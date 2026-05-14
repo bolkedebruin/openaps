@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bolke/inv-driver/internal/events"
 	"github.com/bolke/inv-driver/internal/ingest"
 	"github.com/bolke/inv-driver/internal/store"
 	"github.com/bolke/inv-driver/wire"
@@ -303,6 +304,246 @@ func TestServer_StaleSocket_RefusesSymlink(t *testing.T) {
 	if _, statErr := os.Stat(target); statErr != nil {
 		t.Fatalf("symlink target gone after refusal: %v", statErr)
 	}
+}
+
+// TestServer_SubscriberReceivesPublishedEnvelopes attaches a publisher
+// to the server and a subscriber connection to the UDS, then has a
+// publisher connection submit a telemetry frame and asserts the
+// subscriber receives the same envelope.
+func TestServer_SubscriberReceivesPublishedEnvelopes(t *testing.T) {
+	path := socketPath(t)
+	dbPath := filepath.Join(t.TempDir(), "state.db")
+	st, err := store.Open(context.Background(), dbPath)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	pub := events.New()
+	srv := &Server{
+		SocketPath: path,
+		Ingestor:   &ingest.Ingestor{S: st, Pub: pub},
+		Publisher:  pub,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	doneCh := make(chan error, 1)
+	go func() { doneCh <- srv.Serve(ctx) }()
+	t.Cleanup(func() { cancel(); <-doneCh })
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(path); err == nil {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	// Subscriber side.
+	sub := dial(t, path)
+	defer sub.Close()
+	subHello := &wire.Envelope{Body: &wire.Envelope_Hello{Hello: &wire.Hello{
+		Backend: "test-sub", Version: "0.0.0", StartedAtMs: 1, Role: wire.Role_SUBSCRIBER,
+	}}}
+	if err := wire.WriteFrame(sub, subHello); err != nil {
+		t.Fatalf("sub hello: %v", err)
+	}
+
+	// Give the server a moment to register the subscriber.
+	deadline = time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if pub.Len() >= 1 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if pub.Len() == 0 {
+		t.Fatal("publisher has no subscribers after hello")
+	}
+
+	// Publisher side.
+	pubConn := dial(t, path)
+	defer pubConn.Close()
+	if err := wire.WriteFrame(pubConn, helloEnv()); err != nil {
+		t.Fatalf("pub hello: %v", err)
+	}
+	if err := wire.WriteFrame(pubConn, telemetryEnv("uidS", 42, 99.0)); err != nil {
+		t.Fatalf("pub telemetry: %v", err)
+	}
+
+	// Subscriber should receive a Telemetry envelope.
+	_ = sub.SetReadDeadline(time.Now().Add(2 * time.Second))
+	var got wire.Envelope
+	if err := wire.ReadFrame(sub, &got); err != nil {
+		t.Fatalf("subscriber read: %v", err)
+	}
+	tel := got.GetTelemetry()
+	if tel == nil {
+		t.Fatalf("expected Telemetry envelope, got %T", got.GetBody())
+	}
+	if tel.GetPeerUid() != "uidS" || tel.GetActivePowerW() != 99.0 {
+		t.Fatalf("payload: %+v", tel)
+	}
+}
+
+// TestServer_SubscriberClosedOnInboundFrame verifies a subscriber
+// that sends a post-Hello frame is closed by the server.
+func TestServer_SubscriberClosedOnInboundFrame(t *testing.T) {
+	path := socketPath(t)
+	dbPath := filepath.Join(t.TempDir(), "state.db")
+	st, err := store.Open(context.Background(), dbPath)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	pub := events.New()
+	srv := &Server{
+		SocketPath: path,
+		Ingestor:   &ingest.Ingestor{S: st, Pub: pub},
+		Publisher:  pub,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	doneCh := make(chan error, 1)
+	go func() { doneCh <- srv.Serve(ctx) }()
+	t.Cleanup(func() { cancel(); <-doneCh })
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(path); err == nil {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	sub := dial(t, path)
+	defer sub.Close()
+	subHello := &wire.Envelope{Body: &wire.Envelope_Hello{Hello: &wire.Hello{
+		Backend: "test-sub", Version: "0.0.0", StartedAtMs: 1, Role: wire.Role_SUBSCRIBER,
+	}}}
+	if err := wire.WriteFrame(sub, subHello); err != nil {
+		t.Fatalf("sub hello: %v", err)
+	}
+	// Wait until the publisher registers us.
+	deadline = time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if pub.Len() >= 1 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if pub.Len() == 0 {
+		t.Fatal("publisher has no subscribers")
+	}
+
+	// Now send an unexpected frame after Hello. The server should
+	// close the connection.
+	if err := wire.WriteFrame(sub, helloEnv()); err != nil {
+		t.Fatalf("write second frame: %v", err)
+	}
+
+	// Verify the subscriber is dropped from the publisher within a
+	// short window.
+	deadline = time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if pub.Len() == 0 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("server did not drop subscriber after unexpected inbound frame; pub.Len=%d", pub.Len())
+}
+
+// TestServer_SubscriberBlockedWriteIsTornDown verifies a subscriber
+// that never reads is dropped within writeDeadline once Publisher
+// starts writing.
+func TestServer_SubscriberBlockedWriteIsTornDown(t *testing.T) {
+	path := socketPath(t)
+	dbPath := filepath.Join(t.TempDir(), "state.db")
+	st, err := store.Open(context.Background(), dbPath)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	pub := events.New()
+	srv := &Server{
+		SocketPath: path,
+		Ingestor:   &ingest.Ingestor{S: st, Pub: pub},
+		Publisher:  pub,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	doneCh := make(chan error, 1)
+	go func() { doneCh <- srv.Serve(ctx) }()
+	t.Cleanup(func() { cancel(); <-doneCh })
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(path); err == nil {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	sub := dial(t, path)
+	defer sub.Close()
+	subHello := &wire.Envelope{Body: &wire.Envelope_Hello{Hello: &wire.Hello{
+		Backend: "test-sub-block", Version: "0.0.0", StartedAtMs: 1, Role: wire.Role_SUBSCRIBER,
+	}}}
+	if err := wire.WriteFrame(sub, subHello); err != nil {
+		t.Fatalf("sub hello: %v", err)
+	}
+	deadline = time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if pub.Len() >= 1 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if pub.Len() == 0 {
+		t.Fatal("publisher has no subscribers")
+	}
+
+	// Build a large telemetry envelope and publish enough copies that
+	// the socket buffer fills and a write hits the deadline.
+	big := make([]byte, 32*1024)
+	for i := range big {
+		big[i] = 'A' + byte(i%26)
+	}
+	bigEnv := &wire.Envelope{Body: &wire.Envelope_Telemetry{Telemetry: &wire.Telemetry{
+		TsMs:    1,
+		PeerUid: "block-uid-1",
+		Model:   "QS1A",
+		// Stuff a large field so the on-wire payload is huge.
+		// reactive_var is just a double, so we pack panels.
+		Panels: func() []*wire.Panel {
+			out := make([]*wire.Panel, 200)
+			for i := range out {
+				out[i] = &wire.Panel{Index: int32(i), DcV: float64(i), DcI: float64(i), W: float64(i)}
+			}
+			return out
+		}(),
+	}}}
+
+	// The publish loop will fill the per-subscriber chanCap quickly
+	// and then evict; the per-write deadline kicks in when the
+	// kernel send buffer is also full. Wait until pub drops us.
+	doneFill := make(chan struct{})
+	go func() {
+		defer close(doneFill)
+		for i := 0; i < 1000; i++ {
+			pub.Publish(bigEnv)
+		}
+	}()
+
+	dropDeadline := time.Now().Add(writeDeadline + 5*time.Second)
+	for time.Now().Before(dropDeadline) {
+		if pub.Len() == 0 {
+			<-doneFill
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("blocked subscriber not dropped within %s; pub.Len=%d", writeDeadline+5*time.Second, pub.Len())
 }
 
 func TestServer_ConcurrentConnections(t *testing.T) {

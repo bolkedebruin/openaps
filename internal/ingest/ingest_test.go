@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bolke/inv-driver/codec"
+	"github.com/bolke/inv-driver/internal/events"
 	"github.com/bolke/inv-driver/internal/store"
 	"github.com/bolke/inv-driver/wire"
 )
@@ -22,7 +24,7 @@ func newIngestor(t *testing.T) *Ingestor {
 	return &Ingestor{S: s}
 }
 
-func TestHandle_Hello(t *testing.T) {
+func TestHandle_Hello_NoRowWritten(t *testing.T) {
 	t.Parallel()
 	in := newIngestor(t)
 	env := &wire.Envelope{Body: &wire.Envelope_Hello{Hello: &wire.Hello{
@@ -33,19 +35,12 @@ func TestHandle_Hello(t *testing.T) {
 	if err := in.Handle(context.Background(), "apsystems-stock-zb", env); err != nil {
 		t.Fatalf("Handle: %v", err)
 	}
-	var kind, severity string
-	var uid sql.NullString
-	if err := in.S.DB().QueryRow(`SELECT kind, severity, inverter_uid FROM events`).Scan(&kind, &severity, &uid); err != nil {
-		t.Fatalf("scan: %v", err)
+	var n int
+	if err := in.S.DB().QueryRow(`SELECT COUNT(*) FROM events`).Scan(&n); err != nil {
+		t.Fatalf("count events: %v", err)
 	}
-	if kind != "backend_hello" {
-		t.Fatalf("kind: got %q want backend_hello", kind)
-	}
-	if severity != "info" {
-		t.Fatalf("severity: got %q want info", severity)
-	}
-	if uid.Valid {
-		t.Fatalf("inverter_uid should be NULL, got %q", uid.String)
+	if n != 0 {
+		t.Fatalf("events: got %d rows after Hello, want 0", n)
 	}
 }
 
@@ -142,14 +137,18 @@ func TestHandle_DecodeFailed(t *testing.T) {
 	t.Parallel()
 	in := newIngestor(t)
 	env := &wire.Envelope{Body: &wire.Envelope_DecodeFailed{DecodeFailed: &wire.DecodeFailed{
-		TsMs:  42,
-		Error: "L2 CRC mismatch",
+		TsMs:      42,
+		ShortAddr: 0x1234,
+		Error:     "L2 CRC mismatch",
+		RawHex:    "deadbeef",
 	}}}
 	if err := in.Handle(context.Background(), "be", env); err != nil {
 		t.Fatalf("Handle: %v", err)
 	}
 	var kind, severity string
-	if err := in.S.DB().QueryRow(`SELECT kind, severity FROM events`).Scan(&kind, &severity); err != nil {
+	var shortAddr sql.NullInt64
+	var errMsg, rawHex sql.NullString
+	if err := in.S.DB().QueryRow(`SELECT kind, severity, short_addr, error, raw_hex FROM events`).Scan(&kind, &severity, &shortAddr, &errMsg, &rawHex); err != nil {
 		t.Fatalf("scan: %v", err)
 	}
 	if kind != "decode_failed" {
@@ -157,6 +156,15 @@ func TestHandle_DecodeFailed(t *testing.T) {
 	}
 	if severity != "warn" {
 		t.Fatalf("severity: got %q want warn", severity)
+	}
+	if !shortAddr.Valid || shortAddr.Int64 != 0x1234 {
+		t.Fatalf("short_addr: %+v", shortAddr)
+	}
+	if !errMsg.Valid || errMsg.String != "L2 CRC mismatch" {
+		t.Fatalf("error: %+v", errMsg)
+	}
+	if !rawHex.Valid || rawHex.String != "deadbeef" {
+		t.Fatalf("raw_hex: %+v", rawHex)
 	}
 }
 
@@ -197,6 +205,128 @@ func TestHandle_DecodeFailedWithoutBody(t *testing.T) {
 	env := &wire.Envelope{Body: &wire.Envelope_DecodeFailed{DecodeFailed: nil}}
 	if err := in.Handle(context.Background(), "be", env); err == nil {
 		t.Fatal("expected error on decode_failed without body")
+	}
+}
+
+func TestHandle_RawFrame_QS1A(t *testing.T) {
+	t.Parallel()
+	in := newIngestor(t)
+	in.Pub = events.New()
+	ch, unsub := in.Pub.Subscribe()
+	defer unsub()
+
+	env := &wire.Envelope{Body: &wire.Envelope_RawFrame{RawFrame: &wire.RawFrame{
+		TsMs:      1234,
+		ShortAddr: 0x5011,
+		L1Frame:   codec.QS1AFixture,
+	}}}
+	if err := in.Handle(context.Background(), "be", env); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	// telemetry_live row landed.
+	var acV float64
+	if err := in.S.DB().QueryRow(`SELECT ac_v FROM telemetry_live WHERE inverter_uid='806000042582'`).Scan(&acV); err != nil {
+		t.Fatalf("scan ac_v: %v", err)
+	}
+	if acV < 200 || acV > 250 {
+		t.Errorf("ac_v: got %v want ~223", acV)
+	}
+
+	// telemetry event row landed.
+	var kind string
+	if err := in.S.DB().QueryRow(`SELECT kind FROM events WHERE inverter_uid='806000042582'`).Scan(&kind); err != nil {
+		t.Fatalf("event: %v", err)
+	}
+	if kind != "telemetry" {
+		t.Fatalf("event kind: got %q want telemetry", kind)
+	}
+
+	// inverter_panels populated (QS1A has 4 channels).
+	var panelCount int
+	if err := in.S.DB().QueryRow(`SELECT COUNT(*) FROM inverter_panels WHERE inverter_uid='806000042582'`).Scan(&panelCount); err != nil {
+		t.Fatalf("count panels: %v", err)
+	}
+	if panelCount != 4 {
+		t.Fatalf("panels: got %d want 4", panelCount)
+	}
+
+	// energy_lifetime populated.
+	var lifetimeCount int
+	if err := in.S.DB().QueryRow(`SELECT COUNT(*) FROM energy_lifetime WHERE inverter_uid='806000042582'`).Scan(&lifetimeCount); err != nil {
+		t.Fatalf("count energy_lifetime: %v", err)
+	}
+	if lifetimeCount != 4 {
+		t.Fatalf("energy_lifetime: got %d want 4", lifetimeCount)
+	}
+
+	// A Telemetry envelope must have been published.
+	select {
+	case got := <-ch:
+		tel := got.GetTelemetry()
+		if tel == nil {
+			t.Fatalf("published envelope is not Telemetry: %T", got.GetBody())
+		}
+		if tel.GetPeerUid() != "806000042582" {
+			t.Fatalf("published peer_uid: got %q", tel.GetPeerUid())
+		}
+	default:
+		t.Fatal("no envelope published")
+	}
+}
+
+func TestHandle_RawFrame_DecodeFailure(t *testing.T) {
+	t.Parallel()
+	in := newIngestor(t)
+	in.Pub = events.New()
+	ch, unsub := in.Pub.Subscribe()
+	defer unsub()
+
+	// Garbage L1 frame — too short, will fail ParseL1.
+	env := &wire.Envelope{Body: &wire.Envelope_RawFrame{RawFrame: &wire.RawFrame{
+		TsMs:    42,
+		L1Frame: []byte{0x00, 0x00, 0x00, 0x00},
+	}}}
+	if err := in.Handle(context.Background(), "be", env); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	var kind, severity string
+	if err := in.S.DB().QueryRow(`SELECT kind, severity FROM events`).Scan(&kind, &severity); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if kind != "decode_failed" || severity != "warn" {
+		t.Fatalf("event: kind=%q severity=%q want decode_failed/warn", kind, severity)
+	}
+	// Nothing should have been published.
+	select {
+	case got := <-ch:
+		t.Fatalf("unexpected publish on decode failure: %T", got.GetBody())
+	default:
+	}
+}
+
+func TestHandle_Telemetry_PublishesToSubscribers(t *testing.T) {
+	t.Parallel()
+	in := newIngestor(t)
+	in.Pub = events.New()
+	ch, unsub := in.Pub.Subscribe()
+	defer unsub()
+
+	env := &wire.Envelope{Body: &wire.Envelope_Telemetry{Telemetry: &wire.Telemetry{
+		TsMs:    5,
+		PeerUid: "uid-pub-1",
+		Model:   "QS1A",
+	}}}
+	if err := in.Handle(context.Background(), "be", env); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	select {
+	case got := <-ch:
+		if got.GetTelemetry().GetPeerUid() != "uid-pub-1" {
+			t.Fatalf("publish: got %q", got.GetTelemetry().GetPeerUid())
+		}
+	default:
+		t.Fatal("legacy Telemetry frame did not publish")
 	}
 }
 

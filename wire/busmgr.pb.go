@@ -5,9 +5,8 @@
 // source: busmgr.proto
 
 // Package busmgr.v1 is the wire schema between a bus-mgr backend
-// (e.g. ecu-zb) and inv-driver. Framing is 4-byte BE length prefix
-// per wire.MaxFrameBytes (64 KiB cap). See
-// FIRMWARE_REDESIGN_PROPOSAL.md §8 and INV_DRIVER_DESIGN.md §2.
+// (e.g. ecu-zb) and inv-driver. Framing is a 4-byte BE length prefix
+// per wire.MaxFrameBytes (64 KiB cap).
 
 package wire
 
@@ -26,6 +25,59 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// Role enumerates how a peer participates on the UDS. PUBLISHER (the
+// default for backward compatibility) streams Hello + telemetry into
+// the driver. SUBSCRIBER receives a fan-out of decoded upstream
+// envelopes (telemetry today; raw frames after decode).
+type Role int32
+
+const (
+	Role_ROLE_UNSPECIFIED Role = 0
+	Role_PUBLISHER        Role = 1
+	Role_SUBSCRIBER       Role = 2
+)
+
+// Enum value maps for Role.
+var (
+	Role_name = map[int32]string{
+		0: "ROLE_UNSPECIFIED",
+		1: "PUBLISHER",
+		2: "SUBSCRIBER",
+	}
+	Role_value = map[string]int32{
+		"ROLE_UNSPECIFIED": 0,
+		"PUBLISHER":        1,
+		"SUBSCRIBER":       2,
+	}
+)
+
+func (x Role) Enum() *Role {
+	p := new(Role)
+	*p = x
+	return p
+}
+
+func (x Role) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Role) Descriptor() protoreflect.EnumDescriptor {
+	return file_busmgr_proto_enumTypes[0].Descriptor()
+}
+
+func (Role) Type() protoreflect.EnumType {
+	return &file_busmgr_proto_enumTypes[0]
+}
+
+func (x Role) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Role.Descriptor instead.
+func (Role) EnumDescriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{0}
+}
+
 // Envelope is the single top-level message on every frame. Tag
 // numbers 1..9 are upstream (backend -> driver); 10..19 are reserved
 // for downstream (driver -> backend) so adding upstream fields cannot
@@ -37,6 +89,7 @@ type Envelope struct {
 	//	*Envelope_Hello
 	//	*Envelope_Telemetry
 	//	*Envelope_DecodeFailed
+	//	*Envelope_RawFrame
 	//	*Envelope_Send
 	//	*Envelope_Broadcast
 	//	*Envelope_Reset_
@@ -110,6 +163,15 @@ func (x *Envelope) GetDecodeFailed() *DecodeFailed {
 	return nil
 }
 
+func (x *Envelope) GetRawFrame() *RawFrame {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_RawFrame); ok {
+			return x.RawFrame
+		}
+	}
+	return nil
+}
+
 func (x *Envelope) GetSend() *Send {
 	if x != nil {
 		if x, ok := x.Body.(*Envelope_Send); ok {
@@ -162,6 +224,10 @@ type Envelope_DecodeFailed struct {
 	DecodeFailed *DecodeFailed `protobuf:"bytes,3,opt,name=decode_failed,json=decodeFailed,proto3,oneof"`
 }
 
+type Envelope_RawFrame struct {
+	RawFrame *RawFrame `protobuf:"bytes,4,opt,name=raw_frame,json=rawFrame,proto3,oneof"`
+}
+
 type Envelope_Send struct {
 	Send *Send `protobuf:"bytes,10,opt,name=send,proto3,oneof"`
 }
@@ -184,6 +250,8 @@ func (*Envelope_Telemetry) isEnvelope_Body() {}
 
 func (*Envelope_DecodeFailed) isEnvelope_Body() {}
 
+func (*Envelope_RawFrame) isEnvelope_Body() {}
+
 func (*Envelope_Send) isEnvelope_Body() {}
 
 func (*Envelope_Broadcast) isEnvelope_Body() {}
@@ -201,10 +269,11 @@ type Hello struct {
 	Version     string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"` // backend semver
 	Hostname    string                 `protobuf:"bytes,3,opt,name=hostname,proto3" json:"hostname,omitempty"`
 	StartedAtMs int64                  `protobuf:"varint,4,opt,name=started_at_ms,json=startedAtMs,proto3" json:"started_at_ms,omitempty"` // unix ms
-	// v0 placeholder: free-form capability strings. Should become a
-	// structured BusCapabilities message per FIRMWARE_REDESIGN_PROPOSAL.md
-	// §4 before v1.
-	BusCaps       []string `protobuf:"bytes,5,rep,name=bus_caps,json=busCaps,proto3" json:"bus_caps,omitempty"`
+	// Free-form capability strings.
+	BusCaps []string `protobuf:"bytes,5,rep,name=bus_caps,json=busCaps,proto3" json:"bus_caps,omitempty"`
+	// Role declares the peer's intent. Unset (ROLE_UNSPECIFIED) is
+	// treated as PUBLISHER by the server for backward compatibility.
+	Role          Role `protobuf:"varint,6,opt,name=role,proto3,enum=busmgr.v1.Role" json:"role,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -274,6 +343,76 @@ func (x *Hello) GetBusCaps() []string {
 	return nil
 }
 
+func (x *Hello) GetRole() Role {
+	if x != nil {
+		return x.Role
+	}
+	return Role_ROLE_UNSPECIFIED
+}
+
+// RawFrame is a reassembled L1 reply that the driver decodes itself.
+// peer_uid is intentionally omitted: it lives inside the L1 envelope
+// and the driver parses it during decode. See codec.ParseL1.
+type RawFrame struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TsMs          int64                  `protobuf:"varint,1,opt,name=ts_ms,json=tsMs,proto3" json:"ts_ms,omitempty"`                // wall-clock at capture time
+	ShortAddr     uint32                 `protobuf:"varint,2,opt,name=short_addr,json=shortAddr,proto3" json:"short_addr,omitempty"` // 16-bit network short address
+	L1Frame       []byte                 `protobuf:"bytes,3,opt,name=l1_frame,json=l1Frame,proto3" json:"l1_frame,omitempty"`        // full reassembled L1 reply (FC FC … FE FE)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RawFrame) Reset() {
+	*x = RawFrame{}
+	mi := &file_busmgr_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RawFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RawFrame) ProtoMessage() {}
+
+func (x *RawFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RawFrame.ProtoReflect.Descriptor instead.
+func (*RawFrame) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *RawFrame) GetTsMs() int64 {
+	if x != nil {
+		return x.TsMs
+	}
+	return 0
+}
+
+func (x *RawFrame) GetShortAddr() uint32 {
+	if x != nil {
+		return x.ShortAddr
+	}
+	return 0
+}
+
+func (x *RawFrame) GetL1Frame() []byte {
+	if x != nil {
+		return x.L1Frame
+	}
+	return nil
+}
+
 // Telemetry is one decoded reply from one inverter. Mirrors
 // codec.Reply plus a server-stamped ts_ms so the timeline doesn't
 // depend on a synchronised clock between ECU and inv-driver hosts.
@@ -293,16 +432,13 @@ type Telemetry struct {
 	Panels        []*Panel               `protobuf:"bytes,12,rep,name=panels,proto3" json:"panels,omitempty"`
 	LifetimeRaw   []uint64               `protobuf:"varint,13,rep,packed,name=lifetime_raw,json=lifetimeRaw,proto3" json:"lifetime_raw,omitempty"`
 	LifetimeScale float64                `protobuf:"fixed64,14,opt,name=lifetime_scale,json=lifetimeScale,proto3" json:"lifetime_scale,omitempty"`
-	// v0 transitional: raw L2 body hex. May be removed when the codec
-	// moves into inv-driver.
-	BodyHex       string `protobuf:"bytes,15,opt,name=body_hex,json=bodyHex,proto3" json:"body_hex,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Telemetry) Reset() {
 	*x = Telemetry{}
-	mi := &file_busmgr_proto_msgTypes[2]
+	mi := &file_busmgr_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -314,7 +450,7 @@ func (x *Telemetry) String() string {
 func (*Telemetry) ProtoMessage() {}
 
 func (x *Telemetry) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[2]
+	mi := &file_busmgr_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -327,7 +463,7 @@ func (x *Telemetry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Telemetry.ProtoReflect.Descriptor instead.
 func (*Telemetry) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{2}
+	return file_busmgr_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Telemetry) GetTsMs() int64 {
@@ -428,13 +564,6 @@ func (x *Telemetry) GetLifetimeScale() float64 {
 	return 0
 }
 
-func (x *Telemetry) GetBodyHex() string {
-	if x != nil {
-		return x.BodyHex
-	}
-	return ""
-}
-
 // Panel mirrors codec.Panel.
 type Panel struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -448,7 +577,7 @@ type Panel struct {
 
 func (x *Panel) Reset() {
 	*x = Panel{}
-	mi := &file_busmgr_proto_msgTypes[3]
+	mi := &file_busmgr_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -460,7 +589,7 @@ func (x *Panel) String() string {
 func (*Panel) ProtoMessage() {}
 
 func (x *Panel) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[3]
+	mi := &file_busmgr_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -473,7 +602,7 @@ func (x *Panel) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Panel.ProtoReflect.Descriptor instead.
 func (*Panel) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{3}
+	return file_busmgr_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Panel) GetIndex() int32 {
@@ -518,7 +647,7 @@ type DecodeFailed struct {
 
 func (x *DecodeFailed) Reset() {
 	*x = DecodeFailed{}
-	mi := &file_busmgr_proto_msgTypes[4]
+	mi := &file_busmgr_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -530,7 +659,7 @@ func (x *DecodeFailed) String() string {
 func (*DecodeFailed) ProtoMessage() {}
 
 func (x *DecodeFailed) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[4]
+	mi := &file_busmgr_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -543,7 +672,7 @@ func (x *DecodeFailed) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DecodeFailed.ProtoReflect.Descriptor instead.
 func (*DecodeFailed) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{4}
+	return file_busmgr_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *DecodeFailed) GetTsMs() int64 {
@@ -574,8 +703,7 @@ func (x *DecodeFailed) GetRawHex() string {
 	return ""
 }
 
-// Send is a downstream stub; see FIRMWARE_REDESIGN_PROPOSAL.md §4
-// BusBackend. Server returns Unimplemented in v0.
+// Send is a downstream stub. Server returns Unimplemented in v0.
 type Send struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PeerUid       string                 `protobuf:"bytes,1,opt,name=peer_uid,json=peerUid,proto3" json:"peer_uid,omitempty"`
@@ -587,7 +715,7 @@ type Send struct {
 
 func (x *Send) Reset() {
 	*x = Send{}
-	mi := &file_busmgr_proto_msgTypes[5]
+	mi := &file_busmgr_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -599,7 +727,7 @@ func (x *Send) String() string {
 func (*Send) ProtoMessage() {}
 
 func (x *Send) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[5]
+	mi := &file_busmgr_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -612,7 +740,7 @@ func (x *Send) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Send.ProtoReflect.Descriptor instead.
 func (*Send) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{5}
+	return file_busmgr_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Send) GetPeerUid() string {
@@ -636,8 +764,7 @@ func (x *Send) GetDeadlineMs() int64 {
 	return 0
 }
 
-// Broadcast is a downstream stub; see FIRMWARE_REDESIGN_PROPOSAL.md
-// §4 BusBackend. Server returns Unimplemented in v0.
+// Broadcast is a downstream stub. Server returns Unimplemented in v0.
 type Broadcast struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Frame         []byte                 `protobuf:"bytes,1,opt,name=frame,proto3" json:"frame,omitempty"`
@@ -648,7 +775,7 @@ type Broadcast struct {
 
 func (x *Broadcast) Reset() {
 	*x = Broadcast{}
-	mi := &file_busmgr_proto_msgTypes[6]
+	mi := &file_busmgr_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -660,7 +787,7 @@ func (x *Broadcast) String() string {
 func (*Broadcast) ProtoMessage() {}
 
 func (x *Broadcast) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[6]
+	mi := &file_busmgr_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -673,7 +800,7 @@ func (x *Broadcast) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Broadcast.ProtoReflect.Descriptor instead.
 func (*Broadcast) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{6}
+	return file_busmgr_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Broadcast) GetFrame() []byte {
@@ -690,8 +817,7 @@ func (x *Broadcast) GetDeadlineMs() int64 {
 	return 0
 }
 
-// Reset is a downstream stub; see FIRMWARE_REDESIGN_PROPOSAL.md §4
-// BusBackend. Server returns Unimplemented in v0.
+// Reset is a downstream stub. Server returns Unimplemented in v0.
 type Reset struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -700,7 +826,7 @@ type Reset struct {
 
 func (x *Reset) Reset() {
 	*x = Reset{}
-	mi := &file_busmgr_proto_msgTypes[7]
+	mi := &file_busmgr_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -712,7 +838,7 @@ func (x *Reset) String() string {
 func (*Reset) ProtoMessage() {}
 
 func (x *Reset) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[7]
+	mi := &file_busmgr_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -725,12 +851,11 @@ func (x *Reset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Reset.ProtoReflect.Descriptor instead.
 func (*Reset) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{7}
+	return file_busmgr_proto_rawDescGZIP(), []int{8}
 }
 
-// SubscribeRaw is a downstream stub; see FIRMWARE_REDESIGN_PROPOSAL.md
-// §4 BusBackend. Server returns Unimplemented in v0. Shape is open
-// (see design open questions); v0 is intentionally empty.
+// SubscribeRaw is a downstream stub. Server returns Unimplemented in
+// v0. Shape is intentionally empty until requirements firm up.
 type SubscribeRaw struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -739,7 +864,7 @@ type SubscribeRaw struct {
 
 func (x *SubscribeRaw) Reset() {
 	*x = SubscribeRaw{}
-	mi := &file_busmgr_proto_msgTypes[8]
+	mi := &file_busmgr_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -751,7 +876,7 @@ func (x *SubscribeRaw) String() string {
 func (*SubscribeRaw) ProtoMessage() {}
 
 func (x *SubscribeRaw) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[8]
+	mi := &file_busmgr_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -764,30 +889,37 @@ func (x *SubscribeRaw) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeRaw.ProtoReflect.Descriptor instead.
 func (*SubscribeRaw) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{8}
+	return file_busmgr_proto_rawDescGZIP(), []int{9}
 }
 
 var File_busmgr_proto protoreflect.FileDescriptor
 
 const file_busmgr_proto_rawDesc = "" +
 	"\n" +
-	"\fbusmgr.proto\x12\tbusmgr.v1\"\xf9\x02\n" +
+	"\fbusmgr.proto\x12\tbusmgr.v1\"\xad\x03\n" +
 	"\bEnvelope\x12(\n" +
 	"\x05hello\x18\x01 \x01(\v2\x10.busmgr.v1.HelloH\x00R\x05hello\x124\n" +
 	"\ttelemetry\x18\x02 \x01(\v2\x14.busmgr.v1.TelemetryH\x00R\ttelemetry\x12>\n" +
-	"\rdecode_failed\x18\x03 \x01(\v2\x17.busmgr.v1.DecodeFailedH\x00R\fdecodeFailed\x12%\n" +
+	"\rdecode_failed\x18\x03 \x01(\v2\x17.busmgr.v1.DecodeFailedH\x00R\fdecodeFailed\x122\n" +
+	"\traw_frame\x18\x04 \x01(\v2\x13.busmgr.v1.RawFrameH\x00R\brawFrame\x12%\n" +
 	"\x04send\x18\n" +
 	" \x01(\v2\x0f.busmgr.v1.SendH\x00R\x04send\x124\n" +
 	"\tbroadcast\x18\v \x01(\v2\x14.busmgr.v1.BroadcastH\x00R\tbroadcast\x12(\n" +
 	"\x05reset\x18\f \x01(\v2\x10.busmgr.v1.ResetH\x00R\x05reset\x12>\n" +
 	"\rsubscribe_raw\x18\r \x01(\v2\x17.busmgr.v1.SubscribeRawH\x00R\fsubscribeRawB\x06\n" +
-	"\x04body\"\x96\x01\n" +
+	"\x04body\"\xbb\x01\n" +
 	"\x05Hello\x12\x18\n" +
 	"\abackend\x18\x01 \x01(\tR\abackend\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12\x1a\n" +
 	"\bhostname\x18\x03 \x01(\tR\bhostname\x12\"\n" +
 	"\rstarted_at_ms\x18\x04 \x01(\x03R\vstartedAtMs\x12\x19\n" +
-	"\bbus_caps\x18\x05 \x03(\tR\abusCaps\"\xbe\x03\n" +
+	"\bbus_caps\x18\x05 \x03(\tR\abusCaps\x12#\n" +
+	"\x04role\x18\x06 \x01(\x0e2\x0f.busmgr.v1.RoleR\x04role\"Y\n" +
+	"\bRawFrame\x12\x13\n" +
+	"\x05ts_ms\x18\x01 \x01(\x03R\x04tsMs\x12\x1d\n" +
+	"\n" +
+	"short_addr\x18\x02 \x01(\rR\tshortAddr\x12\x19\n" +
+	"\bl1_frame\x18\x03 \x01(\fR\al1Frame\"\xa9\x03\n" +
 	"\tTelemetry\x12\x13\n" +
 	"\x05ts_ms\x18\x01 \x01(\x03R\x04tsMs\x12\x1d\n" +
 	"\n" +
@@ -805,8 +937,7 @@ const file_busmgr_proto_rawDesc = "" +
 	"\freactive_var\x18\v \x01(\x01R\vreactiveVar\x12(\n" +
 	"\x06panels\x18\f \x03(\v2\x10.busmgr.v1.PanelR\x06panels\x12!\n" +
 	"\flifetime_raw\x18\r \x03(\x04R\vlifetimeRaw\x12%\n" +
-	"\x0elifetime_scale\x18\x0e \x01(\x01R\rlifetimeScale\x12\x19\n" +
-	"\bbody_hex\x18\x0f \x01(\tR\abodyHex\"Q\n" +
+	"\x0elifetime_scale\x18\x0e \x01(\x01R\rlifetimeScaleJ\x04\b\x0f\x10\x10\"Q\n" +
 	"\x05Panel\x12\x14\n" +
 	"\x05index\x18\x01 \x01(\x05R\x05index\x12\x11\n" +
 	"\x04dc_v\x18\x02 \x01(\x01R\x03dcV\x12\x11\n" +
@@ -828,7 +959,12 @@ const file_busmgr_proto_rawDesc = "" +
 	"\vdeadline_ms\x18\x02 \x01(\x03R\n" +
 	"deadlineMs\"\a\n" +
 	"\x05Reset\"\x0e\n" +
-	"\fSubscribeRawB'Z%github.com/bolke/inv-driver/wire;wireb\x06proto3"
+	"\fSubscribeRaw*;\n" +
+	"\x04Role\x12\x14\n" +
+	"\x10ROLE_UNSPECIFIED\x10\x00\x12\r\n" +
+	"\tPUBLISHER\x10\x01\x12\x0e\n" +
+	"\n" +
+	"SUBSCRIBER\x10\x02B'Z%github.com/bolke/inv-driver/wire;wireb\x06proto3"
 
 var (
 	file_busmgr_proto_rawDescOnce sync.Once
@@ -842,32 +978,37 @@ func file_busmgr_proto_rawDescGZIP() []byte {
 	return file_busmgr_proto_rawDescData
 }
 
-var file_busmgr_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_busmgr_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_busmgr_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_busmgr_proto_goTypes = []any{
-	(*Envelope)(nil),     // 0: busmgr.v1.Envelope
-	(*Hello)(nil),        // 1: busmgr.v1.Hello
-	(*Telemetry)(nil),    // 2: busmgr.v1.Telemetry
-	(*Panel)(nil),        // 3: busmgr.v1.Panel
-	(*DecodeFailed)(nil), // 4: busmgr.v1.DecodeFailed
-	(*Send)(nil),         // 5: busmgr.v1.Send
-	(*Broadcast)(nil),    // 6: busmgr.v1.Broadcast
-	(*Reset)(nil),        // 7: busmgr.v1.Reset
-	(*SubscribeRaw)(nil), // 8: busmgr.v1.SubscribeRaw
+	(Role)(0),            // 0: busmgr.v1.Role
+	(*Envelope)(nil),     // 1: busmgr.v1.Envelope
+	(*Hello)(nil),        // 2: busmgr.v1.Hello
+	(*RawFrame)(nil),     // 3: busmgr.v1.RawFrame
+	(*Telemetry)(nil),    // 4: busmgr.v1.Telemetry
+	(*Panel)(nil),        // 5: busmgr.v1.Panel
+	(*DecodeFailed)(nil), // 6: busmgr.v1.DecodeFailed
+	(*Send)(nil),         // 7: busmgr.v1.Send
+	(*Broadcast)(nil),    // 8: busmgr.v1.Broadcast
+	(*Reset)(nil),        // 9: busmgr.v1.Reset
+	(*SubscribeRaw)(nil), // 10: busmgr.v1.SubscribeRaw
 }
 var file_busmgr_proto_depIdxs = []int32{
-	1, // 0: busmgr.v1.Envelope.hello:type_name -> busmgr.v1.Hello
-	2, // 1: busmgr.v1.Envelope.telemetry:type_name -> busmgr.v1.Telemetry
-	4, // 2: busmgr.v1.Envelope.decode_failed:type_name -> busmgr.v1.DecodeFailed
-	5, // 3: busmgr.v1.Envelope.send:type_name -> busmgr.v1.Send
-	6, // 4: busmgr.v1.Envelope.broadcast:type_name -> busmgr.v1.Broadcast
-	7, // 5: busmgr.v1.Envelope.reset:type_name -> busmgr.v1.Reset
-	8, // 6: busmgr.v1.Envelope.subscribe_raw:type_name -> busmgr.v1.SubscribeRaw
-	3, // 7: busmgr.v1.Telemetry.panels:type_name -> busmgr.v1.Panel
-	8, // [8:8] is the sub-list for method output_type
-	8, // [8:8] is the sub-list for method input_type
-	8, // [8:8] is the sub-list for extension type_name
-	8, // [8:8] is the sub-list for extension extendee
-	0, // [0:8] is the sub-list for field type_name
+	2,  // 0: busmgr.v1.Envelope.hello:type_name -> busmgr.v1.Hello
+	4,  // 1: busmgr.v1.Envelope.telemetry:type_name -> busmgr.v1.Telemetry
+	6,  // 2: busmgr.v1.Envelope.decode_failed:type_name -> busmgr.v1.DecodeFailed
+	3,  // 3: busmgr.v1.Envelope.raw_frame:type_name -> busmgr.v1.RawFrame
+	7,  // 4: busmgr.v1.Envelope.send:type_name -> busmgr.v1.Send
+	8,  // 5: busmgr.v1.Envelope.broadcast:type_name -> busmgr.v1.Broadcast
+	9,  // 6: busmgr.v1.Envelope.reset:type_name -> busmgr.v1.Reset
+	10, // 7: busmgr.v1.Envelope.subscribe_raw:type_name -> busmgr.v1.SubscribeRaw
+	0,  // 8: busmgr.v1.Hello.role:type_name -> busmgr.v1.Role
+	5,  // 9: busmgr.v1.Telemetry.panels:type_name -> busmgr.v1.Panel
+	10, // [10:10] is the sub-list for method output_type
+	10, // [10:10] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_busmgr_proto_init() }
@@ -879,6 +1020,7 @@ func file_busmgr_proto_init() {
 		(*Envelope_Hello)(nil),
 		(*Envelope_Telemetry)(nil),
 		(*Envelope_DecodeFailed)(nil),
+		(*Envelope_RawFrame)(nil),
 		(*Envelope_Send)(nil),
 		(*Envelope_Broadcast)(nil),
 		(*Envelope_Reset_)(nil),
@@ -889,13 +1031,14 @@ func file_busmgr_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_busmgr_proto_rawDesc), len(file_busmgr_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   9,
+			NumEnums:      1,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_busmgr_proto_goTypes,
 		DependencyIndexes: file_busmgr_proto_depIdxs,
+		EnumInfos:         file_busmgr_proto_enumTypes,
 		MessageInfos:      file_busmgr_proto_msgTypes,
 	}.Build()
 	File_busmgr_proto = out.File

@@ -1,8 +1,7 @@
 // Package ipc hosts the inv-driver Unix-domain socket server. Backends
 // (bus-mgr / ecu-zb) connect, send a Hello envelope, then stream
-// telemetry frames. Per INV_DRIVER_DESIGN.md §2 this is the typed
-// ingress edge of the daemon — protocol checks live here, business
-// logic lives in package ingest.
+// telemetry frames. This is the typed ingress edge of the daemon —
+// protocol checks live here, business logic lives in package ingest.
 package ipc
 
 import (
@@ -17,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/bolke/inv-driver/internal/events"
 	"github.com/bolke/inv-driver/internal/ingest"
 	"github.com/bolke/inv-driver/wire"
 )
@@ -32,14 +32,22 @@ const (
 	// flows once per cycle (~15-20s); 5 minutes is generous for steady
 	// state while still bounding stuck-conn resource usage.
 	idleDeadline = 5 * time.Minute
+	// writeDeadline bounds each subscriber write. A wedged client must
+	// not block fan-out beyond this.
+	writeDeadline = 5 * time.Second
 )
 
 // Server accepts framed protobuf wire connections on a UDS path and
 // feeds each envelope into the Ingestor. One Server per process.
+//
+// Publisher, when non-nil, supplies the SUBSCRIBER fan-out. Connections
+// that say Hello with Role=SUBSCRIBER subscribe to the publisher and
+// receive decoded telemetry envelopes instead of feeding the ingest.
 type Server struct {
 	SocketPath string
 	SocketMode os.FileMode
 	Ingestor   *ingest.Ingestor
+	Publisher  *events.Publisher
 
 	connSeq atomic.Uint64
 	// conns tracks live connections so Serve can close them on
@@ -143,15 +151,29 @@ func (s *Server) handleConn(ctx context.Context, id uint64, c net.Conn) {
 		return
 	}
 	backend := hello.GetBackend()
-	log.Printf("ipc %s: hello backend=%q version=%q host=%q", tag, backend, hello.GetVersion(), hello.GetHostname())
+	role := hello.GetRole()
+	log.Printf("ipc %s: hello backend=%q version=%q host=%q role=%s",
+		tag, backend, hello.GetVersion(), hello.GetHostname(), role.String())
 	if err := s.Ingestor.Handle(ctx, backend, &env); err != nil {
 		log.Printf("ipc %s: hello ingest: %v", tag, err)
 	}
 
-	// Steady-state loop. Each ReadFrame gets a fresh idleDeadline so a
-	// silent peer is bounded. Ctx cancel is delivered via the parent
-	// Serve closing this conn (see Serve's shutdown goroutine), which
-	// unblocks the read with net.ErrClosed.
+	switch role {
+	case wire.Role_SUBSCRIBER:
+		s.handleSubscriber(ctx, tag, c)
+	default:
+		// ROLE_UNSPECIFIED and PUBLISHER both run the publisher loop;
+		// peers that omit Role default to publishing.
+		s.handlePublisher(ctx, tag, backend, c)
+	}
+}
+
+// handlePublisher runs the steady-state ingest loop for a publishing
+// backend. Each ReadFrame gets a fresh idleDeadline so a silent peer
+// is bounded. Ctx cancel is delivered via the parent Serve closing
+// this conn (see Serve's shutdown goroutine), which unblocks the read
+// with net.ErrClosed.
+func (s *Server) handlePublisher(ctx context.Context, tag, backend string, c net.Conn) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -172,6 +194,62 @@ func (s *Server) handleConn(ctx context.Context, id uint64, c net.Conn) {
 			// Per-event error: log and continue. Connection is still
 			// synchronised on the next length prefix.
 			log.Printf("ipc %s: ingest: %v", tag, err)
+		}
+	}
+}
+
+// handleSubscriber feeds decoded envelopes from the in-process
+// Publisher to the connected client. The client is expected to be
+// read-only on the wire after Hello; we don't enforce that beyond
+// closing the conn on any read error.
+func (s *Server) handleSubscriber(ctx context.Context, tag string, c net.Conn) {
+	if s.Publisher == nil {
+		log.Printf("ipc %s: subscriber requested but Publisher is nil; dropping", tag)
+		return
+	}
+	ch, unsubscribe := s.Publisher.Subscribe()
+	defer unsubscribe()
+	log.Printf("ipc %s: subscriber attached", tag)
+
+	// Run a read-pump in a separate goroutine. A subscriber is
+	// read-silent after Hello; any inbound frame is a protocol
+	// violation, and a read error (EOF, closed conn) is the canonical
+	// disconnect signal.
+	readErr := make(chan error, 1)
+	go func() {
+		var inbound wire.Envelope
+		_ = c.SetReadDeadline(time.Time{})
+		if err := wire.ReadFrame(c, &inbound); err != nil {
+			readErr <- err
+			return
+		}
+		readErr <- errors.New("subscriber sent unexpected frame after hello")
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case err := <-readErr:
+			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
+				return
+			}
+			log.Printf("ipc %s: subscriber read: %v; closing", tag, err)
+			return
+		case env, ok := <-ch:
+			if !ok {
+				// Publisher evicted us as slow. Drop the conn so the
+				// client reconnects fresh.
+				log.Printf("ipc %s: subscriber evicted (slow)", tag)
+				return
+			}
+			_ = c.SetWriteDeadline(time.Now().Add(writeDeadline))
+			if err := wire.WriteFrame(c, env); err != nil {
+				if !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
+					log.Printf("ipc %s: subscriber write: %v", tag, err)
+				}
+				return
+			}
 		}
 	}
 }

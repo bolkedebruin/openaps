@@ -1,11 +1,12 @@
 // Command inv-driver is the v0 daemon and CLI for ingesting backend
 // telemetry (from ecu-zb / bus-mgr) over a Unix-domain socket into a
 // SQLite state-store, plus two read-only dump subcommands for ops
-// inspection. See INV_DRIVER_DESIGN.md for the long-form design.
+// inspection.
 package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -19,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/bolke/inv-driver/internal/events"
 	"github.com/bolke/inv-driver/internal/ingest"
 	"github.com/bolke/inv-driver/internal/ipc"
 	"github.com/bolke/inv-driver/internal/store"
@@ -113,18 +115,18 @@ func runServe(args []string) error {
 		go pruneLoop(ctx, st, *retainTelemetry, *retainOther, *pruneInterval)
 	}
 
+	pub := events.New()
 	srv := &ipc.Server{
 		SocketPath: *socket,
 		SocketMode: mode,
-		Ingestor:   &ingest.Ingestor{S: st},
+		Ingestor:   &ingest.Ingestor{S: st, Pub: pub},
+		Publisher:  pub,
 	}
 	return srv.Serve(ctx)
 }
 
-// pruneOnce runs both retention tiers once, logging summary lines.
-// Telemetry events rotate aggressively (1 Hz × N inverters is the
-// dominant volume); other kinds — backend_hello, decode_failed,
-// future state-change events — get the longer retention.
+// pruneOnce runs both retention tiers once. Telemetry events rotate
+// aggressively (dominant volume); other kinds get the longer retention.
 func pruneOnce(ctx context.Context, st *store.Store, retainTelemetry, retainOther time.Duration) {
 	now := time.Now().UnixMilli()
 	if retainTelemetry > 0 {
@@ -170,18 +172,35 @@ func parseOctalMode(s string) (os.FileMode, error) {
 	return os.FileMode(v), nil
 }
 
-// decodePayload parses a payload column as JSON. On parse failure it
-// returns the raw string so the row isn't dropped from the dump.
-// Empty string returns nil.
-func decodePayload(s string) any {
-	if s == "" {
-		return nil
-	}
-	var p any
-	if err := json.Unmarshal([]byte(s), &p); err != nil {
-		return s
-	}
-	return p
+// telemetryRow is one inverter's latest sample assembled from joined
+// rows. Tagged so json.Marshal emits the operator-friendly shape.
+type telemetryRow struct {
+	InverterUID  string          `json:"inverter_uid"`
+	TsMs         int64           `json:"ts_ms"`
+	Cmd          int64           `json:"cmd"`
+	Model        any             `json:"model"`
+	Family       any             `json:"family"`
+	ShortAddr    any             `json:"short_addr"`
+	ACW          any             `json:"ac_w"`
+	ACV          any             `json:"ac_v"`
+	ACFreq       any             `json:"ac_freq"`
+	BusV         any             `json:"bus_v"`
+	ReportSec    any             `json:"report_sec"`
+	Panels       []telemetryPan  `json:"panels"`
+	Lifetime     []telemetryEner `json:"lifetime"`
+}
+
+type telemetryPan struct {
+	ChannelIdx int     `json:"i"`
+	DCV        any     `json:"dc_v"`
+	DCI        any     `json:"dc_i"`
+	W          any     `json:"w"`
+}
+
+type telemetryEner struct {
+	ChannelIdx int     `json:"i"`
+	Raw        int64   `json:"raw"`
+	Scale      float64 `json:"scale"`
 }
 
 func runDumpTelemetry(args []string) error {
@@ -198,12 +217,14 @@ func runDumpTelemetry(args []string) error {
 	}
 	defer st.Close()
 
-	const q = `
-SELECT inverter_uid, ts_ms, ac_w, ac_v, ac_freq, bus_v, report_sec, payload_json
-FROM   telemetry_live
-ORDER  BY inverter_uid ASC
+	const liveQ = `
+SELECT t.inverter_uid, t.ts_ms, t.cmd, t.ac_w, t.ac_v, t.ac_freq, t.bus_v, t.report_sec,
+       i.short_addr, i.family, i.model
+FROM   telemetry_live t
+LEFT   JOIN inverters i ON i.uid = t.inverter_uid
+ORDER  BY t.inverter_uid ASC
 `
-	rows, err := st.DB().QueryContext(ctx, q)
+	rows, err := st.DB().QueryContext(ctx, liveQ)
 	if err != nil {
 		return err
 	}
@@ -214,31 +235,112 @@ ORDER  BY inverter_uid ASC
 		var (
 			uid       string
 			tsMs      int64
+			cmd       int64
 			acW       sqlNullFloat
 			acV       sqlNullFloat
 			acFreq    sqlNullFloat
 			busV      sqlNullFloat
 			reportSec sqlNullInt
-			payload   string
+			shortAddr sqlNullInt
+			family    sqlNullString
+			model     sqlNullString
 		)
-		if err := rows.Scan(&uid, &tsMs, &acW, &acV, &acFreq, &busV, &reportSec, &payload); err != nil {
+		if err := rows.Scan(&uid, &tsMs, &cmd, &acW, &acV, &acFreq, &busV, &reportSec,
+			&shortAddr, &family, &model); err != nil {
 			return err
 		}
-		row := map[string]any{
-			"inverter_uid": uid,
-			"ts_ms":        tsMs,
-			"ac_w":         acW.toAny(),
-			"ac_v":         acV.toAny(),
-			"ac_freq":      acFreq.toAny(),
-			"bus_v":        busV.toAny(),
-			"report_sec":   reportSec.toAny(),
-			"payload":      decodePayload(payload),
+		panels, err := loadPanels(ctx, st.DB(), uid)
+		if err != nil {
+			return err
+		}
+		lifetime, err := loadLifetime(ctx, st.DB(), uid)
+		if err != nil {
+			return err
+		}
+		row := telemetryRow{
+			InverterUID: uid,
+			TsMs:        tsMs,
+			Cmd:         cmd,
+			Model:       model.toAny(),
+			Family:      family.toAny(),
+			ShortAddr:   shortAddr.toAny(),
+			ACW:         acW.toAny(),
+			ACV:         acV.toAny(),
+			ACFreq:      acFreq.toAny(),
+			BusV:        busV.toAny(),
+			ReportSec:   reportSec.toAny(),
+			Panels:      panels,
+			Lifetime:    lifetime,
 		}
 		if err := enc.Encode(row); err != nil {
 			return err
 		}
 	}
 	return rows.Err()
+}
+
+func loadPanels(ctx context.Context, db *sql.DB, uid string) ([]telemetryPan, error) {
+	const q = `
+SELECT channel_idx, dc_v, dc_i, w
+FROM   inverter_panels
+WHERE  inverter_uid = ?
+ORDER  BY channel_idx ASC
+`
+	rows, err := db.QueryContext(ctx, q, uid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []telemetryPan
+	for rows.Next() {
+		var (
+			idx int
+			dcV sqlNullFloat
+			dcI sqlNullFloat
+			w   sqlNullFloat
+		)
+		if err := rows.Scan(&idx, &dcV, &dcI, &w); err != nil {
+			return nil, err
+		}
+		out = append(out, telemetryPan{
+			ChannelIdx: idx,
+			DCV:        dcV.toAny(),
+			DCI:        dcI.toAny(),
+			W:          w.toAny(),
+		})
+	}
+	return out, rows.Err()
+}
+
+func loadLifetime(ctx context.Context, db *sql.DB, uid string) ([]telemetryEner, error) {
+	const q = `
+SELECT channel_idx, raw, scale
+FROM   energy_lifetime
+WHERE  inverter_uid = ?
+ORDER  BY channel_idx ASC
+`
+	rows, err := db.QueryContext(ctx, q, uid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []telemetryEner
+	for rows.Next() {
+		var (
+			idx   int
+			raw   int64
+			scale float64
+		)
+		if err := rows.Scan(&idx, &raw, &scale); err != nil {
+			return nil, err
+		}
+		out = append(out, telemetryEner{
+			ChannelIdx: idx,
+			Raw:        raw,
+			Scale:      scale,
+		})
+	}
+	return out, rows.Err()
 }
 
 func runDumpEvents(args []string) error {
@@ -262,7 +364,7 @@ func runDumpEvents(args []string) error {
 	defer st.Close()
 
 	q := `
-SELECT id, ts_ms, inverter_uid, kind, severity, payload_json
+SELECT id, ts_ms, inverter_uid, kind, severity, short_addr, error, raw_hex
 FROM   events
 WHERE  ts_ms >= ?
 `
@@ -283,19 +385,17 @@ WHERE  ts_ms >= ?
 	enc := json.NewEncoder(os.Stdout)
 	for rows.Next() {
 		var (
-			id       int64
-			tsMs     int64
-			uid      sqlNullString
-			rowKind  string
-			severity string
-			payload  sqlNullString
+			id        int64
+			tsMs      int64
+			uid       sqlNullString
+			rowKind   string
+			severity  string
+			shortAddr sqlNullInt
+			errMsg    sqlNullString
+			rawHex    sqlNullString
 		)
-		if err := rows.Scan(&id, &tsMs, &uid, &rowKind, &severity, &payload); err != nil {
+		if err := rows.Scan(&id, &tsMs, &uid, &rowKind, &severity, &shortAddr, &errMsg, &rawHex); err != nil {
 			return err
-		}
-		var p any
-		if payload.Valid {
-			p = decodePayload(payload.String)
 		}
 		row := map[string]any{
 			"id":           id,
@@ -303,7 +403,9 @@ WHERE  ts_ms >= ?
 			"inverter_uid": uid.toAny(),
 			"kind":         rowKind,
 			"severity":     severity,
-			"payload":      p,
+			"short_addr":   shortAddr.toAny(),
+			"error":        errMsg.toAny(),
+			"raw_hex":      rawHex.toAny(),
 		}
 		if err := enc.Encode(row); err != nil {
 			return err

@@ -6,12 +6,14 @@ package ingest
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
+	"log"
 	"strings"
+	"time"
 
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
-
+	"github.com/bolke/inv-driver/codec"
+	"github.com/bolke/inv-driver/internal/events"
 	"github.com/bolke/inv-driver/internal/store"
 	"github.com/bolke/inv-driver/wire"
 )
@@ -19,33 +21,49 @@ import (
 // Ingestor owns the store handle and turns wire events into rows.
 // One Ingestor is shared by all connection goroutines; the underlying
 // store handles its own write serialisation.
+//
+// Pub, when non-nil, receives a fan-out copy of every successfully
+// decoded telemetry envelope (RawFrame after decode, or a legacy
+// Telemetry frame as-received). Per-event publish happens after the
+// state-store writes so subscribers never see a row the daemon failed
+// to persist.
 type Ingestor struct {
-	S *store.Store
+	S   *store.Store
+	Pub *events.Publisher
 }
 
 // Handle dispatches an Envelope by oneof body. Returns an error only
 // on hard malformed input; transient DB errors are returned so the
 // connection layer can decide whether to drop the peer.
-//
-// TODO: familyFromModel is a string-prefix hack — replace with a
-// proper capability table when one exists (architecture review).
 func (in *Ingestor) Handle(ctx context.Context, backend string, env *wire.Envelope) error {
 	switch b := env.GetBody().(type) {
 	case *wire.Envelope_Hello:
 		if b.Hello == nil {
 			return fmt.Errorf("hello envelope without body")
 		}
-		return in.S.AppendEvent(ctx, b.Hello.GetStartedAtMs(), "", "backend_hello", "info", protoPayload(b.Hello))
+		log.Printf("ingest hello: backend=%q version=%q hostname=%q role=%s",
+			b.Hello.GetBackend(), b.Hello.GetVersion(), b.Hello.GetHostname(), b.Hello.GetRole().String())
+		return nil
 	case *wire.Envelope_Telemetry:
 		if b.Telemetry == nil {
 			return fmt.Errorf("telemetry envelope without body")
 		}
-		return in.handleTelemetry(ctx, b.Telemetry)
+		if err := in.handleTelemetry(ctx, b.Telemetry); err != nil {
+			return err
+		}
+		in.publish(env)
+		return nil
+	case *wire.Envelope_RawFrame:
+		if b.RawFrame == nil {
+			return fmt.Errorf("raw_frame envelope without body")
+		}
+		return in.handleRawFrame(ctx, b.RawFrame)
 	case *wire.Envelope_DecodeFailed:
 		if b.DecodeFailed == nil {
 			return fmt.Errorf("decode_failed envelope without body")
 		}
-		return in.S.AppendEvent(ctx, b.DecodeFailed.GetTsMs(), "", "decode_failed", "warn", protoPayload(b.DecodeFailed))
+		df := b.DecodeFailed
+		return in.S.AppendDecodeFailed(ctx, df.GetTsMs(), df.GetShortAddr(), df.GetError(), df.GetRawHex())
 	case nil:
 		return fmt.Errorf("envelope without body")
 	default:
@@ -61,43 +79,116 @@ func (in *Ingestor) handleTelemetry(ctx context.Context, t *wire.Telemetry) erro
 	// short_addr on the wire is uint32 (proto has no uint16); narrow
 	// at the store boundary which retains the uint16 column type.
 	shortAddr := uint16(t.GetShortAddr())
-	if err := in.S.UpsertInverterFromTelemetry(ctx, t.GetPeerUid(), shortAddr, fam, t.GetModel(), t.GetTsMs()); err != nil {
+	uid := t.GetPeerUid()
+	tsMs := t.GetTsMs()
+	if err := in.S.UpsertInverterFromTelemetry(ctx, uid, shortAddr, fam, t.GetModel(), tsMs); err != nil {
 		return err
 	}
-	if err := in.S.WriteTelemetryLive(ctx, t.GetPeerUid(), t.GetTsMs(),
-		t.GetActivePowerW(), t.GetGridV(), t.GetFreqHz(), t.GetBusV(), t.GetReportSec(), protoPayload(t)); err != nil {
+	if err := in.S.WriteTelemetryLive(ctx, uid, tsMs, t.GetCmd(),
+		t.GetActivePowerW(), t.GetGridV(), t.GetFreqHz(), t.GetBusV(), t.GetReportSec()); err != nil {
 		return err
 	}
-	// Light-touch audit row. Detailed telemetry_history comes later.
-	return in.S.AppendEvent(ctx, t.GetTsMs(), t.GetPeerUid(), "telemetry", "info", nil)
+	if pp := t.GetPanels(); len(pp) > 0 {
+		rows := make([]store.PanelRow, 0, len(pp))
+		for _, p := range pp {
+			rows = append(rows, store.PanelRow{
+				ChannelIdx: int(p.GetIndex()),
+				DCV:        p.GetDcV(),
+				DCI:        p.GetDcI(),
+				W:          p.GetW(),
+			})
+		}
+		if err := in.S.WritePanels(ctx, uid, tsMs, rows); err != nil {
+			return err
+		}
+	}
+	if raw := t.GetLifetimeRaw(); len(raw) > 0 {
+		scale := t.GetLifetimeScale()
+		rows := make([]store.EnergyRow, 0, len(raw))
+		for i, r := range raw {
+			rows = append(rows, store.EnergyRow{
+				ChannelIdx: i,
+				Raw:        r,
+				Scale:      scale,
+			})
+		}
+		if err := in.S.WriteEnergyLifetime(ctx, uid, tsMs, rows); err != nil {
+			return err
+		}
+	}
+	// Light-touch audit row.
+	return in.S.AppendEvent(ctx, tsMs, uid, "telemetry", "info")
 }
 
-// protoPayload marshals m to protojson and returns it as a
-// json.RawMessage-like type so the store layer writes it verbatim
-// (no second JSON round-trip). nil m -> nil payload.
-func protoPayload(m proto.Message) any {
-	if m == nil {
-		return nil
+// handleRawFrame decodes the L1 reply into a wire.Telemetry, runs the
+// same store writes as the Telemetry path, and publishes a Telemetry
+// envelope so subscribers see the decoded view regardless of which
+// side decoded the frame. A decode failure is captured as a
+// decode_failed event and is NOT published.
+func (in *Ingestor) handleRawFrame(ctx context.Context, rf *wire.RawFrame) error {
+	raw := rf.GetL1Frame()
+	tsMs := rf.GetTsMs()
+	if tsMs == 0 {
+		tsMs = time.Now().UnixMilli()
 	}
-	b, err := protojson.Marshal(m)
+	rep, err := codec.DecodeReply(raw)
 	if err != nil {
-		// Fall back to a stub object rather than dropping the row.
-		return map[string]string{"error": "protojson marshal: " + err.Error()}
+		return in.S.AppendDecodeFailed(ctx, tsMs, rf.GetShortAddr(), err.Error(), truncHex(raw))
 	}
-	return rawJSON(b)
+	t := telemetryFromReply(rep, tsMs)
+	if err := in.handleTelemetry(ctx, t); err != nil {
+		return err
+	}
+	in.publish(&wire.Envelope{Body: &wire.Envelope_Telemetry{Telemetry: t}})
+	return nil
 }
 
-// rawJSON is a []byte alias that the store's json.Marshal will emit
-// verbatim (json.RawMessage). Keeping the type local avoids importing
-// encoding/json into this file.
-type rawJSON []byte
-
-// MarshalJSON implements json.Marshaler.
-func (r rawJSON) MarshalJSON() ([]byte, error) {
-	if len(r) == 0 {
-		return []byte("null"), nil
+// telemetryFromReply maps every codec.Reply field onto wire.Telemetry.
+func telemetryFromReply(r codec.Reply, tsMs int64) *wire.Telemetry {
+	t := &wire.Telemetry{
+		TsMs:          tsMs,
+		ShortAddr:     uint32(r.ShortAddr),
+		PeerUid:       r.PeerUID,
+		Cmd:           uint32(r.Cmd),
+		Model:         r.Model,
+		GridV:         r.GridV,
+		BusV:          r.BusV,
+		FreqHz:        r.FreqHz,
+		ReportSec:     r.ReportSec,
+		ActivePowerW:  r.ActivePowerW,
+		ReactiveVar:   r.ReactivePower,
+		LifetimeRaw:   r.LifetimeRaw,
+		LifetimeScale: r.LifetimeScale,
 	}
-	return []byte(r), nil
+	if len(r.Panels) > 0 {
+		t.Panels = make([]*wire.Panel, len(r.Panels))
+		for i, pn := range r.Panels {
+			t.Panels[i] = &wire.Panel{
+				Index: int32(pn.Index),
+				DcV:   pn.DCV,
+				DcI:   pn.DCI,
+				W:     pn.W,
+			}
+		}
+	}
+	return t
+}
+
+func (in *Ingestor) publish(env *wire.Envelope) {
+	if in.Pub == nil || env == nil {
+		return
+	}
+	in.Pub.Publish(env)
+}
+
+// truncHex caps the raw_hex column at 256 bytes (512 hex chars) so a
+// malformed frame doesn't bloat the events table.
+func truncHex(b []byte) string {
+	const cap = 256
+	if len(b) > cap {
+		b = b[:cap]
+	}
+	return hex.EncodeToString(b)
 }
 
 // familyFromModel maps the human Model string to the lowercase family

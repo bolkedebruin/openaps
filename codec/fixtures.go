@@ -1,0 +1,42 @@
+package codec
+
+import (
+	"encoding/hex"
+	"strings"
+)
+
+// QS1AFixtureHex is a real captured QS1A reply for SA=0x5011
+// (806000042582), taken 2026-05-04 from a live ECU. 100 bytes.
+const QS1AFixtureHex = "" +
+	"fcfc5011bfa5806000042582" +
+	"fbfb51b1" +
+	"04010f3b6800b5707224417421c173248174049b9d0f0000000000070988676406fcc7346d0718c07f97051c369e5c1f000305db00000000000000000000000000000000000000000000000000000000fa2d0000" +
+	"fefe"
+
+// DS3FixtureHex is a real captured DS3 reply for SA=0x61F0
+// (704000006835). 111 bytes.
+const DS3FixtureHex = "" +
+	"fcfc61f0cea5704000006835" +
+	"fbfb5cbb" +
+	"bb2000030043ffff000000000000000007670769009f0059035a138f97f70069002bffff04b908b6041ea2f402e58b5600ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff39fc" +
+	"fefe"
+
+// QS1AFixture decodes QS1AFixtureHex once and exposes the bytes.
+var QS1AFixture = mustHex(QS1AFixtureHex)
+
+// DS3Fixture decodes DS3FixtureHex once.
+var DS3Fixture = mustHex(DS3FixtureHex)
+
+func mustHex(s string) []byte {
+	clean := strings.Map(func(r rune) rune {
+		if r == ' ' || r == '\n' || r == '\t' {
+			return -1
+		}
+		return r
+	}, s)
+	b, err := hex.DecodeString(clean)
+	if err != nil {
+		panic("codec.mustHex: " + err.Error())
+	}
+	return b
+}

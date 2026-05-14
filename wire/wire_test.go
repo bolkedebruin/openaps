@@ -56,7 +56,6 @@ func TestReadWriteFrame_RoundTrip(t *testing.T) {
 				},
 				LifetimeRaw:   []uint64{12345, 12346},
 				LifetimeScale: 0.001,
-				BodyHex:       "deadbeef",
 			}}},
 		},
 		{

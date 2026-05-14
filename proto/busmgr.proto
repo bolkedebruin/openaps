@@ -1,9 +1,8 @@
 syntax = "proto3";
 
 // Package busmgr.v1 is the wire schema between a bus-mgr backend
-// (e.g. ecu-zb) and inv-driver. Framing is 4-byte BE length prefix
-// per wire.MaxFrameBytes (64 KiB cap). See
-// FIRMWARE_REDESIGN_PROPOSAL.md §8 and INV_DRIVER_DESIGN.md §2.
+// (e.g. ecu-zb) and inv-driver. Framing is a 4-byte BE length prefix
+// per wire.MaxFrameBytes (64 KiB cap).
 package busmgr.v1;
 
 option go_package = "github.com/bolke/inv-driver/wire;wire";
@@ -17,12 +16,23 @@ message Envelope {
     Hello         hello         = 1;
     Telemetry     telemetry     = 2;
     DecodeFailed  decode_failed = 3;
+    RawFrame      raw_frame     = 4;
 
     Send          send          = 10;
     Broadcast     broadcast     = 11;
     Reset         reset         = 12;
     SubscribeRaw  subscribe_raw = 13;
   }
+}
+
+// Role enumerates how a peer participates on the UDS. PUBLISHER (the
+// default for backward compatibility) streams Hello + telemetry into
+// the driver. SUBSCRIBER receives a fan-out of decoded upstream
+// envelopes (telemetry today; raw frames after decode).
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  PUBLISHER        = 1;
+  SUBSCRIBER       = 2;
 }
 
 // Hello is the first frame on every backend connection. The driver
@@ -33,10 +43,20 @@ message Hello {
   string version       = 2;  // backend semver
   string hostname      = 3;
   int64  started_at_ms = 4;  // unix ms
-  // v0 placeholder: free-form capability strings. Should become a
-  // structured BusCapabilities message per FIRMWARE_REDESIGN_PROPOSAL.md
-  // §4 before v1.
+  // Free-form capability strings.
   repeated string bus_caps = 5;
+  // Role declares the peer's intent. Unset (ROLE_UNSPECIFIED) is
+  // treated as PUBLISHER by the server for backward compatibility.
+  Role role = 6;
+}
+
+// RawFrame is a reassembled L1 reply that the driver decodes itself.
+// peer_uid is intentionally omitted: it lives inside the L1 envelope
+// and the driver parses it during decode. See codec.ParseL1.
+message RawFrame {
+  int64  ts_ms      = 1;   // wall-clock at capture time
+  uint32 short_addr = 2;   // 16-bit network short address
+  bytes  l1_frame   = 3;   // full reassembled L1 reply (FC FC … FE FE)
 }
 
 // Telemetry is one decoded reply from one inverter. Mirrors
@@ -57,9 +77,7 @@ message Telemetry {
   repeated Panel  panels        = 12;
   repeated uint64 lifetime_raw  = 13;
   double lifetime_scale = 14;
-  // v0 transitional: raw L2 body hex. May be removed when the codec
-  // moves into inv-driver.
-  string body_hex = 15;
+  reserved 15;            // body_hex
 }
 
 // Panel mirrors codec.Panel.
@@ -79,26 +97,22 @@ message DecodeFailed {
   string raw_hex    = 4;  // may be truncated
 }
 
-// Send is a downstream stub; see FIRMWARE_REDESIGN_PROPOSAL.md §4
-// BusBackend. Server returns Unimplemented in v0.
+// Send is a downstream stub. Server returns Unimplemented in v0.
 message Send {
   string peer_uid    = 1;
   bytes  frame       = 2;
   int64  deadline_ms = 3;
 }
 
-// Broadcast is a downstream stub; see FIRMWARE_REDESIGN_PROPOSAL.md
-// §4 BusBackend. Server returns Unimplemented in v0.
+// Broadcast is a downstream stub. Server returns Unimplemented in v0.
 message Broadcast {
   bytes frame       = 1;
   int64 deadline_ms = 2;
 }
 
-// Reset is a downstream stub; see FIRMWARE_REDESIGN_PROPOSAL.md §4
-// BusBackend. Server returns Unimplemented in v0.
+// Reset is a downstream stub. Server returns Unimplemented in v0.
 message Reset {}
 
-// SubscribeRaw is a downstream stub; see FIRMWARE_REDESIGN_PROPOSAL.md
-// §4 BusBackend. Server returns Unimplemented in v0. Shape is open
-// (see design open questions); v0 is intentionally empty.
+// SubscribeRaw is a downstream stub. Server returns Unimplemented in
+// v0. Shape is intentionally empty until requirements firm up.
 message SubscribeRaw {}

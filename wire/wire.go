@@ -1,7 +1,7 @@
 // Package wire defines the framed protobuf protocol between bus-mgr
 // backends (e.g. ecu-zb) and inv-driver.
 //
-// v0 wire format
+// Wire format:
 //
 //	┌─────────────────────────────────────┐
 //	│ 4 bytes  uint32 BE — body len       │
@@ -9,13 +9,9 @@
 //	└─────────────────────────────────────┘
 //
 // The schema lives in proto/busmgr.proto; the generated types are in
-// busmgr.pb.go in this same package (see FIRMWARE_REDESIGN_PROPOSAL.md
-// §8 and INV_DRIVER_DESIGN.md §2). The 4-byte length-prefix framing
-// is fixed; switching the body encoding from JSON to protobuf
-// happened transparently above the framing layer.
-//
-// Max body size is bounded (MaxFrameBytes) so a malformed peer can't
-// allocate gigabytes by claiming a giant length.
+// busmgr.pb.go in this same package. Max body size is bounded
+// (MaxFrameBytes) so a malformed peer can't allocate gigabytes by
+// claiming a giant length.
 package wire
 
 import (

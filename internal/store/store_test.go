@@ -30,8 +30,6 @@ func TestOpen_FreshAndIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first Open: %v", err)
 	}
-	// Insert a row, then close, then re-Open and verify it's still there
-	// (proving schema apply on existing DB is a no-op).
 	if err := s1.UpsertInverterFromTelemetry(context.Background(), "uid1", 0x1234, "qs1a", "QS1A", 1000); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
@@ -71,7 +69,6 @@ func TestUpsertInverter_FirstInsertThenUpdate(t *testing.T) {
 		t.Fatalf("first insert: paired_at=%d last_seen=%d, want both 1000", pairedAt, lastSeen)
 	}
 
-	// Second upsert with later ts.
 	if err := s.UpsertInverterFromTelemetry(ctx, "abc", 0x2222, "qs1a", "QS1A", 2000); err != nil {
 		t.Fatalf("second upsert: %v", err)
 	}
@@ -98,10 +95,10 @@ func TestWriteTelemetryLive_Overwrites(t *testing.T) {
 	if err := s.UpsertInverterFromTelemetry(ctx, "uid", 0, "qs1a", "QS1A", 100); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
-	if err := s.WriteTelemetryLive(ctx, "uid", 100, 100.0, 230.0, 50.0, 380.0, 60, map[string]int{"v": 1}); err != nil {
+	if err := s.WriteTelemetryLive(ctx, "uid", 100, 0xB1, 100.0, 230.0, 50.0, 380.0, 60); err != nil {
 		t.Fatalf("first write: %v", err)
 	}
-	if err := s.WriteTelemetryLive(ctx, "uid", 200, 200.0, 231.0, 50.1, 381.0, 120, map[string]int{"v": 2}); err != nil {
+	if err := s.WriteTelemetryLive(ctx, "uid", 200, 0xB1, 200.0, 231.0, 50.1, 381.0, 120); err != nil {
 		t.Fatalf("second write: %v", err)
 	}
 
@@ -114,34 +111,113 @@ func TestWriteTelemetryLive_Overwrites(t *testing.T) {
 	}
 	var ts int64
 	var acW float64
-	if err := s.DB().QueryRow(`SELECT ts_ms, ac_w FROM telemetry_live WHERE inverter_uid='uid'`).Scan(&ts, &acW); err != nil {
+	var cmd int64
+	if err := s.DB().QueryRow(`SELECT ts_ms, cmd, ac_w FROM telemetry_live WHERE inverter_uid='uid'`).Scan(&ts, &cmd, &acW); err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if ts != 200 || acW != 200.0 {
-		t.Fatalf("overwrite: ts=%d ac_w=%v, want 200/200", ts, acW)
+	if ts != 200 || acW != 200.0 || cmd != 0xB1 {
+		t.Fatalf("overwrite: ts=%d cmd=%x ac_w=%v, want 200/0xB1/200", ts, cmd, acW)
 	}
 }
 
-func TestAppendEvent_DefaultsAndNullPayload(t *testing.T) {
+func TestWritePanels_Upserts(t *testing.T) {
+	t.Parallel()
+	s := openTestStore(t)
+	ctx := context.Background()
+	if err := s.UpsertInverterFromTelemetry(ctx, "uid", 0, "qs1a", "QS1A", 100); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	if err := s.WritePanels(ctx, "uid", 100, []PanelRow{
+		{ChannelIdx: 0, DCV: 30.0, DCI: 4.5, W: 135.0},
+		{ChannelIdx: 1, DCV: 31.0, DCI: 4.6, W: 142.6},
+	}); err != nil {
+		t.Fatalf("first WritePanels: %v", err)
+	}
+	if err := s.WritePanels(ctx, "uid", 200, []PanelRow{
+		{ChannelIdx: 0, DCV: 32.0, DCI: 5.0, W: 160.0},
+		{ChannelIdx: 1, DCV: 33.0, DCI: 5.1, W: 168.3},
+		{ChannelIdx: 2, DCV: 34.0, DCI: 5.2, W: 176.8},
+	}); err != nil {
+		t.Fatalf("second WritePanels: %v", err)
+	}
+	var n int
+	if err := s.DB().QueryRow(`SELECT COUNT(*) FROM inverter_panels WHERE inverter_uid='uid'`).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 3 {
+		t.Fatalf("panels count: got %d want 3", n)
+	}
+	var dcV, w float64
+	var lastSeen int64
+	if err := s.DB().QueryRow(`SELECT dc_v, w, last_seen_ms FROM inverter_panels WHERE inverter_uid='uid' AND channel_idx=0`).Scan(&dcV, &w, &lastSeen); err != nil {
+		t.Fatalf("read ch0: %v", err)
+	}
+	if dcV != 32.0 || w != 160.0 || lastSeen != 200 {
+		t.Fatalf("ch0 after upsert: dc_v=%v w=%v last_seen_ms=%d", dcV, w, lastSeen)
+	}
+}
+
+func TestWriteEnergyLifetime_Upserts(t *testing.T) {
+	t.Parallel()
+	s := openTestStore(t)
+	ctx := context.Background()
+	if err := s.UpsertInverterFromTelemetry(ctx, "uid", 0, "qs1a", "QS1A", 100); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	if err := s.WriteEnergyLifetime(ctx, "uid", 100, []EnergyRow{
+		{ChannelIdx: 0, Raw: 1000, Scale: 3.756e-11},
+		{ChannelIdx: 1, Raw: 2000, Scale: 3.756e-11},
+	}); err != nil {
+		t.Fatalf("first WriteEnergyLifetime: %v", err)
+	}
+	if err := s.WriteEnergyLifetime(ctx, "uid", 200, []EnergyRow{
+		{ChannelIdx: 0, Raw: 1500, Scale: 3.756e-11},
+	}); err != nil {
+		t.Fatalf("second WriteEnergyLifetime: %v", err)
+	}
+	var raw int64
+	var scale float64
+	var lastUpdate int64
+	if err := s.DB().QueryRow(`SELECT raw, scale, last_update_ms FROM energy_lifetime WHERE inverter_uid='uid' AND channel_idx=0`).Scan(&raw, &scale, &lastUpdate); err != nil {
+		t.Fatalf("read ch0: %v", err)
+	}
+	if raw != 1500 || lastUpdate != 200 {
+		t.Fatalf("ch0 after upsert: raw=%d last_update_ms=%d", raw, lastUpdate)
+	}
+	if scale == 0 {
+		t.Fatalf("scale should not be zero")
+	}
+	var n int
+	if err := s.DB().QueryRow(`SELECT COUNT(*) FROM energy_lifetime WHERE inverter_uid='uid'`).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("energy_lifetime count: got %d want 2 (channel 1 must survive)", n)
+	}
+}
+
+func TestAppendEvent_Defaults(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	if err := s.AppendEvent(ctx, 10, "uidA", "kindA", "", nil); err != nil {
+	if err := s.AppendEvent(ctx, 10, "uidA", "kindA", ""); err != nil {
 		t.Fatalf("append 1: %v", err)
 	}
-	if err := s.AppendEvent(ctx, 20, "uidB", "kindB", "warn", map[string]string{"foo": "bar"}); err != nil {
+	if err := s.AppendEvent(ctx, 20, "uidB", "kindB", "warn"); err != nil {
 		t.Fatalf("append 2: %v", err)
 	}
 
 	type row struct {
-		id       int64
-		uid      sql.NullString
-		kind     string
-		severity string
-		payload  sql.NullString
+		id        int64
+		uid       sql.NullString
+		kind      string
+		severity  string
+		shortAddr sql.NullInt64
+		errMsg    sql.NullString
+		rawHex    sql.NullString
 	}
-	rows, err := s.DB().Query(`SELECT id, inverter_uid, kind, severity, payload_json FROM events ORDER BY id`)
+	rows, err := s.DB().Query(`SELECT id, inverter_uid, kind, severity, short_addr, error, raw_hex FROM events ORDER BY id`)
 	if err != nil {
 		t.Fatalf("query: %v", err)
 	}
@@ -150,7 +226,7 @@ func TestAppendEvent_DefaultsAndNullPayload(t *testing.T) {
 	var got []row
 	for rows.Next() {
 		var r row
-		if err := rows.Scan(&r.id, &r.uid, &r.kind, &r.severity, &r.payload); err != nil {
+		if err := rows.Scan(&r.id, &r.uid, &r.kind, &r.severity, &r.shortAddr, &r.errMsg, &r.rawHex); err != nil {
 			t.Fatalf("scan: %v", err)
 		}
 		got = append(got, r)
@@ -158,25 +234,44 @@ func TestAppendEvent_DefaultsAndNullPayload(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("rows: got %d want 2", len(got))
 	}
-	if got[0].id == got[1].id {
-		t.Fatalf("autoincrement: ids equal: %d %d", got[0].id, got[1].id)
-	}
 	if got[1].id <= got[0].id {
 		t.Fatalf("autoincrement: id2=%d not greater than id1=%d", got[1].id, got[0].id)
 	}
-	// First: empty severity -> "info"; nil payload -> NULL.
 	if got[0].severity != "info" {
 		t.Fatalf("severity default: got %q want \"info\"", got[0].severity)
 	}
-	if got[0].payload.Valid {
-		t.Fatalf("expected NULL payload, got %q", got[0].payload.String)
+	if got[0].shortAddr.Valid || got[0].errMsg.Valid || got[0].rawHex.Valid {
+		t.Fatalf("typed columns must be NULL for non-decode_failed rows: %+v", got[0])
 	}
-	// Second: severity preserved; payload non-NULL.
 	if got[1].severity != "warn" {
 		t.Fatalf("severity: got %q want \"warn\"", got[1].severity)
 	}
-	if !got[1].payload.Valid {
-		t.Fatal("expected non-NULL payload")
+}
+
+func TestAppendDecodeFailed_PopulatesTypedColumns(t *testing.T) {
+	t.Parallel()
+	s := openTestStore(t)
+	ctx := context.Background()
+	if err := s.AppendDecodeFailed(ctx, 99, 0x5011, "L2 CRC mismatch", "deadbeef"); err != nil {
+		t.Fatalf("AppendDecodeFailed: %v", err)
+	}
+	var kind, severity string
+	var shortAddr sql.NullInt64
+	var errMsg, rawHex sql.NullString
+	if err := s.DB().QueryRow(`SELECT kind, severity, short_addr, error, raw_hex FROM events`).Scan(&kind, &severity, &shortAddr, &errMsg, &rawHex); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if kind != "decode_failed" || severity != "warn" {
+		t.Fatalf("kind/severity: %q/%q", kind, severity)
+	}
+	if !shortAddr.Valid || shortAddr.Int64 != 0x5011 {
+		t.Fatalf("short_addr: %+v", shortAddr)
+	}
+	if !errMsg.Valid || errMsg.String != "L2 CRC mismatch" {
+		t.Fatalf("error: %+v", errMsg)
+	}
+	if !rawHex.Valid || rawHex.String != "deadbeef" {
+		t.Fatalf("raw_hex: %+v", rawHex)
 	}
 }
 
@@ -184,7 +279,7 @@ func TestAppendEvent_NullableInverterUID(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)
 	ctx := context.Background()
-	if err := s.AppendEvent(ctx, 1, "", "backend_hello", "info", nil); err != nil {
+	if err := s.AppendEvent(ctx, 1, "", "service_start", "info"); err != nil {
 		t.Fatalf("append: %v", err)
 	}
 	var uid sql.NullString
@@ -204,7 +299,7 @@ func TestNullableHelpers_StoreNULLs(t *testing.T) {
 	if err := s.UpsertInverterFromTelemetry(ctx, "u", 0, "", "", 1); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
-	if err := s.WriteTelemetryLive(ctx, "u", 1, 0, 0, 0, 0, 0, struct{}{}); err != nil {
+	if err := s.WriteTelemetryLive(ctx, "u", 1, 0, 0, 0, 0, 0, 0); err != nil {
 		t.Fatalf("write live: %v", err)
 	}
 
@@ -257,7 +352,7 @@ func TestConcurrentWrites(t *testing.T) {
 					errCh <- fmt.Errorf("upsert %s: %w", uid, err)
 					return
 				}
-				if err := s.WriteTelemetryLive(ctx, uid, ts, float64(i), 230, 50, 380, 60, map[string]int{"i": i}); err != nil {
+				if err := s.WriteTelemetryLive(ctx, uid, ts, 0xB1, float64(i), 230, 50, 380, 60); err != nil {
 					errCh <- fmt.Errorf("live %s: %w", uid, err)
 					return
 				}
@@ -291,11 +386,11 @@ func TestPruneEvents(t *testing.T) {
 		{1000, "telemetry"},
 		{2000, "telemetry"},
 		{3000, "telemetry"},
-		{1500, "backend_hello"},
+		{1500, "service_start"},
 		{2500, "decode_failed"},
 	}
 	for _, r := range rows {
-		if err := s.AppendEvent(ctx, r.tsMs, "", r.kind, "info", nil); err != nil {
+		if err := s.AppendEvent(ctx, r.tsMs, "", r.kind, "info"); err != nil {
 			t.Fatalf("AppendEvent: %v", err)
 		}
 	}
@@ -319,8 +414,8 @@ func TestPruneEvents(t *testing.T) {
 	if got := countKind("telemetry"); got != 1 {
 		t.Fatalf("telemetry remaining: got %d want 1", got)
 	}
-	if got := countKind("backend_hello"); got != 1 {
-		t.Fatalf("backend_hello must be untouched, got %d", got)
+	if got := countKind("service_start"); got != 1 {
+		t.Fatalf("service_start must be untouched, got %d", got)
 	}
 	if got := countKind("decode_failed"); got != 1 {
 		t.Fatalf("decode_failed must be untouched, got %d", got)
@@ -333,8 +428,8 @@ func TestPruneEvents(t *testing.T) {
 	if deleted != 1 {
 		t.Fatalf("unscoped delete: got %d want 1", deleted)
 	}
-	if got := countKind("backend_hello"); got != 0 {
-		t.Fatalf("backend_hello must be gone, got %d", got)
+	if got := countKind("service_start"); got != 0 {
+		t.Fatalf("service_start must be gone, got %d", got)
 	}
 	if got := countKind("decode_failed"); got != 1 {
 		t.Fatalf("decode_failed (ts=2500, not < cutoff) must remain, got %d", got)
@@ -354,4 +449,3 @@ func TestPruneEvents(t *testing.T) {
 		t.Fatalf("empty prune: got %d want 0", deleted)
 	}
 }
-
