@@ -1,0 +1,101 @@
+#!/bin/sh
+#
+# S48-inv-driver — start inv-driver before S49-ecu-zb so its UDS socket
+# is available when ecu-zb's busmgr client first dials. Ordering is not
+# strictly required (busmgr retries with backoff), but starting first
+# avoids the first dial cycle's backoff log line.
+#
+# Install:
+#   ssh ecu 'cat > /etc/rcS.d/S48-inv-driver' < S48-inv-driver
+#   ssh ecu 'chmod +x /etc/rcS.d/S48-inv-driver'
+#
+# State paths:
+#   /var/run/inv-driver.sock      UDS endpoint (mode 0600)
+#   /var/lib/inv-driver/state.db  SQLite WAL store
+#   /home/applications/inv-driver/inv-driver.log   stdout/stderr
+
+BIN=/home/applications/inv-driver/inv-driver
+DATA=/var/lib/inv-driver
+SOCK=/var/run/inv-driver.sock
+RUN=/home/applications/inv-driver
+LOG=$RUN/inv-driver.log
+PIDFILE=$RUN/inv-driver.pid
+ARGS="serve -socket $SOCK -db $DATA/state.db"
+
+start() {
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "inv-driver already running (pid $(cat "$PIDFILE"))"
+        return 0
+    fi
+    [ -x "$BIN" ] || { echo "$BIN missing or not executable"; return 1; }
+    mkdir -p "$DATA" "$RUN"
+
+    # nohup-sh-exec wrapper: same pattern as S49-ecu-zb, so the daemon
+    # survives both init(1) boot context and PHP-FPM upgrade-endpoint
+    # context. The inner exec lets the wrapper sh be replaced by
+    # inv-driver so the captured PID is the right one.
+    nohup sh -c "echo \$\$ > '$PIDFILE'; exec '$BIN' $ARGS" \
+        </dev/null >> "$LOG" 2>&1 &
+    sleep 1
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "inv-driver started (pid $(cat "$PIDFILE"))"
+    else
+        echo "inv-driver failed to stay up; check $LOG"
+        return 1
+    fi
+
+    # Wait for the socket to appear so dependent services can connect.
+    i=0
+    while [ $i -lt 10 ]; do
+        if [ -S "$SOCK" ]; then
+            echo "inv-driver ready: $SOCK"
+            return 0
+        fi
+        sleep 1
+        i=$((i+1))
+    done
+    echo "inv-driver did not publish socket within 10s"
+    return 1
+}
+
+stop() {
+    if [ -f "$PIDFILE" ]; then
+        PID=$(cat "$PIDFILE")
+        kill "$PID" 2>/dev/null
+        sleep 2
+        kill -9 "$PID" 2>/dev/null
+        rm -f "$PIDFILE"
+        echo "inv-driver stopped"
+    else
+        P=$(pidof inv-driver 2>/dev/null)
+        if [ -n "$P" ]; then
+            kill $P 2>/dev/null
+            sleep 2
+            kill -9 $P 2>/dev/null
+            echo "inv-driver stopped (no pidfile, used pidof)"
+        else
+            echo "inv-driver not running"
+        fi
+    fi
+    rm -f "$SOCK"
+}
+
+status() {
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "running (pid $(cat "$PIDFILE"))"
+    else
+        echo "stopped"
+        exit 1
+    fi
+}
+
+case "$1" in
+    start)   start ;;
+    stop)    stop ;;
+    restart) stop; sleep 1; start ;;
+    status)  status ;;
+    *)
+        echo "usage: $0 {start|stop|restart|status}"
+        exit 2
+        ;;
+esac

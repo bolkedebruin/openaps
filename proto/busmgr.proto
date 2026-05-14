@@ -1,0 +1,104 @@
+syntax = "proto3";
+
+// Package busmgr.v1 is the wire schema between a bus-mgr backend
+// (e.g. ecu-zb) and inv-driver. Framing is 4-byte BE length prefix
+// per wire.MaxFrameBytes (64 KiB cap). See
+// FIRMWARE_REDESIGN_PROPOSAL.md §8 and INV_DRIVER_DESIGN.md §2.
+package busmgr.v1;
+
+option go_package = "github.com/bolke/inv-driver/wire;wire";
+
+// Envelope is the single top-level message on every frame. Tag
+// numbers 1..9 are upstream (backend -> driver); 10..19 are reserved
+// for downstream (driver -> backend) so adding upstream fields cannot
+// collide with downstream additions.
+message Envelope {
+  oneof body {
+    Hello         hello         = 1;
+    Telemetry     telemetry     = 2;
+    DecodeFailed  decode_failed = 3;
+
+    Send          send          = 10;
+    Broadcast     broadcast     = 11;
+    Reset         reset         = 12;
+    SubscribeRaw  subscribe_raw = 13;
+  }
+}
+
+// Hello is the first frame on every backend connection. The driver
+// uses it to identify the bus backend (e.g. apsystems-stock-zb) and
+// log version drift across restarts.
+message Hello {
+  string backend       = 1;  // e.g. "apsystems-stock-zb"
+  string version       = 2;  // backend semver
+  string hostname      = 3;
+  int64  started_at_ms = 4;  // unix ms
+  // v0 placeholder: free-form capability strings. Should become a
+  // structured BusCapabilities message per FIRMWARE_REDESIGN_PROPOSAL.md
+  // §4 before v1.
+  repeated string bus_caps = 5;
+}
+
+// Telemetry is one decoded reply from one inverter. Mirrors
+// codec.Reply plus a server-stamped ts_ms so the timeline doesn't
+// depend on a synchronised clock between ECU and inv-driver hosts.
+message Telemetry {
+  int64  ts_ms          = 1;   // wall-clock at publish time
+  uint32 short_addr     = 2;   // 16-bit network short address
+  string peer_uid       = 3;   // 12-char hex
+  uint32 cmd            = 4;   // L2 cmd (0xB1 QS1A, 0xBB DS3)
+  string model          = 5;   // "QS1A" / "DS3" / "unknown(0x..)"
+  double grid_v         = 6;
+  double bus_v          = 7;
+  double freq_hz        = 8;
+  uint32 report_sec     = 9;
+  double active_power_w = 10;
+  double reactive_var   = 11;
+  repeated Panel  panels        = 12;
+  repeated uint64 lifetime_raw  = 13;
+  double lifetime_scale = 14;
+  // v0 transitional: raw L2 body hex. May be removed when the codec
+  // moves into inv-driver.
+  string body_hex = 15;
+}
+
+// Panel mirrors codec.Panel.
+message Panel {
+  int32  index = 1;
+  double dc_v  = 2;
+  double dc_i  = 3;
+  double w     = 4;
+}
+
+// DecodeFailed records a frame the backend received but could not
+// decode. Routed to events with kind=decode_failed.
+message DecodeFailed {
+  int64  ts_ms      = 1;
+  uint32 short_addr = 2;
+  string error      = 3;
+  string raw_hex    = 4;  // may be truncated
+}
+
+// Send is a downstream stub; see FIRMWARE_REDESIGN_PROPOSAL.md §4
+// BusBackend. Server returns Unimplemented in v0.
+message Send {
+  string peer_uid    = 1;
+  bytes  frame       = 2;
+  int64  deadline_ms = 3;
+}
+
+// Broadcast is a downstream stub; see FIRMWARE_REDESIGN_PROPOSAL.md
+// §4 BusBackend. Server returns Unimplemented in v0.
+message Broadcast {
+  bytes frame       = 1;
+  int64 deadline_ms = 2;
+}
+
+// Reset is a downstream stub; see FIRMWARE_REDESIGN_PROPOSAL.md §4
+// BusBackend. Server returns Unimplemented in v0.
+message Reset {}
+
+// SubscribeRaw is a downstream stub; see FIRMWARE_REDESIGN_PROPOSAL.md
+// §4 BusBackend. Server returns Unimplemented in v0. Shape is open
+// (see design open questions); v0 is intentionally empty.
+message SubscribeRaw {}
