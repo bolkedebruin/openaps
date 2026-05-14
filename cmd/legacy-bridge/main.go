@@ -17,7 +17,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bolke/inv-driver/internal/paramsfile"
+	"github.com/bolke/inv-driver/cmd/legacy-bridge/internal/paramsfile"
 	"github.com/bolke/inv-driver/wire"
 )
 
