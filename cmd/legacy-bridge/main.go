@@ -21,6 +21,19 @@ import (
 	"github.com/bolke/inv-driver/wire"
 )
 
+// helloFrame builds the SUBSCRIBER Hello the bridge sends on every
+// reconnect.
+func helloFrame() *wire.Hello {
+	hostname, _ := os.Hostname()
+	return &wire.Hello{
+		Backend:     "legacy-bridge",
+		Version:     version,
+		Hostname:    hostname,
+		StartedAtMs: time.Now().UnixMilli(),
+		Role:        wire.Role_SUBSCRIBER,
+	}
+}
+
 const (
 	defaultSocket     = "/var/run/inv-driver.sock"
 	defaultParamsFile = "/tmp/parameters_app.conf"
@@ -77,6 +90,14 @@ func validateParamsPath(p string) error {
 // runLoop attaches as a SUBSCRIBER and feeds Telemetry envelopes into
 // the paramsfile updater, reconnecting with backoff on failure.
 func runLoop(ctx context.Context, socket string, u *paramsfile.Updater) error {
+	onTelemetry := func(t *wire.Telemetry) {
+		if t == nil {
+			return
+		}
+		if err := u.Update(t); err != nil {
+			log.Printf("legacy-bridge: update %s: %v", t.GetPeerUid(), err)
+		}
+	}
 	return wire.DialLoop(ctx, wire.DialLoopConfig{
 		SocketPath: socket,
 		OnConnect: func() {
@@ -86,53 +107,7 @@ func runLoop(ctx context.Context, socket string, u *paramsfile.Updater) error {
 			log.Printf("legacy-bridge: dial/session %s: %v (retry in %s)", socket, err, retryIn)
 		},
 		Session: func(ctx context.Context, conn net.Conn) error {
-			return session(ctx, conn, u)
+			return wire.SubscriberSession(ctx, conn, helloFrame(), onTelemetry)
 		},
 	})
-}
-
-// session sends Hello(SUBSCRIBER) and loops reading envelopes until
-// the conn errors out or ctx is cancelled.
-func session(ctx context.Context, conn net.Conn, u *paramsfile.Updater) error {
-	hostname, _ := os.Hostname()
-	hello := &wire.Envelope{Body: &wire.Envelope_Hello{Hello: &wire.Hello{
-		Backend:     "legacy-bridge",
-		Version:     version,
-		Hostname:    hostname,
-		StartedAtMs: time.Now().UnixMilli(),
-		Role:        wire.Role_SUBSCRIBER,
-	}}}
-	if err := wire.WriteFrame(conn, hello); err != nil {
-		return fmt.Errorf("hello: %w", err)
-	}
-
-	// Closing the conn on ctx cancel unblocks the read loop with
-	// net.ErrClosed.
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
-		select {
-		case <-ctx.Done():
-			_ = conn.Close()
-		case <-done:
-		}
-	}()
-
-	for {
-		var env wire.Envelope
-		if err := wire.ReadFrame(conn, &env); err != nil {
-			return err
-		}
-		switch b := env.GetBody().(type) {
-		case *wire.Envelope_Telemetry:
-			if b.Telemetry == nil {
-				continue
-			}
-			if err := u.Update(b.Telemetry); err != nil {
-				log.Printf("legacy-bridge: update %s: %v", b.Telemetry.GetPeerUid(), err)
-			}
-		default:
-			// Ignore envelopes we don't act on.
-		}
-	}
 }

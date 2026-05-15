@@ -87,7 +87,7 @@ func (u *Updater) Update(t *wire.Telemetry) error {
 	if t.GetPeerUid() == "" {
 		return errors.New("paramsfile: telemetry has no peer UID")
 	}
-	tc := typeCodeFor(t.GetModel())
+	tc := wire.TypeCodeForModel(t.GetModel())
 	if tc == "" {
 		return fmt.Errorf("paramsfile: no type code for model %q", t.GetModel())
 	}
@@ -109,21 +109,6 @@ func (u *Updater) now() time.Time {
 		return u.Now()
 	}
 	return time.Now()
-}
-
-// typeCodeFor returns the leading "type" column main.exe writes for a
-// given inverter family. Only families we have verified on real
-// hardware are listed; everything else returns "" so the caller fails
-// loudly rather than emit a guess that would mis-categorise the
-// inverter in main.exe's view.
-func typeCodeFor(model string) string {
-	switch {
-	case strings.HasPrefix(model, "QS1A"), strings.HasPrefix(model, "QS1"):
-		return "03"
-	case strings.HasPrefix(model, "DS3"):
-		return "01"
-	}
-	return ""
 }
 
 // writeFile renders the current state and atomically replaces u.Path.
