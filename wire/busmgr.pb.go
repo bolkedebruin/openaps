@@ -90,6 +90,7 @@ type Envelope struct {
 	//	*Envelope_Telemetry
 	//	*Envelope_DecodeFailed
 	//	*Envelope_RawFrame
+	//	*Envelope_Info
 	//	*Envelope_Send
 	//	*Envelope_Broadcast
 	//	*Envelope_Reset_
@@ -172,6 +173,15 @@ func (x *Envelope) GetRawFrame() *RawFrame {
 	return nil
 }
 
+func (x *Envelope) GetInfo() *InverterInfo {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_Info); ok {
+			return x.Info
+		}
+	}
+	return nil
+}
+
 func (x *Envelope) GetSend() *Send {
 	if x != nil {
 		if x, ok := x.Body.(*Envelope_Send); ok {
@@ -228,6 +238,10 @@ type Envelope_RawFrame struct {
 	RawFrame *RawFrame `protobuf:"bytes,4,opt,name=raw_frame,json=rawFrame,proto3,oneof"`
 }
 
+type Envelope_Info struct {
+	Info *InverterInfo `protobuf:"bytes,5,opt,name=info,proto3,oneof"`
+}
+
 type Envelope_Send struct {
 	Send *Send `protobuf:"bytes,10,opt,name=send,proto3,oneof"`
 }
@@ -251,6 +265,8 @@ func (*Envelope_Telemetry) isEnvelope_Body() {}
 func (*Envelope_DecodeFailed) isEnvelope_Body() {}
 
 func (*Envelope_RawFrame) isEnvelope_Body() {}
+
+func (*Envelope_Info) isEnvelope_Body() {}
 
 func (*Envelope_Send) isEnvelope_Body() {}
 
@@ -892,16 +908,121 @@ func (*SubscribeRaw) Descriptor() ([]byte, []int) {
 	return file_busmgr_proto_rawDescGZIP(), []int{9}
 }
 
+// InverterInfo carries identity and pair-state metadata sniffed off
+// the primary ZigBee modem. Optional fields use proto3 'optional' so
+// an unset field means "no update for this column" rather than "value
+// is 0".
+type InverterInfo struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	TsMs            int64                  `protobuf:"varint,1,opt,name=ts_ms,json=tsMs,proto3" json:"ts_ms,omitempty"`
+	PeerUid         string                 `protobuf:"bytes,2,opt,name=peer_uid,json=peerUid,proto3" json:"peer_uid,omitempty"` // 12-char hex
+	ShortAddr       uint32                 `protobuf:"varint,3,opt,name=short_addr,json=shortAddr,proto3" json:"short_addr,omitempty"`
+	ModelCode       *uint32                `protobuf:"varint,4,opt,name=model_code,json=modelCode,proto3,oneof" json:"model_code,omitempty"`
+	SoftwareVersion *uint32                `protobuf:"varint,5,opt,name=software_version,json=softwareVersion,proto3,oneof" json:"software_version,omitempty"`
+	Phase           *uint32                `protobuf:"varint,6,opt,name=phase,proto3,oneof" json:"phase,omitempty"` // 0 unknown, 1 single, 3 three
+	ZigbeeBound     *bool                  `protobuf:"varint,7,opt,name=zigbee_bound,json=zigbeeBound,proto3,oneof" json:"zigbee_bound,omitempty"`
+	TurnedOffRpt    *bool                  `protobuf:"varint,8,opt,name=turned_off_rpt,json=turnedOffRpt,proto3,oneof" json:"turned_off_rpt,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *InverterInfo) Reset() {
+	*x = InverterInfo{}
+	mi := &file_busmgr_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InverterInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InverterInfo) ProtoMessage() {}
+
+func (x *InverterInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InverterInfo.ProtoReflect.Descriptor instead.
+func (*InverterInfo) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *InverterInfo) GetTsMs() int64 {
+	if x != nil {
+		return x.TsMs
+	}
+	return 0
+}
+
+func (x *InverterInfo) GetPeerUid() string {
+	if x != nil {
+		return x.PeerUid
+	}
+	return ""
+}
+
+func (x *InverterInfo) GetShortAddr() uint32 {
+	if x != nil {
+		return x.ShortAddr
+	}
+	return 0
+}
+
+func (x *InverterInfo) GetModelCode() uint32 {
+	if x != nil && x.ModelCode != nil {
+		return *x.ModelCode
+	}
+	return 0
+}
+
+func (x *InverterInfo) GetSoftwareVersion() uint32 {
+	if x != nil && x.SoftwareVersion != nil {
+		return *x.SoftwareVersion
+	}
+	return 0
+}
+
+func (x *InverterInfo) GetPhase() uint32 {
+	if x != nil && x.Phase != nil {
+		return *x.Phase
+	}
+	return 0
+}
+
+func (x *InverterInfo) GetZigbeeBound() bool {
+	if x != nil && x.ZigbeeBound != nil {
+		return *x.ZigbeeBound
+	}
+	return false
+}
+
+func (x *InverterInfo) GetTurnedOffRpt() bool {
+	if x != nil && x.TurnedOffRpt != nil {
+		return *x.TurnedOffRpt
+	}
+	return false
+}
+
 var File_busmgr_proto protoreflect.FileDescriptor
 
 const file_busmgr_proto_rawDesc = "" +
 	"\n" +
-	"\fbusmgr.proto\x12\tbusmgr.v1\"\xad\x03\n" +
+	"\fbusmgr.proto\x12\tbusmgr.v1\"\xdc\x03\n" +
 	"\bEnvelope\x12(\n" +
 	"\x05hello\x18\x01 \x01(\v2\x10.busmgr.v1.HelloH\x00R\x05hello\x124\n" +
 	"\ttelemetry\x18\x02 \x01(\v2\x14.busmgr.v1.TelemetryH\x00R\ttelemetry\x12>\n" +
 	"\rdecode_failed\x18\x03 \x01(\v2\x17.busmgr.v1.DecodeFailedH\x00R\fdecodeFailed\x122\n" +
-	"\traw_frame\x18\x04 \x01(\v2\x13.busmgr.v1.RawFrameH\x00R\brawFrame\x12%\n" +
+	"\traw_frame\x18\x04 \x01(\v2\x13.busmgr.v1.RawFrameH\x00R\brawFrame\x12-\n" +
+	"\x04info\x18\x05 \x01(\v2\x17.busmgr.v1.InverterInfoH\x00R\x04info\x12%\n" +
 	"\x04send\x18\n" +
 	" \x01(\v2\x0f.busmgr.v1.SendH\x00R\x04send\x124\n" +
 	"\tbroadcast\x18\v \x01(\v2\x14.busmgr.v1.BroadcastH\x00R\tbroadcast\x12(\n" +
@@ -959,7 +1080,23 @@ const file_busmgr_proto_rawDesc = "" +
 	"\vdeadline_ms\x18\x02 \x01(\x03R\n" +
 	"deadlineMs\"\a\n" +
 	"\x05Reset\"\x0e\n" +
-	"\fSubscribeRaw*;\n" +
+	"\fSubscribeRaw\"\xf1\x02\n" +
+	"\fInverterInfo\x12\x13\n" +
+	"\x05ts_ms\x18\x01 \x01(\x03R\x04tsMs\x12\x19\n" +
+	"\bpeer_uid\x18\x02 \x01(\tR\apeerUid\x12\x1d\n" +
+	"\n" +
+	"short_addr\x18\x03 \x01(\rR\tshortAddr\x12\"\n" +
+	"\n" +
+	"model_code\x18\x04 \x01(\rH\x00R\tmodelCode\x88\x01\x01\x12.\n" +
+	"\x10software_version\x18\x05 \x01(\rH\x01R\x0fsoftwareVersion\x88\x01\x01\x12\x19\n" +
+	"\x05phase\x18\x06 \x01(\rH\x02R\x05phase\x88\x01\x01\x12&\n" +
+	"\fzigbee_bound\x18\a \x01(\bH\x03R\vzigbeeBound\x88\x01\x01\x12)\n" +
+	"\x0eturned_off_rpt\x18\b \x01(\bH\x04R\fturnedOffRpt\x88\x01\x01B\r\n" +
+	"\v_model_codeB\x13\n" +
+	"\x11_software_versionB\b\n" +
+	"\x06_phaseB\x0f\n" +
+	"\r_zigbee_boundB\x11\n" +
+	"\x0f_turned_off_rpt*;\n" +
 	"\x04Role\x12\x14\n" +
 	"\x10ROLE_UNSPECIFIED\x10\x00\x12\r\n" +
 	"\tPUBLISHER\x10\x01\x12\x0e\n" +
@@ -979,7 +1116,7 @@ func file_busmgr_proto_rawDescGZIP() []byte {
 }
 
 var file_busmgr_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_busmgr_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_busmgr_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_busmgr_proto_goTypes = []any{
 	(Role)(0),            // 0: busmgr.v1.Role
 	(*Envelope)(nil),     // 1: busmgr.v1.Envelope
@@ -992,23 +1129,25 @@ var file_busmgr_proto_goTypes = []any{
 	(*Broadcast)(nil),    // 8: busmgr.v1.Broadcast
 	(*Reset)(nil),        // 9: busmgr.v1.Reset
 	(*SubscribeRaw)(nil), // 10: busmgr.v1.SubscribeRaw
+	(*InverterInfo)(nil), // 11: busmgr.v1.InverterInfo
 }
 var file_busmgr_proto_depIdxs = []int32{
 	2,  // 0: busmgr.v1.Envelope.hello:type_name -> busmgr.v1.Hello
 	4,  // 1: busmgr.v1.Envelope.telemetry:type_name -> busmgr.v1.Telemetry
 	6,  // 2: busmgr.v1.Envelope.decode_failed:type_name -> busmgr.v1.DecodeFailed
 	3,  // 3: busmgr.v1.Envelope.raw_frame:type_name -> busmgr.v1.RawFrame
-	7,  // 4: busmgr.v1.Envelope.send:type_name -> busmgr.v1.Send
-	8,  // 5: busmgr.v1.Envelope.broadcast:type_name -> busmgr.v1.Broadcast
-	9,  // 6: busmgr.v1.Envelope.reset:type_name -> busmgr.v1.Reset
-	10, // 7: busmgr.v1.Envelope.subscribe_raw:type_name -> busmgr.v1.SubscribeRaw
-	0,  // 8: busmgr.v1.Hello.role:type_name -> busmgr.v1.Role
-	5,  // 9: busmgr.v1.Telemetry.panels:type_name -> busmgr.v1.Panel
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	11, // 4: busmgr.v1.Envelope.info:type_name -> busmgr.v1.InverterInfo
+	7,  // 5: busmgr.v1.Envelope.send:type_name -> busmgr.v1.Send
+	8,  // 6: busmgr.v1.Envelope.broadcast:type_name -> busmgr.v1.Broadcast
+	9,  // 7: busmgr.v1.Envelope.reset:type_name -> busmgr.v1.Reset
+	10, // 8: busmgr.v1.Envelope.subscribe_raw:type_name -> busmgr.v1.SubscribeRaw
+	0,  // 9: busmgr.v1.Hello.role:type_name -> busmgr.v1.Role
+	5,  // 10: busmgr.v1.Telemetry.panels:type_name -> busmgr.v1.Panel
+	11, // [11:11] is the sub-list for method output_type
+	11, // [11:11] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_busmgr_proto_init() }
@@ -1021,18 +1160,20 @@ func file_busmgr_proto_init() {
 		(*Envelope_Telemetry)(nil),
 		(*Envelope_DecodeFailed)(nil),
 		(*Envelope_RawFrame)(nil),
+		(*Envelope_Info)(nil),
 		(*Envelope_Send)(nil),
 		(*Envelope_Broadcast)(nil),
 		(*Envelope_Reset_)(nil),
 		(*Envelope_SubscribeRaw)(nil),
 	}
+	file_busmgr_proto_msgTypes[10].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_busmgr_proto_rawDesc), len(file_busmgr_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   10,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

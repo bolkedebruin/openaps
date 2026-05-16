@@ -17,6 +17,7 @@ message Envelope {
     Telemetry     telemetry     = 2;
     DecodeFailed  decode_failed = 3;
     RawFrame      raw_frame     = 4;
+    InverterInfo  info          = 5;
 
     Send          send          = 10;
     Broadcast     broadcast     = 11;
@@ -116,3 +117,18 @@ message Reset {}
 // SubscribeRaw is a downstream stub. Server returns Unimplemented in
 // v0. Shape is intentionally empty until requirements firm up.
 message SubscribeRaw {}
+
+// InverterInfo carries identity and pair-state metadata sniffed off
+// the primary ZigBee modem. Optional fields use proto3 'optional' so
+// an unset field means "no update for this column" rather than "value
+// is 0".
+message InverterInfo {
+  int64  ts_ms                 = 1;
+  string peer_uid              = 2;   // 12-char hex
+  uint32 short_addr            = 3;
+  optional uint32 model_code       = 4;
+  optional uint32 software_version = 5;
+  optional uint32 phase            = 6;   // 0 unknown, 1 single, 3 three
+  optional bool   zigbee_bound     = 7;
+  optional bool   turned_off_rpt   = 8;
+}

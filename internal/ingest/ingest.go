@@ -58,6 +58,15 @@ func (in *Ingestor) Handle(ctx context.Context, backend string, env *wire.Envelo
 			return fmt.Errorf("raw_frame envelope without body")
 		}
 		return in.handleRawFrame(ctx, b.RawFrame)
+	case *wire.Envelope_Info:
+		if b.Info == nil {
+			return fmt.Errorf("inverter_info envelope without body")
+		}
+		if err := in.handleInverterInfo(ctx, b.Info); err != nil {
+			return err
+		}
+		in.publish(env)
+		return nil
 	case *wire.Envelope_DecodeFailed:
 		if b.DecodeFailed == nil {
 			return fmt.Errorf("decode_failed envelope without body")
@@ -118,6 +127,32 @@ func (in *Ingestor) handleTelemetry(ctx context.Context, t *wire.Telemetry) erro
 	}
 	// Light-touch audit row.
 	return in.S.AppendEvent(ctx, tsMs, uid, "telemetry", "info")
+}
+
+// handleInverterInfo stores the identity / pair-state columns and
+// appends an inverter_info audit row. Optional proto3 fields map to
+// pointer-typed store columns so an unset field leaves the prior
+// column value untouched.
+func (in *Ingestor) handleInverterInfo(ctx context.Context, info *wire.InverterInfo) error {
+	uid := info.GetPeerUid()
+	if uid == "" {
+		return fmt.Errorf("inverter_info: empty peer_uid")
+	}
+	tsMs := info.GetTsMs()
+	upd := store.InverterInfoUpdate{
+		UID:         uid,
+		TsMs:        tsMs,
+		ShortAddr:   uint16(info.GetShortAddr()),
+		Model:       info.ModelCode,
+		SoftwareVer: info.SoftwareVersion,
+		Phase:       info.Phase,
+		Bound:       info.ZigbeeBound,
+		RptOff:      info.TurnedOffRpt,
+	}
+	if err := in.S.UpsertInverterInfo(ctx, upd); err != nil {
+		return err
+	}
+	return in.S.AppendEvent(ctx, tsMs, uid, "inverter_info", "info")
 }
 
 // handleRawFrame decodes the L1 reply into a wire.Telemetry, runs the

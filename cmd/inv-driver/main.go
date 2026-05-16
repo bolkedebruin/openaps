@@ -23,6 +23,7 @@ import (
 	"github.com/bolke/inv-driver/internal/events"
 	"github.com/bolke/inv-driver/internal/ingest"
 	"github.com/bolke/inv-driver/internal/ipc"
+	"github.com/bolke/inv-driver/internal/probe"
 	"github.com/bolke/inv-driver/internal/store"
 )
 
@@ -88,6 +89,8 @@ func runServe(args []string) error {
 	retainTelemetry := fs.Duration("retain-telemetry", 24*time.Hour, "max age of telemetry events before pruning (0 disables)")
 	retainOther := fs.Duration("retain-other", 7*24*time.Hour, "max age of non-telemetry events before pruning (0 disables)")
 	pruneInterval := fs.Duration("prune-interval", time.Hour, "how often to run event pruning (0 disables periodic prune)")
+	probeBackend := fs.String("probe-backend", "apsystems-stock-zb", "backend name that handles cold-start info-query probes (empty disables)")
+	probeInterval := fs.Duration("probe-interval", 200*time.Millisecond, "per-inverter delay between probe Sends")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -121,6 +124,27 @@ func runServe(args []string) error {
 		SocketMode: mode,
 		Ingestor:   &ingest.Ingestor{S: st, Pub: pub},
 		Publisher:  pub,
+	}
+	if *probeBackend != "" {
+		srv.OnPublisherAttach = func(backend string) {
+			if backend != *probeBackend {
+				return
+			}
+			p := &probe.Probe{
+				Store:        st,
+				Server:       srv,
+				Backend:      backend,
+				SendInterval: *probeInterval,
+			}
+			sent, err := p.Run(ctx)
+			if err != nil {
+				log.Printf("probe: %v", err)
+				return
+			}
+			if sent > 0 {
+				log.Printf("probe: dispatched %d info-query frame(s) to backend=%q", sent, backend)
+			}
+		}
 	}
 	return srv.Serve(ctx)
 }
@@ -175,19 +199,24 @@ func parseOctalMode(s string) (os.FileMode, error) {
 // telemetryRow is one inverter's latest sample assembled from joined
 // rows. Tagged so json.Marshal emits the operator-friendly shape.
 type telemetryRow struct {
-	InverterUID  string          `json:"inverter_uid"`
-	TsMs         int64           `json:"ts_ms"`
-	Cmd          int64           `json:"cmd"`
-	Model        any             `json:"model"`
-	Family       any             `json:"family"`
-	ShortAddr    any             `json:"short_addr"`
-	ACW          any             `json:"ac_w"`
-	ACV          any             `json:"ac_v"`
-	ACFreq       any             `json:"ac_freq"`
-	BusV         any             `json:"bus_v"`
-	ReportSec    any             `json:"report_sec"`
-	Panels       []telemetryPan  `json:"panels"`
-	Lifetime     []telemetryEner `json:"lifetime"`
+	InverterUID     string          `json:"inverter_uid"`
+	TsMs            int64           `json:"ts_ms"`
+	Cmd             int64           `json:"cmd"`
+	Model           any             `json:"model"`
+	Family          any             `json:"family"`
+	ShortAddr       any             `json:"short_addr"`
+	ModelCode       any             `json:"model_code"`
+	SoftwareVersion any             `json:"software_version"`
+	Phase           any             `json:"phase"`
+	ZigbeeBound     any             `json:"zigbee_bound"`
+	TurnedOffRpt    any             `json:"turned_off_rpt"`
+	ACW             any             `json:"ac_w"`
+	ACV             any             `json:"ac_v"`
+	ACFreq          any             `json:"ac_freq"`
+	BusV            any             `json:"bus_v"`
+	ReportSec       any             `json:"report_sec"`
+	Panels          []telemetryPan  `json:"panels"`
+	Lifetime        []telemetryEner `json:"lifetime"`
 }
 
 type telemetryPan struct {
@@ -219,7 +248,8 @@ func runDumpTelemetry(args []string) error {
 
 	const liveQ = `
 SELECT t.inverter_uid, t.ts_ms, t.cmd, t.ac_w, t.ac_v, t.ac_freq, t.bus_v, t.report_sec,
-       i.short_addr, i.family, i.model
+       i.short_addr, i.family, i.model,
+       i.model_code, i.software_version, i.phase, i.zigbee_bound, i.turned_off_rpt
 FROM   telemetry_live t
 LEFT   JOIN inverters i ON i.uid = t.inverter_uid
 ORDER  BY t.inverter_uid ASC
@@ -233,20 +263,26 @@ ORDER  BY t.inverter_uid ASC
 	enc := json.NewEncoder(os.Stdout)
 	for rows.Next() {
 		var (
-			uid       string
-			tsMs      int64
-			cmd       int64
-			acW       sqlNullFloat
-			acV       sqlNullFloat
-			acFreq    sqlNullFloat
-			busV      sqlNullFloat
-			reportSec sqlNullInt
-			shortAddr sqlNullInt
-			family    sqlNullString
-			model     sqlNullString
+			uid        string
+			tsMs       int64
+			cmd        int64
+			acW        sqlNullFloat
+			acV        sqlNullFloat
+			acFreq     sqlNullFloat
+			busV       sqlNullFloat
+			reportSec  sqlNullInt
+			shortAddr  sqlNullInt
+			family     sqlNullString
+			model      sqlNullString
+			modelCode  sqlNullInt
+			swVersion  sqlNullInt
+			phase      sqlNullInt
+			zbBound    sqlNullInt
+			rptOff     sqlNullInt
 		)
 		if err := rows.Scan(&uid, &tsMs, &cmd, &acW, &acV, &acFreq, &busV, &reportSec,
-			&shortAddr, &family, &model); err != nil {
+			&shortAddr, &family, &model,
+			&modelCode, &swVersion, &phase, &zbBound, &rptOff); err != nil {
 			return err
 		}
 		panels, err := loadPanels(ctx, st.DB(), uid)
@@ -258,19 +294,24 @@ ORDER  BY t.inverter_uid ASC
 			return err
 		}
 		row := telemetryRow{
-			InverterUID: uid,
-			TsMs:        tsMs,
-			Cmd:         cmd,
-			Model:       model.toAny(),
-			Family:      family.toAny(),
-			ShortAddr:   shortAddr.toAny(),
-			ACW:         acW.toAny(),
-			ACV:         acV.toAny(),
-			ACFreq:      acFreq.toAny(),
-			BusV:        busV.toAny(),
-			ReportSec:   reportSec.toAny(),
-			Panels:      panels,
-			Lifetime:    lifetime,
+			InverterUID:     uid,
+			TsMs:            tsMs,
+			Cmd:             cmd,
+			Model:           model.toAny(),
+			Family:          family.toAny(),
+			ShortAddr:       shortAddr.toAny(),
+			ModelCode:       modelCode.toAny(),
+			SoftwareVersion: swVersion.toAny(),
+			Phase:           phase.toAny(),
+			ZigbeeBound:     boolFromNullInt(zbBound),
+			TurnedOffRpt:    boolFromNullInt(rptOff),
+			ACW:             acW.toAny(),
+			ACV:             acV.toAny(),
+			ACFreq:          acFreq.toAny(),
+			BusV:            busV.toAny(),
+			ReportSec:       reportSec.toAny(),
+			Panels:          panels,
+			Lifetime:        lifetime,
 		}
 		if err := enc.Encode(row); err != nil {
 			return err

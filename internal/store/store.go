@@ -83,6 +83,58 @@ ON CONFLICT(uid) DO UPDATE SET
 	return nil
 }
 
+// InverterInfoUpdate carries a partial update from an InverterInfo
+// envelope. Pointer-typed fields are optional: nil leaves the existing
+// column value untouched.
+type InverterInfoUpdate struct {
+	UID         string
+	TsMs        int64
+	ShortAddr   uint16
+	Model       *uint32
+	SoftwareVer *uint32
+	Phase       *uint32
+	Bound       *bool
+	RptOff      *bool
+}
+
+// UpsertInverterInfo upserts the inverters row keyed by UID with the
+// optional identity / pair-state columns. On INSERT, paired_at_ms is
+// set to TsMs; on UPDATE it is preserved. last_seen_ms and short_addr
+// always take the supplied value (matching UpsertInverterFromTelemetry
+// semantics). Nil pointer fields fall back to the existing column via
+// COALESCE so a partial update never clobbers a known value with NULL.
+func (s *Store) UpsertInverterInfo(ctx context.Context, in InverterInfoUpdate) error {
+	const q = `
+INSERT INTO inverters (
+    uid, short_addr, family, model, paired_at_ms, last_seen_ms,
+    model_code, software_version, phase, zigbee_bound, turned_off_rpt
+)
+VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(uid) DO UPDATE SET
+    short_addr       = excluded.short_addr,
+    last_seen_ms     = excluded.last_seen_ms,
+    model_code       = COALESCE(?, inverters.model_code),
+    software_version = COALESCE(?, inverters.software_version),
+    phase            = COALESCE(?, inverters.phase),
+    zigbee_bound     = COALESCE(?, inverters.zigbee_bound),
+    turned_off_rpt   = COALESCE(?, inverters.turned_off_rpt)
+`
+	mc := nullableUint32Ptr(in.Model)
+	sv := nullableUint32Ptr(in.SoftwareVer)
+	ph := nullableUint32Ptr(in.Phase)
+	zb := nullableBoolPtr(in.Bound)
+	to := nullableBoolPtr(in.RptOff)
+	_, err := s.db.ExecContext(ctx, q,
+		in.UID, int(in.ShortAddr), in.TsMs, in.TsMs,
+		mc, sv, ph, zb, to,
+		mc, sv, ph, zb, to,
+	)
+	if err != nil {
+		return fmt.Errorf("UpsertInverterInfo: %w", err)
+	}
+	return nil
+}
+
 // WriteTelemetryLive overwrites the in-place "latest sample" row for
 // this inverter.
 func (s *Store) WriteTelemetryLive(ctx context.Context, uid string, tsMs int64, cmd uint32, acW, acV, acFreq, busV float64, reportSec uint32) error {
@@ -268,4 +320,24 @@ func nullableUint32(u uint32) any {
 		return nil
 	}
 	return int64(u)
+}
+
+// nullableUint32Ptr returns nil when the pointer is nil, otherwise the
+// pointee as int64. Unlike nullableUint32, the value 0 is preserved.
+func nullableUint32Ptr(p *uint32) any {
+	if p == nil {
+		return nil
+	}
+	return int64(*p)
+}
+
+// nullableBoolPtr returns nil when the pointer is nil, otherwise 0/1.
+func nullableBoolPtr(p *bool) any {
+	if p == nil {
+		return nil
+	}
+	if *p {
+		return int64(1)
+	}
+	return int64(0)
 }

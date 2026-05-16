@@ -31,3 +31,13 @@ func (n sqlNullString) toAny() any {
 	}
 	return n.String
 }
+
+// boolFromNullInt renders a SQLite INTEGER 0/1 column as JSON true/false
+// (or null when the column is NULL). SQLite has no native BOOLEAN type;
+// the inverters table stores zigbee_bound / turned_off_rpt as 0/1.
+func boolFromNullInt(n sqlNullInt) any {
+	if !n.Valid {
+		return nil
+	}
+	return n.Int64 != 0
+}

@@ -330,6 +330,155 @@ func TestHandle_Telemetry_PublishesToSubscribers(t *testing.T) {
 	}
 }
 
+func u32p(v uint32) *uint32 { return &v }
+func boolp(b bool) *bool     { return &b }
+
+func TestHandle_InverterInfo_ModelOnly(t *testing.T) {
+	t.Parallel()
+	in := newIngestor(t)
+	in.Pub = events.New()
+	ch, unsub := in.Pub.Subscribe()
+	defer unsub()
+
+	env := &wire.Envelope{Body: &wire.Envelope_Info{Info: &wire.InverterInfo{
+		TsMs:      111,
+		PeerUid:   "806000042582",
+		ShortAddr: 0x5011,
+		ModelCode: u32p(0x24),
+	}}}
+	if err := in.Handle(context.Background(), "be", env); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	var modelCode sql.NullInt64
+	var sw, phase, bound, rpt sql.NullInt64
+	if err := in.S.DB().QueryRow(`SELECT model_code, software_version, phase, zigbee_bound, turned_off_rpt FROM inverters WHERE uid='806000042582'`).
+		Scan(&modelCode, &sw, &phase, &bound, &rpt); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if !modelCode.Valid || modelCode.Int64 != 0x24 {
+		t.Fatalf("model_code: %+v", modelCode)
+	}
+	if sw.Valid || phase.Valid || bound.Valid || rpt.Valid {
+		t.Fatalf("expected unset columns NULL: sw=%+v phase=%+v bound=%+v rpt=%+v", sw, phase, bound, rpt)
+	}
+
+	var kind string
+	if err := in.S.DB().QueryRow(`SELECT kind FROM events WHERE inverter_uid='806000042582'`).Scan(&kind); err != nil {
+		t.Fatalf("event scan: %v", err)
+	}
+	if kind != "inverter_info" {
+		t.Fatalf("event kind: got %q want inverter_info", kind)
+	}
+
+	select {
+	case got := <-ch:
+		if got.GetInfo().GetPeerUid() != "806000042582" {
+			t.Fatalf("published peer_uid: %q", got.GetInfo().GetPeerUid())
+		}
+	default:
+		t.Fatal("inverter_info envelope was not published")
+	}
+}
+
+func TestHandle_InverterInfo_AllFields(t *testing.T) {
+	t.Parallel()
+	in := newIngestor(t)
+	env := &wire.Envelope{Body: &wire.Envelope_Info{Info: &wire.InverterInfo{
+		TsMs:            222,
+		PeerUid:         "uidAllFields",
+		ShortAddr:       0xC459,
+		ModelCode:       u32p(0x29),
+		SoftwareVersion: u32p(101000),
+		Phase:           u32p(3),
+		ZigbeeBound:     boolp(true),
+		TurnedOffRpt:    boolp(false),
+	}}}
+	if err := in.Handle(context.Background(), "be", env); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	var modelCode, sw, phase, bound, rpt sql.NullInt64
+	if err := in.S.DB().QueryRow(`SELECT model_code, software_version, phase, zigbee_bound, turned_off_rpt FROM inverters WHERE uid='uidAllFields'`).
+		Scan(&modelCode, &sw, &phase, &bound, &rpt); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if modelCode.Int64 != 0x29 || sw.Int64 != 101000 || phase.Int64 != 3 || bound.Int64 != 1 || rpt.Int64 != 0 {
+		t.Fatalf("cols: model=%d sw=%d phase=%d bound=%d rpt=%d",
+			modelCode.Int64, sw.Int64, phase.Int64, bound.Int64, rpt.Int64)
+	}
+}
+
+func TestHandle_InverterInfo_EmptyPeerUID(t *testing.T) {
+	t.Parallel()
+	in := newIngestor(t)
+	env := &wire.Envelope{Body: &wire.Envelope_Info{Info: &wire.InverterInfo{
+		TsMs:    100,
+		PeerUid: "",
+	}}}
+	err := in.Handle(context.Background(), "be", env)
+	if err == nil {
+		t.Fatal("expected error on empty peer_uid")
+	}
+	if !strings.Contains(err.Error(), "peer_uid") {
+		t.Fatalf("error: %q", err)
+	}
+	var n int
+	if err := in.S.DB().QueryRow(`SELECT COUNT(*) FROM inverters`).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("inverters rows: got %d want 0", n)
+	}
+}
+
+func TestHandle_InverterInfo_Sequence_Accumulates(t *testing.T) {
+	t.Parallel()
+	in := newIngestor(t)
+
+	// 1) seed with model only
+	if err := in.Handle(context.Background(), "be", &wire.Envelope{Body: &wire.Envelope_Info{Info: &wire.InverterInfo{
+		TsMs: 1, PeerUid: "acc", ShortAddr: 0x10,
+		ModelCode: u32p(0x24),
+	}}}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	// 2) add software version
+	if err := in.Handle(context.Background(), "be", &wire.Envelope{Body: &wire.Envelope_Info{Info: &wire.InverterInfo{
+		TsMs: 2, PeerUid: "acc", ShortAddr: 0x10,
+		SoftwareVersion: u32p(7000),
+	}}}); err != nil {
+		t.Fatalf("sw: %v", err)
+	}
+	// 3) add phase + bound
+	if err := in.Handle(context.Background(), "be", &wire.Envelope{Body: &wire.Envelope_Info{Info: &wire.InverterInfo{
+		TsMs: 3, PeerUid: "acc", ShortAddr: 0x10,
+		Phase:       u32p(1),
+		ZigbeeBound: boolp(true),
+	}}}); err != nil {
+		t.Fatalf("phase: %v", err)
+	}
+
+	var modelCode, sw, phase, bound sql.NullInt64
+	if err := in.S.DB().QueryRow(`SELECT model_code, software_version, phase, zigbee_bound FROM inverters WHERE uid='acc'`).
+		Scan(&modelCode, &sw, &phase, &bound); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if modelCode.Int64 != 0x24 || sw.Int64 != 7000 || phase.Int64 != 1 || bound.Int64 != 1 {
+		t.Fatalf("accumulated cols: model=%d sw=%d phase=%d bound=%d",
+			modelCode.Int64, sw.Int64, phase.Int64, bound.Int64)
+	}
+}
+
+func TestHandle_InverterInfoWithoutBody(t *testing.T) {
+	t.Parallel()
+	in := newIngestor(t)
+	env := &wire.Envelope{Body: &wire.Envelope_Info{Info: nil}}
+	if err := in.Handle(context.Background(), "be", env); err == nil {
+		t.Fatal("expected error on inverter_info without body")
+	}
+}
+
 func TestFamilyFromModel(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

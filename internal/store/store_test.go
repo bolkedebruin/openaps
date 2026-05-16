@@ -374,6 +374,161 @@ func TestConcurrentWrites(t *testing.T) {
 	}
 }
 
+func u32p(v uint32) *uint32 { return &v }
+func boolp(b bool) *bool     { return &b }
+
+func TestUpsertInverterInfo_ModelOnly_LeavesOthersNull(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	s := openTestStore(t)
+
+	if err := s.UpsertInverterInfo(ctx, InverterInfoUpdate{
+		UID: "u1", TsMs: 100, ShortAddr: 0x5011,
+		Model: u32p(0x24),
+	}); err != nil {
+		t.Fatalf("first upsert: %v", err)
+	}
+
+	var modelCode, sw, phase sql.NullInt64
+	var bound, rpt sql.NullInt64
+	if err := s.DB().QueryRow(`SELECT model_code, software_version, phase, zigbee_bound, turned_off_rpt FROM inverters WHERE uid='u1'`).
+		Scan(&modelCode, &sw, &phase, &bound, &rpt); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if !modelCode.Valid || modelCode.Int64 != 0x24 {
+		t.Fatalf("model_code: %+v want 0x24", modelCode)
+	}
+	for name, v := range map[string]sql.NullInt64{
+		"software_version": sw, "phase": phase, "zigbee_bound": bound, "turned_off_rpt": rpt,
+	} {
+		if v.Valid {
+			t.Fatalf("%s should be NULL on model-only insert, got %d", name, v.Int64)
+		}
+	}
+
+	if err := s.UpsertInverterInfo(ctx, InverterInfoUpdate{
+		UID: "u1", TsMs: 200, ShortAddr: 0x5011,
+		Model: u32p(0x36),
+	}); err != nil {
+		t.Fatalf("second upsert: %v", err)
+	}
+	if err := s.DB().QueryRow(`SELECT model_code, software_version, phase, zigbee_bound, turned_off_rpt FROM inverters WHERE uid='u1'`).
+		Scan(&modelCode, &sw, &phase, &bound, &rpt); err != nil {
+		t.Fatalf("scan after second: %v", err)
+	}
+	if !modelCode.Valid || modelCode.Int64 != 0x36 {
+		t.Fatalf("model_code update: %+v want 0x36", modelCode)
+	}
+	for name, v := range map[string]sql.NullInt64{
+		"software_version": sw, "phase": phase, "zigbee_bound": bound, "turned_off_rpt": rpt,
+	} {
+		if v.Valid {
+			t.Fatalf("%s must remain NULL after partial update, got %d", name, v.Int64)
+		}
+	}
+}
+
+func TestUpsertInverterInfo_AllFields(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	s := openTestStore(t)
+
+	if err := s.UpsertInverterInfo(ctx, InverterInfoUpdate{
+		UID: "u2", TsMs: 1000, ShortAddr: 0xC459,
+		Model: u32p(0x29), SoftwareVer: u32p(12345), Phase: u32p(3),
+		Bound: boolp(true), RptOff: boolp(false),
+	}); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	var modelCode, sw, phase, bound, rpt sql.NullInt64
+	var shortAddr int
+	var pairedAt, lastSeen int64
+	if err := s.DB().QueryRow(`SELECT short_addr, paired_at_ms, last_seen_ms, model_code, software_version, phase, zigbee_bound, turned_off_rpt FROM inverters WHERE uid='u2'`).
+		Scan(&shortAddr, &pairedAt, &lastSeen, &modelCode, &sw, &phase, &bound, &rpt); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if shortAddr != 0xC459 || pairedAt != 1000 || lastSeen != 1000 {
+		t.Fatalf("base cols: sa=0x%X paired=%d last=%d", shortAddr, pairedAt, lastSeen)
+	}
+	if modelCode.Int64 != 0x29 || sw.Int64 != 12345 || phase.Int64 != 3 {
+		t.Fatalf("typed cols: model=%d sw=%d phase=%d", modelCode.Int64, sw.Int64, phase.Int64)
+	}
+	if bound.Int64 != 1 || rpt.Int64 != 0 {
+		t.Fatalf("bool cols: bound=%d rpt=%d (want 1/0)", bound.Int64, rpt.Int64)
+	}
+}
+
+func TestUpsertInverterInfo_PartialPreservesPrior(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	s := openTestStore(t)
+
+	// Seed full row.
+	if err := s.UpsertInverterInfo(ctx, InverterInfoUpdate{
+		UID: "u3", TsMs: 500, ShortAddr: 0x1111,
+		Model: u32p(0x24), SoftwareVer: u32p(7000), Phase: u32p(1),
+		Bound: boolp(true), RptOff: boolp(false),
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	// Update only Bound.
+	if err := s.UpsertInverterInfo(ctx, InverterInfoUpdate{
+		UID: "u3", TsMs: 600, ShortAddr: 0x1111,
+		Bound: boolp(false),
+	}); err != nil {
+		t.Fatalf("partial: %v", err)
+	}
+
+	var modelCode, sw, phase, bound, rpt sql.NullInt64
+	if err := s.DB().QueryRow(`SELECT model_code, software_version, phase, zigbee_bound, turned_off_rpt FROM inverters WHERE uid='u3'`).
+		Scan(&modelCode, &sw, &phase, &bound, &rpt); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if modelCode.Int64 != 0x24 || sw.Int64 != 7000 || phase.Int64 != 1 {
+		t.Fatalf("non-Bound cols clobbered: model=%d sw=%d phase=%d", modelCode.Int64, sw.Int64, phase.Int64)
+	}
+	if bound.Int64 != 0 {
+		t.Fatalf("Bound: got %d want 0", bound.Int64)
+	}
+	if rpt.Int64 != 0 || !rpt.Valid {
+		t.Fatalf("rpt: %+v want valid=true val=0", rpt)
+	}
+}
+
+func TestUpsertInverterInfo_ShortAddrUpdates(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	s := openTestStore(t)
+
+	if err := s.UpsertInverterInfo(ctx, InverterInfoUpdate{
+		UID: "u4", TsMs: 1, ShortAddr: 0x1111,
+	}); err != nil {
+		t.Fatalf("first: %v", err)
+	}
+	if err := s.UpsertInverterInfo(ctx, InverterInfoUpdate{
+		UID: "u4", TsMs: 2, ShortAddr: 0x2222,
+	}); err != nil {
+		t.Fatalf("second: %v", err)
+	}
+	var shortAddr int
+	var pairedAt, lastSeen int64
+	if err := s.DB().QueryRow(`SELECT short_addr, paired_at_ms, last_seen_ms FROM inverters WHERE uid='u4'`).
+		Scan(&shortAddr, &pairedAt, &lastSeen); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if shortAddr != 0x2222 {
+		t.Fatalf("short_addr: got 0x%X want 0x2222", shortAddr)
+	}
+	if pairedAt != 1 {
+		t.Fatalf("paired_at must be preserved on update: got %d want 1", pairedAt)
+	}
+	if lastSeen != 2 {
+		t.Fatalf("last_seen must update: got %d want 2", lastSeen)
+	}
+}
+
 func TestPruneEvents(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

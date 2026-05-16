@@ -546,6 +546,118 @@ func TestServer_SubscriberBlockedWriteIsTornDown(t *testing.T) {
 	t.Fatalf("blocked subscriber not dropped within %s; pub.Len=%d", writeDeadline+5*time.Second, pub.Len())
 }
 
+// TestServer_SendToBackend_DeliversToPublisher verifies a downstream
+// envelope queued via SendToBackend is delivered to the matching
+// publisher connection.
+func TestServer_SendToBackend_DeliversToPublisher(t *testing.T) {
+	srv, path, cancel, doneCh := newServer(t)
+	t.Cleanup(func() { cancel(); <-doneCh })
+
+	c := dial(t, path)
+	defer c.Close()
+	hello := &wire.Envelope{Body: &wire.Envelope_Hello{Hello: &wire.Hello{
+		Backend: "apsystems-stock-zb", Version: "0.0.0", StartedAtMs: 1,
+	}}}
+	if err := wire.WriteFrame(c, hello); err != nil {
+		t.Fatalf("hello: %v", err)
+	}
+
+	// Wait for the server to register the publisher.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if srv.HasPublisher("apsystems-stock-zb") {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if !srv.HasPublisher("apsystems-stock-zb") {
+		t.Fatal("publisher never registered")
+	}
+
+	sendEnv := &wire.Envelope{Body: &wire.Envelope_Send{Send: &wire.Send{
+		PeerUid:    "806000042582",
+		Frame:      []byte{0xAA, 0xBB, 0xCC},
+		DeadlineMs: 5000,
+	}}}
+	if ok := srv.SendToBackend("apsystems-stock-zb", sendEnv); !ok {
+		t.Fatal("SendToBackend returned false")
+	}
+
+	// Publisher conn reads the downstream Send envelope.
+	_ = c.SetReadDeadline(time.Now().Add(2 * time.Second))
+	var got wire.Envelope
+	if err := wire.ReadFrame(c, &got); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	send := got.GetSend()
+	if send == nil {
+		t.Fatalf("expected Send body, got %T", got.GetBody())
+	}
+	if send.GetPeerUid() != "806000042582" {
+		t.Fatalf("peer_uid: %q", send.GetPeerUid())
+	}
+	if string(send.GetFrame()) != string([]byte{0xAA, 0xBB, 0xCC}) {
+		t.Fatalf("frame: % X", send.GetFrame())
+	}
+}
+
+// TestServer_SendToBackend_UnknownBackend returns false.
+func TestServer_SendToBackend_UnknownBackend(t *testing.T) {
+	srv, _, cancel, doneCh := newServer(t)
+	t.Cleanup(func() { cancel(); <-doneCh })
+
+	env := &wire.Envelope{Body: &wire.Envelope_Reset_{Reset_: &wire.Reset{}}}
+	if ok := srv.SendToBackend("nobody", env); ok {
+		t.Fatal("SendToBackend to unknown backend returned true")
+	}
+}
+
+// TestServer_SendToBackend_FullQueueDrops verifies the per-publisher
+// outbound queue drops with the dropped counter rather than blocking
+// when the publisher never reads.
+func TestServer_SendToBackend_FullQueueDrops(t *testing.T) {
+	srv, path, cancel, doneCh := newServer(t)
+	t.Cleanup(func() { cancel(); <-doneCh })
+
+	c := dial(t, path)
+	defer c.Close()
+	hello := &wire.Envelope{Body: &wire.Envelope_Hello{Hello: &wire.Hello{
+		Backend: "deaf-backend", Version: "0.0.0", StartedAtMs: 1,
+	}}}
+	if err := wire.WriteFrame(c, hello); err != nil {
+		t.Fatalf("hello: %v", err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if srv.HasPublisher("deaf-backend") {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if !srv.HasPublisher("deaf-backend") {
+		t.Fatal("publisher never registered")
+	}
+
+	// Build an envelope big enough that the kernel send buffer fills
+	// after a few writes, so the writer goroutine blocks in WriteFrame
+	// and subsequent SendToBackend calls accumulate in pc.out.
+	big := make([]byte, 16*1024)
+	bigEnv := &wire.Envelope{Body: &wire.Envelope_Send{Send: &wire.Send{
+		PeerUid: "fill", Frame: big, DeadlineMs: 1000,
+	}}}
+
+	// Push beyond publisherOutCap. Client never reads.
+	dropped := 0
+	for i := 0; i < publisherOutCap*4; i++ {
+		if ok := srv.SendToBackend("deaf-backend", bigEnv); !ok {
+			dropped++
+		}
+	}
+	if dropped == 0 {
+		t.Fatal("expected at least one drop when publisher never reads")
+	}
+}
+
 func TestServer_ConcurrentConnections(t *testing.T) {
 	srv, path, cancel, doneCh := newServer(t)
 	t.Cleanup(func() { cancel(); <-doneCh })

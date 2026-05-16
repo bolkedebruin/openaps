@@ -35,6 +35,10 @@ const (
 	// writeDeadline bounds each subscriber write. A wedged client must
 	// not block fan-out beyond this.
 	writeDeadline = 5 * time.Second
+	// publisherOutCap is the per-publisher downstream queue depth.
+	// Drops with a counter when full so a wedged backend can't stall
+	// the driver.
+	publisherOutCap = 64
 )
 
 // Server accepts framed protobuf wire connections on a UDS path and
@@ -49,10 +53,29 @@ type Server struct {
 	Ingestor   *ingest.Ingestor
 	Publisher  *events.Publisher
 
+	// OnPublisherAttach, when non-nil, runs each time a backend
+	// finishes its Hello as a publisher. Invoked in a fresh
+	// goroutine; the callback is responsible for its own context
+	// observance. Used by the cold-start probe to fire downstream
+	// queries the moment a publisher comes online.
+	OnPublisherAttach func(backend string)
+
 	connSeq atomic.Uint64
 	// conns tracks live connections so Serve can close them on
 	// shutdown to force-unblock in-flight reads. Keyed by conn id.
 	conns sync.Map
+
+	pubMu      sync.RWMutex
+	publishers map[string]*publisherConn
+}
+
+// publisherConn is a live publishing peer. The outbound channel is the
+// only thread-safe handle into the per-conn writer goroutine; closing
+// it tells the writer to drain and exit.
+type publisherConn struct {
+	backend string
+	out     chan *wire.Envelope
+	dropped atomic.Uint64
 }
 
 // Serve binds the socket, accepts connections until ctx is cancelled,
@@ -169,11 +192,34 @@ func (s *Server) handleConn(ctx context.Context, id uint64, c net.Conn) {
 }
 
 // handlePublisher runs the steady-state ingest loop for a publishing
-// backend. Each ReadFrame gets a fresh idleDeadline so a silent peer
-// is bounded. Ctx cancel is delivered via the parent Serve closing
-// this conn (see Serve's shutdown goroutine), which unblocks the read
-// with net.ErrClosed.
+// backend AND a writer goroutine for downstream envelopes addressed
+// to this backend. Each ReadFrame gets a fresh idleDeadline so a
+// silent peer is bounded. Ctx cancel is delivered via the parent
+// Serve closing this conn (see Serve's shutdown goroutine), which
+// unblocks the read with net.ErrClosed.
 func (s *Server) handlePublisher(ctx context.Context, tag, backend string, c net.Conn) {
+	pc := &publisherConn{
+		backend: backend,
+		out:     make(chan *wire.Envelope, publisherOutCap),
+	}
+	s.registerPublisher(tag, pc)
+
+	if cb := s.OnPublisherAttach; cb != nil {
+		go cb(backend)
+	}
+
+	writerDone := make(chan struct{})
+	go s.publisherWriter(tag, c, pc, writerDone)
+	defer func() {
+		// Unregister and close the outbound channel atomically so a
+		// concurrent SendToBackend never observes the channel after
+		// it has been closed. Closing tells the writer to drain and
+		// exit; the read loop has already signalled exit by reading
+		// past the bottom of the for loop into the deferred close.
+		s.unregisterAndClose(pc)
+		<-writerDone
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -192,9 +238,96 @@ func (s *Server) handlePublisher(ctx context.Context, tag, backend string, c net
 		}
 		if err := s.Ingestor.Handle(ctx, backend, &next); err != nil {
 			// Per-event error: log and continue. Connection is still
-			// synchronised on the next length prefix.
+			// synchronised on the next length prefix. Unknown body
+			// types fall through here; debug-level logging keeps the
+			// noise floor reasonable for benign cases (Hello echoes,
+			// future fields).
 			log.Printf("ipc %s: ingest: %v", tag, err)
 		}
+	}
+}
+
+// publisherWriter drains the per-publisher outbound channel onto the
+// conn. Exits when the channel is closed or a write fails.
+func (s *Server) publisherWriter(tag string, c net.Conn, pc *publisherConn, done chan<- struct{}) {
+	defer close(done)
+	for env := range pc.out {
+		_ = c.SetWriteDeadline(time.Now().Add(writeDeadline))
+		if err := wire.WriteFrame(c, env); err != nil {
+			if !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
+				log.Printf("ipc %s: publisher write: %v", tag, err)
+			}
+			// Drain remaining queued envelopes so close(pc.out)
+			// in the caller's defer can complete without panicking
+			// on a closed conn (the writes will keep failing fast
+			// after SetWriteDeadline).
+			for range pc.out {
+			}
+			return
+		}
+	}
+}
+
+func (s *Server) registerPublisher(tag string, pc *publisherConn) {
+	s.pubMu.Lock()
+	defer s.pubMu.Unlock()
+	if s.publishers == nil {
+		s.publishers = make(map[string]*publisherConn)
+	}
+	if existing, ok := s.publishers[pc.backend]; ok && existing != pc {
+		log.Printf("ipc %s: duplicate publisher backend=%q; replacing previous", tag, pc.backend)
+	}
+	s.publishers[pc.backend] = pc
+}
+
+// unregisterAndClose removes pc from the publisher map and closes its
+// outbound channel as a single critical section. Senders holding
+// pubMu.RLock therefore see either the live registration (and complete
+// their send) or no registration at all — never a registered-but-closed
+// channel.
+func (s *Server) unregisterAndClose(pc *publisherConn) {
+	s.pubMu.Lock()
+	defer s.pubMu.Unlock()
+	if cur, ok := s.publishers[pc.backend]; ok && cur == pc {
+		delete(s.publishers, pc.backend)
+	}
+	close(pc.out)
+}
+
+// HasPublisher reports whether a publisher with the given backend
+// name is currently registered. Primarily useful for test
+// synchronisation.
+func (s *Server) HasPublisher(backend string) bool {
+	s.pubMu.RLock()
+	defer s.pubMu.RUnlock()
+	_, ok := s.publishers[backend]
+	return ok
+}
+
+// SendToBackend enqueues an envelope for delivery to the named
+// publisher. Returns false if no live publisher with that backend is
+// registered, or if the per-publisher queue is full (the dropped
+// counter is bumped in that case). The send is performed while
+// holding pubMu (read), serialising it against unregisterPublisher so
+// the outbound channel can never be closed while a send is in flight.
+func (s *Server) SendToBackend(backend string, env *wire.Envelope) bool {
+	if env == nil {
+		return false
+	}
+	s.pubMu.RLock()
+	defer s.pubMu.RUnlock()
+	pc := s.publishers[backend]
+	if pc == nil {
+		return false
+	}
+	select {
+	case pc.out <- env:
+		return true
+	default:
+		pc.dropped.Add(1)
+		log.Printf("ipc: send to backend=%q dropped (queue full); total dropped=%d",
+			backend, pc.dropped.Load())
+		return false
 	}
 }
 

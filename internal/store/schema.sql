@@ -10,12 +10,17 @@ PRAGMA synchronous = NORMAL;
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS inverters (
-    uid             TEXT PRIMARY KEY,
-    short_addr      INTEGER,
-    family          TEXT,
-    model           TEXT,
-    paired_at_ms    INTEGER NOT NULL,
-    last_seen_ms    INTEGER NOT NULL
+    uid              TEXT PRIMARY KEY,
+    short_addr       INTEGER,
+    family           TEXT,
+    model            TEXT,
+    paired_at_ms     INTEGER NOT NULL,
+    last_seen_ms     INTEGER NOT NULL,
+    model_code       INTEGER,
+    software_version INTEGER,
+    phase            INTEGER,
+    zigbee_bound     INTEGER,
+    turned_off_rpt   INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS telemetry_live (
