@@ -127,6 +127,7 @@ func runServe(args []string) error {
 		SocketMode: mode,
 		Ingestor:   &ingest.Ingestor{S: st, Pub: pub, Probe: trigger},
 		Publisher:  pub,
+		Store:      st,
 	}
 	if *probeBackend != "" {
 		p := &probe.Probe{

@@ -16,8 +16,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"database/sql"
+
 	"github.com/bolke/inv-driver/internal/events"
 	"github.com/bolke/inv-driver/internal/ingest"
+	"github.com/bolke/inv-driver/internal/store"
 	"github.com/bolke/inv-driver/wire"
 )
 
@@ -52,6 +55,11 @@ type Server struct {
 	SocketMode os.FileMode
 	Ingestor   *ingest.Ingestor
 	Publisher  *events.Publisher
+	// Store, when non-nil, is read on subscriber attach to push the
+	// current InverterInfo snapshot (one Envelope_Info per inverter
+	// row) before the live fanout stream starts. Late attachers see
+	// current state without waiting on a fresh probe cycle.
+	Store *store.Store
 
 	// OnPublisherAttach, when non-nil, runs each time a backend
 	// finishes its Hello as a publisher. Invoked in a fresh
@@ -344,6 +352,18 @@ func (s *Server) handleSubscriber(ctx context.Context, tag string, c net.Conn) {
 	defer unsubscribe()
 	log.Printf("ipc %s: subscriber attached", tag)
 
+	// Push the current InverterInfo snapshot before the live stream.
+	// Subscribe-first / replay-second ordering: any live update that
+	// fires during replay queues in ch and is drained by the loop
+	// below. Subscriber's "latest wins by ts_ms" semantics handle a
+	// live envelope that re-asserts replayed state.
+	if err := s.replaySubscriberState(ctx, c); err != nil {
+		if !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
+			log.Printf("ipc %s: replay: %v", tag, err)
+		}
+		return
+	}
+
 	// Run a read-pump in a separate goroutine. A subscriber is
 	// read-silent after Hello; any inbound frame is a protocol
 	// violation, and a read error (EOF, closed conn) is the canonical
@@ -385,6 +405,75 @@ func (s *Server) handleSubscriber(ctx context.Context, tag string, c net.Conn) {
 			}
 		}
 	}
+}
+
+// replaySubscriberState writes one Envelope_Info per known inverter
+// to conn. Called once before the live fanout starts so a subscriber
+// that joins after the probe has settled still sees current identity
+// state. Skipped silently when Store is nil.
+func (s *Server) replaySubscriberState(ctx context.Context, conn net.Conn) error {
+	if s.Store == nil {
+		return nil
+	}
+	rows, err := s.Store.DB().QueryContext(ctx, `
+SELECT uid, short_addr, model_code, software_version, phase,
+       zigbee_bound, turned_off_rpt, last_seen_ms
+FROM   inverters
+ORDER  BY uid`)
+	if err != nil {
+		return fmt.Errorf("query inverters: %w", err)
+	}
+	defer rows.Close()
+	count := 0
+	for rows.Next() {
+		var (
+			uid                                                       string
+			shortAddr, model, sw, phase, zigbee, rptOff, lastSeen     sql.NullInt64
+		)
+		if err := rows.Scan(&uid, &shortAddr, &model, &sw, &phase, &zigbee, &rptOff, &lastSeen); err != nil {
+			return fmt.Errorf("scan: %w", err)
+		}
+		info := &wire.InverterInfo{
+			TsMs:    lastSeen.Int64,
+			PeerUid: uid,
+		}
+		if shortAddr.Valid {
+			info.ShortAddr = uint32(shortAddr.Int64)
+		}
+		if model.Valid {
+			v := uint32(model.Int64)
+			info.ModelCode = &v
+		}
+		if sw.Valid {
+			v := uint32(sw.Int64)
+			info.SoftwareVersion = &v
+		}
+		if phase.Valid {
+			v := uint32(phase.Int64)
+			info.Phase = &v
+		}
+		if zigbee.Valid {
+			v := zigbee.Int64 != 0
+			info.ZigbeeBound = &v
+		}
+		if rptOff.Valid {
+			v := rptOff.Int64 != 0
+			info.TurnedOffRpt = &v
+		}
+		env := &wire.Envelope{Body: &wire.Envelope_Info{Info: info}}
+		_ = conn.SetWriteDeadline(time.Now().Add(writeDeadline))
+		if err := wire.WriteFrame(conn, env); err != nil {
+			return err
+		}
+		count++
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("rows: %w", err)
+	}
+	if count > 0 {
+		log.Printf("ipc: replayed %d InverterInfo row(s) to subscriber", count)
+	}
+	return nil
 }
 
 // removeStaleSocket unlinks an existing UDS at path if (and only if)

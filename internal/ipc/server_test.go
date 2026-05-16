@@ -385,6 +385,92 @@ func TestServer_SubscriberReceivesPublishedEnvelopes(t *testing.T) {
 	}
 }
 
+// TestServer_SubscriberReceivesReplayOnAttach seeds the store with an
+// inverter row, attaches a SUBSCRIBER, and asserts the row is pushed
+// as an Envelope_Info before any live fanout. Late attachers must not
+// have to wait for a fresh probe cycle to learn current state.
+func TestServer_SubscriberReceivesReplayOnAttach(t *testing.T) {
+	path := socketPath(t)
+	dbPath := filepath.Join(t.TempDir(), "state.db")
+	st, err := store.Open(context.Background(), dbPath)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	// Seed inverters table with a row carrying identity fields.
+	ctx0 := context.Background()
+	mc := uint32(0x18) // QS1A
+	sw := uint32(5203)
+	ph := uint32(1)
+	tt := true
+	if err := st.UpsertInverterFromTelemetry(ctx0, "000000abcdef", 0x1234, "qs1a", "QS1A", 100); err != nil {
+		t.Fatalf("seed telemetry: %v", err)
+	}
+	if err := st.UpsertInverterInfo(ctx0, store.InverterInfoUpdate{
+		UID: "000000abcdef", TsMs: 100, ShortAddr: 0x1234,
+		Model: &mc, SoftwareVer: &sw, Phase: &ph, Bound: &tt,
+	}); err != nil {
+		t.Fatalf("seed info: %v", err)
+	}
+
+	pub := events.New()
+	srv := &Server{
+		SocketPath: path,
+		Ingestor:   &ingest.Ingestor{S: st, Pub: pub},
+		Publisher:  pub,
+		Store:      st,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	doneCh := make(chan error, 1)
+	go func() { doneCh <- srv.Serve(ctx) }()
+	t.Cleanup(func() { cancel(); <-doneCh })
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(path); err == nil {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	sub := dial(t, path)
+	defer sub.Close()
+	if err := wire.WriteFrame(sub, &wire.Envelope{Body: &wire.Envelope_Hello{Hello: &wire.Hello{
+		Backend: "test-sub", Version: "0.0.0", StartedAtMs: 1, Role: wire.Role_SUBSCRIBER,
+	}}}); err != nil {
+		t.Fatalf("hello: %v", err)
+	}
+
+	_ = sub.SetReadDeadline(time.Now().Add(2 * time.Second))
+	var got wire.Envelope
+	if err := wire.ReadFrame(sub, &got); err != nil {
+		t.Fatalf("read replay: %v", err)
+	}
+	info := got.GetInfo()
+	if info == nil {
+		t.Fatalf("expected Envelope_Info from replay, got %T", got.GetBody())
+	}
+	if info.GetPeerUid() != "000000abcdef" {
+		t.Fatalf("peer_uid: %q", info.GetPeerUid())
+	}
+	if info.GetShortAddr() != 0x1234 {
+		t.Fatalf("short_addr: %d", info.GetShortAddr())
+	}
+	if info.ModelCode == nil || *info.ModelCode != 0x18 {
+		t.Fatalf("model_code: %v", info.ModelCode)
+	}
+	if info.SoftwareVersion == nil || *info.SoftwareVersion != 5203 {
+		t.Fatalf("software_version: %v", info.SoftwareVersion)
+	}
+	if info.Phase == nil || *info.Phase != 1 {
+		t.Fatalf("phase: %v", info.Phase)
+	}
+	if info.ZigbeeBound == nil || *info.ZigbeeBound != true {
+		t.Fatalf("zigbee_bound: %v", info.ZigbeeBound)
+	}
+}
+
 // TestServer_SubscriberClosedOnInboundFrame verifies a subscriber
 // that sends a post-Hello frame is closed by the server.
 func TestServer_SubscriberClosedOnInboundFrame(t *testing.T) {
