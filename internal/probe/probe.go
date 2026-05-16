@@ -1,8 +1,11 @@
-// Package probe runs cold-start identity queries against inverters
-// the driver has seen but doesn't yet have an identity payload for
-// (model_code IS NULL). Replies flow back upstream as RawFrame
-// envelopes; the existing ingest path matches them against
-// codec.MatchOutboundInfoQuery and routes the decoded InfoReply.
+// Package probe runs identity queries against inverters whose row
+// lacks the full set of identity fields the 0xDC reply carries
+// (model_code / software_version). Replies flow back upstream as
+// RawFrame envelopes; the existing ingest path matches them against
+// codec.MatchOutboundInfoQuery and routes the decoded InfoReply. The
+// phase column is filled by ingest from model_code for single-phase
+// families; three-phase per-leg phase comes from operator config
+// (separate future work) and is not what triggers the probe.
 package probe
 
 import (
@@ -35,6 +38,36 @@ type Probe struct {
 	SendInterval time.Duration
 	// MaxRows caps a single probe pass. Defaults to 100 when zero.
 	MaxRows int
+	// Trigger, when non-nil, drives RunLoop. Any signal (publisher
+	// attach, newly-seen UID from ingest, etc.) causes a single Run.
+	// Multiple signals during one Run coalesce into one re-run after.
+	Trigger <-chan struct{}
+}
+
+// RunLoop reacts to Trigger signals by calling Run. Returns when ctx
+// is cancelled. Safe to invoke when Trigger is nil — the case blocks
+// forever and only ctx-cancel wakes the loop.
+//
+// Coalescing is handled by Trigger's cap-1 buffer at the sender side:
+// a burst of non-blocking sends collapses into at most one pending
+// signal, which collapses again at the next receive while Run is
+// in flight.
+//
+// A hostile peer streaming Telemetry envelopes can cause repeated
+// wakeups; each Run is bounded by SendInterval × MaxRows. Mitigations
+// against probe-spam are out of scope under the same-host-root trust
+// model (any peer with UDS access is already root).
+func (p *Probe) RunLoop(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-p.Trigger:
+			if _, err := p.Run(ctx); err != nil {
+				log.Printf("probe: trigger run: %v", err)
+			}
+		}
+	}
 }
 
 // Run iterates inverters with model_code IS NULL and dispatches one
@@ -54,10 +87,15 @@ func (p *Probe) Run(ctx context.Context) (int, error) {
 		limit = 100
 	}
 
+	// Re-query when model_code or software_version is missing. Phase is
+	// not part of this gate: for a three-phase inverter the per-leg
+	// phase stays NULL until operator config arrives, and we don't want
+	// to wire-poll forever on rows waiting on that.
 	rows, err := p.Store.DB().QueryContext(ctx, `
 SELECT uid, short_addr
 FROM   inverters
-WHERE  model_code IS NULL AND short_addr IS NOT NULL
+WHERE  short_addr IS NOT NULL
+  AND  (model_code IS NULL OR software_version IS NULL)
 ORDER  BY uid ASC
 LIMIT  ?`, limit)
 	if err != nil {

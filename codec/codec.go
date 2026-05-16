@@ -143,6 +143,13 @@ func DecodeReply(raw []byte) (Reply, error) {
 	if err != nil {
 		return Reply{}, err
 	}
+	return DecodeReplyFromEnvelope(env)
+}
+
+// DecodeReplyFromEnvelope decodes telemetry from an already-parsed
+// L1 envelope. Callers that have alternative decoders to try (info
+// reply, pair frames, ...) parse L1 once and reuse the envelope.
+func DecodeReplyFromEnvelope(env L1Envelope) (Reply, error) {
 	if env.Encrypted {
 		return Reply{}, ErrEncrypted
 	}

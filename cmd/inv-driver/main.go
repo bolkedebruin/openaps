@@ -119,30 +119,31 @@ func runServe(args []string) error {
 	}
 
 	pub := events.New()
+	// Buffered cap 1: multiple triggers during one probe Run coalesce
+	// into a single re-run.
+	trigger := make(chan struct{}, 1)
 	srv := &ipc.Server{
 		SocketPath: *socket,
 		SocketMode: mode,
-		Ingestor:   &ingest.Ingestor{S: st, Pub: pub},
+		Ingestor:   &ingest.Ingestor{S: st, Pub: pub, Probe: trigger},
 		Publisher:  pub,
 	}
 	if *probeBackend != "" {
+		p := &probe.Probe{
+			Store:        st,
+			Server:       srv,
+			Backend:      *probeBackend,
+			SendInterval: *probeInterval,
+			Trigger:      trigger,
+		}
+		go p.RunLoop(ctx)
 		srv.OnPublisherAttach = func(backend string) {
 			if backend != *probeBackend {
 				return
 			}
-			p := &probe.Probe{
-				Store:        st,
-				Server:       srv,
-				Backend:      backend,
-				SendInterval: *probeInterval,
-			}
-			sent, err := p.Run(ctx)
-			if err != nil {
-				log.Printf("probe: %v", err)
-				return
-			}
-			if sent > 0 {
-				log.Printf("probe: dispatched %d info-query frame(s) to backend=%q", sent, backend)
+			select {
+			case trigger <- struct{}{}:
+			default:
 			}
 		}
 	}

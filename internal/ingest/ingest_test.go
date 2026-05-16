@@ -92,14 +92,14 @@ func TestHandle_Telemetry_UnknownModel_FamilyNull(t *testing.T) {
 	in := newIngestor(t)
 	env := &wire.Envelope{Body: &wire.Envelope_Telemetry{Telemetry: &wire.Telemetry{
 		TsMs:    100,
-		PeerUid: "unknownuid01",
+		PeerUid: "0000000000e1",
 		Model:   "unknown(0xAB)",
 	}}}
 	if err := in.Handle(context.Background(), "be", env); err != nil {
 		t.Fatalf("Handle: %v", err)
 	}
 	var family sql.NullString
-	if err := in.S.DB().QueryRow(`SELECT family FROM inverters WHERE uid='unknownuid01'`).Scan(&family); err != nil {
+	if err := in.S.DB().QueryRow(`SELECT family FROM inverters WHERE uid='0000000000e1'`).Scan(&family); err != nil {
 		t.Fatalf("scan: %v", err)
 	}
 	if family.Valid {
@@ -314,7 +314,7 @@ func TestHandle_Telemetry_PublishesToSubscribers(t *testing.T) {
 
 	env := &wire.Envelope{Body: &wire.Envelope_Telemetry{Telemetry: &wire.Telemetry{
 		TsMs:    5,
-		PeerUid: "uid-pub-1",
+		PeerUid: "000000000fa1",
 		Model:   "QS1A",
 	}}}
 	if err := in.Handle(context.Background(), "be", env); err != nil {
@@ -322,7 +322,7 @@ func TestHandle_Telemetry_PublishesToSubscribers(t *testing.T) {
 	}
 	select {
 	case got := <-ch:
-		if got.GetTelemetry().GetPeerUid() != "uid-pub-1" {
+		if got.GetTelemetry().GetPeerUid() != "000000000fa1" {
 			t.Fatalf("publish: got %q", got.GetTelemetry().GetPeerUid())
 		}
 	default:
@@ -386,7 +386,7 @@ func TestHandle_InverterInfo_AllFields(t *testing.T) {
 	in := newIngestor(t)
 	env := &wire.Envelope{Body: &wire.Envelope_Info{Info: &wire.InverterInfo{
 		TsMs:            222,
-		PeerUid:         "uidAllFields",
+		PeerUid:         "000000000a11",
 		ShortAddr:       0xC459,
 		ModelCode:       u32p(0x29),
 		SoftwareVersion: u32p(101000),
@@ -399,7 +399,7 @@ func TestHandle_InverterInfo_AllFields(t *testing.T) {
 	}
 
 	var modelCode, sw, phase, bound, rpt sql.NullInt64
-	if err := in.S.DB().QueryRow(`SELECT model_code, software_version, phase, zigbee_bound, turned_off_rpt FROM inverters WHERE uid='uidAllFields'`).
+	if err := in.S.DB().QueryRow(`SELECT model_code, software_version, phase, zigbee_bound, turned_off_rpt FROM inverters WHERE uid='000000000a11'`).
 		Scan(&modelCode, &sw, &phase, &bound, &rpt); err != nil {
 		t.Fatalf("scan: %v", err)
 	}
@@ -438,21 +438,21 @@ func TestHandle_InverterInfo_Sequence_Accumulates(t *testing.T) {
 
 	// 1) seed with model only
 	if err := in.Handle(context.Background(), "be", &wire.Envelope{Body: &wire.Envelope_Info{Info: &wire.InverterInfo{
-		TsMs: 1, PeerUid: "acc", ShortAddr: 0x10,
+		TsMs: 1, PeerUid: "000000000acc", ShortAddr: 0x10,
 		ModelCode: u32p(0x24),
 	}}}); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	// 2) add software version
 	if err := in.Handle(context.Background(), "be", &wire.Envelope{Body: &wire.Envelope_Info{Info: &wire.InverterInfo{
-		TsMs: 2, PeerUid: "acc", ShortAddr: 0x10,
+		TsMs: 2, PeerUid: "000000000acc", ShortAddr: 0x10,
 		SoftwareVersion: u32p(7000),
 	}}}); err != nil {
 		t.Fatalf("sw: %v", err)
 	}
 	// 3) add phase + bound
 	if err := in.Handle(context.Background(), "be", &wire.Envelope{Body: &wire.Envelope_Info{Info: &wire.InverterInfo{
-		TsMs: 3, PeerUid: "acc", ShortAddr: 0x10,
+		TsMs: 3, PeerUid: "000000000acc", ShortAddr: 0x10,
 		Phase:       u32p(1),
 		ZigbeeBound: boolp(true),
 	}}}); err != nil {
@@ -460,7 +460,7 @@ func TestHandle_InverterInfo_Sequence_Accumulates(t *testing.T) {
 	}
 
 	var modelCode, sw, phase, bound sql.NullInt64
-	if err := in.S.DB().QueryRow(`SELECT model_code, software_version, phase, zigbee_bound FROM inverters WHERE uid='acc'`).
+	if err := in.S.DB().QueryRow(`SELECT model_code, software_version, phase, zigbee_bound FROM inverters WHERE uid='000000000acc'`).
 		Scan(&modelCode, &sw, &phase, &bound); err != nil {
 		t.Fatalf("scan: %v", err)
 	}

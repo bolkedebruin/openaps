@@ -114,7 +114,7 @@ func TestServer_HelloFirstContract(t *testing.T) {
 	t.Cleanup(func() { cancel(); <-doneCh })
 
 	c := dial(t, path)
-	if err := wire.WriteFrame(c, telemetryEnv("uid1", 100, 50.0)); err != nil {
+	if err := wire.WriteFrame(c, telemetryEnv("000000000001", 100, 50.0)); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 	_ = c.SetReadDeadline(time.Now().Add(2 * time.Second))
@@ -144,7 +144,7 @@ func TestServer_HappyPath(t *testing.T) {
 		t.Fatalf("hello: %v", err)
 	}
 	for i, w := range []float64{100, 200, 300} {
-		if err := wire.WriteFrame(c, telemetryEnv("uidA", int64(1000+i), w)); err != nil {
+		if err := wire.WriteFrame(c, telemetryEnv("00000000000a", int64(1000+i), w)); err != nil {
 			t.Fatalf("telemetry %d: %v", i, err)
 		}
 	}
@@ -155,7 +155,7 @@ func TestServer_HappyPath(t *testing.T) {
 	}
 
 	var acW float64
-	if err := srv.Ingestor.S.DB().QueryRow(`SELECT ac_w FROM telemetry_live WHERE inverter_uid='uidA'`).Scan(&acW); err != nil {
+	if err := srv.Ingestor.S.DB().QueryRow(`SELECT ac_w FROM telemetry_live WHERE inverter_uid='00000000000a'`).Scan(&acW); err != nil {
 		t.Fatalf("scan ac_w: %v", err)
 	}
 	if acW != 300 {
@@ -181,11 +181,11 @@ func TestServer_PerEventErrorTolerance(t *testing.T) {
 	if err := wire.WriteFrame(c, bad); err != nil {
 		t.Fatalf("write bad: %v", err)
 	}
-	if err := wire.WriteFrame(c, telemetryEnv("good-uid", 2, 42.0)); err != nil {
+	if err := wire.WriteFrame(c, telemetryEnv("000000000060", 2, 42.0)); err != nil {
 		t.Fatalf("write good: %v", err)
 	}
 
-	got := waitForRowCount(t, srv, `SELECT COUNT(*) FROM telemetry_live WHERE inverter_uid='good-uid'`, 1)
+	got := waitForRowCount(t, srv, `SELECT COUNT(*) FROM telemetry_live WHERE inverter_uid='000000000060'`, 1)
 	if got != 1 {
 		t.Fatalf("good telemetry not landed: got %d", got)
 	}
@@ -366,7 +366,7 @@ func TestServer_SubscriberReceivesPublishedEnvelopes(t *testing.T) {
 	if err := wire.WriteFrame(pubConn, helloEnv()); err != nil {
 		t.Fatalf("pub hello: %v", err)
 	}
-	if err := wire.WriteFrame(pubConn, telemetryEnv("uidS", 42, 99.0)); err != nil {
+	if err := wire.WriteFrame(pubConn, telemetryEnv("0000000000a5", 42, 99.0)); err != nil {
 		t.Fatalf("pub telemetry: %v", err)
 	}
 
@@ -380,7 +380,7 @@ func TestServer_SubscriberReceivesPublishedEnvelopes(t *testing.T) {
 	if tel == nil {
 		t.Fatalf("expected Telemetry envelope, got %T", got.GetBody())
 	}
-	if tel.GetPeerUid() != "uidS" || tel.GetActivePowerW() != 99.0 {
+	if tel.GetPeerUid() != "0000000000a5" || tel.GetActivePowerW() != 99.0 {
 		t.Fatalf("payload: %+v", tel)
 	}
 }
@@ -511,7 +511,7 @@ func TestServer_SubscriberBlockedWriteIsTornDown(t *testing.T) {
 	}
 	bigEnv := &wire.Envelope{Body: &wire.Envelope_Telemetry{Telemetry: &wire.Telemetry{
 		TsMs:    1,
-		PeerUid: "block-uid-1",
+		PeerUid: "000000000b01",
 		Model:   "QS1A",
 		// Stuff a large field so the on-wire payload is huge.
 		// reactive_var is just a double, so we pack panels.
@@ -643,7 +643,7 @@ func TestServer_SendToBackend_FullQueueDrops(t *testing.T) {
 	// and subsequent SendToBackend calls accumulate in pc.out.
 	big := make([]byte, 16*1024)
 	bigEnv := &wire.Envelope{Body: &wire.Envelope_Send{Send: &wire.Send{
-		PeerUid: "fill", Frame: big, DeadlineMs: 1000,
+		PeerUid: "00000000fa11", Frame: big, DeadlineMs: 1000,
 	}}}
 
 	// Push beyond publisherOutCap. Client never reads.
@@ -683,7 +683,7 @@ func TestServer_ConcurrentConnections(t *testing.T) {
 				return
 			}
 			for j := 0; j < perClient; j++ {
-				uid := fmt.Sprintf("uid-%d-%d", i, j)
+				uid := fmt.Sprintf("%012x", i*100+j)
 				if err := wire.WriteFrame(c, telemetryEnv(uid, int64(1000*i+j), float64(j))); err != nil {
 					errCh <- fmt.Errorf("frame %d/%d: %w", i, j, err)
 					return
