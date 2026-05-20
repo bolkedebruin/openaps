@@ -15,6 +15,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/bolke/inv-driver/codec"
 	"github.com/bolke/inv-driver/internal/store"
 	"github.com/bolke/inv-driver/wire"
 )
@@ -162,29 +163,8 @@ LIMIT  ?`, limit)
 	return sent, nil
 }
 
-// buildInfoQueryFrame returns the 28-byte L0+L2 info-query frame for
-// the given inverter short-address. Same outer L0 shape as the BB
-// telemetry query (AA AA AA AA 55 SA-hi SA-lo 00 00 00 00 00 crc-hi
-// crc-lo 0D); the inner L2 is the canonical 0xDC body
-// (FB FB 06 DC 00 00 00 00 00 00 E2 FE FE).
+// buildInfoQueryFrame returns the L1-wrapped 0xDC info-query frame for
+// the given inverter short-address.
 func buildInfoQueryFrame(sa uint16) []byte {
-	saHi := byte(sa >> 8)
-	saLo := byte(sa & 0xFF)
-	chk := uint16(0x55) + uint16(saHi) + uint16(saLo)
-	chkHi := byte(chk >> 8)
-	chkLo := byte(chk & 0xFF)
-	return []byte{
-		0xAA, 0xAA, 0xAA, 0xAA,
-		0x55,
-		saHi, saLo,
-		0x00, 0x00, 0x00, 0x00, 0x00,
-		chkHi, chkLo,
-		0x0D,
-		// L2 0xDC query (codec.outboundInfoQueryL2).
-		0xFB, 0xFB,
-		0x06, 0xDC,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0xE2,
-		0xFE, 0xFE,
-	}
+	return codec.BuildL1Frame(sa, codec.BuildL2Frame(0x06, 0xDC, []byte{0, 0, 0, 0, 0}))
 }

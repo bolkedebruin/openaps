@@ -24,6 +24,178 @@ func newIngestor(t *testing.T) *Ingestor {
 	return &Ingestor{S: s}
 }
 
+type fakeRouter struct {
+	calls   []routedCall
+	refuse  bool
+}
+
+type routedCall struct {
+	backend string
+	env     *wire.Envelope
+}
+
+func (f *fakeRouter) SendToBackend(backend string, env *wire.Envelope) bool {
+	if f.refuse {
+		return false
+	}
+	f.calls = append(f.calls, routedCall{backend: backend, env: env})
+	return true
+}
+
+func TestHandle_Send_RoutesToBackend(t *testing.T) {
+	t.Parallel()
+	in := newIngestor(t)
+	r := &fakeRouter{}
+	in.Router = r
+	in.RouteBackend = "apsystems-stock-zb"
+	in.ControllerBackends = []string{"inv-driver-cli"}
+
+	frame := []byte{0xAA, 0xAA, 0xAA, 0xAA, 0x55, 0x12, 0x34}
+	env := &wire.Envelope{Body: &wire.Envelope_Send{Send: &wire.Send{
+		PeerUid: "806000042582", Frame: frame,
+	}}}
+	if err := in.Handle(context.Background(), "inv-driver-cli", env); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if len(r.calls) != 1 {
+		t.Fatalf("Router calls: got %d want 1", len(r.calls))
+	}
+	if r.calls[0].backend != "apsystems-stock-zb" {
+		t.Errorf("backend: got %q", r.calls[0].backend)
+	}
+	if got := r.calls[0].env.GetSend().GetFrame(); !equalBytes(got, frame) {
+		t.Errorf("frame mismatch: got % X want % X", got, frame)
+	}
+}
+
+func TestHandle_Broadcast_RoutesToBackend(t *testing.T) {
+	t.Parallel()
+	in := newIngestor(t)
+	r := &fakeRouter{}
+	in.Router = r
+	in.RouteBackend = "apsystems-stock-zb"
+	in.ControllerBackends = []string{"inv-driver-cli"}
+
+	frame := []byte{0xAA, 0xAA, 0xAA, 0xAA, 0x55, 0x00, 0x00}
+	env := &wire.Envelope{Body: &wire.Envelope_Broadcast{Broadcast: &wire.Broadcast{Frame: frame}}}
+	if err := in.Handle(context.Background(), "inv-driver-cli", env); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if len(r.calls) != 1 || r.calls[0].env.GetBroadcast() == nil {
+		t.Fatalf("Broadcast not routed: %+v", r.calls)
+	}
+}
+
+func TestHandle_Send_NoRouterDrops(t *testing.T) {
+	t.Parallel()
+	in := newIngestor(t)
+	env := &wire.Envelope{Body: &wire.Envelope_Send{Send: &wire.Send{Frame: []byte{0xAA}}}}
+	if err := in.Handle(context.Background(), "x", env); err != nil {
+		t.Fatalf("Handle (drop): %v", err)
+	}
+}
+
+func TestHandle_Send_RouterRefusalIsError(t *testing.T) {
+	t.Parallel()
+	in := newIngestor(t)
+	r := &fakeRouter{refuse: true}
+	in.Router = r
+	in.RouteBackend = "apsystems-stock-zb"
+	in.ControllerBackends = []string{"inv-driver-cli"}
+	env := &wire.Envelope{Body: &wire.Envelope_Send{Send: &wire.Send{Frame: []byte{0xAA}}}}
+	err := in.Handle(context.Background(), "inv-driver-cli", env)
+	if err == nil {
+		t.Fatalf("expected error on router refusal")
+	}
+}
+
+func TestHandle_Send_LoopbackRejected(t *testing.T) {
+	t.Parallel()
+	in := newIngestor(t)
+	r := &fakeRouter{}
+	in.Router = r
+	in.RouteBackend = "apsystems-stock-zb"
+	in.ControllerBackends = []string{"inv-driver-cli"}
+
+	env := &wire.Envelope{Body: &wire.Envelope_Send{Send: &wire.Send{Frame: []byte{0xAA}}}}
+	err := in.Handle(context.Background(), "apsystems-stock-zb", env)
+	if err == nil {
+		t.Fatalf("expected loopback rejection")
+	}
+	if !strings.Contains(err.Error(), "loopback") {
+		t.Fatalf("error should mention loopback: %v", err)
+	}
+	if len(r.calls) != 0 {
+		t.Fatalf("router was called: %+v", r.calls)
+	}
+}
+
+func TestHandle_Send_UnknownSenderRejected(t *testing.T) {
+	t.Parallel()
+	in := newIngestor(t)
+	r := &fakeRouter{}
+	in.Router = r
+	in.RouteBackend = "apsystems-stock-zb"
+	in.ControllerBackends = []string{"inv-driver-cli"}
+
+	env := &wire.Envelope{Body: &wire.Envelope_Send{Send: &wire.Send{Frame: []byte{0xAA}}}}
+	err := in.Handle(context.Background(), "stranger", env)
+	if err == nil {
+		t.Fatalf("expected unknown-sender rejection")
+	}
+	if len(r.calls) != 0 {
+		t.Fatalf("router was called: %+v", r.calls)
+	}
+}
+
+func TestHandle_Broadcast_LoopbackRejected(t *testing.T) {
+	t.Parallel()
+	in := newIngestor(t)
+	r := &fakeRouter{}
+	in.Router = r
+	in.RouteBackend = "apsystems-stock-zb"
+	in.ControllerBackends = []string{"inv-driver-cli"}
+
+	env := &wire.Envelope{Body: &wire.Envelope_Broadcast{Broadcast: &wire.Broadcast{Frame: []byte{0xAA}}}}
+	err := in.Handle(context.Background(), "apsystems-stock-zb", env)
+	if err == nil {
+		t.Fatalf("expected loopback rejection")
+	}
+	if len(r.calls) != 0 {
+		t.Fatalf("router was called: %+v", r.calls)
+	}
+}
+
+func TestHandle_Broadcast_UnknownSenderRejected(t *testing.T) {
+	t.Parallel()
+	in := newIngestor(t)
+	r := &fakeRouter{}
+	in.Router = r
+	in.RouteBackend = "apsystems-stock-zb"
+	in.ControllerBackends = []string{"inv-driver-cli"}
+
+	env := &wire.Envelope{Body: &wire.Envelope_Broadcast{Broadcast: &wire.Broadcast{Frame: []byte{0xAA}}}}
+	err := in.Handle(context.Background(), "stranger", env)
+	if err == nil {
+		t.Fatalf("expected unknown-sender rejection")
+	}
+	if len(r.calls) != 0 {
+		t.Fatalf("router was called: %+v", r.calls)
+	}
+}
+
+func equalBytes(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func TestHandle_Hello_NoRowWritten(t *testing.T) {
 	t.Parallel()
 	in := newIngestor(t)

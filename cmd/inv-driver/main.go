@@ -51,6 +51,8 @@ func main() {
 		err = runDumpTelemetry(args)
 	case "dump-events":
 		err = runDumpEvents(args)
+	case "set-power":
+		err = runSetPower(args)
 	case "-h", "--help", "help":
 		usage(os.Stdout)
 		return
@@ -72,6 +74,7 @@ subcommands:
   serve            Run the UDS ingestion daemon.
   dump-telemetry   Print the latest sample per inverter as JSON lines.
   dump-events      Print rows from the events table as JSON lines.
+  set-power        Dispatch an inverter max-power command (per-UID or broadcast).
 
 Run 'inv-driver <subcommand> -h' for subcommand-specific flags.
 `)
@@ -125,9 +128,16 @@ func runServe(args []string) error {
 	srv := &ipc.Server{
 		SocketPath: *socket,
 		SocketMode: mode,
-		Ingestor:   &ingest.Ingestor{S: st, Pub: pub, Probe: trigger},
 		Publisher:  pub,
 		Store:      st,
+	}
+	srv.Ingestor = &ingest.Ingestor{
+		S:                  st,
+		Pub:                pub,
+		Probe:              trigger,
+		Router:             srv,
+		RouteBackend:       *probeBackend,
+		ControllerBackends: []string{"inv-driver-cli"},
 	}
 	if *probeBackend != "" {
 		p := &probe.Probe{

@@ -36,6 +36,29 @@ type Ingestor struct {
 	S     *store.Store
 	Pub   *events.Publisher
 	Probe chan<- struct{}
+
+	// Router, when non-nil, dispatches Envelope_Send / Envelope_Broadcast
+	// frames received from peer connections (typically the inv-driver
+	// CLI) to a named backend (typically the active ecu-zb publisher).
+	// Without a Router these envelopes are dropped with a log line.
+	Router Router
+
+	// RouteBackend names the backend that receives downstream Send /
+	// Broadcast envelopes routed through Router. Empty disables routing.
+	RouteBackend string
+
+	// ControllerBackends names the set of peer backends permitted to
+	// inject Envelope_Send / Envelope_Broadcast frames. A peer whose
+	// Hello backend is not on this list is refused. The publisher
+	// backend named in RouteBackend is always refused (loopback). Empty
+	// list disables Send/Broadcast routing entirely.
+	ControllerBackends []string
+}
+
+// Router is the subset of ipc.Server the Ingestor needs to forward
+// downstream envelopes. Lives here to avoid an ingest -> ipc import.
+type Router interface {
+	SendToBackend(backend string, env *wire.Envelope) bool
 }
 
 // Handle dispatches an Envelope by oneof body. Returns an error only
@@ -79,11 +102,43 @@ func (in *Ingestor) Handle(ctx context.Context, backend string, env *wire.Envelo
 		}
 		df := b.DecodeFailed
 		return in.S.AppendDecodeFailed(ctx, df.GetTsMs(), df.GetShortAddr(), df.GetError(), df.GetRawHex())
+	case *wire.Envelope_Send, *wire.Envelope_Broadcast:
+		return in.routeDownstream(backend, env)
 	case nil:
 		return fmt.Errorf("envelope without body")
 	default:
 		return fmt.Errorf("unhandled envelope body type %T", b)
 	}
+}
+
+// routeDownstream forwards an Envelope_Send / Envelope_Broadcast to the
+// configured backend via Router. The sender's backend identity must be
+// on ControllerBackends and must not match RouteBackend (loopback).
+func (in *Ingestor) routeDownstream(sender string, env *wire.Envelope) error {
+	if in.Router == nil || in.RouteBackend == "" {
+		log.Printf("ingest: downstream envelope dropped (no router/backend configured)")
+		return nil
+	}
+	if sender == in.RouteBackend {
+		return fmt.Errorf("downstream route refused: sender backend %q matches RouteBackend (loopback)", sender)
+	}
+	if !isControllerBackend(in.ControllerBackends, sender) {
+		return fmt.Errorf("downstream route refused: sender backend %q is not an allowed controller", sender)
+	}
+	if !in.Router.SendToBackend(in.RouteBackend, env) {
+		return fmt.Errorf("downstream route to backend %q failed (publisher absent or queue full)", in.RouteBackend)
+	}
+	return nil
+}
+
+// isControllerBackend reports whether sender is on the allow-list.
+func isControllerBackend(allow []string, sender string) bool {
+	for _, b := range allow {
+		if b == sender {
+			return true
+		}
+	}
+	return false
 }
 
 func (in *Ingestor) handleTelemetry(ctx context.Context, t *wire.Telemetry) error {

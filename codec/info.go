@@ -17,12 +17,19 @@ type InfoReply struct {
 // any of the known 0xDC reply forms.
 var ErrUnknownReplyShape = errors.New("info reply: unknown shape (length)")
 
-// outboundInfoQueryL2 is the canonical 0xDC query L2 body. 13 bytes,
-// byte-for-byte fixed.
-var outboundInfoQueryL2 = [...]byte{
-	0xFB, 0xFB, 0x06, 0xDC,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0xE2, 0xFE, 0xFE,
+// outboundInfoQueryL2 is the canonical 0xDC query L2 body, built once
+// at init via the shared envelope helper.
+var outboundInfoQueryL2 = BuildL2Frame(0x06, 0xDC, []byte{0, 0, 0, 0, 0})
+
+// outboundBBQueryL2 is the canonical 0xBB telemetry query L2 body.
+var outboundBBQueryL2 = BuildL2Frame(0x06, 0xBB, []byte{0, 0, 0, 0, 0})
+
+// OutboundBBQueryL2 returns a copy of the canonical 0xBB telemetry
+// query L2 body.
+func OutboundBBQueryL2() []byte {
+	out := make([]byte, len(outboundBBQueryL2))
+	copy(out, outboundBBQueryL2)
+	return out
 }
 
 // MatchOutboundInfoQuery reports whether l2 is the canonical 0xDC
@@ -60,8 +67,7 @@ func DecodeInfoReply(l2 []byte) (InfoReply, error) {
 //
 //	FB FB 09 DC <model> <hi BE16> ?? <lo BE16> ... FE FE
 //
-// software_version = hi*1000 + lo. Validation matches main.exe's
-// assertions on the SOF, cmd bytes, and byte 14 == 0xFE.
+// software_version = hi*1000 + lo.
 func decodeInfoReplyA(l2 []byte) (InfoReply, error) {
 	if l2[0] != 0xFB || l2[1] != 0xFB {
 		return InfoReply{}, ErrBadL2SOF
@@ -121,9 +127,8 @@ func decodeInfoReplyC(l2 []byte) (InfoReply, error) {
 	return InfoReply{Model: model, SoftwareVersion: hi*1_000_000 + mid*1_000 + lo}, nil
 }
 
-// Model codes observed in 0xDC replies and in the firmware's
-// set_paraName_paraValue_inverter dispatcher. Family identification is
-// our own; the firmware doesn't carry these names.
+// Model codes observed in 0xDC replies. Family identification is our
+// own; the firmware doesn't carry these names.
 const (
 	ModelYC600 uint32 = 0x07 // single-phase 2-channel
 	ModelQS1   uint32 = 0x08 // single-phase 4-channel (older reporting code)
@@ -140,9 +145,7 @@ const (
 )
 
 // PhaseFromModel returns the inverter family classifier: 1 for
-// single-phase, 3 for three-phase, 0 for unknown. Mirrors the
-// firmware's compare_model_phase @ 0xb4314 plus ModelQS1A (0x18),
-// which the firmware's table omits.
+// single-phase, 3 for three-phase, 0 for unknown.
 func PhaseFromModel(model uint32) uint32 {
 	switch model {
 	case ModelYC600, ModelQS1, ModelQS1A, ModelDS3, ModelDS3H, ModelDS3L, ModelExt36:
