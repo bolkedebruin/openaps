@@ -185,6 +185,173 @@ func TestDecodeReply_DS3_FromLiveCapture(t *testing.T) {
 	}
 }
 
+func TestDecodeReply_DS3_StatusFlagsAllZeroInLiveCapture(t *testing.T) {
+	r, err := DecodeReply(hx(t, ds3Fixture))
+	if err != nil {
+		t.Fatalf("DecodeReply: %v", err)
+	}
+	if r.DS3Status.Raw != [5]byte{} {
+		t.Errorf("DS3Status.Raw: got %v want all zero", r.DS3Status.Raw)
+	}
+	if (r.Status != InverterStatus{}) {
+		t.Errorf("expected zero InverterStatus, got %+v", r.Status)
+	}
+	if (r.QS1AStatus != QS1AStatus{}) {
+		t.Errorf("QS1AStatus should stay zero for DS3 replies, got %+v", r.QS1AStatus)
+	}
+}
+
+func TestDecodeReply_DS3_StatusFlagsBitMap(t *testing.T) {
+	// Patches the 5 status bytes of the live fixture and re-decodes.
+	// body[0x0b] sits at raw[16+0x0b]: 12 L1 bytes + FB FB type cmd = 16.
+	const bodyOff = 16
+	cases := []struct {
+		name                                string
+		b, c, d, e, f                       byte
+		dcBus, faultA, faultB, warnA, warnB bool
+	}{
+		{"all zero", 0, 0, 0, 0, 0, false, false, false, false, false},
+		{"DC bus fault (byte 0xd bit 4)", 0, 0, 1 << 4, 0, 0, true, false, false, false, false},
+		{"fault A bit 0", 0, 0, 0, 0, 1 << 0, false, true, false, false, false},
+		{"fault A bit 6", 0, 0, 0, 0, 1 << 6, false, true, false, false, false},
+		{"fault B bit 1", 0, 0, 0, 0, 1 << 1, false, false, true, false, false},
+		{"fault B bit 7", 0, 0, 0, 0, 1 << 7, false, false, true, false, false},
+		{"warning A bit 0", 0, 0, 0, 1 << 0, 0, false, false, false, true, false},
+		{"warning A bit 2", 0, 0, 0, 1 << 2, 0, false, false, false, true, false},
+		{"warning B bit 1", 0, 0, 0, 1 << 1, 0, false, false, false, false, true},
+		{"warning B bit 3", 0, 0, 0, 1 << 3, 0, false, false, false, false, true},
+		{"byte 0xe bit 4 not aggregated", 0, 0, 0, 1 << 4, 0, false, false, false, false, false},
+		{"all bytes 0xff", 0xff, 0xff, 0xff, 0xff, 0xff, true, true, true, true, true},
+	}
+	base := hx(t, ds3Fixture)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			buf := append([]byte(nil), base...)
+			buf[bodyOff+0x0b] = tc.b
+			buf[bodyOff+0x0c] = tc.c
+			buf[bodyOff+0x0d] = tc.d
+			buf[bodyOff+0x0e] = tc.e
+			buf[bodyOff+0x0f] = tc.f
+			r, err := DecodeReply(buf)
+			if err != nil {
+				t.Fatalf("DecodeReply: %v", err)
+			}
+			wantRaw := [5]byte{tc.b, tc.c, tc.d, tc.e, tc.f}
+			if r.DS3Status.Raw != wantRaw {
+				t.Errorf("DS3Status.Raw: got %v want %v", r.DS3Status.Raw, wantRaw)
+			}
+			want := InverterStatus{
+				DCBusFault: tc.dcBus,
+				FaultA:      tc.faultA,
+				FaultB:      tc.faultB,
+				WarningA:    tc.warnA,
+				WarningB:    tc.warnB,
+			}
+			if r.Status != want {
+				t.Errorf("Status: got %+v want %+v", r.Status, want)
+			}
+		})
+	}
+}
+
+func TestDecodeReply_QS1A_StatusFlagsAllZeroInLiveCapture(t *testing.T) {
+	r, err := DecodeReply(hx(t, qs1aFixture))
+	if err != nil {
+		t.Fatalf("DecodeReply: %v", err)
+	}
+	if r.QS1AStatus.Main != [4]byte{} {
+		t.Errorf("QS1AStatus.Main: got %v want all zero", r.QS1AStatus.Main)
+	}
+	if r.QS1AStatus.Grid != [2]byte{} {
+		t.Errorf("QS1AStatus.Grid: got %v want all zero", r.QS1AStatus.Grid)
+	}
+	if r.QS1AStatus.Extra != 0 {
+		t.Errorf("QS1AStatus.Extra: got %v want 0", r.QS1AStatus.Extra)
+	}
+	if (r.Status != InverterStatus{}) {
+		t.Errorf("expected zero InverterStatus, got %+v", r.Status)
+	}
+	if (r.DS3Status != DS3Status{}) {
+		t.Errorf("DS3Status should stay zero for QS1A replies, got %+v", r.DS3Status)
+	}
+}
+
+func TestDecodeReply_QS1A_StatusFlagsBitMap(t *testing.T) {
+	// Patches the QS1A status bytes (body[0x17..0x1a]) of the live
+	// fixture and re-decodes. body[0x17] sits at raw[16+0x17]: 12 L1
+	// + FB FB type cmd = 16.
+	const bodyOff = 16
+	cases := []struct {
+		name                                string
+		b17, b18, b19, b1a                  byte
+		dcBus, faultA, faultB, warnA, warnB bool
+	}{
+		{"all zero", 0, 0, 0, 0, false, false, false, false, false},
+		{"DC bus fault (byte 0x18 bit 4)", 0, 1 << 4, 0, 0, true, false, false, false, false},
+		{"fault A: 0x1a bit 4", 0, 0, 0, 1 << 4, false, true, false, false, false},
+		{"fault A: 0x1a bit 6", 0, 0, 0, 1 << 6, false, true, false, false, false},
+		{"fault A: 0x19 bit 0", 0, 0, 1 << 0, 0, false, true, false, false, false},
+		{"fault A: 0x17 bit 5", 1 << 5, 0, 0, 0, false, true, false, false, false},
+		{"fault B: 0x1a bit 5", 0, 0, 0, 1 << 5, false, false, true, false, false},
+		{"fault B: 0x1a bit 7", 0, 0, 0, 1 << 7, false, false, true, false, false},
+		{"fault B: 0x19 bit 1", 0, 0, 1 << 1, 0, false, false, true, false, false},
+		{"fault B: 0x17 bit 6", 1 << 6, 0, 0, 0, false, false, true, false, false},
+		{"warning A: 0x1a bit 0", 0, 0, 0, 1 << 0, false, false, false, true, false},
+		{"warning A: 0x1a bit 2", 0, 0, 0, 1 << 2, false, false, false, true, false},
+		{"warning B: 0x1a bit 1", 0, 0, 0, 1 << 1, false, false, false, false, true},
+		{"warning B: 0x1a bit 3", 0, 0, 0, 1 << 3, false, false, false, false, true},
+		{"0x17 bits 0..4,7 not aggregated", 0b10011111, 0, 0, 0, false, false, false, false, false},
+		{"0x19 bits 2..7 not aggregated", 0, 0, 0b11111100, 0, false, false, false, false, false},
+		{"all 0xff", 0xff, 0xff, 0xff, 0xff, true, true, true, true, true},
+	}
+	base := hx(t, qs1aFixture)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			buf := append([]byte(nil), base...)
+			buf[bodyOff+0x17] = tc.b17
+			buf[bodyOff+0x18] = tc.b18
+			buf[bodyOff+0x19] = tc.b19
+			buf[bodyOff+0x1a] = tc.b1a
+			r, err := DecodeReply(buf)
+			if err != nil {
+				t.Fatalf("DecodeReply: %v", err)
+			}
+			wantMain := [4]byte{tc.b17, tc.b18, tc.b19, tc.b1a}
+			if r.QS1AStatus.Main != wantMain {
+				t.Errorf("QS1AStatus.Main: got %v want %v", r.QS1AStatus.Main, wantMain)
+			}
+			want := InverterStatus{
+				DCBusFault: tc.dcBus,
+				FaultA:      tc.faultA,
+				FaultB:      tc.faultB,
+				WarningA:    tc.warnA,
+				WarningB:    tc.warnB,
+			}
+			if r.Status != want {
+				t.Errorf("Status: got %+v want %+v", r.Status, want)
+			}
+		})
+	}
+}
+
+func TestDecodeReply_QS1A_StatusPreservesGridAndExtra(t *testing.T) {
+	const bodyOff = 16
+	buf := append([]byte(nil), hx(t, qs1aFixture)...)
+	buf[bodyOff+0x34] = 0x42
+	buf[bodyOff+0x38] = 0xa5
+	buf[bodyOff+0x39] = 0x5a
+	r, err := DecodeReply(buf)
+	if err != nil {
+		t.Fatalf("DecodeReply: %v", err)
+	}
+	if r.QS1AStatus.Extra != 0x42 {
+		t.Errorf("Extra: got 0x%02x want 0x42", r.QS1AStatus.Extra)
+	}
+	if r.QS1AStatus.Grid != [2]byte{0xa5, 0x5a} {
+		t.Errorf("Grid: got %v want [a5 5a]", r.QS1AStatus.Grid)
+	}
+}
+
 func TestDecodeReply_RejectsTruncated(t *testing.T) {
 	cases := []struct{ name, hexStr string }{
 		{"empty", ""},

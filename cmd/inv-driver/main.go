@@ -219,6 +219,9 @@ type telemetryRow struct {
 	ReportSec       any             `json:"report_sec"`
 	Panels          []telemetryPan  `json:"panels"`
 	Lifetime        []telemetryEner `json:"lifetime"`
+	LastIntervalMs  any             `json:"last_interval_ms"`  // gap to previous frame for this UID
+	AvgIntervalMs   any             `json:"avg_interval_ms"`   // EWMA over recent frames
+	IntervalSamples any             `json:"interval_samples"`  // EWMA sample count
 }
 
 type telemetryPan struct {
@@ -229,9 +232,10 @@ type telemetryPan struct {
 }
 
 type telemetryEner struct {
-	ChannelIdx int     `json:"i"`
-	Raw        int64   `json:"raw"`
-	Scale      float64 `json:"scale"`
+	ChannelIdx   int     `json:"i"`
+	Raw          int64   `json:"prev_raw"`
+	Scale        float64 `json:"scale"`
+	CumulativeWh float64 `json:"cumulative_wh"`
 }
 
 func runDumpTelemetry(args []string) error {
@@ -295,6 +299,16 @@ ORDER  BY t.inverter_uid ASC
 		if err != nil {
 			return err
 		}
+		var lastIntervalMs sqlNullInt
+		var avgIntervalMs sql.NullFloat64
+		var intervalSamples sqlNullInt
+		_ = st.DB().QueryRowContext(ctx,
+			`SELECT last_interval_ms, avg_interval_ms, sample_count FROM inverter_metrics WHERE inverter_uid=?`,
+			uid).Scan(&lastIntervalMs, &avgIntervalMs, &intervalSamples)
+		var avgAny any
+		if avgIntervalMs.Valid {
+			avgAny = avgIntervalMs.Float64
+		}
 		row := telemetryRow{
 			InverterUID:     uid,
 			TsMs:            tsMs,
@@ -314,6 +328,9 @@ ORDER  BY t.inverter_uid ASC
 			ReportSec:       reportSec.toAny(),
 			Panels:          panels,
 			Lifetime:        lifetime,
+			LastIntervalMs:  lastIntervalMs.toAny(),
+			AvgIntervalMs:   avgAny,
+			IntervalSamples: intervalSamples.toAny(),
 		}
 		if err := enc.Encode(row); err != nil {
 			return err
@@ -357,7 +374,7 @@ ORDER  BY channel_idx ASC
 
 func loadLifetime(ctx context.Context, db *sql.DB, uid string) ([]telemetryEner, error) {
 	const q = `
-SELECT channel_idx, raw, scale
+SELECT channel_idx, prev_raw, cumulative_wh, scale
 FROM   energy_lifetime
 WHERE  inverter_uid = ?
 ORDER  BY channel_idx ASC
@@ -370,17 +387,19 @@ ORDER  BY channel_idx ASC
 	var out []telemetryEner
 	for rows.Next() {
 		var (
-			idx   int
-			raw   int64
-			scale float64
+			idx          int
+			prevRaw      int64
+			cumulativeWh float64
+			scale        float64
 		)
-		if err := rows.Scan(&idx, &raw, &scale); err != nil {
+		if err := rows.Scan(&idx, &prevRaw, &cumulativeWh, &scale); err != nil {
 			return nil, err
 		}
 		out = append(out, telemetryEner{
-			ChannelIdx: idx,
-			Raw:        raw,
-			Scale:      scale,
+			ChannelIdx:   idx,
+			Raw:          prevRaw,
+			Scale:        scale,
+			CumulativeWh: cumulativeWh,
 		})
 	}
 	return out, rows.Err()

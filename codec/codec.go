@@ -20,10 +20,17 @@ import (
 
 // L1Envelope is the parsed L1 reply frame from the modem.
 //
-//	FC FC <SA hi> <SA lo> <nonce 2> <peer UID 6> <gate=L2[0]> ...
+//	FC FC <SA hi> <SA lo> <RSSI byte 4> <RSSI byte 5> <peer UID 6> <gate=L2[0]> ...
+//
+// Bytes 4 and 5 are signal-quality bytes the ZigBee modem stamps on every
+// received reply. Main.exe (zb_get_reply @ 0xe5ac) writes byte 4 to its
+// signal_strength table as the "RSSI" exposed to operators, clamping
+// values < 0x10 up to 0xff (sentinel for "tiny / unknown"). Byte 5 is
+// stored separately as signal_field2_rssi and logged to /tmp/raduis.txt.
 type L1Envelope struct {
 	ShortAddr uint16
-	Nonce     [2]byte
+	RSSI      byte    // byte 4 of L1 — primary RSSI (main.exe's signal_strength)
+	LQI       byte    // byte 5 of L1 — secondary signal metric (main.exe's signal_field2_rssi)
 	PeerUID   [6]byte // 6-byte BCD inverter ID, e.g. 80 60 00 04 25 82
 	Encrypted bool    // gate byte < 0xF0
 	L2Frame   []byte  // FB FB ... FE FE (plaintext or ciphertext block)
@@ -66,7 +73,8 @@ func ParseL1(raw []byte) (L1Envelope, error) {
 	}
 	env := L1Envelope{
 		ShortAddr: uint16(raw[2])<<8 | uint16(raw[3]),
-		Nonce:     [2]byte{raw[4], raw[5]},
+		RSSI:      raw[4],
+		LQI:       raw[5],
 	}
 	copy(env.PeerUID[:], raw[6:12])
 	gate := raw[12]
@@ -113,6 +121,12 @@ type Reply struct {
 	Cmd       byte   // L2 cmd byte (0xB1 QS1A, 0xBB DS3, etc.)
 	Model     string // "QS1A" / "DS3" / "unknown"
 
+	// Signal-quality bytes from the L1 envelope (zb_get_reply @ 0xe5ac).
+	// RSSI is what main.exe stores in its signal_strength SQLite table
+	// (with clamp byte < 0x10 → 0xff applied at consumer level).
+	RSSI byte
+	LQI  byte
+
 	GridV         float64
 	BusV          float64 // QS1A internal DC link
 	FreqHz        float64
@@ -126,6 +140,103 @@ type Reply struct {
 	// separate so callers can verify or override.
 	LifetimeRaw   []uint64
 	LifetimeScale float64 // kWh per raw unit
+
+	// Status holds the family-agnostic aggregator booleans (DC bus,
+	// fault A/B, warning A/B) — the same five signals main.exe
+	// derives at the tail of every resolvedata_* function before
+	// stepping its on-firmware counters at inv+0x3ec..0x400.
+	// Populated for every recognised family.
+	Status InverterStatus
+
+	// DS3Status holds the raw 5-byte status block at body[0x0b..0x10].
+	// Populated only for DS3-family replies.
+	DS3Status DS3Status
+
+	// QS1AStatus holds the raw QS1A status bytes
+	// (body[0x17..0x1a, 0x38..0x39, 0x34]). Populated only for QS1A.
+	QS1AStatus QS1AStatus
+}
+
+// InverterStatus collects the five aggregator signals main.exe
+// derives in every resolvedata_* function. Each codec populates this
+// from its own byte map; the inverter-struct slots and counter
+// addresses are identical across families (DC bus → inv+0x3f0 vs
+// 0x3ec, fault A → 0x3f4, fault B → 0x3f8, warning A → 0x3fc,
+// warning B → 0x400). All bits are fault-active: true means a fault
+// event is present (firmware counter inv+0x3f0 advances).
+type InverterStatus struct {
+	DCBusFault         bool
+	FaultA, FaultB     bool
+	WarningA, WarningB bool
+}
+
+// modbusStatusInputs is the union of bits both families project into
+// the SunSpec Model 103 St + Evt1 registers via packModbusStatus.
+// DS3 leaves CommFault / ZBLink / OverTemp false (no body source);
+// QS1A populates all four. Bits not driven by either family stay
+// zero in Evt1 — they would otherwise come from other resolvers
+// (RCD / DSP-event subsystems) that the codec doesn't see.
+type modbusStatusInputs struct {
+	GridRelay      bool
+	DCContactor    bool
+	DCGround       bool
+	IsoAny         bool
+	CommFault      bool
+	ZBLink         bool
+	OverTemperature bool
+	ACOverVoltAny  bool
+	ACUnderVoltAny bool
+	OverFreqAny    bool
+	UnderFreqAny   bool
+}
+
+// packModbusStatus mirrors main.exe's update_modbus_status @ 0x96570:
+// returns (St, Evt1) as the SunSpec Model 103 16-bit big-endian
+// register pair the firmware writes at inv+0x534 and inv+0x538.
+// Per-family ModbusStatus methods build a modbusStatusInputs and call
+// here so the Evt1 layout has one source of truth.
+func packModbusStatus(in modbusStatusInputs) (st, evt1 uint16) {
+	if in.GridRelay {
+		st = 6
+	} else {
+		st = 4
+	}
+	var hi, lo byte
+	if in.DCContactor {
+		hi |= 0x80
+	}
+	if in.IsoAny {
+		hi |= 0x40
+	}
+	if in.CommFault {
+		hi |= 0x20 | 0x08 // firmware sets bit 5 and bit 3 from one slot
+	}
+	if in.ZBLink {
+		hi |= 0x10
+	}
+	if in.GridRelay {
+		hi |= 0x02
+	}
+	if in.DCGround {
+		hi |= 0x01
+	}
+	if in.ACOverVoltAny {
+		lo |= 0x80
+	}
+	if in.ACUnderVoltAny {
+		lo |= 0x40
+	}
+	if in.OverFreqAny {
+		lo |= 0x20
+	}
+	if in.UnderFreqAny {
+		lo |= 0x10
+	}
+	if in.OverTemperature {
+		lo |= 0x02
+	}
+	evt1 = uint16(hi)<<8 | uint16(lo)
+	return
 }
 
 // Panel is one MPPT input.
@@ -161,6 +272,8 @@ func DecodeReplyFromEnvelope(env L1Envelope) (Reply, error) {
 		ShortAddr: env.ShortAddr,
 		PeerUID:   env.PeerUIDString(),
 		Cmd:       l2.Cmd,
+		RSSI:      env.RSSI,
+		LQI:       env.LQI,
 	}
 	switch l2.Cmd {
 	case 0xB1:
@@ -201,6 +314,20 @@ func be24(b []byte, off int) uint32 {
 		return 0
 	}
 	return uint32(b[off])<<16 | uint32(b[off+1])<<8 | uint32(b[off+2])
+}
+
+// LifetimeKWh returns the per-panel lifetime energy in kWh using
+// the model's scale. Convenience for callers; equivalent to
+// raw * Reply.LifetimeScale, rounded to 3 decimals.
+func (r Reply) LifetimeKWh() []float64 {
+	if r.LifetimeScale == 0 {
+		return nil
+	}
+	out := make([]float64, len(r.LifetimeRaw))
+	for i, raw := range r.LifetimeRaw {
+		out[i] = math.Round(float64(raw)*r.LifetimeScale*1000) / 1000
+	}
+	return out
 }
 
 // fround rounds to 3 decimals so JSON output stays readable.

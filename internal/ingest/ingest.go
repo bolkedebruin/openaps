@@ -100,8 +100,20 @@ func (in *Ingestor) handleTelemetry(ctx context.Context, t *wire.Telemetry) erro
 		return err
 	}
 	in.signalProbe()
+	// Capture previous frame's ts before WriteTelemetryLive overwrites
+	// it, so we can stamp t.PrevFrameMs and feed RecordInterval. A
+	// zero result (no prior row) is fine — subscribers see 0 and skip
+	// interval calc on first frame.
+	prevTsMs, err := in.S.PrevTelemetryTsMs(ctx, uid)
+	if err != nil {
+		return err
+	}
+	t.PrevFrameMs = prevTsMs
 	if err := in.S.WriteTelemetryLive(ctx, uid, tsMs, t.GetCmd(),
 		t.GetActivePowerW(), t.GetGridV(), t.GetFreqHz(), t.GetBusV(), t.GetReportSec()); err != nil {
+		return err
+	}
+	if _, err := in.S.RecordInterval(ctx, uid, prevTsMs, tsMs); err != nil {
 		return err
 	}
 	if pp := t.GetPanels(); len(pp) > 0 {
@@ -128,7 +140,8 @@ func (in *Ingestor) handleTelemetry(ctx context.Context, t *wire.Telemetry) erro
 				Scale:      scale,
 			})
 		}
-		if err := in.S.WriteEnergyLifetime(ctx, uid, tsMs, rows); err != nil {
+		maxChannelW := maxChannelWForCmd(t.GetCmd(), len(raw))
+		if err := in.S.WriteEnergyLifetime(ctx, uid, tsMs, rows, maxChannelW); err != nil {
 			return err
 		}
 	}
@@ -225,6 +238,9 @@ func (in *Ingestor) tryTelemetry(ctx context.Context, tsMs int64, env codec.L1En
 		return true, err
 	}
 	in.publish(&wire.Envelope{Body: &wire.Envelope_Telemetry{Telemetry: t}})
+	// Refresh fleet aggregate so today/month/year/lifetime tracks each
+	// new sample without subscribers having to poll.
+	in.publishFleetSummary(ctx)
 	return true, nil
 }
 
@@ -296,13 +312,83 @@ func (in *Ingestor) applyPairFrame(ctx context.Context, tsMs int64, env codec.L1
 
 // storeAndPublishInfo upserts an InverterInfo into the store and
 // publishes the envelope to subscribers. Common tail for the info /
-// pair decoders.
+// pair decoders. Also republishes a FleetSummary so subscribers can
+// keep their fleet-nameplate aggregate fresh without re-attaching.
 func (in *Ingestor) storeAndPublishInfo(ctx context.Context, wireInfo *wire.InverterInfo) error {
 	if err := in.handleInverterInfo(ctx, wireInfo); err != nil {
 		return err
 	}
 	in.publish(&wire.Envelope{Body: &wire.Envelope_Info{Info: wireInfo}})
+	in.publishFleetSummary(ctx)
 	return nil
+}
+
+// publishFleetSummary computes and broadcasts the current fleet
+// aggregate. Non-fatal on error — the next call will retry.
+func (in *Ingestor) publishFleetSummary(ctx context.Context) {
+	if in.Pub == nil {
+		return
+	}
+	fleet := in.BuildFleetSummary(ctx)
+	if fleet == nil {
+		return
+	}
+	in.publish(&wire.Envelope{Body: &wire.Envelope_Fleet{Fleet: fleet}})
+}
+
+// BuildFleetSummary returns a fully-populated FleetSummary proto for
+// the current state of the store: nameplate sum, inverter count, and
+// fleet-level lifetime / today / month / year watt-hours. Returns
+// nil when the store isn't ready. Side-effect: seeds period anchor
+// rows on first observation in a new day/month/year.
+func (in *Ingestor) BuildFleetSummary(ctx context.Context) *wire.FleetSummary {
+	if in.S == nil {
+		return nil
+	}
+	totalW, count, err := in.S.FleetSummary(ctx)
+	if err != nil {
+		return nil
+	}
+	now := time.Now()
+	lifetimeWh, err := in.S.FleetLifetimeWh(ctx)
+	if err != nil {
+		lifetimeWh = 0
+	}
+	todayWh, _ := in.S.PeriodEnergyWh(ctx, "day", now, lifetimeWh)
+	monthWh, _ := in.S.PeriodEnergyWh(ctx, "month", now, lifetimeWh)
+	yearWh, _ := in.S.PeriodEnergyWh(ctx, "year", now, lifetimeWh)
+	return &wire.FleetSummary{
+		TsMs:            now.UnixMilli(),
+		NameplateTotalW: totalW,
+		InverterCount:   count,
+		LifetimeWh:      uint64(lifetimeWh + 0.5),
+		TodayWh:         uint64(todayWh + 0.5),
+		MonthWh:         uint64(monthWh + 0.5),
+		YearWh:          uint64(yearWh + 0.5),
+	}
+}
+
+// maxChannelWForCmd returns the rated AC watts per channel for the
+// inverter family identified by the L2 cmd byte. Used by the energy
+// anomaly check in store.WriteEnergyLifetime as the rate ceiling.
+// Returns 0 (anomaly check disabled) for unknown cmds.
+func maxChannelWForCmd(cmd uint32, channels int) uint32 {
+	if channels <= 0 {
+		return 0
+	}
+	var nameplateW uint32
+	switch cmd {
+	case 0xBB: // DS3 family
+		nameplateW = codec.NameplateWattsForModel(codec.ModelDS3)
+	case 0xB1: // QS1A
+		nameplateW = codec.NameplateWattsForModel(codec.ModelQS1A)
+	default:
+		return 0
+	}
+	if nameplateW == 0 {
+		return 0
+	}
+	return nameplateW / uint32(channels)
 }
 
 // telemetryFromReply maps every codec.Reply field onto wire.Telemetry.
@@ -321,6 +407,8 @@ func telemetryFromReply(r codec.Reply, tsMs int64) *wire.Telemetry {
 		ReactiveVar:   r.ReactivePower,
 		LifetimeRaw:   r.LifetimeRaw,
 		LifetimeScale: r.LifetimeScale,
+		Rssi:          uint32(r.RSSI),
+		Lqi:           uint32(r.LQI),
 	}
 	if len(r.Panels) > 0 {
 		t.Panels = make([]*wire.Panel, len(r.Panels))
@@ -333,7 +421,69 @@ func telemetryFromReply(r codec.Reply, tsMs int64) *wire.Telemetry {
 			}
 		}
 	}
+	if f := faultsFromReply(r); f != nil {
+		t.Faults = f
+	}
 	return t
+}
+
+// faultsFromReply projects the codec's per-family Faults() decode
+// onto the wire.InverterFaults oneof. Returns nil when the reply
+// can't be family-classified (e.g. unknown cmd).
+func faultsFromReply(r codec.Reply) *wire.InverterFaults {
+	switch r.Cmd {
+	case 0xBB:
+		f := r.DS3Status.Faults()
+		return &wire.InverterFaults{Family: &wire.InverterFaults_Ds3{Ds3: &wire.DS3Faults{
+			GridRelayFault:     f.GridRelayFault,
+			DcContactorFault:   f.DCContactorFault,
+			DcBusFault:         f.DCBusFault,
+			DcGroundFault:      f.DCGroundFault,
+			IsoFaultA:          f.IsoFaultA,
+			IsoFaultB:          f.IsoFaultB,
+			AcOverVoltStage1:   f.ACOverVoltStage1,
+			AcOverVoltStage2:   f.ACOverVoltStage2,
+			AcUnderVoltStage1:  f.ACUnderVoltStage1,
+			AcUnderVoltStage2:  f.ACUnderVoltStage2,
+			OverFreqStage1:     f.OverFreqStage1,
+			OverFreqStage2:     f.OverFreqStage2,
+			OverFreqAux:        f.OverFreqAux,
+			OverFreqExtra:      f.OverFreqExtra,
+			UnderFreqStage1:    f.UnderFreqStage1,
+			UnderFreqStage2:    f.UnderFreqStage2,
+			UnderFreqAux:       f.UnderFreqAux,
+			UnderFreqExtra:     f.UnderFreqExtra,
+		}}}
+	case 0xB1:
+		f := r.QS1AStatus.Faults()
+		return &wire.InverterFaults{Family: &wire.InverterFaults_Qs1A{Qs1A: &wire.QS1AFaults{
+			GridRelayFault:    f.GridRelayFault,
+			DcContactorFault:  f.DCContactorFault,
+			DcGroundFault:     f.DCGroundFault,
+			DcBusFault:        f.DCBusFault,
+			CommFault:         f.CommFault,
+			OverTemperature:   f.OverTemperature,
+			IsoFaultA:         f.IsoFaultA,
+			IsoFaultB:         f.IsoFaultB,
+			IsoFaultC:         f.IsoFaultC,
+			IsoFaultD:         f.IsoFaultD,
+			AcOverVoltFast:    f.ACOverVoltFast,
+			AcOverVoltSlow:    f.ACOverVoltSlow,
+			AcUnderVoltFast:   f.ACUnderVoltFast,
+			AcUnderVoltSlow:   f.ACUnderVoltSlow,
+			OverFreqFast:      f.OverFreqFast,
+			OverFreqSlow:      f.OverFreqSlow,
+			OverFreqExtra:     f.OverFreqExtra,
+			OverFreqRms:       f.OverFreqRMS,
+			UnderFreqFast:     f.UnderFreqFast,
+			UnderFreqSlow:     f.UnderFreqSlow,
+			UnderFreqExtra:    f.UnderFreqExtra,
+			UnderFreqRms:      f.UnderFreqRMS,
+			ZbLinkA:           f.ZBLinkA,
+			ZbLinkB:           f.ZBLinkB,
+		}}}
+	}
+	return nil
 }
 
 func (in *Ingestor) publish(env *wire.Envelope) {

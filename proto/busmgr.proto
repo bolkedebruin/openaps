@@ -18,6 +18,7 @@ message Envelope {
     DecodeFailed  decode_failed = 3;
     RawFrame      raw_frame     = 4;
     InverterInfo  info          = 5;
+    FleetSummary  fleet         = 6;
 
     Send          send          = 10;
     Broadcast     broadcast     = 11;
@@ -79,6 +80,87 @@ message Telemetry {
   repeated uint64 lifetime_raw  = 13;
   double lifetime_scale = 14;
   reserved 15;            // body_hex
+  // faults carries the family-specific named-bit decode of the
+  // status block (DS3 body[0x0b..0x10] / QS1A body[0x17..0x1a +
+  // 0x34 + 0x38..0x39]). Absent on frames the codec couldn't
+  // family-classify.
+  InverterFaults faults = 16;
+  // rssi / lqi are L1 envelope bytes 4 and 5 — signal-quality bytes
+  // the ZB modem stamps on every received reply. uint32 because
+  // proto3 has no uint8; values fit in 0..255.
+  uint32 rssi = 17;
+  uint32 lqi  = 18;
+  // prev_frame_ms is the wall-clock ts of the previous telemetry
+  // frame inv-driver received for this UID, or 0 if none. Subscribers
+  // can derive the inter-frame interval (this frame's ts_ms minus
+  // prev_frame_ms) as a per-inverter response-time proxy.
+  int64 prev_frame_ms = 19;
+}
+
+// InverterFaults dispatches on family. Each variant mirrors the
+// codec's named-bit struct (codec.DS3Faults / codec.QS1AFaults).
+// Bits whose meaning is not pinned by main.exe's Modbus packing
+// (warning-bucket, legacy slots) are NOT carried here — consumers
+// that need raw bytes should read RawFrame.
+message InverterFaults {
+  oneof family {
+    DS3Faults  ds3  = 1;
+    QS1AFaults qs1a = 2;
+  }
+}
+
+// DS3Faults mirrors codec.DS3Faults — 18 named bits from the
+// 5-byte status block at body[0x0b..0x10] of a DS3 reply.
+// Semantics pinned by main.exe update_modbus_status @ 0x96570.
+message DS3Faults {
+  bool grid_relay_fault      = 1;   // body[0x0c] bit 1 — 1=event/fault (per DS3_DS3D_status @ 0x290f8)
+  bool dc_contactor_fault    = 2;   // body[0x0d] bit 7 — 1=event/fault
+  bool dc_bus_fault          = 3;   // body[0x0d] bit 4 — 1=event/fault
+  bool dc_ground_fault       = 4;   // body[0x0d] bit 3
+  bool iso_fault_a           = 5;   // body[0x0e] bit 4
+  bool iso_fault_b           = 6;   // body[0x0e] bit 6
+  bool ac_over_volt_stage1   = 7;   // body[0x0e] bit 0
+  bool ac_over_volt_stage2   = 8;   // body[0x0e] bit 2
+  bool ac_under_volt_stage1  = 9;   // body[0x0e] bit 1
+  bool ac_under_volt_stage2  = 10;  // body[0x0e] bit 3
+  bool over_freq_stage1      = 11;  // body[0x0f] bit 2
+  bool over_freq_stage2      = 12;  // body[0x0f] bit 4
+  bool over_freq_aux         = 13;  // body[0x0f] bit 6
+  bool over_freq_extra       = 14;  // body[0x0f] bit 0
+  bool under_freq_stage1     = 15;  // body[0x0f] bit 3
+  bool under_freq_stage2     = 16;  // body[0x0f] bit 5
+  bool under_freq_aux        = 17;  // body[0x0f] bit 7
+  bool under_freq_extra      = 18;  // body[0x0f] bit 1
+}
+
+// QS1AFaults mirrors codec.QS1AFaults — 24 named bits from
+// body[0x17..0x1a], body[0x38..0x39], plus implicit ZB-link
+// derivation. Semantics pinned by main.exe update_modbus_status.
+message QS1AFaults {
+  bool grid_relay_fault      = 1;   // body[0x17] bit 2 — 1=event/fault (per qs1200_60_status @ 0x297d8)
+  bool dc_contactor_fault    = 2;   // body[0x17] bit 1 — 1=event/fault
+  bool dc_ground_fault       = 3;   // body[0x17] bit 3
+  bool dc_bus_fault          = 4;   // body[0x18] bit 4 — 1=event/fault
+  bool comm_fault            = 5;   // body[0x17] bit 4
+  bool over_temperature      = 6;   // body[0x18] bit 2
+  bool iso_fault_a           = 7;   // body[0x19] bit 2
+  bool iso_fault_b           = 8;   // body[0x19] bit 4
+  bool iso_fault_c           = 9;   // body[0x18] bit 0
+  bool iso_fault_d           = 10;  // body[0x19] bit 6
+  bool ac_over_volt_fast     = 11;  // body[0x1a] bit 2
+  bool ac_over_volt_slow     = 12;  // body[0x1a] bit 0
+  bool ac_under_volt_fast    = 13;  // body[0x1a] bit 3
+  bool ac_under_volt_slow    = 14;  // body[0x1a] bit 1
+  bool over_freq_fast        = 15;  // body[0x1a] bit 6
+  bool over_freq_slow        = 16;  // body[0x1a] bit 4
+  bool over_freq_extra       = 17;  // body[0x19] bit 0
+  bool over_freq_rms         = 18;  // body[0x17] bit 5
+  bool under_freq_fast       = 19;  // body[0x1a] bit 7
+  bool under_freq_slow       = 20;  // body[0x1a] bit 5
+  bool under_freq_extra      = 21;  // body[0x19] bit 1
+  bool under_freq_rms        = 22;  // body[0x17] bit 6
+  bool zb_link_a             = 23;  // body[0x39] bit 0
+  bool zb_link_b             = 24;  // body[0x39] bit 1
 }
 
 // Panel mirrors codec.Panel.
@@ -117,6 +199,31 @@ message Reset {}
 // SubscribeRaw is a downstream stub. Server returns Unimplemented in
 // v0. Shape is intentionally empty until requirements firm up.
 message SubscribeRaw {}
+
+// FleetSummary is an inv-driver-derived view across the inverter
+// inventory. Published on subscriber attach (replay) and whenever
+// inventory changes. nameplate_total_w is the sum of per-inverter
+// rated AC watts (codec.NameplateWattsForModel applied to each
+// inverters.model_code). Inverters with unknown model codes
+// contribute 0; inverter_count includes them so subscribers can
+// detect partial-knowledge fleets.
+message FleetSummary {
+  int64  ts_ms              = 1;   // wall-clock at publish time
+  uint32 nameplate_total_w  = 2;
+  uint32 inverter_count     = 3;
+
+  // Fleet-level energy in watt-hours, computed by inv-driver from its
+  // own energy_lifetime + energy_period_anchor tables. Independent of
+  // main.exe's daily/monthly/yearly tables.
+  //   lifetime_wh  : sum across all inverters/channels of raw*scale
+  //   today_wh     : lifetime_wh - anchor at start of today
+  //   month_wh     : lifetime_wh - anchor at start of month
+  //   year_wh      : lifetime_wh - anchor at start of year
+  uint64 lifetime_wh        = 4;
+  uint64 today_wh           = 5;
+  uint64 month_wh           = 6;
+  uint64 year_wh            = 7;
+}
 
 // InverterInfo carries identity and pair-state metadata sniffed off
 // the primary ZigBee modem. Optional fields use proto3 'optional' so

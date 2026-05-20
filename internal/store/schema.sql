@@ -50,13 +50,52 @@ CREATE TABLE IF NOT EXISTS inverter_panels (
     PRIMARY KEY (inverter_uid, channel_idx)
 );
 
+-- energy_lifetime carries inv-driver's own cumulative energy per
+-- channel, in watt-hours. The on-wire raw counter is a wrap-prone
+-- per-poll window (main.exe also sums deltas, not raw, into its own
+-- ltpower table — verified at 15286 kWh while our raw values give
+-- 9 Wh total).
+--
+-- On every telemetry frame:
+--   delta_raw    = max(new_raw - prev_raw, 0) if no wrap
+--                  new_raw                    if wrap (new_raw < prev_raw)
+--   cumulative_wh += delta_raw * scale * 1000
+--   prev_raw      = new_raw
 CREATE TABLE IF NOT EXISTS energy_lifetime (
     inverter_uid    TEXT NOT NULL REFERENCES inverters(uid),
     channel_idx     INTEGER NOT NULL,
-    raw             INTEGER NOT NULL,
-    scale           REAL NOT NULL,
+    cumulative_wh   REAL NOT NULL DEFAULT 0,
+    prev_raw        INTEGER NOT NULL DEFAULT 0,
+    scale           REAL NOT NULL DEFAULT 0,
     last_update_ms  INTEGER NOT NULL,
     PRIMARY KEY (inverter_uid, channel_idx)
+);
+
+-- inverter_metrics holds rolling per-UID response-time stats.
+-- last_interval_ms is the gap between this telemetry frame and the
+-- previous one for the same UID (proxy for the inverter's effective
+-- poll cadence). avg_interval_ms is an EWMA-smoothed view; intervals
+-- above the sanity ceiling (e.g. >1 h) reset the EWMA so a busy-wait
+-- gap doesn't permanently skew the average.
+CREATE TABLE IF NOT EXISTS inverter_metrics (
+    inverter_uid     TEXT PRIMARY KEY REFERENCES inverters(uid),
+    last_interval_ms INTEGER NOT NULL DEFAULT 0,
+    avg_interval_ms  REAL NOT NULL DEFAULT 0,
+    sample_count     INTEGER NOT NULL DEFAULT 0,
+    last_update_ms   INTEGER NOT NULL
+);
+
+-- energy_period_anchor records the fleet cumulative lifetime watt-hours
+-- at the start of each day/month/year. Today/month/year energy is then
+-- derived as (current_lifetime - anchor_wh). One row per period_key per
+-- period; rolling over to a new period inserts a fresh anchor at the
+-- current cumulative value, so the next period starts at 0 W·h.
+CREATE TABLE IF NOT EXISTS energy_period_anchor (
+    period      TEXT NOT NULL,    -- 'day' | 'month' | 'year'
+    period_key  TEXT NOT NULL,    -- '2026-05-18' | '2026-05' | '2026'
+    anchor_wh   REAL NOT NULL,
+    captured_ms INTEGER NOT NULL,
+    PRIMARY KEY (period, period_key)
 );
 
 CREATE TABLE IF NOT EXISTS events (

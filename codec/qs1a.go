@@ -1,7 +1,5 @@
 package codec
 
-import "math"
-
 // QS1A reply payload layout, body offset 0 = byte right after the
 // L2 cmd 0xB1 (i.e. main.exe's `param_1` to resolvedata_60_1200,
 // which is l2_frame[4..]).
@@ -72,7 +70,6 @@ func decodeQS1A(body []byte, r *Reply) {
 	// Panels: payload byte order is D, C, B, A — invert so r.Panels
 	// is indexed A=0, B=1, C=2, D=3 to match the 12-character UID
 	// suffix labels users see (704000006835A/B/C/D).
-	type pkt struct{ off int }
 	for _, pp := range []struct {
 		idx, off int
 	}{
@@ -111,6 +108,173 @@ func decodeQS1A(body []byte, r *Reply) {
 		charsToUint(body, 0x2a, 5),
 	}
 	r.LifetimeScale = qs1aLifetime
+
+	r.QS1AStatus = decodeQS1AStatus(body)
+	r.Status = r.QS1AStatus.Faults().InverterStatus()
+}
+
+// QS1AStatus holds the raw status bytes a QS1A reply spreads across
+// the payload. main.exe (resolvedata_60_1200 @ 0x1dbec) unpacks them
+// into the same inverter-struct slots DS3 uses (0x288..0x2db) and an
+// additional grid-side block at inv+0x3cc..0x3d3 driven by Grid.
+//
+// Source layout (in ascending body offset order):
+//
+//	Main  = body[0x17..0x1a]  — primary fault/warning bits
+//	Extra = body[0x34]        — single byte copied verbatim to
+//	                            inv+0x3d9; semantics undocumented.
+//	Grid  = body[0x38..0x39]  — grid-side flag table; main.exe also
+//	                            steps per-bit "absence" counters at
+//	                            inv+0x3dc/0x3e0/0x3e4/0x3e8.
+type QS1AStatus struct {
+	Main  [4]byte
+	Grid  [2]byte
+	Extra byte
+}
+
+// decodeQS1AStatus returns the raw status bytes plus the
+// family-agnostic aggregator booleans. Source-byte mapping (verified
+// against resolvedata_60_1200):
+//
+//	DCBusFault  = body[0x18] bit 4                          (inv+0x29e)
+//	WarningA    = body[0x1a] bits 0,2                       (inv+0x2a5,0x2a7)
+//	WarningB    = body[0x1a] bits 1,3                       (inv+0x2a6,0x2a8)
+//	FaultA      = body[0x1a] bits 4,6 | body[0x19] bit 0    (inv+0x2a9,0x2ab,0x2ad,
+//	              | body[0x17] bit 5                              0x2b4)
+//	FaultB      = body[0x1a] bits 5,7 | body[0x19] bit 1    (inv+0x2aa,0x2ac,0x2ae,
+//	              | body[0x17] bit 6                              0x2b5)
+// decodeQS1AStatus returns the raw status bytes. The semantic
+// aggregator booleans (InverterStatus) are derived from
+// QS1AStatus.Faults().InverterStatus() so the bit→meaning mapping has
+// one source of truth.
+func decodeQS1AStatus(body []byte) QS1AStatus {
+	var qs QS1AStatus
+	if len(body) < 0x3a {
+		return qs
+	}
+	copy(qs.Main[:], body[0x17:0x1b])
+	copy(qs.Grid[:], body[0x38:0x3a])
+	qs.Extra = body[0x34]
+	return qs
+}
+
+// InverterStatus reduces named QS1A fault bits to the firmware's five
+// aggregator signals (resolvedata_60_1200's slot-walking aggregator
+// at inv+0x3ec / 0x3f0 / 0x3f4 / 0x3f8 / 0x3fc / 0x400).
+func (f QS1AFaults) InverterStatus() InverterStatus {
+	return InverterStatus{
+		DCBusFault: f.DCBusFault,
+		FaultA:     f.OverFreqFast || f.OverFreqSlow || f.OverFreqExtra || f.OverFreqRMS,
+		FaultB:     f.UnderFreqFast || f.UnderFreqSlow || f.UnderFreqExtra || f.UnderFreqRMS,
+		WarningA:   f.ACOverVoltFast || f.ACOverVoltSlow,
+		WarningB:   f.ACUnderVoltFast || f.ACUnderVoltSlow,
+	}
+}
+
+// QS1AFaults names the QS1A status bits whose meaning is pinned by
+// main.exe's Modbus packing (update_modbus_status @ 0x96570) or by
+// debounce/aggregator placement. All bits are fault-active: '1' on
+// the wire means an event/fault is present; '0' means healthy.
+// Verified via qs1200_60_status @ 0x297d8 (gates the cloud-upload
+// alarm-pending flag on these slots being '1'). Bits with no named
+// semantic stay reachable via QS1AStatus.Main/Grid/Extra.
+//
+// QS1A reports a strictly richer Evt1 surface than DS3: isolation is
+// split per-channel (A/B/C/D), and over-temperature has a body bit
+// where DS3 has none. Conversely, QS1A's OF/UF cluster reads fewer
+// off-body slots, so Evt1 OF/UF here reflects only what body[0x17,
+// 0x19, 0x1a] supplies.
+type QS1AFaults struct {
+	GridRelayFault    bool // body[0x17] bit 2 → inv+0x29a (1=event; firmware also maps St 4↔6 and Evt1 bit 1)
+	DCContactorFault  bool // body[0x17] bit 1 → inv+0x299 → Evt1 bit 7
+	DCGroundFault     bool // body[0x17] bit 3 → inv+0x298 → Evt1 bit 0
+	DCBusFault        bool // body[0x18] bit 4 → inv+0x29e (1=event; counter inv+0x3f0 tracks fault-poll count, inv+0x3ec the healthy streak)
+	CommFault         bool // body[0x17] bit 4 → inv+0x29b → Evt1 bits 5 + 3
+	OverTemperature   bool // body[0x18] bit 2 → inv+0x2b3 → Evt1 bit 1
+
+	IsoFaultA bool // body[0x19] bit 2 → inv+0x290 → Evt1 bit 6
+	IsoFaultB bool // body[0x19] bit 4 → inv+0x292 → Evt1 bit 6
+	IsoFaultC bool // body[0x18] bit 0 → inv+0x2b1 → Evt1 bit 6
+	IsoFaultD bool // body[0x19] bit 6 → inv+0x2af → Evt1 bit 6
+
+	ACOverVoltFast  bool // body[0x1a] bit 2 → inv+0x2a7 → Evt1 bit 15
+	ACOverVoltSlow  bool // body[0x1a] bit 0 → inv+0x2a5 → Evt1 bit 15
+	ACUnderVoltFast bool // body[0x1a] bit 3 → inv+0x2a8 → Evt1 bit 14
+	ACUnderVoltSlow bool // body[0x1a] bit 1 → inv+0x2a6 → Evt1 bit 14
+
+	OverFreqFast    bool // body[0x1a] bit 6 → inv+0x2ab → Evt1 bit 13
+	OverFreqSlow    bool // body[0x1a] bit 4 → inv+0x2a9 → Evt1 bit 13
+	OverFreqExtra   bool // body[0x19] bit 0 → inv+0x2ad → Evt1 bit 13
+	OverFreqRMS     bool // body[0x17] bit 5 → inv+0x2b4 → Evt1 bit 13 (10-min RMS)
+	UnderFreqFast   bool // body[0x1a] bit 7 → inv+0x2ac → Evt1 bit 12
+	UnderFreqSlow   bool // body[0x1a] bit 5 → inv+0x2aa → Evt1 bit 12
+	UnderFreqExtra  bool // body[0x19] bit 1 → inv+0x2ae → Evt1 bit 12
+	UnderFreqRMS    bool // body[0x17] bit 6 → inv+0x2b5 → Evt1 bit 12 (10-min RMS)
+
+	// ZBLink{A,B} feed Evt1 bit 4 via inv+0x3cc/0x3cd. Polarity
+	// reflects the firmware verbatim — main.exe ORs the slot value
+	// into Evt1 bit 4 regardless of SunSpec's GRID_DISCONNECT
+	// convention. Same slots also drive the per-channel absence
+	// counters at inv+0x3dc/0x3e0.
+	ZBLinkA bool // body[0x39] bit 0 → inv+0x3cc → Evt1 bit 4
+	ZBLinkB bool // body[0x39] bit 1 → inv+0x3cd → Evt1 bit 4
+}
+
+// Faults decodes the named-meaning bits from the QS1A status bytes.
+// Bits without a confirmed semantic (warning bucket, reserved, raw
+// "Extra" byte) stay in Main/Grid/Extra.
+func (s QS1AStatus) Faults() QS1AFaults {
+	b17, b18, b19, b1a := s.Main[0], s.Main[1], s.Main[2], s.Main[3]
+	b39 := s.Grid[1]
+	return QS1AFaults{
+		GridRelayFault:    b17&(1<<2) != 0,
+		DCContactorFault:  b17&(1<<1) != 0,
+		DCGroundFault:     b17&(1<<3) != 0,
+		DCBusFault:        b18&(1<<4) != 0,
+		CommFault:         b17&(1<<4) != 0,
+		OverTemperature:   b18&(1<<2) != 0,
+		IsoFaultA:         b19&(1<<2) != 0,
+		IsoFaultB:         b19&(1<<4) != 0,
+		IsoFaultC:         b18&(1<<0) != 0,
+		IsoFaultD:         b19&(1<<6) != 0,
+		ACOverVoltFast:    b1a&(1<<2) != 0,
+		ACOverVoltSlow:    b1a&(1<<0) != 0,
+		ACUnderVoltFast:   b1a&(1<<3) != 0,
+		ACUnderVoltSlow:   b1a&(1<<1) != 0,
+		OverFreqFast:      b1a&(1<<6) != 0,
+		OverFreqSlow:      b1a&(1<<4) != 0,
+		OverFreqExtra:     b19&(1<<0) != 0,
+		OverFreqRMS:       b17&(1<<5) != 0,
+		UnderFreqFast:     b1a&(1<<7) != 0,
+		UnderFreqSlow:     b1a&(1<<5) != 0,
+		UnderFreqExtra:    b19&(1<<1) != 0,
+		UnderFreqRMS:      b17&(1<<6) != 0,
+		ZBLinkA:           b39&(1<<0) != 0,
+		ZBLinkB:           b39&(1<<1) != 0,
+	}
+}
+
+// ModbusStatus reproduces main.exe's update_modbus_status @ 0x96570
+// for a QS1A reply via the shared packModbusStatus helper. QS1A
+// populates strictly more Evt1 bits than DS3 — isolation (bit 14,
+// per-channel A/B/C/D), comm (bits 13 + 11), ZB-link (bit 12), and
+// over-temperature (bit 1) all have body sources for QS1A and zero
+// body sources for DS3.
+func (s QS1AStatus) ModbusStatus() (st, evt1 uint16) {
+	f := s.Faults()
+	return packModbusStatus(modbusStatusInputs{
+		GridRelay:       f.GridRelayFault,
+		DCContactor:     f.DCContactorFault,
+		DCGround:        f.DCGroundFault,
+		IsoAny:          f.IsoFaultA || f.IsoFaultB || f.IsoFaultC || f.IsoFaultD,
+		CommFault:       f.CommFault,
+		ZBLink:          f.ZBLinkA || f.ZBLinkB,
+		OverTemperature: f.OverTemperature,
+		ACOverVoltAny:   f.ACOverVoltFast || f.ACOverVoltSlow,
+		ACUnderVoltAny:  f.ACUnderVoltFast || f.ACUnderVoltSlow,
+		OverFreqAny:     f.OverFreqFast || f.OverFreqSlow || f.OverFreqExtra || f.OverFreqRMS,
+		UnderFreqAny:    f.UnderFreqFast || f.UnderFreqSlow || f.UnderFreqExtra || f.UnderFreqRMS,
+	})
 }
 
 // qs1aBusV applies main.exe's internal-DC-link formula:
@@ -163,16 +327,3 @@ func qs1aPanelI(body []byte, off int) float64 {
 	return float64(raw) * qs1aPanelIMax / qs1aADC12bit
 }
 
-// LifetimeKWh returns the per-panel lifetime energy in kWh using
-// the model's scale. Convenience for callers; equivalent to
-// raw * Reply.LifetimeScale.
-func (r Reply) LifetimeKWh() []float64 {
-	if r.LifetimeScale == 0 {
-		return nil
-	}
-	out := make([]float64, len(r.LifetimeRaw))
-	for i, raw := range r.LifetimeRaw {
-		out[i] = math.Round(float64(raw)*r.LifetimeScale*1000) / 1000
-	}
-	return out
-}

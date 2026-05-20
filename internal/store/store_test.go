@@ -164,28 +164,32 @@ func TestWriteEnergyLifetime_Upserts(t *testing.T) {
 	if err := s.UpsertInverterFromTelemetry(ctx, "uid", 0, "qs1a", "QS1A", 100); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
+	// First call: no prior row → anchor, cumulative_wh stays 0.
 	if err := s.WriteEnergyLifetime(ctx, "uid", 100, []EnergyRow{
 		{ChannelIdx: 0, Raw: 1000, Scale: 3.756e-11},
 		{ChannelIdx: 1, Raw: 2000, Scale: 3.756e-11},
-	}); err != nil {
+	}, 400); err != nil {
 		t.Fatalf("first WriteEnergyLifetime: %v", err)
 	}
+	// Second call ch0: raw went 1000→1500, delta 500 × 3.756e-11 × 1000
+	// = 1.878e-5 Wh added.
 	if err := s.WriteEnergyLifetime(ctx, "uid", 200, []EnergyRow{
 		{ChannelIdx: 0, Raw: 1500, Scale: 3.756e-11},
-	}); err != nil {
+	}, 400); err != nil {
 		t.Fatalf("second WriteEnergyLifetime: %v", err)
 	}
-	var raw int64
-	var scale float64
+	var prevRaw int64
+	var cumulativeWh float64
 	var lastUpdate int64
-	if err := s.DB().QueryRow(`SELECT raw, scale, last_update_ms FROM energy_lifetime WHERE inverter_uid='uid' AND channel_idx=0`).Scan(&raw, &scale, &lastUpdate); err != nil {
+	if err := s.DB().QueryRow(`SELECT prev_raw, cumulative_wh, last_update_ms FROM energy_lifetime WHERE inverter_uid='uid' AND channel_idx=0`).Scan(&prevRaw, &cumulativeWh, &lastUpdate); err != nil {
 		t.Fatalf("read ch0: %v", err)
 	}
-	if raw != 1500 || lastUpdate != 200 {
-		t.Fatalf("ch0 after upsert: raw=%d last_update_ms=%d", raw, lastUpdate)
+	if prevRaw != 1500 || lastUpdate != 200 {
+		t.Fatalf("ch0 after upsert: prev_raw=%d last_update_ms=%d", prevRaw, lastUpdate)
 	}
-	if scale == 0 {
-		t.Fatalf("scale should not be zero")
+	wantDelta := 500.0 * 3.756e-11 * 1000
+	if cumulativeWh < wantDelta*0.99 || cumulativeWh > wantDelta*1.01 {
+		t.Fatalf("cumulative_wh: got %g want ~%g", cumulativeWh, wantDelta)
 	}
 	var n int
 	if err := s.DB().QueryRow(`SELECT COUNT(*) FROM energy_lifetime WHERE inverter_uid='uid'`).Scan(&n); err != nil {

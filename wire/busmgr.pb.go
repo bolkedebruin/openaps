@@ -91,6 +91,7 @@ type Envelope struct {
 	//	*Envelope_DecodeFailed
 	//	*Envelope_RawFrame
 	//	*Envelope_Info
+	//	*Envelope_Fleet
 	//	*Envelope_Send
 	//	*Envelope_Broadcast
 	//	*Envelope_Reset_
@@ -182,6 +183,15 @@ func (x *Envelope) GetInfo() *InverterInfo {
 	return nil
 }
 
+func (x *Envelope) GetFleet() *FleetSummary {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_Fleet); ok {
+			return x.Fleet
+		}
+	}
+	return nil
+}
+
 func (x *Envelope) GetSend() *Send {
 	if x != nil {
 		if x, ok := x.Body.(*Envelope_Send); ok {
@@ -242,6 +252,10 @@ type Envelope_Info struct {
 	Info *InverterInfo `protobuf:"bytes,5,opt,name=info,proto3,oneof"`
 }
 
+type Envelope_Fleet struct {
+	Fleet *FleetSummary `protobuf:"bytes,6,opt,name=fleet,proto3,oneof"`
+}
+
 type Envelope_Send struct {
 	Send *Send `protobuf:"bytes,10,opt,name=send,proto3,oneof"`
 }
@@ -267,6 +281,8 @@ func (*Envelope_DecodeFailed) isEnvelope_Body() {}
 func (*Envelope_RawFrame) isEnvelope_Body() {}
 
 func (*Envelope_Info) isEnvelope_Body() {}
+
+func (*Envelope_Fleet) isEnvelope_Body() {}
 
 func (*Envelope_Send) isEnvelope_Body() {}
 
@@ -448,6 +464,21 @@ type Telemetry struct {
 	Panels        []*Panel               `protobuf:"bytes,12,rep,name=panels,proto3" json:"panels,omitempty"`
 	LifetimeRaw   []uint64               `protobuf:"varint,13,rep,packed,name=lifetime_raw,json=lifetimeRaw,proto3" json:"lifetime_raw,omitempty"`
 	LifetimeScale float64                `protobuf:"fixed64,14,opt,name=lifetime_scale,json=lifetimeScale,proto3" json:"lifetime_scale,omitempty"`
+	// faults carries the family-specific named-bit decode of the
+	// status block (DS3 body[0x0b..0x10] / QS1A body[0x17..0x1a +
+	// 0x34 + 0x38..0x39]). Absent on frames the codec couldn't
+	// family-classify.
+	Faults *InverterFaults `protobuf:"bytes,16,opt,name=faults,proto3" json:"faults,omitempty"`
+	// rssi / lqi are L1 envelope bytes 4 and 5 — signal-quality bytes
+	// the ZB modem stamps on every received reply. uint32 because
+	// proto3 has no uint8; values fit in 0..255.
+	Rssi uint32 `protobuf:"varint,17,opt,name=rssi,proto3" json:"rssi,omitempty"`
+	Lqi  uint32 `protobuf:"varint,18,opt,name=lqi,proto3" json:"lqi,omitempty"`
+	// prev_frame_ms is the wall-clock ts of the previous telemetry
+	// frame inv-driver received for this UID, or 0 if none. Subscribers
+	// can derive the inter-frame interval (this frame's ts_ms minus
+	// prev_frame_ms) as a per-inverter response-time proxy.
+	PrevFrameMs   int64 `protobuf:"varint,19,opt,name=prev_frame_ms,json=prevFrameMs,proto3" json:"prev_frame_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -580,6 +611,535 @@ func (x *Telemetry) GetLifetimeScale() float64 {
 	return 0
 }
 
+func (x *Telemetry) GetFaults() *InverterFaults {
+	if x != nil {
+		return x.Faults
+	}
+	return nil
+}
+
+func (x *Telemetry) GetRssi() uint32 {
+	if x != nil {
+		return x.Rssi
+	}
+	return 0
+}
+
+func (x *Telemetry) GetLqi() uint32 {
+	if x != nil {
+		return x.Lqi
+	}
+	return 0
+}
+
+func (x *Telemetry) GetPrevFrameMs() int64 {
+	if x != nil {
+		return x.PrevFrameMs
+	}
+	return 0
+}
+
+// InverterFaults dispatches on family. Each variant mirrors the
+// codec's named-bit struct (codec.DS3Faults / codec.QS1AFaults).
+// Bits whose meaning is not pinned by main.exe's Modbus packing
+// (warning-bucket, legacy slots) are NOT carried here — consumers
+// that need raw bytes should read RawFrame.
+type InverterFaults struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Family:
+	//
+	//	*InverterFaults_Ds3
+	//	*InverterFaults_Qs1A
+	Family        isInverterFaults_Family `protobuf_oneof:"family"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InverterFaults) Reset() {
+	*x = InverterFaults{}
+	mi := &file_busmgr_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InverterFaults) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InverterFaults) ProtoMessage() {}
+
+func (x *InverterFaults) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InverterFaults.ProtoReflect.Descriptor instead.
+func (*InverterFaults) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *InverterFaults) GetFamily() isInverterFaults_Family {
+	if x != nil {
+		return x.Family
+	}
+	return nil
+}
+
+func (x *InverterFaults) GetDs3() *DS3Faults {
+	if x != nil {
+		if x, ok := x.Family.(*InverterFaults_Ds3); ok {
+			return x.Ds3
+		}
+	}
+	return nil
+}
+
+func (x *InverterFaults) GetQs1A() *QS1AFaults {
+	if x != nil {
+		if x, ok := x.Family.(*InverterFaults_Qs1A); ok {
+			return x.Qs1A
+		}
+	}
+	return nil
+}
+
+type isInverterFaults_Family interface {
+	isInverterFaults_Family()
+}
+
+type InverterFaults_Ds3 struct {
+	Ds3 *DS3Faults `protobuf:"bytes,1,opt,name=ds3,proto3,oneof"`
+}
+
+type InverterFaults_Qs1A struct {
+	Qs1A *QS1AFaults `protobuf:"bytes,2,opt,name=qs1a,proto3,oneof"`
+}
+
+func (*InverterFaults_Ds3) isInverterFaults_Family() {}
+
+func (*InverterFaults_Qs1A) isInverterFaults_Family() {}
+
+// DS3Faults mirrors codec.DS3Faults — 18 named bits from the
+// 5-byte status block at body[0x0b..0x10] of a DS3 reply.
+// Semantics pinned by main.exe update_modbus_status @ 0x96570.
+type DS3Faults struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	GridRelayFault    bool                   `protobuf:"varint,1,opt,name=grid_relay_fault,json=gridRelayFault,proto3" json:"grid_relay_fault,omitempty"`             // body[0x0c] bit 1 — 1=event/fault (per DS3_DS3D_status @ 0x290f8)
+	DcContactorFault  bool                   `protobuf:"varint,2,opt,name=dc_contactor_fault,json=dcContactorFault,proto3" json:"dc_contactor_fault,omitempty"`       // body[0x0d] bit 7 — 1=event/fault
+	DcBusFault        bool                   `protobuf:"varint,3,opt,name=dc_bus_fault,json=dcBusFault,proto3" json:"dc_bus_fault,omitempty"`                         // body[0x0d] bit 4 — 1=event/fault
+	DcGroundFault     bool                   `protobuf:"varint,4,opt,name=dc_ground_fault,json=dcGroundFault,proto3" json:"dc_ground_fault,omitempty"`                // body[0x0d] bit 3
+	IsoFaultA         bool                   `protobuf:"varint,5,opt,name=iso_fault_a,json=isoFaultA,proto3" json:"iso_fault_a,omitempty"`                            // body[0x0e] bit 4
+	IsoFaultB         bool                   `protobuf:"varint,6,opt,name=iso_fault_b,json=isoFaultB,proto3" json:"iso_fault_b,omitempty"`                            // body[0x0e] bit 6
+	AcOverVoltStage1  bool                   `protobuf:"varint,7,opt,name=ac_over_volt_stage1,json=acOverVoltStage1,proto3" json:"ac_over_volt_stage1,omitempty"`     // body[0x0e] bit 0
+	AcOverVoltStage2  bool                   `protobuf:"varint,8,opt,name=ac_over_volt_stage2,json=acOverVoltStage2,proto3" json:"ac_over_volt_stage2,omitempty"`     // body[0x0e] bit 2
+	AcUnderVoltStage1 bool                   `protobuf:"varint,9,opt,name=ac_under_volt_stage1,json=acUnderVoltStage1,proto3" json:"ac_under_volt_stage1,omitempty"`  // body[0x0e] bit 1
+	AcUnderVoltStage2 bool                   `protobuf:"varint,10,opt,name=ac_under_volt_stage2,json=acUnderVoltStage2,proto3" json:"ac_under_volt_stage2,omitempty"` // body[0x0e] bit 3
+	OverFreqStage1    bool                   `protobuf:"varint,11,opt,name=over_freq_stage1,json=overFreqStage1,proto3" json:"over_freq_stage1,omitempty"`            // body[0x0f] bit 2
+	OverFreqStage2    bool                   `protobuf:"varint,12,opt,name=over_freq_stage2,json=overFreqStage2,proto3" json:"over_freq_stage2,omitempty"`            // body[0x0f] bit 4
+	OverFreqAux       bool                   `protobuf:"varint,13,opt,name=over_freq_aux,json=overFreqAux,proto3" json:"over_freq_aux,omitempty"`                     // body[0x0f] bit 6
+	OverFreqExtra     bool                   `protobuf:"varint,14,opt,name=over_freq_extra,json=overFreqExtra,proto3" json:"over_freq_extra,omitempty"`               // body[0x0f] bit 0
+	UnderFreqStage1   bool                   `protobuf:"varint,15,opt,name=under_freq_stage1,json=underFreqStage1,proto3" json:"under_freq_stage1,omitempty"`         // body[0x0f] bit 3
+	UnderFreqStage2   bool                   `protobuf:"varint,16,opt,name=under_freq_stage2,json=underFreqStage2,proto3" json:"under_freq_stage2,omitempty"`         // body[0x0f] bit 5
+	UnderFreqAux      bool                   `protobuf:"varint,17,opt,name=under_freq_aux,json=underFreqAux,proto3" json:"under_freq_aux,omitempty"`                  // body[0x0f] bit 7
+	UnderFreqExtra    bool                   `protobuf:"varint,18,opt,name=under_freq_extra,json=underFreqExtra,proto3" json:"under_freq_extra,omitempty"`            // body[0x0f] bit 1
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *DS3Faults) Reset() {
+	*x = DS3Faults{}
+	mi := &file_busmgr_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DS3Faults) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DS3Faults) ProtoMessage() {}
+
+func (x *DS3Faults) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DS3Faults.ProtoReflect.Descriptor instead.
+func (*DS3Faults) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *DS3Faults) GetGridRelayFault() bool {
+	if x != nil {
+		return x.GridRelayFault
+	}
+	return false
+}
+
+func (x *DS3Faults) GetDcContactorFault() bool {
+	if x != nil {
+		return x.DcContactorFault
+	}
+	return false
+}
+
+func (x *DS3Faults) GetDcBusFault() bool {
+	if x != nil {
+		return x.DcBusFault
+	}
+	return false
+}
+
+func (x *DS3Faults) GetDcGroundFault() bool {
+	if x != nil {
+		return x.DcGroundFault
+	}
+	return false
+}
+
+func (x *DS3Faults) GetIsoFaultA() bool {
+	if x != nil {
+		return x.IsoFaultA
+	}
+	return false
+}
+
+func (x *DS3Faults) GetIsoFaultB() bool {
+	if x != nil {
+		return x.IsoFaultB
+	}
+	return false
+}
+
+func (x *DS3Faults) GetAcOverVoltStage1() bool {
+	if x != nil {
+		return x.AcOverVoltStage1
+	}
+	return false
+}
+
+func (x *DS3Faults) GetAcOverVoltStage2() bool {
+	if x != nil {
+		return x.AcOverVoltStage2
+	}
+	return false
+}
+
+func (x *DS3Faults) GetAcUnderVoltStage1() bool {
+	if x != nil {
+		return x.AcUnderVoltStage1
+	}
+	return false
+}
+
+func (x *DS3Faults) GetAcUnderVoltStage2() bool {
+	if x != nil {
+		return x.AcUnderVoltStage2
+	}
+	return false
+}
+
+func (x *DS3Faults) GetOverFreqStage1() bool {
+	if x != nil {
+		return x.OverFreqStage1
+	}
+	return false
+}
+
+func (x *DS3Faults) GetOverFreqStage2() bool {
+	if x != nil {
+		return x.OverFreqStage2
+	}
+	return false
+}
+
+func (x *DS3Faults) GetOverFreqAux() bool {
+	if x != nil {
+		return x.OverFreqAux
+	}
+	return false
+}
+
+func (x *DS3Faults) GetOverFreqExtra() bool {
+	if x != nil {
+		return x.OverFreqExtra
+	}
+	return false
+}
+
+func (x *DS3Faults) GetUnderFreqStage1() bool {
+	if x != nil {
+		return x.UnderFreqStage1
+	}
+	return false
+}
+
+func (x *DS3Faults) GetUnderFreqStage2() bool {
+	if x != nil {
+		return x.UnderFreqStage2
+	}
+	return false
+}
+
+func (x *DS3Faults) GetUnderFreqAux() bool {
+	if x != nil {
+		return x.UnderFreqAux
+	}
+	return false
+}
+
+func (x *DS3Faults) GetUnderFreqExtra() bool {
+	if x != nil {
+		return x.UnderFreqExtra
+	}
+	return false
+}
+
+// QS1AFaults mirrors codec.QS1AFaults — 24 named bits from
+// body[0x17..0x1a], body[0x38..0x39], plus implicit ZB-link
+// derivation. Semantics pinned by main.exe update_modbus_status.
+type QS1AFaults struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	GridRelayFault   bool                   `protobuf:"varint,1,opt,name=grid_relay_fault,json=gridRelayFault,proto3" json:"grid_relay_fault,omitempty"`       // body[0x17] bit 2 — 1=event/fault (per qs1200_60_status @ 0x297d8)
+	DcContactorFault bool                   `protobuf:"varint,2,opt,name=dc_contactor_fault,json=dcContactorFault,proto3" json:"dc_contactor_fault,omitempty"` // body[0x17] bit 1 — 1=event/fault
+	DcGroundFault    bool                   `protobuf:"varint,3,opt,name=dc_ground_fault,json=dcGroundFault,proto3" json:"dc_ground_fault,omitempty"`          // body[0x17] bit 3
+	DcBusFault       bool                   `protobuf:"varint,4,opt,name=dc_bus_fault,json=dcBusFault,proto3" json:"dc_bus_fault,omitempty"`                   // body[0x18] bit 4 — 1=event/fault
+	CommFault        bool                   `protobuf:"varint,5,opt,name=comm_fault,json=commFault,proto3" json:"comm_fault,omitempty"`                        // body[0x17] bit 4
+	OverTemperature  bool                   `protobuf:"varint,6,opt,name=over_temperature,json=overTemperature,proto3" json:"over_temperature,omitempty"`      // body[0x18] bit 2
+	IsoFaultA        bool                   `protobuf:"varint,7,opt,name=iso_fault_a,json=isoFaultA,proto3" json:"iso_fault_a,omitempty"`                      // body[0x19] bit 2
+	IsoFaultB        bool                   `protobuf:"varint,8,opt,name=iso_fault_b,json=isoFaultB,proto3" json:"iso_fault_b,omitempty"`                      // body[0x19] bit 4
+	IsoFaultC        bool                   `protobuf:"varint,9,opt,name=iso_fault_c,json=isoFaultC,proto3" json:"iso_fault_c,omitempty"`                      // body[0x18] bit 0
+	IsoFaultD        bool                   `protobuf:"varint,10,opt,name=iso_fault_d,json=isoFaultD,proto3" json:"iso_fault_d,omitempty"`                     // body[0x19] bit 6
+	AcOverVoltFast   bool                   `protobuf:"varint,11,opt,name=ac_over_volt_fast,json=acOverVoltFast,proto3" json:"ac_over_volt_fast,omitempty"`    // body[0x1a] bit 2
+	AcOverVoltSlow   bool                   `protobuf:"varint,12,opt,name=ac_over_volt_slow,json=acOverVoltSlow,proto3" json:"ac_over_volt_slow,omitempty"`    // body[0x1a] bit 0
+	AcUnderVoltFast  bool                   `protobuf:"varint,13,opt,name=ac_under_volt_fast,json=acUnderVoltFast,proto3" json:"ac_under_volt_fast,omitempty"` // body[0x1a] bit 3
+	AcUnderVoltSlow  bool                   `protobuf:"varint,14,opt,name=ac_under_volt_slow,json=acUnderVoltSlow,proto3" json:"ac_under_volt_slow,omitempty"` // body[0x1a] bit 1
+	OverFreqFast     bool                   `protobuf:"varint,15,opt,name=over_freq_fast,json=overFreqFast,proto3" json:"over_freq_fast,omitempty"`            // body[0x1a] bit 6
+	OverFreqSlow     bool                   `protobuf:"varint,16,opt,name=over_freq_slow,json=overFreqSlow,proto3" json:"over_freq_slow,omitempty"`            // body[0x1a] bit 4
+	OverFreqExtra    bool                   `protobuf:"varint,17,opt,name=over_freq_extra,json=overFreqExtra,proto3" json:"over_freq_extra,omitempty"`         // body[0x19] bit 0
+	OverFreqRms      bool                   `protobuf:"varint,18,opt,name=over_freq_rms,json=overFreqRms,proto3" json:"over_freq_rms,omitempty"`               // body[0x17] bit 5
+	UnderFreqFast    bool                   `protobuf:"varint,19,opt,name=under_freq_fast,json=underFreqFast,proto3" json:"under_freq_fast,omitempty"`         // body[0x1a] bit 7
+	UnderFreqSlow    bool                   `protobuf:"varint,20,opt,name=under_freq_slow,json=underFreqSlow,proto3" json:"under_freq_slow,omitempty"`         // body[0x1a] bit 5
+	UnderFreqExtra   bool                   `protobuf:"varint,21,opt,name=under_freq_extra,json=underFreqExtra,proto3" json:"under_freq_extra,omitempty"`      // body[0x19] bit 1
+	UnderFreqRms     bool                   `protobuf:"varint,22,opt,name=under_freq_rms,json=underFreqRms,proto3" json:"under_freq_rms,omitempty"`            // body[0x17] bit 6
+	ZbLinkA          bool                   `protobuf:"varint,23,opt,name=zb_link_a,json=zbLinkA,proto3" json:"zb_link_a,omitempty"`                           // body[0x39] bit 0
+	ZbLinkB          bool                   `protobuf:"varint,24,opt,name=zb_link_b,json=zbLinkB,proto3" json:"zb_link_b,omitempty"`                           // body[0x39] bit 1
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *QS1AFaults) Reset() {
+	*x = QS1AFaults{}
+	mi := &file_busmgr_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QS1AFaults) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QS1AFaults) ProtoMessage() {}
+
+func (x *QS1AFaults) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QS1AFaults.ProtoReflect.Descriptor instead.
+func (*QS1AFaults) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *QS1AFaults) GetGridRelayFault() bool {
+	if x != nil {
+		return x.GridRelayFault
+	}
+	return false
+}
+
+func (x *QS1AFaults) GetDcContactorFault() bool {
+	if x != nil {
+		return x.DcContactorFault
+	}
+	return false
+}
+
+func (x *QS1AFaults) GetDcGroundFault() bool {
+	if x != nil {
+		return x.DcGroundFault
+	}
+	return false
+}
+
+func (x *QS1AFaults) GetDcBusFault() bool {
+	if x != nil {
+		return x.DcBusFault
+	}
+	return false
+}
+
+func (x *QS1AFaults) GetCommFault() bool {
+	if x != nil {
+		return x.CommFault
+	}
+	return false
+}
+
+func (x *QS1AFaults) GetOverTemperature() bool {
+	if x != nil {
+		return x.OverTemperature
+	}
+	return false
+}
+
+func (x *QS1AFaults) GetIsoFaultA() bool {
+	if x != nil {
+		return x.IsoFaultA
+	}
+	return false
+}
+
+func (x *QS1AFaults) GetIsoFaultB() bool {
+	if x != nil {
+		return x.IsoFaultB
+	}
+	return false
+}
+
+func (x *QS1AFaults) GetIsoFaultC() bool {
+	if x != nil {
+		return x.IsoFaultC
+	}
+	return false
+}
+
+func (x *QS1AFaults) GetIsoFaultD() bool {
+	if x != nil {
+		return x.IsoFaultD
+	}
+	return false
+}
+
+func (x *QS1AFaults) GetAcOverVoltFast() bool {
+	if x != nil {
+		return x.AcOverVoltFast
+	}
+	return false
+}
+
+func (x *QS1AFaults) GetAcOverVoltSlow() bool {
+	if x != nil {
+		return x.AcOverVoltSlow
+	}
+	return false
+}
+
+func (x *QS1AFaults) GetAcUnderVoltFast() bool {
+	if x != nil {
+		return x.AcUnderVoltFast
+	}
+	return false
+}
+
+func (x *QS1AFaults) GetAcUnderVoltSlow() bool {
+	if x != nil {
+		return x.AcUnderVoltSlow
+	}
+	return false
+}
+
+func (x *QS1AFaults) GetOverFreqFast() bool {
+	if x != nil {
+		return x.OverFreqFast
+	}
+	return false
+}
+
+func (x *QS1AFaults) GetOverFreqSlow() bool {
+	if x != nil {
+		return x.OverFreqSlow
+	}
+	return false
+}
+
+func (x *QS1AFaults) GetOverFreqExtra() bool {
+	if x != nil {
+		return x.OverFreqExtra
+	}
+	return false
+}
+
+func (x *QS1AFaults) GetOverFreqRms() bool {
+	if x != nil {
+		return x.OverFreqRms
+	}
+	return false
+}
+
+func (x *QS1AFaults) GetUnderFreqFast() bool {
+	if x != nil {
+		return x.UnderFreqFast
+	}
+	return false
+}
+
+func (x *QS1AFaults) GetUnderFreqSlow() bool {
+	if x != nil {
+		return x.UnderFreqSlow
+	}
+	return false
+}
+
+func (x *QS1AFaults) GetUnderFreqExtra() bool {
+	if x != nil {
+		return x.UnderFreqExtra
+	}
+	return false
+}
+
+func (x *QS1AFaults) GetUnderFreqRms() bool {
+	if x != nil {
+		return x.UnderFreqRms
+	}
+	return false
+}
+
+func (x *QS1AFaults) GetZbLinkA() bool {
+	if x != nil {
+		return x.ZbLinkA
+	}
+	return false
+}
+
+func (x *QS1AFaults) GetZbLinkB() bool {
+	if x != nil {
+		return x.ZbLinkB
+	}
+	return false
+}
+
 // Panel mirrors codec.Panel.
 type Panel struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -593,7 +1153,7 @@ type Panel struct {
 
 func (x *Panel) Reset() {
 	*x = Panel{}
-	mi := &file_busmgr_proto_msgTypes[4]
+	mi := &file_busmgr_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -605,7 +1165,7 @@ func (x *Panel) String() string {
 func (*Panel) ProtoMessage() {}
 
 func (x *Panel) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[4]
+	mi := &file_busmgr_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -618,7 +1178,7 @@ func (x *Panel) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Panel.ProtoReflect.Descriptor instead.
 func (*Panel) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{4}
+	return file_busmgr_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Panel) GetIndex() int32 {
@@ -663,7 +1223,7 @@ type DecodeFailed struct {
 
 func (x *DecodeFailed) Reset() {
 	*x = DecodeFailed{}
-	mi := &file_busmgr_proto_msgTypes[5]
+	mi := &file_busmgr_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -675,7 +1235,7 @@ func (x *DecodeFailed) String() string {
 func (*DecodeFailed) ProtoMessage() {}
 
 func (x *DecodeFailed) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[5]
+	mi := &file_busmgr_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -688,7 +1248,7 @@ func (x *DecodeFailed) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DecodeFailed.ProtoReflect.Descriptor instead.
 func (*DecodeFailed) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{5}
+	return file_busmgr_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *DecodeFailed) GetTsMs() int64 {
@@ -731,7 +1291,7 @@ type Send struct {
 
 func (x *Send) Reset() {
 	*x = Send{}
-	mi := &file_busmgr_proto_msgTypes[6]
+	mi := &file_busmgr_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -743,7 +1303,7 @@ func (x *Send) String() string {
 func (*Send) ProtoMessage() {}
 
 func (x *Send) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[6]
+	mi := &file_busmgr_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -756,7 +1316,7 @@ func (x *Send) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Send.ProtoReflect.Descriptor instead.
 func (*Send) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{6}
+	return file_busmgr_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Send) GetPeerUid() string {
@@ -791,7 +1351,7 @@ type Broadcast struct {
 
 func (x *Broadcast) Reset() {
 	*x = Broadcast{}
-	mi := &file_busmgr_proto_msgTypes[7]
+	mi := &file_busmgr_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -803,7 +1363,7 @@ func (x *Broadcast) String() string {
 func (*Broadcast) ProtoMessage() {}
 
 func (x *Broadcast) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[7]
+	mi := &file_busmgr_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -816,7 +1376,7 @@ func (x *Broadcast) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Broadcast.ProtoReflect.Descriptor instead.
 func (*Broadcast) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{7}
+	return file_busmgr_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *Broadcast) GetFrame() []byte {
@@ -842,7 +1402,7 @@ type Reset struct {
 
 func (x *Reset) Reset() {
 	*x = Reset{}
-	mi := &file_busmgr_proto_msgTypes[8]
+	mi := &file_busmgr_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -854,7 +1414,7 @@ func (x *Reset) String() string {
 func (*Reset) ProtoMessage() {}
 
 func (x *Reset) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[8]
+	mi := &file_busmgr_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -867,7 +1427,7 @@ func (x *Reset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Reset.ProtoReflect.Descriptor instead.
 func (*Reset) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{8}
+	return file_busmgr_proto_rawDescGZIP(), []int{11}
 }
 
 // SubscribeRaw is a downstream stub. Server returns Unimplemented in
@@ -880,7 +1440,7 @@ type SubscribeRaw struct {
 
 func (x *SubscribeRaw) Reset() {
 	*x = SubscribeRaw{}
-	mi := &file_busmgr_proto_msgTypes[9]
+	mi := &file_busmgr_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -892,7 +1452,7 @@ func (x *SubscribeRaw) String() string {
 func (*SubscribeRaw) ProtoMessage() {}
 
 func (x *SubscribeRaw) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[9]
+	mi := &file_busmgr_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -905,7 +1465,114 @@ func (x *SubscribeRaw) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeRaw.ProtoReflect.Descriptor instead.
 func (*SubscribeRaw) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{9}
+	return file_busmgr_proto_rawDescGZIP(), []int{12}
+}
+
+// FleetSummary is an inv-driver-derived view across the inverter
+// inventory. Published on subscriber attach (replay) and whenever
+// inventory changes. nameplate_total_w is the sum of per-inverter
+// rated AC watts (codec.NameplateWattsForModel applied to each
+// inverters.model_code). Inverters with unknown model codes
+// contribute 0; inverter_count includes them so subscribers can
+// detect partial-knowledge fleets.
+type FleetSummary struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	TsMs            int64                  `protobuf:"varint,1,opt,name=ts_ms,json=tsMs,proto3" json:"ts_ms,omitempty"` // wall-clock at publish time
+	NameplateTotalW uint32                 `protobuf:"varint,2,opt,name=nameplate_total_w,json=nameplateTotalW,proto3" json:"nameplate_total_w,omitempty"`
+	InverterCount   uint32                 `protobuf:"varint,3,opt,name=inverter_count,json=inverterCount,proto3" json:"inverter_count,omitempty"`
+	// Fleet-level energy in watt-hours, computed by inv-driver from its
+	// own energy_lifetime + energy_period_anchor tables. Independent of
+	// main.exe's daily/monthly/yearly tables.
+	//
+	//	lifetime_wh  : sum across all inverters/channels of raw*scale
+	//	today_wh     : lifetime_wh - anchor at start of today
+	//	month_wh     : lifetime_wh - anchor at start of month
+	//	year_wh      : lifetime_wh - anchor at start of year
+	LifetimeWh    uint64 `protobuf:"varint,4,opt,name=lifetime_wh,json=lifetimeWh,proto3" json:"lifetime_wh,omitempty"`
+	TodayWh       uint64 `protobuf:"varint,5,opt,name=today_wh,json=todayWh,proto3" json:"today_wh,omitempty"`
+	MonthWh       uint64 `protobuf:"varint,6,opt,name=month_wh,json=monthWh,proto3" json:"month_wh,omitempty"`
+	YearWh        uint64 `protobuf:"varint,7,opt,name=year_wh,json=yearWh,proto3" json:"year_wh,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FleetSummary) Reset() {
+	*x = FleetSummary{}
+	mi := &file_busmgr_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FleetSummary) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FleetSummary) ProtoMessage() {}
+
+func (x *FleetSummary) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FleetSummary.ProtoReflect.Descriptor instead.
+func (*FleetSummary) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *FleetSummary) GetTsMs() int64 {
+	if x != nil {
+		return x.TsMs
+	}
+	return 0
+}
+
+func (x *FleetSummary) GetNameplateTotalW() uint32 {
+	if x != nil {
+		return x.NameplateTotalW
+	}
+	return 0
+}
+
+func (x *FleetSummary) GetInverterCount() uint32 {
+	if x != nil {
+		return x.InverterCount
+	}
+	return 0
+}
+
+func (x *FleetSummary) GetLifetimeWh() uint64 {
+	if x != nil {
+		return x.LifetimeWh
+	}
+	return 0
+}
+
+func (x *FleetSummary) GetTodayWh() uint64 {
+	if x != nil {
+		return x.TodayWh
+	}
+	return 0
+}
+
+func (x *FleetSummary) GetMonthWh() uint64 {
+	if x != nil {
+		return x.MonthWh
+	}
+	return 0
+}
+
+func (x *FleetSummary) GetYearWh() uint64 {
+	if x != nil {
+		return x.YearWh
+	}
+	return 0
 }
 
 // InverterInfo carries identity and pair-state metadata sniffed off
@@ -928,7 +1595,7 @@ type InverterInfo struct {
 
 func (x *InverterInfo) Reset() {
 	*x = InverterInfo{}
-	mi := &file_busmgr_proto_msgTypes[10]
+	mi := &file_busmgr_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -940,7 +1607,7 @@ func (x *InverterInfo) String() string {
 func (*InverterInfo) ProtoMessage() {}
 
 func (x *InverterInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[10]
+	mi := &file_busmgr_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -953,7 +1620,7 @@ func (x *InverterInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InverterInfo.ProtoReflect.Descriptor instead.
 func (*InverterInfo) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{10}
+	return file_busmgr_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *InverterInfo) GetTsMs() int64 {
@@ -1016,13 +1683,14 @@ var File_busmgr_proto protoreflect.FileDescriptor
 
 const file_busmgr_proto_rawDesc = "" +
 	"\n" +
-	"\fbusmgr.proto\x12\tbusmgr.v1\"\xdc\x03\n" +
+	"\fbusmgr.proto\x12\tbusmgr.v1\"\x8d\x04\n" +
 	"\bEnvelope\x12(\n" +
 	"\x05hello\x18\x01 \x01(\v2\x10.busmgr.v1.HelloH\x00R\x05hello\x124\n" +
 	"\ttelemetry\x18\x02 \x01(\v2\x14.busmgr.v1.TelemetryH\x00R\ttelemetry\x12>\n" +
 	"\rdecode_failed\x18\x03 \x01(\v2\x17.busmgr.v1.DecodeFailedH\x00R\fdecodeFailed\x122\n" +
 	"\traw_frame\x18\x04 \x01(\v2\x13.busmgr.v1.RawFrameH\x00R\brawFrame\x12-\n" +
-	"\x04info\x18\x05 \x01(\v2\x17.busmgr.v1.InverterInfoH\x00R\x04info\x12%\n" +
+	"\x04info\x18\x05 \x01(\v2\x17.busmgr.v1.InverterInfoH\x00R\x04info\x12/\n" +
+	"\x05fleet\x18\x06 \x01(\v2\x17.busmgr.v1.FleetSummaryH\x00R\x05fleet\x12%\n" +
 	"\x04send\x18\n" +
 	" \x01(\v2\x0f.busmgr.v1.SendH\x00R\x04send\x124\n" +
 	"\tbroadcast\x18\v \x01(\v2\x14.busmgr.v1.BroadcastH\x00R\tbroadcast\x12(\n" +
@@ -1040,7 +1708,7 @@ const file_busmgr_proto_rawDesc = "" +
 	"\x05ts_ms\x18\x01 \x01(\x03R\x04tsMs\x12\x1d\n" +
 	"\n" +
 	"short_addr\x18\x02 \x01(\rR\tshortAddr\x12\x19\n" +
-	"\bl1_frame\x18\x03 \x01(\fR\al1Frame\"\xa9\x03\n" +
+	"\bl1_frame\x18\x03 \x01(\fR\al1Frame\"\xa6\x04\n" +
 	"\tTelemetry\x12\x13\n" +
 	"\x05ts_ms\x18\x01 \x01(\x03R\x04tsMs\x12\x1d\n" +
 	"\n" +
@@ -1058,7 +1726,65 @@ const file_busmgr_proto_rawDesc = "" +
 	"\freactive_var\x18\v \x01(\x01R\vreactiveVar\x12(\n" +
 	"\x06panels\x18\f \x03(\v2\x10.busmgr.v1.PanelR\x06panels\x12!\n" +
 	"\flifetime_raw\x18\r \x03(\x04R\vlifetimeRaw\x12%\n" +
-	"\x0elifetime_scale\x18\x0e \x01(\x01R\rlifetimeScaleJ\x04\b\x0f\x10\x10\"Q\n" +
+	"\x0elifetime_scale\x18\x0e \x01(\x01R\rlifetimeScale\x121\n" +
+	"\x06faults\x18\x10 \x01(\v2\x19.busmgr.v1.InverterFaultsR\x06faults\x12\x12\n" +
+	"\x04rssi\x18\x11 \x01(\rR\x04rssi\x12\x10\n" +
+	"\x03lqi\x18\x12 \x01(\rR\x03lqi\x12\"\n" +
+	"\rprev_frame_ms\x18\x13 \x01(\x03R\vprevFrameMsJ\x04\b\x0f\x10\x10\"q\n" +
+	"\x0eInverterFaults\x12(\n" +
+	"\x03ds3\x18\x01 \x01(\v2\x14.busmgr.v1.DS3FaultsH\x00R\x03ds3\x12+\n" +
+	"\x04qs1a\x18\x02 \x01(\v2\x15.busmgr.v1.QS1AFaultsH\x00R\x04qs1aB\b\n" +
+	"\x06family\"\xf5\x05\n" +
+	"\tDS3Faults\x12(\n" +
+	"\x10grid_relay_fault\x18\x01 \x01(\bR\x0egridRelayFault\x12,\n" +
+	"\x12dc_contactor_fault\x18\x02 \x01(\bR\x10dcContactorFault\x12 \n" +
+	"\fdc_bus_fault\x18\x03 \x01(\bR\n" +
+	"dcBusFault\x12&\n" +
+	"\x0fdc_ground_fault\x18\x04 \x01(\bR\rdcGroundFault\x12\x1e\n" +
+	"\viso_fault_a\x18\x05 \x01(\bR\tisoFaultA\x12\x1e\n" +
+	"\viso_fault_b\x18\x06 \x01(\bR\tisoFaultB\x12-\n" +
+	"\x13ac_over_volt_stage1\x18\a \x01(\bR\x10acOverVoltStage1\x12-\n" +
+	"\x13ac_over_volt_stage2\x18\b \x01(\bR\x10acOverVoltStage2\x12/\n" +
+	"\x14ac_under_volt_stage1\x18\t \x01(\bR\x11acUnderVoltStage1\x12/\n" +
+	"\x14ac_under_volt_stage2\x18\n" +
+	" \x01(\bR\x11acUnderVoltStage2\x12(\n" +
+	"\x10over_freq_stage1\x18\v \x01(\bR\x0eoverFreqStage1\x12(\n" +
+	"\x10over_freq_stage2\x18\f \x01(\bR\x0eoverFreqStage2\x12\"\n" +
+	"\rover_freq_aux\x18\r \x01(\bR\voverFreqAux\x12&\n" +
+	"\x0fover_freq_extra\x18\x0e \x01(\bR\roverFreqExtra\x12*\n" +
+	"\x11under_freq_stage1\x18\x0f \x01(\bR\x0funderFreqStage1\x12*\n" +
+	"\x11under_freq_stage2\x18\x10 \x01(\bR\x0funderFreqStage2\x12$\n" +
+	"\x0eunder_freq_aux\x18\x11 \x01(\bR\funderFreqAux\x12(\n" +
+	"\x10under_freq_extra\x18\x12 \x01(\bR\x0eunderFreqExtra\"\x98\a\n" +
+	"\n" +
+	"QS1AFaults\x12(\n" +
+	"\x10grid_relay_fault\x18\x01 \x01(\bR\x0egridRelayFault\x12,\n" +
+	"\x12dc_contactor_fault\x18\x02 \x01(\bR\x10dcContactorFault\x12&\n" +
+	"\x0fdc_ground_fault\x18\x03 \x01(\bR\rdcGroundFault\x12 \n" +
+	"\fdc_bus_fault\x18\x04 \x01(\bR\n" +
+	"dcBusFault\x12\x1d\n" +
+	"\n" +
+	"comm_fault\x18\x05 \x01(\bR\tcommFault\x12)\n" +
+	"\x10over_temperature\x18\x06 \x01(\bR\x0foverTemperature\x12\x1e\n" +
+	"\viso_fault_a\x18\a \x01(\bR\tisoFaultA\x12\x1e\n" +
+	"\viso_fault_b\x18\b \x01(\bR\tisoFaultB\x12\x1e\n" +
+	"\viso_fault_c\x18\t \x01(\bR\tisoFaultC\x12\x1e\n" +
+	"\viso_fault_d\x18\n" +
+	" \x01(\bR\tisoFaultD\x12)\n" +
+	"\x11ac_over_volt_fast\x18\v \x01(\bR\x0eacOverVoltFast\x12)\n" +
+	"\x11ac_over_volt_slow\x18\f \x01(\bR\x0eacOverVoltSlow\x12+\n" +
+	"\x12ac_under_volt_fast\x18\r \x01(\bR\x0facUnderVoltFast\x12+\n" +
+	"\x12ac_under_volt_slow\x18\x0e \x01(\bR\x0facUnderVoltSlow\x12$\n" +
+	"\x0eover_freq_fast\x18\x0f \x01(\bR\foverFreqFast\x12$\n" +
+	"\x0eover_freq_slow\x18\x10 \x01(\bR\foverFreqSlow\x12&\n" +
+	"\x0fover_freq_extra\x18\x11 \x01(\bR\roverFreqExtra\x12\"\n" +
+	"\rover_freq_rms\x18\x12 \x01(\bR\voverFreqRms\x12&\n" +
+	"\x0funder_freq_fast\x18\x13 \x01(\bR\runderFreqFast\x12&\n" +
+	"\x0funder_freq_slow\x18\x14 \x01(\bR\runderFreqSlow\x12(\n" +
+	"\x10under_freq_extra\x18\x15 \x01(\bR\x0eunderFreqExtra\x12$\n" +
+	"\x0eunder_freq_rms\x18\x16 \x01(\bR\funderFreqRms\x12\x1a\n" +
+	"\tzb_link_a\x18\x17 \x01(\bR\azbLinkA\x12\x1a\n" +
+	"\tzb_link_b\x18\x18 \x01(\bR\azbLinkB\"Q\n" +
 	"\x05Panel\x12\x14\n" +
 	"\x05index\x18\x01 \x01(\x05R\x05index\x12\x11\n" +
 	"\x04dc_v\x18\x02 \x01(\x01R\x03dcV\x12\x11\n" +
@@ -1080,7 +1806,16 @@ const file_busmgr_proto_rawDesc = "" +
 	"\vdeadline_ms\x18\x02 \x01(\x03R\n" +
 	"deadlineMs\"\a\n" +
 	"\x05Reset\"\x0e\n" +
-	"\fSubscribeRaw\"\xf1\x02\n" +
+	"\fSubscribeRaw\"\xe6\x01\n" +
+	"\fFleetSummary\x12\x13\n" +
+	"\x05ts_ms\x18\x01 \x01(\x03R\x04tsMs\x12*\n" +
+	"\x11nameplate_total_w\x18\x02 \x01(\rR\x0fnameplateTotalW\x12%\n" +
+	"\x0einverter_count\x18\x03 \x01(\rR\rinverterCount\x12\x1f\n" +
+	"\vlifetime_wh\x18\x04 \x01(\x04R\n" +
+	"lifetimeWh\x12\x19\n" +
+	"\btoday_wh\x18\x05 \x01(\x04R\atodayWh\x12\x19\n" +
+	"\bmonth_wh\x18\x06 \x01(\x04R\amonthWh\x12\x17\n" +
+	"\ayear_wh\x18\a \x01(\x04R\x06yearWh\"\xf1\x02\n" +
 	"\fInverterInfo\x12\x13\n" +
 	"\x05ts_ms\x18\x01 \x01(\x03R\x04tsMs\x12\x19\n" +
 	"\bpeer_uid\x18\x02 \x01(\tR\apeerUid\x12\x1d\n" +
@@ -1116,38 +1851,46 @@ func file_busmgr_proto_rawDescGZIP() []byte {
 }
 
 var file_busmgr_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_busmgr_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_busmgr_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_busmgr_proto_goTypes = []any{
-	(Role)(0),            // 0: busmgr.v1.Role
-	(*Envelope)(nil),     // 1: busmgr.v1.Envelope
-	(*Hello)(nil),        // 2: busmgr.v1.Hello
-	(*RawFrame)(nil),     // 3: busmgr.v1.RawFrame
-	(*Telemetry)(nil),    // 4: busmgr.v1.Telemetry
-	(*Panel)(nil),        // 5: busmgr.v1.Panel
-	(*DecodeFailed)(nil), // 6: busmgr.v1.DecodeFailed
-	(*Send)(nil),         // 7: busmgr.v1.Send
-	(*Broadcast)(nil),    // 8: busmgr.v1.Broadcast
-	(*Reset)(nil),        // 9: busmgr.v1.Reset
-	(*SubscribeRaw)(nil), // 10: busmgr.v1.SubscribeRaw
-	(*InverterInfo)(nil), // 11: busmgr.v1.InverterInfo
+	(Role)(0),              // 0: busmgr.v1.Role
+	(*Envelope)(nil),       // 1: busmgr.v1.Envelope
+	(*Hello)(nil),          // 2: busmgr.v1.Hello
+	(*RawFrame)(nil),       // 3: busmgr.v1.RawFrame
+	(*Telemetry)(nil),      // 4: busmgr.v1.Telemetry
+	(*InverterFaults)(nil), // 5: busmgr.v1.InverterFaults
+	(*DS3Faults)(nil),      // 6: busmgr.v1.DS3Faults
+	(*QS1AFaults)(nil),     // 7: busmgr.v1.QS1AFaults
+	(*Panel)(nil),          // 8: busmgr.v1.Panel
+	(*DecodeFailed)(nil),   // 9: busmgr.v1.DecodeFailed
+	(*Send)(nil),           // 10: busmgr.v1.Send
+	(*Broadcast)(nil),      // 11: busmgr.v1.Broadcast
+	(*Reset)(nil),          // 12: busmgr.v1.Reset
+	(*SubscribeRaw)(nil),   // 13: busmgr.v1.SubscribeRaw
+	(*FleetSummary)(nil),   // 14: busmgr.v1.FleetSummary
+	(*InverterInfo)(nil),   // 15: busmgr.v1.InverterInfo
 }
 var file_busmgr_proto_depIdxs = []int32{
 	2,  // 0: busmgr.v1.Envelope.hello:type_name -> busmgr.v1.Hello
 	4,  // 1: busmgr.v1.Envelope.telemetry:type_name -> busmgr.v1.Telemetry
-	6,  // 2: busmgr.v1.Envelope.decode_failed:type_name -> busmgr.v1.DecodeFailed
+	9,  // 2: busmgr.v1.Envelope.decode_failed:type_name -> busmgr.v1.DecodeFailed
 	3,  // 3: busmgr.v1.Envelope.raw_frame:type_name -> busmgr.v1.RawFrame
-	11, // 4: busmgr.v1.Envelope.info:type_name -> busmgr.v1.InverterInfo
-	7,  // 5: busmgr.v1.Envelope.send:type_name -> busmgr.v1.Send
-	8,  // 6: busmgr.v1.Envelope.broadcast:type_name -> busmgr.v1.Broadcast
-	9,  // 7: busmgr.v1.Envelope.reset:type_name -> busmgr.v1.Reset
-	10, // 8: busmgr.v1.Envelope.subscribe_raw:type_name -> busmgr.v1.SubscribeRaw
-	0,  // 9: busmgr.v1.Hello.role:type_name -> busmgr.v1.Role
-	5,  // 10: busmgr.v1.Telemetry.panels:type_name -> busmgr.v1.Panel
-	11, // [11:11] is the sub-list for method output_type
-	11, // [11:11] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	15, // 4: busmgr.v1.Envelope.info:type_name -> busmgr.v1.InverterInfo
+	14, // 5: busmgr.v1.Envelope.fleet:type_name -> busmgr.v1.FleetSummary
+	10, // 6: busmgr.v1.Envelope.send:type_name -> busmgr.v1.Send
+	11, // 7: busmgr.v1.Envelope.broadcast:type_name -> busmgr.v1.Broadcast
+	12, // 8: busmgr.v1.Envelope.reset:type_name -> busmgr.v1.Reset
+	13, // 9: busmgr.v1.Envelope.subscribe_raw:type_name -> busmgr.v1.SubscribeRaw
+	0,  // 10: busmgr.v1.Hello.role:type_name -> busmgr.v1.Role
+	8,  // 11: busmgr.v1.Telemetry.panels:type_name -> busmgr.v1.Panel
+	5,  // 12: busmgr.v1.Telemetry.faults:type_name -> busmgr.v1.InverterFaults
+	6,  // 13: busmgr.v1.InverterFaults.ds3:type_name -> busmgr.v1.DS3Faults
+	7,  // 14: busmgr.v1.InverterFaults.qs1a:type_name -> busmgr.v1.QS1AFaults
+	15, // [15:15] is the sub-list for method output_type
+	15, // [15:15] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_busmgr_proto_init() }
@@ -1161,19 +1904,24 @@ func file_busmgr_proto_init() {
 		(*Envelope_DecodeFailed)(nil),
 		(*Envelope_RawFrame)(nil),
 		(*Envelope_Info)(nil),
+		(*Envelope_Fleet)(nil),
 		(*Envelope_Send)(nil),
 		(*Envelope_Broadcast)(nil),
 		(*Envelope_Reset_)(nil),
 		(*Envelope_SubscribeRaw)(nil),
 	}
-	file_busmgr_proto_msgTypes[10].OneofWrappers = []any{}
+	file_busmgr_proto_msgTypes[4].OneofWrappers = []any{
+		(*InverterFaults_Ds3)(nil),
+		(*InverterFaults_Qs1A)(nil),
+	}
+	file_busmgr_proto_msgTypes[14].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_busmgr_proto_rawDesc), len(file_busmgr_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   11,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

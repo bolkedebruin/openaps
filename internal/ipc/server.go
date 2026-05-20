@@ -473,6 +473,25 @@ ORDER  BY uid`)
 	if count > 0 {
 		log.Printf("ipc: replayed %d InverterInfo row(s) to subscriber", count)
 	}
+
+	// Follow with one FleetSummary (nameplate + energy aggregates)
+	// so the subscriber doesn't have to wait for the next telemetry-
+	// or inventory-change event. Errors here are non-fatal.
+	if s.Ingestor == nil {
+		return nil
+	}
+	fleet := s.Ingestor.BuildFleetSummary(ctx)
+	if fleet == nil || fleet.GetInverterCount() == 0 {
+		return nil
+	}
+	env := &wire.Envelope{Body: &wire.Envelope_Fleet{Fleet: fleet}}
+	_ = conn.SetWriteDeadline(time.Now().Add(writeDeadline))
+	if err := wire.WriteFrame(conn, env); err != nil {
+		return err
+	}
+	log.Printf("ipc: replayed FleetSummary (nameplate=%dW count=%d lifetime=%dWh today=%dWh) to subscriber",
+		fleet.GetNameplateTotalW(), fleet.GetInverterCount(),
+		fleet.GetLifetimeWh(), fleet.GetTodayWh())
 	return nil
 }
 
