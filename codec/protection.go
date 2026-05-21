@@ -19,26 +19,26 @@ var ErrUnsupportedProtectionFamily = errors.New("set-protection: unsupported mod
 var ErrUnsupportedProtectionParam = errors.New("set-protection: param not encodable for this family")
 
 // EncodeSetProtection returns the unicast L2 frame that programs one
-// grid-protection frequency threshold on a given inverter. hz is the
-// absolute threshold frequency (e.g. 50.3). It mirrors main.exe's
-// per-inverter dispatcher (set_paraName_paraValue_inverter @ 0x69bdc,
-// unicast), not the broadcast profile path; the per-family encoders live
-// in ds3.go / qs1a.go.
+// grid-protection param on a given inverter. value is in the param's
+// native unit: Hz for the frequency thresholds, %P/Hz for the slope,
+// seconds for the delay. It mirrors main.exe's per-inverter dispatcher
+// (set_paraName_paraValue_inverter @ 0x69bdc, unicast), not the broadcast
+// profile path; the per-family encoders live in ds3.go / qs1a.go.
 //
-// Only the single-frame frequency-threshold params (CA/CB/CC/DH/DI) are
-// encoded. Params whose firmware encoding is env-gated or multi-frame
-// (Over_frequency_Watt_set, Over_Frequency_Watt_Slope_set,
-// Over_frequency_Watt_Delay_Time_set, grid_recovery_time) return
-// ErrUnsupportedProtectionParam.
-func EncodeSetProtection(modelCode uint8, paramName string, hz float64) ([]byte, error) {
-	if hz <= 0 {
-		return nil, fmt.Errorf("set-protection: %q: frequency must be > 0 (got %g)", paramName, hz)
+// Encoded today: frequency thresholds (CB/CC/DH/DI both families; CA on
+// QS1A only) plus DS3 slope (CF) and DS3 delay (CG). Params whose
+// firmware encoding is multi-frame (the over-frequency mode enum) or
+// needs the env/line-frequency multiplier on a non-DS3 path
+// (grid_recovery_time) still return ErrUnsupportedProtectionParam.
+func EncodeSetProtection(modelCode uint8, paramName string, value float64) ([]byte, error) {
+	if value <= 0 {
+		return nil, fmt.Errorf("set-protection: %q: value must be > 0 (got %g)", paramName, value)
 	}
 	switch modelCode {
 	case ModelDS3, ModelDS3H, ModelDS3L, ModelExt36:
-		return encodeProtectionDS3(paramName, hz)
+		return encodeProtectionDS3(paramName, value)
 	case ModelQS1, ModelQS1A:
-		return encodeProtectionQS1A(paramName, hz)
+		return encodeProtectionQS1A(paramName, value)
 	default:
 		return nil, fmt.Errorf("%w: model 0x%02X", ErrUnsupportedProtectionFamily, modelCode)
 	}

@@ -21,14 +21,14 @@ var qs1ProtFreqSubs = map[string]byte{
 // frequency-threshold param. byte_count 3 sits at [5] and the 24-bit
 // value is left-aligned at [6..8]; the opcode is the QS1 family SET
 // opcode, shared with set-power and distinguished by the sub-byte at [4].
-func encodeProtectionQS1A(paramName string, hz float64) ([]byte, error) {
+func encodeProtectionQS1A(paramName string, value float64) ([]byte, error) {
 	sub, ok := qs1ProtFreqSubs[paramName]
 	if !ok {
 		return nil, fmt.Errorf("%w: %q on QS1A", ErrUnsupportedProtectionParam, paramName)
 	}
-	wire := int64(protFreqDividendQS1 / hz) // truncate toward zero
+	wire := int64(protFreqDividendQS1 / value) // truncate toward zero
 	if wire < 0 || wire > 0xFFFFFF {
-		return nil, fmt.Errorf("set-protection: %q=%g Hz → wire %d out of 24-bit range", paramName, hz, wire)
+		return nil, fmt.Errorf("set-protection: %q=%g Hz → wire %d out of 24-bit range", paramName, value, wire)
 	}
 	return BuildL2Frame(CmdSetPowerQS1Unicast, []byte{sub, 3, byte(wire >> 16), byte(wire >> 8), byte(wire)}), nil
 }

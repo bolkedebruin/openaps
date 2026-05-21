@@ -24,6 +24,12 @@ func TestEncodeSetProtection_WorkedFrames(t *testing.T) {
 			[]byte{0xFB, 0xFB, 0x06, 0x1C, 0x68, 0x03, 0x0F, 0x2A, 0xF3, 0x01, 0xB9, 0xFE, 0xFE}},
 		{"QS1A CC 51.0", ModelQS1A, "Over_frequency_Watt_High_set", 51.0,
 			[]byte{0xFB, 0xFB, 0x06, 0x1C, 0x65, 0x03, 0x0E, 0xF5, 0xA8, 0x02, 0x35, 0xFE, 0xFE}},
+		// DS3 slope CF: int(40 * 163.68) = 6547 = 0x1993, sub 0x2D.
+		{"DS3 CF slope 40", ModelDS3, "Over_Frequency_Watt_Slope_set", 40.0,
+			[]byte{0xFB, 0xFB, 0x06, 0xAA, 0x2D, 0x00, 0x00, 0x19, 0x93, 0x01, 0x89, 0xFE, 0xFE}},
+		// DS3 delay CG: int(5 + 0.5) = 5, sub 0x2E.
+		{"DS3 CG delay 5", ModelDS3, "Over_frequency_Watt_Delay_Time_set", 5.0,
+			[]byte{0xFB, 0xFB, 0x06, 0xAA, 0x2E, 0x00, 0x00, 0x00, 0x05, 0x00, 0xE3, 0xFE, 0xFE}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -105,15 +111,28 @@ func TestEncodeSetProtection_Unsupported(t *testing.T) {
 	if _, err := EncodeSetProtection(ModelDS3, "Over_frequency_Watt_Start_set", 50.2); !errors.Is(err, ErrUnsupportedProtectionParam) {
 		t.Errorf("DS3 CA: want ErrUnsupportedProtectionParam, got %v", err)
 	}
-	// Env-gated / multi-frame params are deliberately not encoded here.
+	// QS1A: slope/delay/recover are firmware-rejected; the mode enum is
+	// multi-frame; grid_recovery uses a different builder. None encoded here.
 	for _, p := range []string{
 		"Over_frequency_Watt_set",
 		"Over_Frequency_Watt_Slope_set",
 		"Over_frequency_Watt_Delay_Time_set",
+		"Over_frequency_Watt_recover_High_set",
 		"grid_recovery_time",
 	} {
 		if _, err := EncodeSetProtection(ModelQS1A, p, 60); !errors.Is(err, ErrUnsupportedProtectionParam) {
-			t.Errorf("%s: want ErrUnsupportedProtectionParam, got %v", p, err)
+			t.Errorf("QS1A %s: want ErrUnsupportedProtectionParam, got %v", p, err)
+		}
+	}
+	// DS3: the mode enum (multi-frame), grid_recovery (env/line-freq), and
+	// recover-high are not encoded here even though slope/delay now are.
+	for _, p := range []string{
+		"Over_frequency_Watt_set",
+		"grid_recovery_time",
+		"Over_frequency_Watt_recover_High_set",
+	} {
+		if _, err := EncodeSetProtection(ModelDS3, p, 50); !errors.Is(err, ErrUnsupportedProtectionParam) {
+			t.Errorf("DS3 %s: want ErrUnsupportedProtectionParam, got %v", p, err)
 		}
 	}
 	// Unknown family.

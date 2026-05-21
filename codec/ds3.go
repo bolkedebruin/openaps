@@ -5,35 +5,51 @@ import (
 	"math"
 )
 
-// protFreqScaleDS3 is the DS3 frequency-threshold wire scale (main.exe
-// .rodata DAT_6dc28 etc.): wire = int(Hz * 100), 16-bit big-endian,
-// truncated toward zero (no +0.5).
-const protFreqScaleDS3 = 100.0
+// DS3 protection-param wire scales (main.exe .rodata, via
+// set_paraName_paraValue_inverter @ 0x69bdc). All produce a 16-bit
+// big-endian value, truncated toward zero (the firmware's (int) cast).
+const (
+	ds3ProtFreqScale  = 100.0                // freq thresholds CB/CC/DH/DI: int(Hz*100). DAT_6dc28/6efc0/6f5f0.
+	ds3ProtSlopeScale = 1023.0 * 16.0 * 0.01 // CF slope: int(v*163.68). DAT_6dc18 * 16 * DAT_6dc20. NOT env-gated on DS3.
+)
 
-// ds3ProtFreqSubs maps the long-form param name to its DS3 0xAA sub-byte
-// for the single-frame frequency-threshold protection params.
-// Over_frequency_Watt_Start_set (CA) has no DS3 branch in main.exe.
-var ds3ProtFreqSubs = map[string]byte{
-	"Over_frequency_Watt_Low_set":   0x2B, // CB
-	"Over_frequency_Watt_High_set":  0x2A, // CC
-	"Under_Frequency_Watt_Low_set":  0x56, // DH
-	"Under_Frequency_Watt_High_set": 0x55, // DI
+// ds3ProtParam binds a long-form param to its DS3 0xAA sub-byte and the
+// real→wire transform.
+type ds3ProtParam struct {
+	sub    byte
+	toWire func(float64) int64
+}
+
+func ds3ScaleHz(v float64) int64    { return int64(v * ds3ProtFreqScale) }
+func ds3ScaleSlope(v float64) int64 { return int64(v * ds3ProtSlopeScale) }
+func ds3RoundSec(v float64) int64   { return int64(v + 0.5) } // CG: firmware adds +0.5 before the cast
+
+// ds3ProtParams maps each writable DS3 protection param to its sub-byte
+// and scaling. Over_frequency_Watt_Start_set (CA) has no DS3 branch in
+// main.exe and so is intentionally absent.
+var ds3ProtParams = map[string]ds3ProtParam{
+	"Over_frequency_Watt_Low_set":        {0x2B, ds3ScaleHz},    // CB
+	"Over_frequency_Watt_High_set":       {0x2A, ds3ScaleHz},    // CC
+	"Under_Frequency_Watt_Low_set":       {0x56, ds3ScaleHz},    // DH
+	"Under_Frequency_Watt_High_set":      {0x55, ds3ScaleHz},    // DI
+	"Over_Frequency_Watt_Slope_set":      {0x2D, ds3ScaleSlope}, // CF
+	"Over_frequency_Watt_Delay_Time_set": {0x2E, ds3RoundSec},   // CG
 }
 
 // encodeProtectionDS3 builds the DS3 (0xAA) unicast frame for one
-// frequency-threshold param. The 16-bit value is right-aligned at bytes
-// [7..8] (byte_count 2); the opcode is the DS3 family SET opcode, shared
-// with set-power and distinguished by the sub-byte at [4].
-func encodeProtectionDS3(paramName string, hz float64) ([]byte, error) {
-	sub, ok := ds3ProtFreqSubs[paramName]
+// protection param. The 16-bit value is right-aligned at bytes [7..8]
+// (byte_count 2); the opcode is the DS3 family SET opcode, shared with
+// set-power and distinguished by the sub-byte at [4].
+func encodeProtectionDS3(paramName string, value float64) ([]byte, error) {
+	pp, ok := ds3ProtParams[paramName]
 	if !ok {
 		return nil, fmt.Errorf("%w: %q on DS3", ErrUnsupportedProtectionParam, paramName)
 	}
-	wire := int64(hz * protFreqScaleDS3) // truncate toward zero
+	wire := pp.toWire(value)
 	if wire < 0 || wire > 0xFFFF {
-		return nil, fmt.Errorf("set-protection: %q=%g Hz → wire %d out of 16-bit range", paramName, hz, wire)
+		return nil, fmt.Errorf("set-protection: %q=%g → wire %d out of 16-bit range", paramName, value, wire)
 	}
-	return BuildL2Frame(CmdSetPowerDS3Unicast, []byte{sub, 0, 0, byte(wire >> 8), byte(wire)}), nil
+	return BuildL2Frame(CmdSetPowerDS3Unicast, []byte{pp.sub, 0, 0, byte(wire >> 8), byte(wire)}), nil
 }
 
 // DS3 set-power scaling. Watts → on-wire register value is
