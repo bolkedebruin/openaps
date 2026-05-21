@@ -1,6 +1,40 @@
 package codec
 
-import "math"
+import (
+	"fmt"
+	"math"
+)
+
+// protFreqScaleDS3 is the DS3 frequency-threshold wire scale (main.exe
+// .rodata DAT_6dc28 etc.): wire = int(Hz * 100), 16-bit big-endian,
+// truncated toward zero (no +0.5).
+const protFreqScaleDS3 = 100.0
+
+// ds3ProtFreqSubs maps the long-form param name to its DS3 0xAA sub-byte
+// for the single-frame frequency-threshold protection params.
+// Over_frequency_Watt_Start_set (CA) has no DS3 branch in main.exe.
+var ds3ProtFreqSubs = map[string]byte{
+	"Over_frequency_Watt_Low_set":   0x2B, // CB
+	"Over_frequency_Watt_High_set":  0x2A, // CC
+	"Under_Frequency_Watt_Low_set":  0x56, // DH
+	"Under_Frequency_Watt_High_set": 0x55, // DI
+}
+
+// encodeProtectionDS3 builds the DS3 (0xAA) unicast frame for one
+// frequency-threshold param. The 16-bit value is right-aligned at bytes
+// [7..8] (byte_count 2); the opcode is the DS3 family SET opcode, shared
+// with set-power and distinguished by the sub-byte at [4].
+func encodeProtectionDS3(paramName string, hz float64) ([]byte, error) {
+	sub, ok := ds3ProtFreqSubs[paramName]
+	if !ok {
+		return nil, fmt.Errorf("%w: %q on DS3", ErrUnsupportedProtectionParam, paramName)
+	}
+	wire := int64(hz * protFreqScaleDS3) // truncate toward zero
+	if wire < 0 || wire > 0xFFFF {
+		return nil, fmt.Errorf("set-protection: %q=%g Hz → wire %d out of 16-bit range", paramName, hz, wire)
+	}
+	return BuildL2Frame(CmdSetPowerDS3Unicast, []byte{sub, 0, 0, byte(wire >> 8), byte(wire)}), nil
+}
 
 // DS3 set-power scaling. Watts → on-wire register value is
 // round(watts / setPowerScaleDS3Inv), saturated at setPowerRegMaxDS3.
@@ -131,10 +165,10 @@ type DS3Status struct {
 // legacy-slot bits are not surfaced here; consumers needing them
 // read DS3Status.Raw.
 type DS3Faults struct {
-	GridRelayFault    bool // body[0xc] bit 1 → inv+0x29a (1=event; firmware also maps St 4↔6 and Evt1 bit 1)
-	DCContactorFault  bool // body[0xd] bit 7 → inv+0x299 → Evt1 bit 7
-	DCBusFault        bool // body[0xd] bit 4 → inv+0x29e (1=event; counter inv+0x3f0 tracks fault-poll count, inv+0x3ec the healthy streak)
-	DCGroundFault     bool // body[0xd] bit 3 → inv+0x298 → Evt1 bit 0
+	GridRelayFault   bool // body[0xc] bit 1 → inv+0x29a (1=event; firmware also maps St 4↔6 and Evt1 bit 1)
+	DCContactorFault bool // body[0xd] bit 7 → inv+0x299 → Evt1 bit 7
+	DCBusFault       bool // body[0xd] bit 4 → inv+0x29e (1=event; counter inv+0x3f0 tracks fault-poll count, inv+0x3ec the healthy streak)
+	DCGroundFault    bool // body[0xd] bit 3 → inv+0x298 → Evt1 bit 0
 
 	IsoFaultA bool // body[0xe] bit 4 → inv+0x290 → Evt1 bit 6
 	IsoFaultB bool // body[0xe] bit 6 → inv+0x292 → Evt1 bit 6

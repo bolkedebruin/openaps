@@ -1,5 +1,38 @@
 package codec
 
+import "fmt"
+
+// protFreqDividendQS1 is the QS1/QS1A frequency-threshold dividend
+// (main.exe .rodata DAT_6dbf8 etc.): wire = int(50000000 / Hz), 24-bit
+// big-endian, truncated toward zero (no +0.5).
+const protFreqDividendQS1 = 50000000.0
+
+// qs1ProtFreqSubs maps the long-form param name to its QS1 0x1C sub-byte
+// for the single-frame frequency-threshold protection params.
+var qs1ProtFreqSubs = map[string]byte{
+	"Over_frequency_Watt_Start_set": 0x62, // CA
+	"Over_frequency_Watt_Low_set":   0x68, // CB
+	"Over_frequency_Watt_High_set":  0x65, // CC
+	"Under_Frequency_Watt_Low_set":  0xA1, // DH
+	"Under_Frequency_Watt_High_set": 0xA4, // DI
+}
+
+// encodeProtectionQS1A builds the QS1 (0x1C) unicast frame for one
+// frequency-threshold param. byte_count 3 sits at [5] and the 24-bit
+// value is left-aligned at [6..8]; the opcode is the QS1 family SET
+// opcode, shared with set-power and distinguished by the sub-byte at [4].
+func encodeProtectionQS1A(paramName string, hz float64) ([]byte, error) {
+	sub, ok := qs1ProtFreqSubs[paramName]
+	if !ok {
+		return nil, fmt.Errorf("%w: %q on QS1A", ErrUnsupportedProtectionParam, paramName)
+	}
+	wire := int64(protFreqDividendQS1 / hz) // truncate toward zero
+	if wire < 0 || wire > 0xFFFFFF {
+		return nil, fmt.Errorf("set-protection: %q=%g Hz → wire %d out of 24-bit range", paramName, hz, wire)
+	}
+	return BuildL2Frame(CmdSetPowerQS1Unicast, []byte{sub, 3, byte(wire >> 16), byte(wire >> 8), byte(wire)}), nil
+}
+
 // setPowerScaleDSP is the QS1 / QS1A / YC600-family watts-to-register
 // multiplier used by EncodeSetPowerQS1A and EncodeSetPowerC3.
 //
@@ -178,6 +211,7 @@ type QS1AStatus struct {
 //	              | body[0x17] bit 5                              0x2b4)
 //	FaultB      = body[0x1a] bits 5,7 | body[0x19] bit 1    (inv+0x2aa,0x2ac,0x2ae,
 //	              | body[0x17] bit 6                              0x2b5)
+//
 // decodeQS1AStatus returns the raw status bytes. The semantic
 // aggregator booleans (InverterStatus) are derived from
 // QS1AStatus.Faults().InverterStatus() so the bit→meaning mapping has
@@ -220,12 +254,12 @@ func (f QS1AFaults) InverterStatus() InverterStatus {
 // off-body slots, so Evt1 OF/UF here reflects only what body[0x17,
 // 0x19, 0x1a] supplies.
 type QS1AFaults struct {
-	GridRelayFault    bool // body[0x17] bit 2 → inv+0x29a (1=event; firmware also maps St 4↔6 and Evt1 bit 1)
-	DCContactorFault  bool // body[0x17] bit 1 → inv+0x299 → Evt1 bit 7
-	DCGroundFault     bool // body[0x17] bit 3 → inv+0x298 → Evt1 bit 0
-	DCBusFault        bool // body[0x18] bit 4 → inv+0x29e (1=event; counter inv+0x3f0 tracks fault-poll count, inv+0x3ec the healthy streak)
-	CommFault         bool // body[0x17] bit 4 → inv+0x29b → Evt1 bits 5 + 3
-	OverTemperature   bool // body[0x18] bit 2 → inv+0x2b3 → Evt1 bit 1
+	GridRelayFault   bool // body[0x17] bit 2 → inv+0x29a (1=event; firmware also maps St 4↔6 and Evt1 bit 1)
+	DCContactorFault bool // body[0x17] bit 1 → inv+0x299 → Evt1 bit 7
+	DCGroundFault    bool // body[0x17] bit 3 → inv+0x298 → Evt1 bit 0
+	DCBusFault       bool // body[0x18] bit 4 → inv+0x29e (1=event; counter inv+0x3f0 tracks fault-poll count, inv+0x3ec the healthy streak)
+	CommFault        bool // body[0x17] bit 4 → inv+0x29b → Evt1 bits 5 + 3
+	OverTemperature  bool // body[0x18] bit 2 → inv+0x2b3 → Evt1 bit 1
 
 	IsoFaultA bool // body[0x19] bit 2 → inv+0x290 → Evt1 bit 6
 	IsoFaultB bool // body[0x19] bit 4 → inv+0x292 → Evt1 bit 6
@@ -237,14 +271,14 @@ type QS1AFaults struct {
 	ACUnderVoltFast bool // body[0x1a] bit 3 → inv+0x2a8 → Evt1 bit 14
 	ACUnderVoltSlow bool // body[0x1a] bit 1 → inv+0x2a6 → Evt1 bit 14
 
-	OverFreqFast    bool // body[0x1a] bit 6 → inv+0x2ab → Evt1 bit 13
-	OverFreqSlow    bool // body[0x1a] bit 4 → inv+0x2a9 → Evt1 bit 13
-	OverFreqExtra   bool // body[0x19] bit 0 → inv+0x2ad → Evt1 bit 13
-	OverFreqRMS     bool // body[0x17] bit 5 → inv+0x2b4 → Evt1 bit 13 (10-min RMS)
-	UnderFreqFast   bool // body[0x1a] bit 7 → inv+0x2ac → Evt1 bit 12
-	UnderFreqSlow   bool // body[0x1a] bit 5 → inv+0x2aa → Evt1 bit 12
-	UnderFreqExtra  bool // body[0x19] bit 1 → inv+0x2ae → Evt1 bit 12
-	UnderFreqRMS    bool // body[0x17] bit 6 → inv+0x2b5 → Evt1 bit 12 (10-min RMS)
+	OverFreqFast   bool // body[0x1a] bit 6 → inv+0x2ab → Evt1 bit 13
+	OverFreqSlow   bool // body[0x1a] bit 4 → inv+0x2a9 → Evt1 bit 13
+	OverFreqExtra  bool // body[0x19] bit 0 → inv+0x2ad → Evt1 bit 13
+	OverFreqRMS    bool // body[0x17] bit 5 → inv+0x2b4 → Evt1 bit 13 (10-min RMS)
+	UnderFreqFast  bool // body[0x1a] bit 7 → inv+0x2ac → Evt1 bit 12
+	UnderFreqSlow  bool // body[0x1a] bit 5 → inv+0x2aa → Evt1 bit 12
+	UnderFreqExtra bool // body[0x19] bit 1 → inv+0x2ae → Evt1 bit 12
+	UnderFreqRMS   bool // body[0x17] bit 6 → inv+0x2b5 → Evt1 bit 12 (10-min RMS)
 
 	// ZBLink{A,B} feed Evt1 bit 4 via inv+0x3cc/0x3cd. Polarity
 	// reflects the firmware verbatim — main.exe ORs the slot value
@@ -262,30 +296,30 @@ func (s QS1AStatus) Faults() QS1AFaults {
 	b17, b18, b19, b1a := s.Main[0], s.Main[1], s.Main[2], s.Main[3]
 	b39 := s.Grid[1]
 	return QS1AFaults{
-		GridRelayFault:    b17&(1<<2) != 0,
-		DCContactorFault:  b17&(1<<1) != 0,
-		DCGroundFault:     b17&(1<<3) != 0,
-		DCBusFault:        b18&(1<<4) != 0,
-		CommFault:         b17&(1<<4) != 0,
-		OverTemperature:   b18&(1<<2) != 0,
-		IsoFaultA:         b19&(1<<2) != 0,
-		IsoFaultB:         b19&(1<<4) != 0,
-		IsoFaultC:         b18&(1<<0) != 0,
-		IsoFaultD:         b19&(1<<6) != 0,
-		ACOverVoltFast:    b1a&(1<<2) != 0,
-		ACOverVoltSlow:    b1a&(1<<0) != 0,
-		ACUnderVoltFast:   b1a&(1<<3) != 0,
-		ACUnderVoltSlow:   b1a&(1<<1) != 0,
-		OverFreqFast:      b1a&(1<<6) != 0,
-		OverFreqSlow:      b1a&(1<<4) != 0,
-		OverFreqExtra:     b19&(1<<0) != 0,
-		OverFreqRMS:       b17&(1<<5) != 0,
-		UnderFreqFast:     b1a&(1<<7) != 0,
-		UnderFreqSlow:     b1a&(1<<5) != 0,
-		UnderFreqExtra:    b19&(1<<1) != 0,
-		UnderFreqRMS:      b17&(1<<6) != 0,
-		ZBLinkA:           b39&(1<<0) != 0,
-		ZBLinkB:           b39&(1<<1) != 0,
+		GridRelayFault:   b17&(1<<2) != 0,
+		DCContactorFault: b17&(1<<1) != 0,
+		DCGroundFault:    b17&(1<<3) != 0,
+		DCBusFault:       b18&(1<<4) != 0,
+		CommFault:        b17&(1<<4) != 0,
+		OverTemperature:  b18&(1<<2) != 0,
+		IsoFaultA:        b19&(1<<2) != 0,
+		IsoFaultB:        b19&(1<<4) != 0,
+		IsoFaultC:        b18&(1<<0) != 0,
+		IsoFaultD:        b19&(1<<6) != 0,
+		ACOverVoltFast:   b1a&(1<<2) != 0,
+		ACOverVoltSlow:   b1a&(1<<0) != 0,
+		ACUnderVoltFast:  b1a&(1<<3) != 0,
+		ACUnderVoltSlow:  b1a&(1<<1) != 0,
+		OverFreqFast:     b1a&(1<<6) != 0,
+		OverFreqSlow:     b1a&(1<<4) != 0,
+		OverFreqExtra:    b19&(1<<0) != 0,
+		OverFreqRMS:      b17&(1<<5) != 0,
+		UnderFreqFast:    b1a&(1<<7) != 0,
+		UnderFreqSlow:    b1a&(1<<5) != 0,
+		UnderFreqExtra:   b19&(1<<1) != 0,
+		UnderFreqRMS:     b17&(1<<6) != 0,
+		ZBLinkA:          b39&(1<<0) != 0,
+		ZBLinkB:          b39&(1<<1) != 0,
 	}
 }
 
@@ -361,4 +395,3 @@ func qs1aPanelI(body []byte, off int) float64 {
 	raw := (uint16(body[off+1]&0x0F) << 8) | uint16(body[off])
 	return float64(raw) * qs1aPanelIMax / qs1aADC12bit
 }
-
