@@ -27,5 +27,5 @@ func EncodeSetPowerC3(modelCode uint8, panelWatts uint16, broadcast bool) ([]byt
 	if broadcast {
 		cmd = CmdSetPowerC3Broadcast
 	}
-	return BuildL2Frame(L2TypeInverterCmd, cmd, body), nil
+	return BuildL2Frame(cmd, body), nil
 }

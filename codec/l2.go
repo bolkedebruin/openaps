@@ -1,17 +1,18 @@
 package codec
 
 // BuildL2Frame wraps body with the canonical
-// `FB FB <type> <cmd> <body...> <sum_hi> <sum_lo> FE FE` envelope.
+// `FB FB <inner_len> <cmd> <body...> <sum_hi> <sum_lo> FE FE` envelope.
 //
-// The 16-bit checksum is the byte-wise sum of `type`, `cmd`, and every
-// byte of `body`, packed big-endian into two bytes.
-func BuildL2Frame(typeByte, cmdByte byte, body []byte) []byte {
+// inner_len is the count of cmd + body bytes that follow (1 + len(body));
+// it sits at offset 2 of the frame. The 16-bit checksum is the byte-wise
+// sum of inner_len, cmd, and every byte of body, packed big-endian into
+// two bytes.
+func BuildL2Frame(cmdByte byte, body []byte) []byte {
+	innerLen := byte(1 + len(body))
 	out := make([]byte, 0, 4+len(body)+4)
-	out = append(out, L2SOF1, L2SOF2, typeByte, cmdByte)
+	out = append(out, L2SOF1, L2SOF2, innerLen, cmdByte)
 	out = append(out, body...)
-	var sum uint16
-	sum += uint16(typeByte)
-	sum += uint16(cmdByte)
+	sum := uint16(innerLen) + uint16(cmdByte)
 	for _, b := range body {
 		sum += uint16(b)
 	}

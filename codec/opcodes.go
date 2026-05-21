@@ -8,16 +8,16 @@ const (
 	L2EOF2 byte = 0xFE
 )
 
-// L2TypeInverterCmd is the type byte (offset 2) for inverter-command
-// frames. All set-power / info / telemetry queries use it.
-const L2TypeInverterCmd byte = 0x06
-
 // L1 outer envelope sentinels for the apsystems-stock-zb backend.
 const (
 	L1Preamble byte = 0xAA // repeated 4 times
 	L1Sentinel byte = 0x55
 	L1ReplySOF byte = 0xFC // repeated 2 times on inbound
 )
+
+// CleartextGateMin is the lowest L1 gate byte that marks a frame as
+// cleartext. Any gate byte below this is AES-wrapped.
+const CleartextGateMin byte = 0xF0
 
 // L2 command opcodes.
 const (
@@ -30,9 +30,21 @@ const (
 	CmdSetPowerC3Broadcast  byte = 0xA3
 
 	CmdInfoQuery        byte = 0xDC
+	CmdInfoExtended     byte = 0xDD // wraps CmdInfoQuery on newer reply forms
 	CmdTelemetryBBQuery byte = 0xBB
 	CmdReplyQS1A        byte = 0xB1
 	CmdReplyDS3         byte = 0xBB
+)
+
+// Inner-length byte (offset 2 of an L2 frame) for the three observed
+// CmdInfoQuery reply shapes. The value equals the count of cmd + body
+// bytes that follow it. V1/V2/V3 are firmware-generation tags: older
+// firmware emits the short form, newer firmware wraps CmdInfoQuery
+// inside CmdInfoExtended and adds version-byte width.
+const (
+	InfoReplyV1 byte = 0x09 // 16-byte short form
+	InfoReplyV2 byte = 0x0A // 17-byte extended form, 2-segment version
+	InfoReplyV3 byte = 0x0C // 19-byte extended form, 3-segment version
 )
 
 // Sub-codes within set-power opcodes.

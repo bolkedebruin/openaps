@@ -19,10 +19,10 @@ var ErrUnknownReplyShape = errors.New("info reply: unknown shape (length)")
 
 // outboundInfoQueryL2 is the canonical 0xDC query L2 body, built once
 // at init via the shared envelope helper.
-var outboundInfoQueryL2 = BuildL2Frame(L2TypeInverterCmd, CmdInfoQuery, []byte{0, 0, 0, 0, 0})
+var outboundInfoQueryL2 = BuildL2Frame(CmdInfoQuery, []byte{0, 0, 0, 0, 0})
 
 // outboundBBQueryL2 is the canonical 0xBB telemetry query L2 body.
-var outboundBBQueryL2 = BuildL2Frame(L2TypeInverterCmd, CmdTelemetryBBQuery, []byte{0, 0, 0, 0, 0})
+var outboundBBQueryL2 = BuildL2Frame(CmdTelemetryBBQuery, []byte{0, 0, 0, 0, 0})
 
 // OutboundBBQueryL2 returns the canonical 0xBB telemetry query L2 body.
 // Callers must not mutate the returned slice; BuildL1Frame copies it on
@@ -53,32 +53,34 @@ func MatchOutboundInfoQuery(l2 []byte) bool {
 
 // DecodeInfoReply parses a 0xDC reply L2 body. Returns
 // ErrUnknownReplyShape if the length is not one of the three known
-// forms (16, 17, 19). Validates the FB FB SOF, per-form cmd bytes,
-// and FE FE EOF.
+// forms (16, 17, 19). Validates the FB FB SOF once up front, then
+// per-form cmd bytes and FE FE EOF in the matching decoder.
 func DecodeInfoReply(l2 []byte) (InfoReply, error) {
+	var decoder func([]byte) (InfoReply, error)
 	switch len(l2) {
 	case 16:
-		return decodeInfoReplyA(l2)
+		decoder = decodeInfoReplyV1
 	case 17:
-		return decodeInfoReplyB(l2)
+		decoder = decodeInfoReplyV2
 	case 19:
-		return decodeInfoReplyC(l2)
+		decoder = decodeInfoReplyV3
 	default:
 		return InfoReply{}, fmt.Errorf("%w: len=%d", ErrUnknownReplyShape, len(l2))
 	}
+	if l2[0] != L2SOF1 || l2[1] != L2SOF2 {
+		return InfoReply{}, ErrBadL2SOF
+	}
+	return decoder(l2)
 }
 
-// decodeInfoReplyA parses the 16-byte form:
+// decodeInfoReplyV1 parses the 16-byte form emitted by older firmware:
 //
 //	FB FB 09 DC <model> <hi BE16> ?? <lo BE16> ... FE FE
 //
 // software_version = hi*1000 + lo.
-func decodeInfoReplyA(l2 []byte) (InfoReply, error) {
-	if l2[0] != L2SOF1 || l2[1] != L2SOF2 {
-		return InfoReply{}, ErrBadL2SOF
-	}
-	if l2[2] != 0x09 || l2[3] != 0xDC {
-		return InfoReply{}, fmt.Errorf("info reply A: bad cmd bytes %02X %02X", l2[2], l2[3])
+func decodeInfoReplyV1(l2 []byte) (InfoReply, error) {
+	if l2[2] != InfoReplyV1 || l2[3] != CmdInfoQuery {
+		return InfoReply{}, fmt.Errorf("info reply v1: bad cmd bytes %02X %02X", l2[2], l2[3])
 	}
 	if l2[14] != L2EOF1 || l2[15] != L2EOF2 {
 		return InfoReply{}, ErrBadL2EOF
@@ -89,17 +91,14 @@ func decodeInfoReplyA(l2 []byte) (InfoReply, error) {
 	return InfoReply{Model: model, SoftwareVersion: hi*1000 + lo}, nil
 }
 
-// decodeInfoReplyB parses the 17-byte form:
+// decodeInfoReplyV2 parses the 17-byte extended form:
 //
 //	FB FB 0A DD DC <model> <hi BE16> ?? <lo BE16> ... FE FE
 //
 // software_version = hi*1000 + lo.
-func decodeInfoReplyB(l2 []byte) (InfoReply, error) {
-	if l2[0] != L2SOF1 || l2[1] != L2SOF2 {
-		return InfoReply{}, ErrBadL2SOF
-	}
-	if l2[2] != 0x0A || l2[3] != 0xDD || l2[4] != 0xDC {
-		return InfoReply{}, fmt.Errorf("info reply B: bad cmd bytes %02X %02X %02X", l2[2], l2[3], l2[4])
+func decodeInfoReplyV2(l2 []byte) (InfoReply, error) {
+	if l2[2] != InfoReplyV2 || l2[3] != CmdInfoExtended || l2[4] != CmdInfoQuery {
+		return InfoReply{}, fmt.Errorf("info reply v2: bad cmd bytes %02X %02X %02X", l2[2], l2[3], l2[4])
 	}
 	if l2[15] != L2EOF1 || l2[16] != L2EOF2 {
 		return InfoReply{}, ErrBadL2EOF
@@ -110,17 +109,15 @@ func decodeInfoReplyB(l2 []byte) (InfoReply, error) {
 	return InfoReply{Model: model, SoftwareVersion: hi*1000 + lo}, nil
 }
 
-// decodeInfoReplyC parses the 19-byte form:
+// decodeInfoReplyV3 parses the 19-byte extended form with a 3-segment
+// version field:
 //
 //	FB FB 0C DD DC <model> <hi BE16> ?? <mid BE16> ?? <lo BE16> FE FE
 //
 // software_version = hi*1_000_000 + mid*1_000 + lo.
-func decodeInfoReplyC(l2 []byte) (InfoReply, error) {
-	if l2[0] != L2SOF1 || l2[1] != L2SOF2 {
-		return InfoReply{}, ErrBadL2SOF
-	}
-	if l2[2] != 0x0C || l2[3] != 0xDD || l2[4] != 0xDC {
-		return InfoReply{}, fmt.Errorf("info reply C: bad cmd bytes %02X %02X %02X", l2[2], l2[3], l2[4])
+func decodeInfoReplyV3(l2 []byte) (InfoReply, error) {
+	if l2[2] != InfoReplyV3 || l2[3] != CmdInfoExtended || l2[4] != CmdInfoQuery {
+		return InfoReply{}, fmt.Errorf("info reply v3: bad cmd bytes %02X %02X %02X", l2[2], l2[3], l2[4])
 	}
 	if l2[17] != L2EOF1 || l2[18] != L2EOF2 {
 		return InfoReply{}, ErrBadL2EOF

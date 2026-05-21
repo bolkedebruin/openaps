@@ -7,6 +7,9 @@ package codec
 const (
 	setPowerScaleDSP      uint32 = 0x1CE3
 	setPowerScaleDSPShift        = 8
+	// setPowerQS1ValueLen is the body byte that announces a 2-byte value
+	// follows under sub-code SubMaxPowerQS1.
+	setPowerQS1ValueLen byte = 0x02
 )
 
 // EncodeSetPowerQS1A builds the L2 frame to set max-power on the
@@ -20,7 +23,7 @@ func EncodeSetPowerQS1A(panelWatts uint16, broadcast bool) ([]byte, error) {
 	val := (uint32(panelWatts) * setPowerScaleDSP) >> setPowerScaleDSPShift
 	body := []byte{
 		SubMaxPowerQS1,
-		0x02,
+		setPowerQS1ValueLen,
 		byte(val >> 8),
 		byte(val & 0xFF),
 		0x00,
@@ -29,7 +32,7 @@ func EncodeSetPowerQS1A(panelWatts uint16, broadcast bool) ([]byte, error) {
 	if broadcast {
 		cmd = CmdSetPowerQS1Broadcast
 	}
-	return BuildL2Frame(L2TypeInverterCmd, cmd, body), nil
+	return BuildL2Frame(cmd, body), nil
 }
 
 // QS1A reply payload layout, body offset 0 = byte right after the

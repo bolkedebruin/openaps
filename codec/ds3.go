@@ -33,7 +33,7 @@ func EncodeSetPowerDS3(panelWatts uint16, broadcast bool) ([]byte, error) {
 	if broadcast {
 		cmd = CmdSetPowerDS3Broadcast
 	}
-	return BuildL2Frame(L2TypeInverterCmd, cmd, body), nil
+	return BuildL2Frame(cmd, body), nil
 }
 
 // DS3 reply payload layout, body offset 0 = byte right after the L2

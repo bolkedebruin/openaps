@@ -8,19 +8,20 @@ import (
 
 func TestBuildL2Frame_InfoQuery(t *testing.T) {
 	t.Parallel()
-	got := BuildL2Frame(0x06, 0xDC, []byte{0, 0, 0, 0, 0})
+	got := BuildL2Frame(0xDC, []byte{0, 0, 0, 0, 0})
 	want := hx(t, "FB FB 06 DC 00 00 00 00 00 00 E2 FE FE")
 	if !bytes.Equal(got, want) {
 		t.Fatalf("BuildL2Frame mismatch:\n  got  % X\n  want % X", got, want)
 	}
 }
 
-func TestBuildL2Frame_ChecksumWraps16Bit(t *testing.T) {
+func TestBuildL2Frame_ChecksumPacksHighByte(t *testing.T) {
 	t.Parallel()
-	got := BuildL2Frame(0xFF, 0xFF, []byte{0xFF, 0xFF})
-	want := hx(t, "FB FB FF FF FF FF 03 FC FE FE")
+	// inner_len = 1 + 3 = 4; sum = 0x04 + 0xFF + 3*0xFF = 0x400.
+	got := BuildL2Frame(0xFF, []byte{0xFF, 0xFF, 0xFF})
+	want := hx(t, "FB FB 04 FF FF FF FF 04 00 FE FE")
 	if !bytes.Equal(got, want) {
-		t.Fatalf("16-bit sum mismatch:\n  got  % X\n  want % X", got, want)
+		t.Fatalf("checksum hi-byte pack mismatch:\n  got  % X\n  want % X", got, want)
 	}
 }
 

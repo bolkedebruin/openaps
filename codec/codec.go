@@ -78,7 +78,7 @@ func ParseL1(raw []byte) (L1Envelope, error) {
 	}
 	copy(env.PeerUID[:], raw[6:12])
 	gate := raw[12]
-	env.Encrypted = gate < 0xF0
+	env.Encrypted = gate < CleartextGateMin
 	env.L2Frame = raw[12:] // gate byte coincides with L2 SOF FB FB on plaintext frames
 	return env, nil
 }
