@@ -2,11 +2,6 @@ package codec
 
 import "fmt"
 
-// protFreqDividendQS1 is the QS1/QS1A frequency-threshold dividend
-// (main.exe .rodata DAT_6dbf8 etc.): wire = int(50000000 / Hz), 24-bit
-// big-endian, truncated toward zero (no +0.5).
-const protFreqDividendQS1 = 50000000.0
-
 // qs1ProtFreqSubs maps the long-form param name to its QS1 0x1C sub-byte
 // for the single-frame frequency-threshold protection params.
 var qs1ProtFreqSubs = map[string]byte{
@@ -29,7 +24,7 @@ const protRecoveryScaleQS1 = 100.0
 // set-power; the sub-byte at [4] distinguishes.
 func encodeProtectionQS1A(paramName string, value float64) ([][]byte, error) {
 	if sub, ok := qs1ProtFreqSubs[paramName]; ok {
-		wire := int64(protFreqDividendQS1 / value) // truncate toward zero
+		wire := int64(qs1aFreqDivBy / value) // wire = int(50e6/Hz), truncate toward zero
 		if wire < 0 || wire > 0xFFFFFF {
 			return nil, fmt.Errorf("set-protection: %q=%g Hz → wire %d out of 24-bit range", paramName, value, wire)
 		}
@@ -135,7 +130,7 @@ const (
 	qs1aBusDenom  = 4092.0
 	qs1aBusOffset = 757.0
 	qs1aBusPFBase = 2.85
-	qs1aFreqDivBy = 50_000_000.0
+	qs1aFreqDivBy = 50_000_000.0 // QS1 freq raw↔Hz dividend; also the protection-encode dividend (DAT_6dbf8/6f5e8)
 	qs1aPanelVMax = 82.5
 	qs1aPanelIMax = 27.5
 	qs1aADC12bit  = 4096.0
