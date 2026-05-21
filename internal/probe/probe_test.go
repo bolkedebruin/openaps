@@ -53,40 +53,6 @@ func openStore(t *testing.T) *store.Store {
 	return s
 }
 
-func TestBuildInfoQueryFrame_Shape(t *testing.T) {
-	t.Parallel()
-	got := buildInfoQueryFrame(0x5011)
-	if len(got) != 28 {
-		t.Fatalf("len: got %d want 28", len(got))
-	}
-	// L0 prefix.
-	for i, b := range []byte{0xAA, 0xAA, 0xAA, 0xAA, 0x55, 0x50, 0x11} {
-		if got[i] != b {
-			t.Fatalf("L0 byte %d: got 0x%02X want 0x%02X", i, got[i], b)
-		}
-	}
-	// L0 CRC = 0x55 + 0x50 + 0x11 = 0xB6.
-	if got[12] != 0x00 || got[13] != 0xB6 {
-		t.Fatalf("crc: got %02X %02X want 00 B6", got[12], got[13])
-	}
-	if got[14] != 0x0D {
-		t.Fatalf("byte 14: got 0x%02X want 0x0D", got[14])
-	}
-	// L2 body must match codec.outboundInfoQueryL2.
-	if !codec.MatchOutboundInfoQuery(got[15:]) {
-		t.Fatalf("L2 inner doesn't match outboundInfoQueryL2: % X", got[15:])
-	}
-}
-
-func TestBuildInfoQueryFrame_DifferentSAs(t *testing.T) {
-	t.Parallel()
-	a := buildInfoQueryFrame(0x5011)
-	b := buildInfoQueryFrame(0xC459)
-	if string(a) == string(b) {
-		t.Fatal("frames should differ across short-addrs")
-	}
-}
-
 func TestProbe_IteratesNullModelCode_Only(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -126,9 +92,10 @@ func TestProbe_IteratesNullModelCode_Only(t *testing.T) {
 	if uids[0] != "uidA" || uids[1] != "uidC" {
 		t.Fatalf("uids: got %v want [uidA uidC]", uids)
 	}
-	// Frame should be the 28-byte info query.
-	if len(got[0].GetSend().GetFrame()) != 28 {
-		t.Fatalf("frame len: got %d want 28", len(got[0].GetSend().GetFrame()))
+	// Frame is the 13-byte info-query L2 body (outer envelope is
+	// wrapped by the backend, not the probe).
+	if !codec.MatchOutboundInfoQuery(got[0].GetSend().GetFrame()) {
+		t.Fatalf("frame is not the info-query L2: % X", got[0].GetSend().GetFrame())
 	}
 }
 
@@ -295,11 +262,8 @@ func TestProbe_ColdStart_EndToEnd(t *testing.T) {
 	if send.GetPeerUid() != "uidProbe1" {
 		t.Fatalf("peer_uid: %q want uidProbe1", send.GetPeerUid())
 	}
-	if len(send.GetFrame()) != 28 {
-		t.Fatalf("frame len: got %d want 28", len(send.GetFrame()))
-	}
-	if !codec.MatchOutboundInfoQuery(send.GetFrame()[15:]) {
-		t.Fatalf("frame inner L2 is not info-query: % X", send.GetFrame()[15:])
+	if !codec.MatchOutboundInfoQuery(send.GetFrame()) {
+		t.Fatalf("frame is not info-query L2: % X", send.GetFrame())
 	}
 
 	// uidKnown must NOT be probed; setting a short read deadline and

@@ -104,11 +104,7 @@ LIMIT  ?`, limit)
 	}
 	defer rows.Close()
 
-	type target struct {
-		uid string
-		sa  uint16
-	}
-	var targets []target
+	var targets []string
 	for rows.Next() {
 		var uid string
 		var sa sql.NullInt64
@@ -118,7 +114,7 @@ LIMIT  ?`, limit)
 		if !sa.Valid {
 			continue
 		}
-		targets = append(targets, target{uid: uid, sa: uint16(sa.Int64)})
+		targets = append(targets, uid)
 	}
 	if err := rows.Err(); err != nil {
 		return 0, fmt.Errorf("probe: rows: %w", err)
@@ -131,7 +127,7 @@ LIMIT  ?`, limit)
 	log.Printf("probe: dispatching %d info-query frame(s) to backend=%q", len(targets), p.Backend)
 
 	sent := 0
-	for i, tgt := range targets {
+	for i, uid := range targets {
 		select {
 		case <-ctx.Done():
 			return sent, ctx.Err()
@@ -139,8 +135,8 @@ LIMIT  ?`, limit)
 		}
 
 		env := &wire.Envelope{Body: &wire.Envelope_Send{Send: &wire.Send{
-			PeerUid: tgt.uid,
-			Frame:   buildInfoQueryFrame(tgt.sa),
+			PeerUid: uid,
+			Frame:   codec.OutboundInfoQueryL2(),
 		}}}
 		if ok := p.Server.SendToBackend(p.Backend, env); ok {
 			sent++
@@ -148,7 +144,7 @@ LIMIT  ?`, limit)
 			// Publisher disappeared or queue full. Stop early; the
 			// next attach will re-run the probe for whatever still
 			// lacks model_code.
-			log.Printf("probe: backend=%q send refused at uid=%s; aborting pass", p.Backend, tgt.uid)
+			log.Printf("probe: backend=%q send refused at uid=%s; aborting pass", p.Backend, uid)
 			return sent, nil
 		}
 
@@ -161,10 +157,4 @@ LIMIT  ?`, limit)
 		}
 	}
 	return sent, nil
-}
-
-// buildInfoQueryFrame returns the L1-wrapped 0xDC info-query frame for
-// the given inverter short-address.
-func buildInfoQueryFrame(sa uint16) []byte {
-	return codec.BuildL1Frame(sa, codec.OutboundInfoQueryL2())
 }

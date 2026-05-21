@@ -180,16 +180,19 @@ message DecodeFailed {
   string raw_hex    = 4;  // may be truncated
 }
 
-// Send is a downstream stub. Server returns Unimplemented in v0.
+// Send addresses one inverter by peer_uid. frame carries the L2 body
+// (FB FB ... FE FE) only; the bus-mgr backend resolves peer_uid to a
+// short-address and wraps the outer L1 envelope before injection.
 message Send {
   string peer_uid    = 1;
-  bytes  frame       = 2;
+  bytes  frame       = 2;  // L2 only (FB FB ... FE FE)
   int64  deadline_ms = 3;
 }
 
-// Broadcast is a downstream stub. Server returns Unimplemented in v0.
+// Broadcast carries an L2 body addressed to every inverter on the bus.
+// The bus-mgr backend wraps the L1 outer envelope with SA=0.
 message Broadcast {
-  bytes frame       = 1;
+  bytes frame       = 1;  // L2 only (FB FB ... FE FE)
   int64 deadline_ms = 2;
 }
 

@@ -105,10 +105,10 @@ func buildSetPowerFrame(dbPath, uid string, broadcast bool, panelWatts uint16, f
 		if err != nil {
 			return nil, "", err
 		}
-		return codec.BuildL1Frame(0, l2), "", nil
+		return l2, "", nil
 	}
 
-	sa, modelCode, err := lookupInverter(dbPath, uid)
+	modelCode, err := lookupInverter(dbPath, uid)
 	if err != nil {
 		return nil, "", err
 	}
@@ -116,14 +116,18 @@ func buildSetPowerFrame(dbPath, uid string, broadcast bool, panelWatts uint16, f
 	if err != nil {
 		return nil, "", err
 	}
-	return codec.BuildL1Frame(sa, l2), uid, nil
+	return l2, uid, nil
 }
 
-func lookupInverter(dbPath, uid string) (sa uint16, modelCode uint8, err error) {
+// lookupInverter returns the model_code for uid. short_addr is checked
+// for validity (rows that never paired are rejected) but the wrapping
+// outer envelope is built by the bus-mgr backend, so the SA value is
+// not needed here.
+func lookupInverter(dbPath, uid string) (modelCode uint8, err error) {
 	ctx := context.Background()
 	st, err := store.Open(ctx, dbPath)
 	if err != nil {
-		return 0, 0, fmt.Errorf("open db: %w", err)
+		return 0, fmt.Errorf("open db: %w", err)
 	}
 	defer st.Close()
 
@@ -135,17 +139,17 @@ func lookupInverter(dbPath, uid string) (sa uint16, modelCode uint8, err error) 
 		`SELECT short_addr, model_code FROM inverters WHERE uid = ?`, uid)
 	if err := row.Scan(&saNI, &mcNI); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return 0, 0, fmt.Errorf("uid %q: not in inverters table", uid)
+			return 0, fmt.Errorf("uid %q: not in inverters table", uid)
 		}
-		return 0, 0, fmt.Errorf("uid %q: %w", uid, err)
+		return 0, fmt.Errorf("uid %q: %w", uid, err)
 	}
 	if !saNI.Valid {
-		return 0, 0, fmt.Errorf("uid %q: short_addr is NULL (inverter never paired)", uid)
+		return 0, fmt.Errorf("uid %q: short_addr is NULL (inverter never paired)", uid)
 	}
 	if !mcNI.Valid {
-		return 0, 0, fmt.Errorf("uid %q: model_code is NULL (probe has not completed)", uid)
+		return 0, fmt.Errorf("uid %q: model_code is NULL (probe has not completed)", uid)
 	}
-	return uint16(saNI.Int64), uint8(mcNI.Int64), nil
+	return uint8(mcNI.Int64), nil
 }
 
 // sendEnvelopeOverUDS dials the daemon, says Hello as a publisher with

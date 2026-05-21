@@ -1279,11 +1279,13 @@ func (x *DecodeFailed) GetRawHex() string {
 	return ""
 }
 
-// Send is a downstream stub. Server returns Unimplemented in v0.
+// Send addresses one inverter by peer_uid. frame carries the L2 body
+// (FB FB ... FE FE) only; the bus-mgr backend resolves peer_uid to a
+// short-address and wraps the outer L1 envelope before injection.
 type Send struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PeerUid       string                 `protobuf:"bytes,1,opt,name=peer_uid,json=peerUid,proto3" json:"peer_uid,omitempty"`
-	Frame         []byte                 `protobuf:"bytes,2,opt,name=frame,proto3" json:"frame,omitempty"`
+	Frame         []byte                 `protobuf:"bytes,2,opt,name=frame,proto3" json:"frame,omitempty"` // L2 only (FB FB ... FE FE)
 	DeadlineMs    int64                  `protobuf:"varint,3,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1340,10 +1342,11 @@ func (x *Send) GetDeadlineMs() int64 {
 	return 0
 }
 
-// Broadcast is a downstream stub. Server returns Unimplemented in v0.
+// Broadcast carries an L2 body addressed to every inverter on the bus.
+// The bus-mgr backend wraps the L1 outer envelope with SA=0.
 type Broadcast struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Frame         []byte                 `protobuf:"bytes,1,opt,name=frame,proto3" json:"frame,omitempty"`
+	Frame         []byte                 `protobuf:"bytes,1,opt,name=frame,proto3" json:"frame,omitempty"` // L2 only (FB FB ... FE FE)
 	DeadlineMs    int64                  `protobuf:"varint,2,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

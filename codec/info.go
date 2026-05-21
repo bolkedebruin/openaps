@@ -25,8 +25,8 @@ var outboundInfoQueryL2 = BuildL2Frame(CmdInfoQuery, []byte{0, 0, 0, 0, 0})
 var outboundBBQueryL2 = BuildL2Frame(CmdTelemetryBBQuery, []byte{0, 0, 0, 0, 0})
 
 // OutboundBBQueryL2 returns the canonical 0xBB telemetry query L2 body.
-// Callers must not mutate the returned slice; BuildL1Frame copies it on
-// the way out so re-entrancy is safe.
+// Callers must not mutate the returned slice; downstream wrappers copy
+// it before sending so re-entrancy is safe.
 func OutboundBBQueryL2() []byte {
 	return outboundBBQueryL2
 }
