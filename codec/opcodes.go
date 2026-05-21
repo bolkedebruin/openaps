@@ -29,6 +29,16 @@ const (
 	CmdSetPowerC3Unicast    byte = 0xC3
 	CmdSetPowerC3Broadcast  byte = 0xA3
 
+	// Inverter on/off. Family-independent: main.exe's zb_boot_single /
+	// zb_shutdown_single (and the generic set_protection_yc600 encoder
+	// reused by the MQTT / DA-conf dispatchers) emit the same frame for
+	// DS3, QS1A, and YC600/C3. The opcode encodes on/off and unicast/
+	// broadcast; the body is all zero.
+	CmdTurnOnUnicast    byte = 0xC1
+	CmdTurnOffUnicast   byte = 0xC2
+	CmdTurnOnBroadcast  byte = 0xA1
+	CmdTurnOffBroadcast byte = 0xA2
+
 	CmdInfoQuery        byte = 0xDC
 	CmdInfoExtended     byte = 0xDD // wraps CmdInfoQuery on newer reply forms
 	CmdTelemetryBBQuery byte = 0xBB
