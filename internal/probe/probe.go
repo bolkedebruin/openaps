@@ -166,5 +166,5 @@ LIMIT  ?`, limit)
 // buildInfoQueryFrame returns the L1-wrapped 0xDC info-query frame for
 // the given inverter short-address.
 func buildInfoQueryFrame(sa uint16) []byte {
-	return codec.BuildL1Frame(sa, codec.BuildL2Frame(0x06, 0xDC, []byte{0, 0, 0, 0, 0}))
+	return codec.BuildL1Frame(sa, codec.OutboundInfoQueryL2())
 }

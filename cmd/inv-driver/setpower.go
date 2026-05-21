@@ -27,18 +27,18 @@ func runSetPower(args []string) error {
 	uid := fs.String("uid", "", "inverter UID (12 hex chars); required unless --broadcast is set")
 	broadcast := fs.Bool("broadcast", false, "broadcast to every inverter on the bus (SA=0)")
 	watts := fs.Int("watts", -1, "max-power per panel in watts, 20..500")
-	family := fs.String("family", "dsp", "family for --broadcast: 'dsp' (QS1 / QS1A), 'ds3' (DS3 family), or 'c3' (YC600 / YC1000)")
+	family := fs.String("family", "qs1a", "family for --broadcast: 'qs1a' (QS1 / QS1A; alias 'dsp'), 'ds3' (DS3 family), or 'c3' (YC600 / YC1000)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "usage:")
 		fmt.Fprintln(fs.Output(), "  inv-driver set-power --uid <12-hex> --watts <20-500>")
-		fmt.Fprintln(fs.Output(), "  inv-driver set-power --broadcast --family dsp|c3|ds3 --watts <20-500>")
+		fmt.Fprintln(fs.Output(), "  inv-driver set-power --broadcast --family qs1a|c3|ds3 --watts <20-500>")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *watts < 20 || *watts > 500 {
-		return errors.New("--watts must be in [20, 500]")
+	if uint16(*watts) < codec.MinPanelLimitW || uint16(*watts) > codec.MaxPanelLimitW || *watts < 0 {
+		return fmt.Errorf("--watts must be in [%d, %d]", codec.MinPanelLimitW, codec.MaxPanelLimitW)
 	}
 	if *broadcast == (*uid != "") {
 		return errors.New("exactly one of --uid or --broadcast must be set")
@@ -92,14 +92,14 @@ func buildSetPowerFrame(dbPath, uid string, broadcast bool, panelWatts uint16, f
 	if broadcast {
 		var modelCode uint8
 		switch strings.ToLower(family) {
-		case "dsp":
-			modelCode = 0x18
+		case "qs1a", "dsp":
+			modelCode = codec.ModelQS1A
 		case "ds3":
-			modelCode = 0x20
+			modelCode = codec.ModelDS3
 		case "c3":
-			modelCode = 0x06
+			modelCode = codec.ModelYC1000
 		default:
-			return nil, "", fmt.Errorf("unknown --family %q (want 'dsp', 'ds3', or 'c3')", family)
+			return nil, "", fmt.Errorf("unknown --family %q (want 'qs1a', 'ds3', or 'c3')", family)
 		}
 		l2, err := codec.EncodeSetPower(modelCode, panelWatts, true)
 		if err != nil {

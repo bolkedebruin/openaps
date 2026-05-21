@@ -53,7 +53,20 @@ type Ingestor struct {
 	// backend named in RouteBackend is always refused (loopback). Empty
 	// list disables Send/Broadcast routing entirely.
 	ControllerBackends []string
+
+	// ControllerUIDs is the OS-level UID allow-list for peers permitted
+	// to inject Envelope_Send / Envelope_Broadcast. The peer UID is
+	// resolved at connect time via SO_PEERCRED (Linux). A nil/empty list
+	// disables the UID gate (legacy / non-Linux); a non-empty list
+	// rejects any UID not listed. The Hello.Backend string remains
+	// informational and ControllerBackends still gates by backend name.
+	ControllerUIDs []int
 }
+
+// peerUIDUnknown is the sentinel meaning "no peer UID was resolved".
+// On non-Linux hosts and from in-process test callers the UID gate is
+// implicitly bypassed when ControllerUIDs is empty.
+const peerUIDUnknown = -1
 
 // Router is the subset of ipc.Server the Ingestor needs to forward
 // downstream envelopes. Lives here to avoid an ingest -> ipc import.
@@ -64,7 +77,19 @@ type Router interface {
 // Handle dispatches an Envelope by oneof body. Returns an error only
 // on hard malformed input; transient DB errors are returned so the
 // connection layer can decide whether to drop the peer.
+//
+// Handle does not resolve the peer's OS UID; the ControllerUIDs gate is
+// implicitly skipped. Callers that have a verified peer UID should call
+// HandleWithPeer instead so the gate fires for downstream injections.
 func (in *Ingestor) Handle(ctx context.Context, backend string, env *wire.Envelope) error {
+	return in.HandleWithPeer(ctx, peerUIDUnknown, backend, env)
+}
+
+// HandleWithPeer is Handle with the verified peer UID supplied. Used by
+// the IPC server to feed SO_PEERCRED-resolved credentials into the
+// downstream-injection gate. peerUID == peerUIDUnknown disables the UID
+// check (matches Handle behaviour).
+func (in *Ingestor) HandleWithPeer(ctx context.Context, peerUID int, backend string, env *wire.Envelope) error {
 	switch b := env.GetBody().(type) {
 	case *wire.Envelope_Hello:
 		if b.Hello == nil {
@@ -103,7 +128,7 @@ func (in *Ingestor) Handle(ctx context.Context, backend string, env *wire.Envelo
 		df := b.DecodeFailed
 		return in.S.AppendDecodeFailed(ctx, df.GetTsMs(), df.GetShortAddr(), df.GetError(), df.GetRawHex())
 	case *wire.Envelope_Send, *wire.Envelope_Broadcast:
-		return in.routeDownstream(backend, env)
+		return in.routeDownstream(peerUID, backend, env)
 	case nil:
 		return fmt.Errorf("envelope without body")
 	default:
@@ -112,9 +137,13 @@ func (in *Ingestor) Handle(ctx context.Context, backend string, env *wire.Envelo
 }
 
 // routeDownstream forwards an Envelope_Send / Envelope_Broadcast to the
-// configured backend via Router. The sender's backend identity must be
-// on ControllerBackends and must not match RouteBackend (loopback).
-func (in *Ingestor) routeDownstream(sender string, env *wire.Envelope) error {
+// configured backend via Router. Three gates apply:
+//
+//  1. sender backend must not equal RouteBackend (loopback).
+//  2. sender backend must be on ControllerBackends.
+//  3. when ControllerUIDs is non-empty and peerUID != peerUIDUnknown,
+//     peerUID must be on ControllerUIDs.
+func (in *Ingestor) routeDownstream(peerUID int, sender string, env *wire.Envelope) error {
 	if in.Router == nil || in.RouteBackend == "" {
 		log.Printf("ingest: downstream envelope dropped (no router/backend configured)")
 		return nil
@@ -125,10 +154,23 @@ func (in *Ingestor) routeDownstream(sender string, env *wire.Envelope) error {
 	if !isControllerBackend(in.ControllerBackends, sender) {
 		return fmt.Errorf("downstream route refused: sender backend %q is not an allowed controller", sender)
 	}
+	if len(in.ControllerUIDs) > 0 && peerUID != peerUIDUnknown && !isControllerUID(in.ControllerUIDs, peerUID) {
+		return fmt.Errorf("downstream route refused: peer uid=%d not in controller-uids allow-list", peerUID)
+	}
 	if !in.Router.SendToBackend(in.RouteBackend, env) {
 		return fmt.Errorf("downstream route to backend %q failed (publisher absent or queue full)", in.RouteBackend)
 	}
 	return nil
+}
+
+// isControllerUID reports whether peerUID is on the allow-list.
+func isControllerUID(allow []int, peerUID int) bool {
+	for _, u := range allow {
+		if u == peerUID {
+			return true
+		}
+	}
+	return false
 }
 
 // isControllerBackend reports whether sender is on the allow-list.
@@ -141,10 +183,24 @@ func isControllerBackend(allow []string, sender string) bool {
 	return false
 }
 
+// Telemetry-row caps. Real frames carry at most 4 panels (QS1A) and at
+// most 4 lifetime rows; the caps add headroom for future models without
+// permitting a hostile peer to grow store rows unbounded.
+const (
+	maxTelemetryPanels       = 16
+	maxTelemetryLifetimeRows = 16
+)
+
 func (in *Ingestor) handleTelemetry(ctx context.Context, t *wire.Telemetry) error {
 	uid := t.GetPeerUid()
 	if !isValidPeerUID(uid) {
 		return fmt.Errorf("telemetry: invalid peer_uid (expected 12 hex chars)")
+	}
+	if n := len(t.GetPanels()); n > maxTelemetryPanels {
+		return fmt.Errorf("telemetry: panel count %d exceeds cap %d", n, maxTelemetryPanels)
+	}
+	if n := len(t.GetLifetimeRaw()); n > maxTelemetryLifetimeRows {
+		return fmt.Errorf("telemetry: lifetime row count %d exceeds cap %d", n, maxTelemetryLifetimeRows)
 	}
 	fam := familyFromModel(t.GetModel())
 	// short_addr on the wire is uint32 (proto has no uint16); narrow
@@ -320,16 +376,16 @@ func (in *Ingestor) tryPairFrame(ctx context.Context, tsMs int64, env codec.L1En
 // only when it's 1 because single-phase implies leg=1 unambiguously.
 // Three-phase per-leg phase is operator-configured (separate work).
 func (in *Ingestor) applyInfoReply(ctx context.Context, tsMs int64, env codec.L1Envelope, info codec.InfoReply) error {
-	model := uint32(info.Model)
-	sw := uint32(info.SoftwareVersion)
+	modelWire := uint32(info.Model)
+	sw := info.SoftwareVersion
 	wireInfo := &wire.InverterInfo{
 		TsMs:            tsMs,
 		PeerUid:         env.PeerUIDString(),
 		ShortAddr:       uint32(env.ShortAddr),
-		ModelCode:       &model,
+		ModelCode:       &modelWire,
 		SoftwareVersion: &sw,
 	}
-	if codec.PhaseFromModel(model) == 1 {
+	if codec.PhaseFromModel(info.Model) == 1 {
 		one := uint32(1)
 		wireInfo.Phase = &one
 	}
@@ -432,10 +488,10 @@ func maxChannelWForCmd(cmd uint32, channels int) uint32 {
 		return 0
 	}
 	var nameplateW uint32
-	switch cmd {
-	case 0xBB: // DS3 family
+	switch byte(cmd) {
+	case codec.CmdReplyDS3:
 		nameplateW = codec.NameplateWattsForModel(codec.ModelDS3)
-	case 0xB1: // QS1A
+	case codec.CmdReplyQS1A:
 		nameplateW = codec.NameplateWattsForModel(codec.ModelQS1A)
 	default:
 		return 0
@@ -487,7 +543,7 @@ func telemetryFromReply(r codec.Reply, tsMs int64) *wire.Telemetry {
 // can't be family-classified (e.g. unknown cmd).
 func faultsFromReply(r codec.Reply) *wire.InverterFaults {
 	switch r.Cmd {
-	case 0xBB:
+	case codec.CmdReplyDS3:
 		f := r.DS3Status.Faults()
 		return &wire.InverterFaults{Family: &wire.InverterFaults_Ds3{Ds3: &wire.DS3Faults{
 			GridRelayFault:     f.GridRelayFault,
@@ -509,7 +565,7 @@ func faultsFromReply(r codec.Reply) *wire.InverterFaults {
 			UnderFreqAux:       f.UnderFreqAux,
 			UnderFreqExtra:     f.UnderFreqExtra,
 		}}}
-	case 0xB1:
+	case codec.CmdReplyQS1A:
 		f := r.QS1AStatus.Faults()
 		return &wire.InverterFaults{Family: &wire.InverterFaults_Qs1A{Qs1A: &wire.QS1AFaults{
 			GridRelayFault:    f.GridRelayFault,

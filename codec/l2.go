@@ -7,7 +7,7 @@ package codec
 // byte of `body`, packed big-endian into two bytes.
 func BuildL2Frame(typeByte, cmdByte byte, body []byte) []byte {
 	out := make([]byte, 0, 4+len(body)+4)
-	out = append(out, 0xFB, 0xFB, typeByte, cmdByte)
+	out = append(out, L2SOF1, L2SOF2, typeByte, cmdByte)
 	out = append(out, body...)
 	var sum uint16
 	sum += uint16(typeByte)
@@ -15,6 +15,6 @@ func BuildL2Frame(typeByte, cmdByte byte, body []byte) []byte {
 	for _, b := range body {
 		sum += uint16(b)
 	}
-	out = append(out, byte(sum>>8), byte(sum&0xFF), 0xFE, 0xFE)
+	out = append(out, byte(sum>>8), byte(sum&0xFF), L2EOF1, L2EOF2)
 	return out
 }

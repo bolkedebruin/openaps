@@ -1,5 +1,12 @@
 package codec
 
+// TODO(redesign): the outer ZigBee envelope (this file) is a bus-mgr
+// backend concern; long-term it belongs in ecu-zb/internal/busmgr and
+// inv-driver should speak L2 only. The proto-side change is to drop L1
+// wrapping from inv-driver's Send/Broadcast envelopes; ecu-zb's OnSend
+// then wraps the received L2 in L1 before injection. Kept here for now
+// so probe / set-power CLI / busmgr stay one library hop apart.
+
 // BuildL1Frame wraps an L2 body in the outer ZigBee envelope for the
 // given short-address. SA=0 produces a broadcast envelope. The 16-bit
 // outer checksum covers bytes [4..11] (the 0x55 SOF, the two SA bytes,
@@ -11,11 +18,11 @@ package codec
 func BuildL1Frame(sa uint16, l2 []byte) []byte {
 	saHi := byte(sa >> 8)
 	saLo := byte(sa & 0xFF)
-	sum := uint16(0x55) + uint16(saHi) + uint16(saLo)
+	sum := uint16(L1Sentinel) + uint16(saHi) + uint16(saLo)
 	out := make([]byte, 0, 15+len(l2))
 	out = append(out,
-		0xAA, 0xAA, 0xAA, 0xAA,
-		0x55,
+		L1Preamble, L1Preamble, L1Preamble, L1Preamble,
+		L1Sentinel,
 		saHi, saLo,
 		0x00, 0x00, 0x00, 0x00, 0x00,
 		byte(sum>>8), byte(sum&0xFF),

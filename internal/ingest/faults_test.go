@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/bolke/inv-driver/codec"
+	"github.com/bolke/inv-driver/codec/codectest"
 	"github.com/bolke/inv-driver/internal/events"
 	"github.com/bolke/inv-driver/wire"
 )
@@ -79,7 +80,7 @@ func TestHandle_RawFrame_DS3_FaultsPublished(t *testing.T) {
 	defer unsub()
 
 	env := &wire.Envelope{Body: &wire.Envelope_RawFrame{RawFrame: &wire.RawFrame{
-		TsMs: 1, ShortAddr: 0x61F0, L1Frame: codec.DS3Fixture,
+		TsMs: 1, ShortAddr: 0x61F0, L1Frame: codectest.DS3Fixture,
 	}}}
 	if err := in.Handle(context.Background(), "be", env); err != nil {
 		t.Fatalf("Handle: %v", err)
@@ -106,7 +107,7 @@ func TestHandle_RawFrame_QS1A_FaultsPublished(t *testing.T) {
 	defer unsub()
 
 	env := &wire.Envelope{Body: &wire.Envelope_RawFrame{RawFrame: &wire.RawFrame{
-		TsMs: 1, ShortAddr: 0x5011, L1Frame: codec.QS1AFixture,
+		TsMs: 1, ShortAddr: 0x5011, L1Frame: codectest.QS1AFixture,
 	}}}
 	if err := in.Handle(context.Background(), "be", env); err != nil {
 		t.Fatalf("Handle: %v", err)

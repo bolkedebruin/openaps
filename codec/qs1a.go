@@ -1,5 +1,37 @@
 package codec
 
+// setPowerScaleDSP is the QS1 / QS1A / YC600-family watts-to-register
+// multiplier used by EncodeSetPowerQS1A and EncodeSetPowerC3.
+//
+//	reg = (panelWatts * setPowerScaleDSP) >> setPowerScaleDSPShift
+const (
+	setPowerScaleDSP      uint32 = 0x1CE3
+	setPowerScaleDSPShift        = 8
+)
+
+// EncodeSetPowerQS1A builds the L2 frame to set max-power on the
+// QS1 / QS1A family (model codes 0x08 / 0x18). broadcast=true emits
+// CmdSetPowerQS1Broadcast; broadcast=false emits CmdSetPowerQS1Unicast.
+// SubMaxPowerQS1 selects the parameter; value length is 2.
+func EncodeSetPowerQS1A(panelWatts uint16, broadcast bool) ([]byte, error) {
+	if err := checkPanelWatts(panelWatts); err != nil {
+		return nil, err
+	}
+	val := (uint32(panelWatts) * setPowerScaleDSP) >> setPowerScaleDSPShift
+	body := []byte{
+		SubMaxPowerQS1,
+		0x02,
+		byte(val >> 8),
+		byte(val & 0xFF),
+		0x00,
+	}
+	cmd := CmdSetPowerQS1Unicast
+	if broadcast {
+		cmd = CmdSetPowerQS1Broadcast
+	}
+	return BuildL2Frame(L2TypeInverterCmd, cmd, body), nil
+}
+
 // QS1A reply payload layout, body offset 0 = byte right after the
 // L2 cmd 0xB1 (i.e. main.exe's `param_1` to resolvedata_60_1200,
 // which is l2_frame[4..]).

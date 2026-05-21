@@ -169,6 +169,8 @@ func (s *Server) handleConn(ctx context.Context, id uint64, c net.Conn) {
 		log.Printf("ipc %s: closed", tag)
 	}()
 
+	peerUID := peerUIDFromConn(c)
+
 	// First frame must be Hello, within helloDeadline.
 	_ = c.SetReadDeadline(time.Now().Add(helloDeadline))
 	var env wire.Envelope
@@ -183,9 +185,9 @@ func (s *Server) handleConn(ctx context.Context, id uint64, c net.Conn) {
 	}
 	backend := hello.GetBackend()
 	role := hello.GetRole()
-	log.Printf("ipc %s: hello backend=%q version=%q host=%q role=%s",
-		tag, backend, hello.GetVersion(), hello.GetHostname(), role.String())
-	if err := s.Ingestor.Handle(ctx, backend, &env); err != nil {
+	log.Printf("ipc %s: hello backend=%q version=%q host=%q role=%s peer_uid=%d",
+		tag, backend, hello.GetVersion(), hello.GetHostname(), role.String(), peerUID)
+	if err := s.Ingestor.HandleWithPeer(ctx, peerUID, backend, &env); err != nil {
 		log.Printf("ipc %s: hello ingest: %v", tag, err)
 	}
 
@@ -195,7 +197,7 @@ func (s *Server) handleConn(ctx context.Context, id uint64, c net.Conn) {
 	default:
 		// ROLE_UNSPECIFIED and PUBLISHER both run the publisher loop;
 		// peers that omit Role default to publishing.
-		s.handlePublisher(ctx, tag, backend, c)
+		s.handlePublisher(ctx, peerUID, tag, backend, c)
 	}
 }
 
@@ -205,7 +207,7 @@ func (s *Server) handleConn(ctx context.Context, id uint64, c net.Conn) {
 // silent peer is bounded. Ctx cancel is delivered via the parent
 // Serve closing this conn (see Serve's shutdown goroutine), which
 // unblocks the read with net.ErrClosed.
-func (s *Server) handlePublisher(ctx context.Context, tag, backend string, c net.Conn) {
+func (s *Server) handlePublisher(ctx context.Context, peerUID int, tag, backend string, c net.Conn) {
 	pc := &publisherConn{
 		backend: backend,
 		out:     make(chan *wire.Envelope, publisherOutCap),
@@ -244,7 +246,7 @@ func (s *Server) handlePublisher(ctx context.Context, tag, backend string, c net
 			log.Printf("ipc %s: read: %v", tag, err)
 			return
 		}
-		if err := s.Ingestor.Handle(ctx, backend, &next); err != nil {
+		if err := s.Ingestor.HandleWithPeer(ctx, peerUID, backend, &next); err != nil {
 			// Per-event error: log and continue. Connection is still
 			// synchronised on the next length prefix. Unknown body
 			// types fall through here; debug-level logging keeps the

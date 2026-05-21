@@ -119,7 +119,7 @@ func TestDecodeInfoReply_BadCmdBytes(t *testing.T) {
 func TestPhaseFromModel(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		model uint32
+		model uint8
 		want  uint32
 	}{
 		{7, 1},

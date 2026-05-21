@@ -17,6 +17,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -94,8 +95,17 @@ func runServe(args []string) error {
 	pruneInterval := fs.Duration("prune-interval", time.Hour, "how often to run event pruning (0 disables periodic prune)")
 	probeBackend := fs.String("probe-backend", "apsystems-stock-zb", "backend name that handles cold-start info-query probes (empty disables)")
 	probeInterval := fs.Duration("probe-interval", 200*time.Millisecond, "per-inverter delay between probe Sends")
+	controllerBackends := fs.String("controller-backends", "inv-driver-cli",
+		"comma-separated list of peer backends permitted to inject Envelope_Send / Envelope_Broadcast frames")
+	controllerUIDs := fs.String("controller-uids", "0",
+		"comma-separated list of OS user-ids whose UDS connections may inject Envelope_Send / Envelope_Broadcast frames (Linux SO_PEERCRED; empty disables UID gate)")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	controllers := splitTrim(*controllerBackends)
+	uids, err := parseUIDList(*controllerUIDs)
+	if err != nil {
+		return fmt.Errorf("-controller-uids: %w", err)
 	}
 
 	mode, err := parseOctalMode(*modeStr)
@@ -137,7 +147,8 @@ func runServe(args []string) error {
 		Probe:              trigger,
 		Router:             srv,
 		RouteBackend:       *probeBackend,
-		ControllerBackends: []string{"inv-driver-cli"},
+		ControllerBackends: controllers,
+		ControllerUIDs:     uids,
 	}
 	if *probeBackend != "" {
 		p := &probe.Probe{
@@ -198,6 +209,44 @@ func pruneLoop(ctx context.Context, st *store.Store, retainTelemetry, retainOthe
 			pruneOnce(ctx, st, retainTelemetry, retainOther)
 		}
 	}
+}
+
+// parseUIDList parses a comma-separated list of decimal UIDs.
+// An empty / blank input returns nil (disables the gate).
+func parseUIDList(csv string) ([]int, error) {
+	parts := splitTrim(csv)
+	if len(parts) == 0 {
+		return nil, nil
+	}
+	out := make([]int, 0, len(parts))
+	for _, p := range parts {
+		v, err := strconv.Atoi(p)
+		if err != nil {
+			return nil, fmt.Errorf("bad uid %q: %w", p, err)
+		}
+		if v < 0 {
+			return nil, fmt.Errorf("uid %d must be non-negative", v)
+		}
+		out = append(out, v)
+	}
+	return out, nil
+}
+
+// splitTrim splits csv on ',', trims surrounding whitespace from each
+// element, and drops empty entries. An all-blank input returns nil.
+func splitTrim(csv string) []string {
+	if csv == "" {
+		return nil
+	}
+	parts := strings.Split(csv, ",")
+	out := parts[:0]
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func parseOctalMode(s string) (os.FileMode, error) {

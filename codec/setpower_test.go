@@ -24,13 +24,13 @@ func TestBuildL2Frame_ChecksumWraps16Bit(t *testing.T) {
 	}
 }
 
-func TestEncodeSetPowerDSPNew_QS1A_400W(t *testing.T) {
+func TestEncodeSetPowerQS1A_QS1A_400W(t *testing.T) {
 	t.Parallel()
 	// (400 * 7395) >> 8 = 11554 = 0x2D22
 	// sum = 06+1C+8C+02+2D+22+00 = 0xFF
-	got, err := EncodeSetPowerDSPNew(400, false)
+	got, err := EncodeSetPowerQS1A(400, false)
 	if err != nil {
-		t.Fatalf("EncodeSetPowerDSPNew: %v", err)
+		t.Fatalf("EncodeSetPowerQS1A: %v", err)
 	}
 	want := hx(t, "FB FB 06 1C 8C 02 2D 22 00 00 FF FE FE")
 	if !bytes.Equal(got, want) {
@@ -38,12 +38,12 @@ func TestEncodeSetPowerDSPNew_QS1A_400W(t *testing.T) {
 	}
 }
 
-func TestEncodeSetPowerDSPNew_Broadcast_400W(t *testing.T) {
+func TestEncodeSetPowerQS1A_Broadcast_400W(t *testing.T) {
 	t.Parallel()
 	// cmd 0x2C: sum = 0xFF + 0x10 = 0x10F
-	got, err := EncodeSetPowerDSPNew(400, true)
+	got, err := EncodeSetPowerQS1A(400, true)
 	if err != nil {
-		t.Fatalf("EncodeSetPowerDSPNew: %v", err)
+		t.Fatalf("EncodeSetPowerQS1A: %v", err)
 	}
 	want := hx(t, "FB FB 06 2C 8C 02 2D 22 00 01 0F FE FE")
 	if !bytes.Equal(got, want) {
@@ -51,22 +51,22 @@ func TestEncodeSetPowerDSPNew_Broadcast_400W(t *testing.T) {
 	}
 }
 
-func TestEncodeSetPowerDSPNew_Boundaries(t *testing.T) {
+func TestEncodeSetPowerQS1A_Boundaries(t *testing.T) {
 	t.Parallel()
-	if _, err := EncodeSetPowerDSPNew(20, false); err != nil {
+	if _, err := EncodeSetPowerQS1A(20, false); err != nil {
 		t.Fatalf("20W (min) should be accepted, got %v", err)
 	}
-	if _, err := EncodeSetPowerDSPNew(500, false); err != nil {
+	if _, err := EncodeSetPowerQS1A(500, false); err != nil {
 		t.Fatalf("500W (max) should be accepted, got %v", err)
 	}
 }
 
-func TestEncodeSetPowerDSPNew_RejectsOutOfRange(t *testing.T) {
+func TestEncodeSetPowerQS1A_RejectsOutOfRange(t *testing.T) {
 	t.Parallel()
-	if _, err := EncodeSetPowerDSPNew(10, false); !errors.Is(err, ErrPanelWattsOutOfRange) {
+	if _, err := EncodeSetPowerQS1A(10, false); !errors.Is(err, ErrPanelWattsOutOfRange) {
 		t.Fatalf("10W: got %v want ErrPanelWattsOutOfRange", err)
 	}
-	if _, err := EncodeSetPowerDSPNew(501, false); !errors.Is(err, ErrPanelWattsOutOfRange) {
+	if _, err := EncodeSetPowerQS1A(501, false); !errors.Is(err, ErrPanelWattsOutOfRange) {
 		t.Fatalf("501W: got %v want ErrPanelWattsOutOfRange", err)
 	}
 }

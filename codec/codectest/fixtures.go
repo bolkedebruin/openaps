@@ -1,4 +1,7 @@
-package codec
+// Package codectest holds shared test fixtures for the codec package
+// and its cross-package consumers. The fixtures are real captured
+// inverter replies; tests build off them rather than fabricating bytes.
+package codectest
 
 import (
 	"encoding/hex"
@@ -6,7 +9,7 @@ import (
 )
 
 // QS1AFixtureHex is a real captured QS1A reply for SA=0x5011
-// (806000042582), taken 2026-05-04 from a live ECU. 100 bytes.
+// (806000042582). 100 bytes.
 const QS1AFixtureHex = "" +
 	"fcfc5011bfa5806000042582" +
 	"fbfb51b1" +
@@ -21,7 +24,7 @@ const DS3FixtureHex = "" +
 	"bb2000030043ffff000000000000000007670769009f0059035a138f97f70069002bffff04b908b6041ea2f402e58b5600ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff39fc" +
 	"fefe"
 
-// QS1AFixture decodes QS1AFixtureHex once and exposes the bytes.
+// QS1AFixture decodes QS1AFixtureHex once.
 var QS1AFixture = mustHex(QS1AFixtureHex)
 
 // DS3Fixture decodes DS3FixtureHex once.
@@ -36,7 +39,7 @@ func mustHex(s string) []byte {
 	}, s)
 	b, err := hex.DecodeString(clean)
 	if err != nil {
-		panic("codec.mustHex: " + err.Error())
+		panic("codectest.mustHex: " + err.Error())
 	}
 	return b
 }

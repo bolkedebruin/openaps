@@ -236,7 +236,7 @@ func (s *Store) FleetSummary(ctx context.Context) (totalW uint32, count uint32, 
 		}
 		count++
 		if mc.Valid {
-			totalW += codec.NameplateWattsForModel(uint32(mc.Int64))
+			totalW += codec.NameplateWattsForModel(uint8(mc.Int64))
 		}
 	}
 	return totalW, count, rows.Err()

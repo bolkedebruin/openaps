@@ -1,5 +1,41 @@
 package codec
 
+import "math"
+
+// DS3 set-power scaling. Watts → on-wire register value is
+// round(watts / setPowerScaleDS3Inv), saturated at setPowerRegMaxDS3.
+const (
+	setPowerScaleDS3Inv float64 = 0.06027
+	setPowerRegMaxDS3   uint32  = 0x474C
+)
+
+// EncodeSetPowerDS3 builds the L2 frame to set max-power on the DS3
+// family. broadcast=true emits opcode CmdSetPowerDS3Broadcast;
+// broadcast=false emits CmdSetPowerDS3Unicast. SubMaxPowerDS3 selects
+// the rated-power parameter; the 16-bit BE value occupies the last two
+// body bytes.
+func EncodeSetPowerDS3(panelWatts uint16, broadcast bool) ([]byte, error) {
+	if err := checkPanelWatts(panelWatts); err != nil {
+		return nil, err
+	}
+	val := uint32(math.Round(float64(panelWatts) / setPowerScaleDS3Inv))
+	if val > setPowerRegMaxDS3 {
+		val = setPowerRegMaxDS3
+	}
+	body := []byte{
+		SubMaxPowerDS3,
+		0x00,
+		0x00,
+		byte(val >> 8),
+		byte(val & 0xFF),
+	}
+	cmd := CmdSetPowerDS3Unicast
+	if broadcast {
+		cmd = CmdSetPowerDS3Broadcast
+	}
+	return BuildL2Frame(L2TypeInverterCmd, cmd, body), nil
+}
+
 // DS3 reply payload layout, body offset 0 = byte right after the L2
 // cmd 0xBB (= main.exe `param_1` for resolvedata_DS3, which is
 // l2_frame[4..]).

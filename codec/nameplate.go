@@ -11,7 +11,7 @@ package codec
 // table (the same one main.exe writes into /tmp/powerALL.conf at
 // boot). Defaults for the rest are derived from product datasheets
 // and may need adjustment for region-specific submodels.
-func NameplateWattsForModel(modelCode uint32) uint32 {
+func NameplateWattsForModel(modelCode uint8) uint32 {
 	switch modelCode {
 	case ModelYC600:
 		return 600

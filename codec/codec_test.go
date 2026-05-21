@@ -5,6 +5,8 @@ import (
 	"math"
 	"strings"
 	"testing"
+
+	"github.com/bolke/inv-driver/codec/codectest"
 )
 
 // hx parses a hex string with optional whitespace into bytes.
@@ -28,10 +30,10 @@ func approxEq(a, b, tol float64) bool {
 	return math.Abs(a-b) <= tol
 }
 
-// qs1aFixture and ds3Fixture wrap the shared hex literals in
-// codec/fixtures.go.
-var qs1aFixture = QS1AFixtureHex
-var ds3Fixture = DS3FixtureHex
+var (
+	qs1aFixture = codectest.QS1AFixtureHex
+	ds3Fixture  = codectest.DS3FixtureHex
+)
 
 func TestParseL1_QS1A(t *testing.T) {
 	frame := hx(t, qs1aFixture)

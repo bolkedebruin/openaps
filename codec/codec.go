@@ -68,7 +68,7 @@ func ParseL1(raw []byte) (L1Envelope, error) {
 	if len(raw) < 14 {
 		return L1Envelope{}, fmt.Errorf("%w: L1 needs ≥14 bytes, got %d", ErrShortFrame, len(raw))
 	}
-	if raw[0] != 0xFC || raw[1] != 0xFC {
+	if raw[0] != L1ReplySOF || raw[1] != L1ReplySOF {
 		return L1Envelope{}, ErrBadL1SOF
 	}
 	env := L1Envelope{
@@ -93,10 +93,10 @@ func ParseL2(raw []byte) (L2Frame, error) {
 	if len(raw) < 8 {
 		return L2Frame{}, fmt.Errorf("%w: L2 needs ≥8 bytes, got %d", ErrShortFrame, len(raw))
 	}
-	if raw[0] != 0xFB || raw[1] != 0xFB {
+	if raw[0] != L2SOF1 || raw[1] != L2SOF2 {
 		return L2Frame{}, ErrBadL2SOF
 	}
-	if raw[len(raw)-2] != 0xFE || raw[len(raw)-1] != 0xFE {
+	if raw[len(raw)-2] != L2EOF1 || raw[len(raw)-1] != L2EOF2 {
 		return L2Frame{}, ErrBadL2EOF
 	}
 	// layout: [FB FB][type][cmd][body...][chk hi][chk lo][FE FE]
@@ -276,10 +276,10 @@ func DecodeReplyFromEnvelope(env L1Envelope) (Reply, error) {
 		LQI:       env.LQI,
 	}
 	switch l2.Cmd {
-	case 0xB1:
+	case CmdReplyQS1A:
 		r.Model = "QS1A"
 		decodeQS1A(l2.Body, &r)
-	case 0xBB:
+	case CmdReplyDS3:
 		r.Model = "DS3"
 		decodeDS3(l2.Body, &r)
 	default:

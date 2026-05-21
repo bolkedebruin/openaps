@@ -21,9 +21,9 @@ func TestBuildL1Frame_UnicastShape(t *testing.T) {
 
 func TestBuildL1Frame_BroadcastShape(t *testing.T) {
 	t.Parallel()
-	l2, err := EncodeSetPowerDSPNew(80, true)
+	l2, err := EncodeSetPowerQS1A(80, true)
 	if err != nil {
-		t.Fatalf("EncodeSetPowerDSPNew: %v", err)
+		t.Fatalf("EncodeSetPowerQS1A: %v", err)
 	}
 	got := BuildL1Frame(0, l2)
 	// Broadcast: SA bytes zero, sum = 0x55 + 0 = 0x55.
