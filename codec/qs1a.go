@@ -17,20 +17,64 @@ var qs1ProtFreqSubs = map[string]byte{
 	"Under_Frequency_Watt_High_set": 0xA4, // DI
 }
 
-// encodeProtectionQS1A builds the QS1 (0x1C) unicast frame for one
-// frequency-threshold param. byte_count 3 sits at [5] and the 24-bit
-// value is left-aligned at [6..8]; the opcode is the QS1 family SET
-// opcode, shared with set-power and distinguished by the sub-byte at [4].
-func encodeProtectionQS1A(paramName string, value float64) ([]byte, error) {
-	sub, ok := qs1ProtFreqSubs[paramName]
-	if !ok {
-		return nil, fmt.Errorf("%w: %q on QS1A", ErrUnsupportedProtectionParam, paramName)
+// protRecoveryScaleQS1 is the QS1 grid_recovery_time wire scale:
+// int(s*100), 16-bit. Uses the YC600 builder (opcode 0x5D), not 0x1C.
+const protRecoveryScaleQS1 = 100.0
+
+// encodeProtectionQS1A builds the QS1 (0x1C) unicast frame(s) for one
+// protection param. Frequency thresholds are single 0x1C frames with
+// byte_count 3 (24-bit value left-aligned at [6..8]); the over-frequency
+// mode enum is a 2-3 frame 0x1C sequence; grid_recovery_time uses the
+// YC600 builder (opcode 0x5D). The opcode shares the family SET byte with
+// set-power; the sub-byte at [4] distinguishes.
+func encodeProtectionQS1A(paramName string, value float64) ([][]byte, error) {
+	if sub, ok := qs1ProtFreqSubs[paramName]; ok {
+		wire := int64(protFreqDividendQS1 / value) // truncate toward zero
+		if wire < 0 || wire > 0xFFFFFF {
+			return nil, fmt.Errorf("set-protection: %q=%g Hz → wire %d out of 24-bit range", paramName, value, wire)
+		}
+		return [][]byte{BuildL2Frame(CmdSetPowerQS1Unicast, []byte{sub, 3, byte(wire >> 16), byte(wire >> 8), byte(wire)})}, nil
 	}
-	wire := int64(protFreqDividendQS1 / value) // truncate toward zero
-	if wire < 0 || wire > 0xFFFFFF {
-		return nil, fmt.Errorf("set-protection: %q=%g Hz → wire %d out of 24-bit range", paramName, value, wire)
+	switch paramName {
+	case "Over_frequency_Watt_set": // CV — multi-frame mode enum
+		return qs1ModeFrames(value), nil
+	case "grid_recovery_time": // AG — YC600 0x5D builder, int(s*100)
+		wire := int64(value * protRecoveryScaleQS1)
+		if wire < 0 || wire > 0xFFFF {
+			return nil, fmt.Errorf("set-protection: grid_recovery_time=%g → wire %d out of 16-bit range", value, wire)
+		}
+		// 0x5D body: value left-aligned big-endian at [4..5], rest zero.
+		return [][]byte{BuildL2Frame(CmdGridRecoveryQS1, []byte{byte(wire >> 8), byte(wire), 0, 0, 0})}, nil
 	}
-	return BuildL2Frame(CmdSetPowerQS1Unicast, []byte{sub, 3, byte(wire >> 16), byte(wire >> 8), byte(wire)}), nil
+	return nil, fmt.Errorf("%w: %q on QS1A", ErrUnsupportedProtectionParam, paramName)
+}
+
+// qs1ModeFrames builds the QS1 over-frequency-watt mode enum sequence
+// (Over_frequency_Watt_set, sub 0x5F + 0x99), replicating main.exe's
+// branch+remap: 0xF (disabled) → 5F=0x30, 5F=0x0F, 99=0; {3,4,0xD}
+// (AS/NZS, 0xD→4) → 5F=0x10, 5F=v, 99=1; else (e.g. 0xE→1) → 5F=0x20,
+// 5F=v. Each is a 0x1C frame with byte_count 1 (value at [6]).
+func qs1ModeFrames(value float64) [][]byte {
+	mode := int(value)
+	frame := func(sub, v byte) []byte {
+		return BuildL2Frame(CmdSetPowerQS1Unicast, []byte{sub, 1, v, 0, 0})
+	}
+	switch mode {
+	case 0xF:
+		return [][]byte{frame(0x5F, 0x30), frame(0x5F, 0x0F), frame(0x99, 0x00)}
+	case 3, 4, 0xD:
+		v := byte(mode)
+		if mode == 0xD {
+			v = 4
+		}
+		return [][]byte{frame(0x5F, 0x10), frame(0x5F, v), frame(0x99, 0x01)}
+	default:
+		v := byte(mode)
+		if mode == 0xE {
+			v = 1
+		}
+		return [][]byte{frame(0x5F, 0x20), frame(0x5F, v)}
+	}
 }
 
 // setPowerScaleDSP is the QS1 / QS1A / YC600-family watts-to-register

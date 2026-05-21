@@ -11,6 +11,10 @@ import (
 const (
 	ds3ProtFreqScale  = 100.0                // freq thresholds CB/CC/DH/DI: int(Hz*100). DAT_6dc28/6efc0/6f5f0.
 	ds3ProtSlopeScale = 1023.0 * 16.0 * 0.01 // CF slope: int(v*163.68). DAT_6dc18 * 16 * DAT_6dc20. NOT env-gated on DS3.
+	// AG grid_recovery: int(s * line-cycles-per-sec). main.exe uses ×60
+	// when ecu_environment==2 (60 Hz) else ×50. Encoded for 50 Hz here; a
+	// 60 Hz site would need ×60.
+	ds3ProtRecoveryScale = 50.0
 )
 
 // ds3ProtParam binds a long-form param to its DS3 0xAA sub-byte and the
@@ -20,27 +24,44 @@ type ds3ProtParam struct {
 	toWire func(float64) int64
 }
 
-func ds3ScaleHz(v float64) int64    { return int64(v * ds3ProtFreqScale) }
-func ds3ScaleSlope(v float64) int64 { return int64(v * ds3ProtSlopeScale) }
-func ds3RoundSec(v float64) int64   { return int64(v + 0.5) } // CG: firmware adds +0.5 before the cast
+func ds3ScaleHz(v float64) int64     { return int64(v * ds3ProtFreqScale) }
+func ds3ScaleSlope(v float64) int64  { return int64(v * ds3ProtSlopeScale) }
+func ds3RoundSec(v float64) int64    { return int64(v + 0.5) } // CG: firmware adds +0.5 before the cast
+func ds3RecoverySec(v float64) int64 { return int64(v * ds3ProtRecoveryScale) }
+
+// ds3ModeEnum maps the over-frequency-watt mode (Over_frequency_Watt_set;
+// SunSpec sends 13=AS/NZS, 14=other, 15=disabled) to the DS3 sub-0x28
+// value: 0xF→0, {3,4,0xD}→1, else→2.
+func ds3ModeEnum(v float64) int64 {
+	switch int(v) {
+	case 0xF:
+		return 0
+	case 3, 4, 0xD:
+		return 1
+	default:
+		return 2
+	}
+}
 
 // ds3ProtParams maps each writable DS3 protection param to its sub-byte
 // and scaling. Over_frequency_Watt_Start_set (CA) has no DS3 branch in
 // main.exe and so is intentionally absent.
 var ds3ProtParams = map[string]ds3ProtParam{
-	"Over_frequency_Watt_Low_set":        {0x2B, ds3ScaleHz},    // CB
-	"Over_frequency_Watt_High_set":       {0x2A, ds3ScaleHz},    // CC
-	"Under_Frequency_Watt_Low_set":       {0x56, ds3ScaleHz},    // DH
-	"Under_Frequency_Watt_High_set":      {0x55, ds3ScaleHz},    // DI
-	"Over_Frequency_Watt_Slope_set":      {0x2D, ds3ScaleSlope}, // CF
-	"Over_frequency_Watt_Delay_Time_set": {0x2E, ds3RoundSec},   // CG
+	"Over_frequency_Watt_Low_set":        {0x2B, ds3ScaleHz},     // CB
+	"Over_frequency_Watt_High_set":       {0x2A, ds3ScaleHz},     // CC
+	"Under_Frequency_Watt_Low_set":       {0x56, ds3ScaleHz},     // DH
+	"Under_Frequency_Watt_High_set":      {0x55, ds3ScaleHz},     // DI
+	"Over_Frequency_Watt_Slope_set":      {0x2D, ds3ScaleSlope},  // CF
+	"Over_frequency_Watt_Delay_Time_set": {0x2E, ds3RoundSec},    // CG
+	"Over_frequency_Watt_set":            {0x28, ds3ModeEnum},    // CV (mode enum)
+	"grid_recovery_time":                 {0x25, ds3RecoverySec}, // AG
 }
 
 // encodeProtectionDS3 builds the DS3 (0xAA) unicast frame for one
-// protection param. The 16-bit value is right-aligned at bytes [7..8]
-// (byte_count 2); the opcode is the DS3 family SET opcode, shared with
-// set-power and distinguished by the sub-byte at [4].
-func encodeProtectionDS3(paramName string, value float64) ([]byte, error) {
+// protection param. The value is right-aligned big-endian ending at byte
+// [8] (16-bit max); the opcode is the DS3 family SET opcode, shared with
+// set-power and distinguished by the sub-byte at [4]. Always single-frame.
+func encodeProtectionDS3(paramName string, value float64) ([][]byte, error) {
 	pp, ok := ds3ProtParams[paramName]
 	if !ok {
 		return nil, fmt.Errorf("%w: %q on DS3", ErrUnsupportedProtectionParam, paramName)
@@ -49,7 +70,7 @@ func encodeProtectionDS3(paramName string, value float64) ([]byte, error) {
 	if wire < 0 || wire > 0xFFFF {
 		return nil, fmt.Errorf("set-protection: %q=%g → wire %d out of 16-bit range", paramName, value, wire)
 	}
-	return BuildL2Frame(CmdSetPowerDS3Unicast, []byte{pp.sub, 0, 0, byte(wire >> 8), byte(wire)}), nil
+	return [][]byte{BuildL2Frame(CmdSetPowerDS3Unicast, []byte{pp.sub, 0, 0, byte(wire >> 8), byte(wire)})}, nil
 }
 
 // DS3 set-power scaling. Watts → on-wire register value is

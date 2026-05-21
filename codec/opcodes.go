@@ -39,6 +39,11 @@ const (
 	CmdTurnOnBroadcast  byte = 0xA1
 	CmdTurnOffBroadcast byte = 0xA2
 
+	// CmdGridRecoveryQS1 is the YC600-builder opcode QS1 uses for
+	// grid_recovery_time (set_protection_yc600_one); value left-aligned
+	// at [4..5], no sub-byte.
+	CmdGridRecoveryQS1 byte = 0x5D
+
 	CmdInfoQuery        byte = 0xDC
 	CmdInfoExtended     byte = 0xDD // wraps CmdInfoQuery on newer reply forms
 	CmdTelemetryBBQuery byte = 0xBB
