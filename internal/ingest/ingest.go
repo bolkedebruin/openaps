@@ -69,6 +69,13 @@ type Ingestor struct {
 	// grid-protection state without waiting for the next poll cycle.
 	protMu     sync.RWMutex
 	latestProt map[string]*wire.Protection
+	// protPages buffers the latest paged protection reply frame per
+	// inverter UID, keyed by page id (0xDD/0xDE/0xD9), so the 3 pages
+	// (which arrive as separate replies) can be decoded together.
+	protPages map[string]map[byte][]byte
+	// protSig is the last-logged decoded-values signature per UID, so a
+	// steady poll only logs grid-protection state when it changes.
+	protSig map[string]string
 }
 
 // cacheProtection stores the latest Protection per UID for replay.
@@ -374,10 +381,46 @@ type rawFrameTryFunc func(ctx context.Context, tsMs int64, env codec.L1Envelope)
 func (in *Ingestor) rawFrameDecoders() []rawFrameTryFunc {
 	return []rawFrameTryFunc{
 		in.tryTelemetry,
+		in.tryProtectionReply,
 		in.tryInfoReply,
 		in.tryPairFrame,
 	}
 }
+
+// tryProtectionReply handles the paged grid-protection read replies
+// (0xDD page A / 0xDE page B / 0xD9 page C). 0xDD is shared with the
+// info-extended query, so a 0xDD frame is treated as protection only
+// when it's longer than any info reply (≥ protReplyMinLen); shorter
+// 0xDD frames fall through to tryInfoReply. 0xDE/0xD9 are unambiguous.
+//
+// The family is inferred from the reply cmd: DS3 tags every page 0xDD
+// (page selector at byte[4]); QS1 uses the page byte as the cmd. The
+// page is buffered and the per-UID set re-decoded + published.
+func (in *Ingestor) tryProtectionReply(ctx context.Context, tsMs int64, env codec.L1Envelope) (bool, error) {
+	l2, err := codec.ParseL2(env.L2Frame)
+	if err != nil {
+		return false, nil
+	}
+	var model uint8
+	switch l2.Cmd {
+	case codec.CmdProtReadPageA: // 0xDD → DS3 (all DS3 pages), or short info
+		if len(env.L2Frame) < protReplyMinLen {
+			return false, nil // short 0xDD = info-extended; let tryInfoReply handle
+		}
+		model = codec.ModelDS3
+	case codec.CmdProtReadPageB, codec.CmdProtReadPageC: // 0xDE/0xD9 → QS1
+		model = codec.ModelQS1A
+	default:
+		return false, nil
+	}
+	in.handleProtectionPage(ctx, tsMs, env, model)
+	return true, nil
+}
+
+// protReplyMinLen is the shortest a 0xDD protection page-A reply can be;
+// info-extended (0xDD) replies are ≤ ~19 bytes, full protection pages
+// are far longer (DS3 page A inner-len ≥ 0x63).
+const protReplyMinLen = 32
 
 func (in *Ingestor) tryTelemetry(ctx context.Context, tsMs int64, env codec.L1Envelope) (bool, error) {
 	rep, err := codec.DecodeReplyFromEnvelope(env)
