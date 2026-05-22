@@ -80,6 +80,15 @@ type Ingestor struct {
 	// read (on first telemetry), so reads are on-demand (first-seen +
 	// after-write) rather than a continuous poll.
 	protSeen map[string]bool
+	// protFamily caches whether each UID is DS3-family (from telemetry),
+	// so a protection reply whose inferred family contradicts the known
+	// model is rejected (guards against reply cross-talk on the modem).
+	protFamily map[string]bool
+	// protReadQueue serialises on-demand reads through a single worker so
+	// queries are spaced on the wire (concurrent unspaced reads make
+	// ecu-zb's single-frame reassembly cross-talk between inverters).
+	protReadOnce  sync.Once
+	protReadQueue chan string
 }
 
 // cacheProtection stores the latest Protection per UID for replay.
@@ -248,6 +257,7 @@ func (in *Ingestor) handleTelemetry(ctx context.Context, t *wire.Telemetry) erro
 	if !isValidPeerUID(uid) {
 		return fmt.Errorf("telemetry: invalid peer_uid (expected 12 hex chars)")
 	}
+	in.noteProtFamily(uid, t.GetModel())
 	in.protReadOnFirstSeen(uid)
 	if n := len(t.GetPanels()); n > maxTelemetryPanels {
 		return fmt.Errorf("telemetry: panel count %d exceeds cap %d", n, maxTelemetryPanels)

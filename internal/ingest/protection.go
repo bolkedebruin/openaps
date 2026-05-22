@@ -12,23 +12,69 @@ import (
 	"github.com/bolke/inv-driver/wire"
 )
 
-// protReadAfterWriteDelay lets a protection write land on the inverter
-// before the read-back query is sent.
-const protReadAfterWriteDelay = 4 * time.Second
+const (
+	// protReadAfterWriteDelay lets a protection write land on the inverter
+	// before the read-back query is sent.
+	protReadAfterWriteDelay = 4 * time.Second
+	// protReadFrameSpacing spaces the three page queries; protReadUIDSpacing
+	// spaces successive inverters. Without spacing, concurrent reads make
+	// ecu-zb's single-frame reassembly cross-talk between inverters.
+	protReadFrameSpacing = 300 * time.Millisecond
+	protReadUIDSpacing   = 500 * time.Millisecond
+	protReadQueueCap     = 16
+	// protReadAttempts re-sends the page set per read; pages accumulate in
+	// the buffer, so a second pass fills any page whose reply was lost on
+	// the radio (on-demand has no continuous-poll redundancy). main.exe
+	// retries each page up to 3×.
+	protReadAttempts = 2
+)
 
-// triggerProtectionRead sends the three paged read queries to one
-// inverter through the downstream backend (ecu-zb resolves uid→SA and
-// injects them); the replies flow back through the normal decode path.
-// Reads are on-demand — first-seen + after a protection write — so there
-// is no continuous poll. No-op without a router/backend.
+// triggerProtectionRead enqueues a one-shot, three-page read for one
+// inverter. A single worker drains the queue so reads are serialised and
+// spaced on the wire (reads are on-demand — first-seen + after a
+// protection write — so there is no continuous poll). No-op without a
+// router/backend.
 func (in *Ingestor) triggerProtectionRead(uid string) {
 	if in.Router == nil || in.RouteBackend == "" || uid == "" {
 		return
 	}
-	for _, frame := range codec.ProtectionQueryFrames() {
-		env := &wire.Envelope{Body: &wire.Envelope_Send{Send: &wire.Send{PeerUid: uid, Frame: frame}}}
-		in.Router.SendToBackend(in.RouteBackend, env)
+	in.protReadOnce.Do(func() {
+		in.protReadQueue = make(chan string, protReadQueueCap)
+		go in.protReadWorker()
+	})
+	select {
+	case in.protReadQueue <- uid:
+	default: // a read is already queued for this/another uid; drop (idempotent)
 	}
+}
+
+// protReadWorker drains the read queue one inverter at a time, sending
+// the three page queries spaced so their replies don't interleave.
+func (in *Ingestor) protReadWorker() {
+	for uid := range in.protReadQueue {
+		for attempt := 0; attempt < protReadAttempts; attempt++ {
+			for _, frame := range codec.ProtectionQueryFrames() {
+				env := &wire.Envelope{Body: &wire.Envelope_Send{Send: &wire.Send{PeerUid: uid, Frame: frame}}}
+				in.Router.SendToBackend(in.RouteBackend, env)
+				time.Sleep(protReadFrameSpacing)
+			}
+		}
+		time.Sleep(protReadUIDSpacing)
+	}
+}
+
+// noteProtFamily records an inverter's family (from telemetry) so a
+// protection reply whose inferred family contradicts it can be rejected.
+func (in *Ingestor) noteProtFamily(uid, model string) {
+	if uid == "" {
+		return
+	}
+	in.protMu.Lock()
+	if in.protFamily == nil {
+		in.protFamily = make(map[string]bool)
+	}
+	in.protFamily[uid] = model == "DS3"
+	in.protMu.Unlock()
 }
 
 // protReadOnFirstSeen issues a one-shot startup protection read the first
@@ -69,6 +115,16 @@ func (in *Ingestor) maybeReadAfterWrite(env *wire.Envelope) {
 func (in *Ingestor) handleProtectionPage(ctx context.Context, tsMs int64, env codec.L1Envelope, model uint8) {
 	uid := env.PeerUIDString()
 	if uid == "" || len(env.L2Frame) < 5 {
+		return
+	}
+	// Reject a reply whose inferred family contradicts the inverter's
+	// known model (from telemetry) — a sign of reply cross-talk on the
+	// modem; decoding it with the wrong family yields garbage.
+	in.protMu.RLock()
+	knownDS3, known := in.protFamily[uid]
+	in.protMu.RUnlock()
+	if known && knownDS3 != (model == codec.ModelDS3) {
+		log.Printf("protection: dropping reply for uid=%s — inferred family != known model (cross-talk?)", uid)
 		return
 	}
 	// Page id: DS3 tags every page 0xDD with the selector at byte[4];
