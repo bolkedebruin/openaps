@@ -2,6 +2,14 @@ package codec
 
 import "fmt"
 
+// isQS1ProtectionWrite reports whether a QS1 L2 (cmd,sub) is a protection
+// write: the 0x1C opcode is shared with set-power (any sub other than the
+// set-power sub 0x8C is a protection param), and 0x5D (grid_recovery via
+// the YC600 builder) is always protection.
+func isQS1ProtectionWrite(cmd, sub byte) bool {
+	return (cmd == CmdSetPowerQS1Unicast && sub != SubMaxPowerQS1) || cmd == CmdGridRecoveryQS1
+}
+
 // qs1ProtFreqSubs maps the long-form param name to its QS1 0x1C sub-byte
 // for the single-frame frequency-threshold protection params.
 var qs1ProtFreqSubs = map[string]byte{

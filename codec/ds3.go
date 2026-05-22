@@ -17,6 +17,13 @@ const (
 	ds3ProtRecoveryScale = 50.0
 )
 
+// isDS3ProtectionWrite reports whether a DS3 L2 (cmd,sub) is a protection
+// write: the 0xAA opcode is shared with set-power, so any sub other than
+// the set-power sub (0x27) is a protection param.
+func isDS3ProtectionWrite(cmd, sub byte) bool {
+	return cmd == CmdSetPowerDS3Unicast && sub != SubMaxPowerDS3
+}
+
 // ds3ProtParam binds a long-form param to its DS3 0xAA sub-byte and the
 // real→wire transform.
 type ds3ProtParam struct {

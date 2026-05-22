@@ -18,6 +18,19 @@ var ErrUnsupportedProtectionFamily = errors.New("set-protection: unsupported mod
 // dependence is resolved and validated on-wire.
 var ErrUnsupportedProtectionParam = errors.New("set-protection: param not encodable for this family")
 
+// IsProtectionWrite reports whether an L2 frame is a grid-protection
+// write (as opposed to set-power or on/off), so the driver can schedule a
+// read-back after one. The opcode/sub-byte that distinguishes a
+// protection write from set-power is family-specific, so the predicates
+// live in ds3.go / qs1a.go; this only parses the frame and combines them.
+func IsProtectionWrite(frame []byte) bool {
+	if len(frame) < 5 {
+		return false
+	}
+	cmd, sub := frame[3], frame[4]
+	return isDS3ProtectionWrite(cmd, sub) || isQS1ProtectionWrite(cmd, sub)
+}
+
 // EncodeSetProtection returns the unicast L2 frame(s) that program one
 // grid-protection param on a given inverter. value is in the param's
 // native unit: Hz for the frequency thresholds, %P/Hz for the slope,

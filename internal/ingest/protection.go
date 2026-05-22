@@ -6,10 +6,61 @@ import (
 	"log"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/bolke/inv-driver/codec"
 	"github.com/bolke/inv-driver/wire"
 )
+
+// protReadAfterWriteDelay lets a protection write land on the inverter
+// before the read-back query is sent.
+const protReadAfterWriteDelay = 4 * time.Second
+
+// triggerProtectionRead sends the three paged read queries to one
+// inverter through the downstream backend (ecu-zb resolves uid→SA and
+// injects them); the replies flow back through the normal decode path.
+// Reads are on-demand — first-seen + after a protection write — so there
+// is no continuous poll. No-op without a router/backend.
+func (in *Ingestor) triggerProtectionRead(uid string) {
+	if in.Router == nil || in.RouteBackend == "" || uid == "" {
+		return
+	}
+	for _, frame := range codec.ProtectionQueryFrames() {
+		env := &wire.Envelope{Body: &wire.Envelope_Send{Send: &wire.Send{PeerUid: uid, Frame: frame}}}
+		in.Router.SendToBackend(in.RouteBackend, env)
+	}
+}
+
+// protReadOnFirstSeen issues a one-shot startup protection read the first
+// time an inverter's telemetry is seen, so the cache populates without a
+// continuous poll.
+func (in *Ingestor) protReadOnFirstSeen(uid string) {
+	in.protMu.Lock()
+	if in.protSeen == nil {
+		in.protSeen = make(map[string]bool)
+	}
+	first := !in.protSeen[uid]
+	in.protSeen[uid] = true
+	in.protMu.Unlock()
+	if first {
+		go in.triggerProtectionRead(uid)
+	}
+}
+
+// maybeReadAfterWrite schedules a protection read-back after a routed
+// protection write lands, so the published thresholds reflect the change
+// without polling.
+func (in *Ingestor) maybeReadAfterWrite(env *wire.Envelope) {
+	s := env.GetSend()
+	if s == nil || !codec.IsProtectionWrite(s.GetFrame()) {
+		return
+	}
+	uid := s.GetPeerUid()
+	go func() {
+		time.Sleep(protReadAfterWriteDelay)
+		in.triggerProtectionRead(uid)
+	}()
+}
 
 // handleProtectionPage buffers one paged protection reply per inverter,
 // re-decodes the per-UID page set, and caches + publishes the merged

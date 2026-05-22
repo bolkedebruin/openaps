@@ -76,6 +76,10 @@ type Ingestor struct {
 	// protSig is the last-logged decoded-values signature per UID, so a
 	// steady poll only logs grid-protection state when it changes.
 	protSig map[string]string
+	// protSeen marks UIDs already given their one-shot startup protection
+	// read (on first telemetry), so reads are on-demand (first-seen +
+	// after-write) rather than a continuous poll.
+	protSeen map[string]bool
 }
 
 // cacheProtection stores the latest Protection per UID for replay.
@@ -207,6 +211,7 @@ func (in *Ingestor) routeDownstream(peerUID int, sender string, env *wire.Envelo
 	if !in.Router.SendToBackend(in.RouteBackend, env) {
 		return fmt.Errorf("downstream route to backend %q failed (publisher absent or queue full)", in.RouteBackend)
 	}
+	in.maybeReadAfterWrite(env)
 	return nil
 }
 
@@ -243,6 +248,7 @@ func (in *Ingestor) handleTelemetry(ctx context.Context, t *wire.Telemetry) erro
 	if !isValidPeerUID(uid) {
 		return fmt.Errorf("telemetry: invalid peer_uid (expected 12 hex chars)")
 	}
+	in.protReadOnFirstSeen(uid)
 	if n := len(t.GetPanels()); n > maxTelemetryPanels {
 		return fmt.Errorf("telemetry: panel count %d exceeds cap %d", n, maxTelemetryPanels)
 	}
