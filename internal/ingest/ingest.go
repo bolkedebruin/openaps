@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bolke/inv-driver/codec"
@@ -61,6 +62,38 @@ type Ingestor struct {
 	// rejects any UID not listed. The Hello.Backend string remains
 	// informational and ControllerBackends still gates by backend name.
 	ControllerUIDs []int
+
+	// protMu guards latestProt, the most-recent Protection envelope per
+	// inverter UID. Kept in memory (not the store) and replayed to
+	// subscribers on attach so a late-joining ecu-sunspec sees current
+	// grid-protection state without waiting for the next poll cycle.
+	protMu     sync.RWMutex
+	latestProt map[string]*wire.Protection
+}
+
+// cacheProtection stores the latest Protection per UID for replay.
+func (in *Ingestor) cacheProtection(p *wire.Protection) {
+	if p.GetPeerUid() == "" {
+		return
+	}
+	in.protMu.Lock()
+	if in.latestProt == nil {
+		in.latestProt = make(map[string]*wire.Protection)
+	}
+	in.latestProt[p.GetPeerUid()] = p
+	in.protMu.Unlock()
+}
+
+// SnapshotProtection returns a copy of the latest Protection per UID,
+// for replay to a newly-attached subscriber.
+func (in *Ingestor) SnapshotProtection() []*wire.Protection {
+	in.protMu.RLock()
+	defer in.protMu.RUnlock()
+	out := make([]*wire.Protection, 0, len(in.latestProt))
+	for _, p := range in.latestProt {
+		out = append(out, p)
+	}
+	return out
 }
 
 // peerUIDUnknown is the sentinel meaning "no peer UID was resolved".
@@ -119,6 +152,13 @@ func (in *Ingestor) HandleWithPeer(ctx context.Context, peerUID int, backend str
 		if err := in.handleInverterInfo(ctx, b.Info); err != nil {
 			return err
 		}
+		in.publish(env)
+		return nil
+	case *wire.Envelope_Protection:
+		if b.Protection == nil {
+			return fmt.Errorf("protection envelope without body")
+		}
+		in.cacheProtection(b.Protection)
 		in.publish(env)
 		return nil
 	case *wire.Envelope_DecodeFailed:
@@ -546,52 +586,52 @@ func faultsFromReply(r codec.Reply) *wire.InverterFaults {
 	case codec.CmdReplyDS3:
 		f := r.DS3Status.Faults()
 		return &wire.InverterFaults{Family: &wire.InverterFaults_Ds3{Ds3: &wire.DS3Faults{
-			GridRelayFault:     f.GridRelayFault,
-			DcContactorFault:   f.DCContactorFault,
-			DcBusFault:         f.DCBusFault,
-			DcGroundFault:      f.DCGroundFault,
-			IsoFaultA:          f.IsoFaultA,
-			IsoFaultB:          f.IsoFaultB,
-			AcOverVoltStage1:   f.ACOverVoltStage1,
-			AcOverVoltStage2:   f.ACOverVoltStage2,
-			AcUnderVoltStage1:  f.ACUnderVoltStage1,
-			AcUnderVoltStage2:  f.ACUnderVoltStage2,
-			OverFreqStage1:     f.OverFreqStage1,
-			OverFreqStage2:     f.OverFreqStage2,
-			OverFreqAux:        f.OverFreqAux,
-			OverFreqExtra:      f.OverFreqExtra,
-			UnderFreqStage1:    f.UnderFreqStage1,
-			UnderFreqStage2:    f.UnderFreqStage2,
-			UnderFreqAux:       f.UnderFreqAux,
-			UnderFreqExtra:     f.UnderFreqExtra,
+			GridRelayFault:    f.GridRelayFault,
+			DcContactorFault:  f.DCContactorFault,
+			DcBusFault:        f.DCBusFault,
+			DcGroundFault:     f.DCGroundFault,
+			IsoFaultA:         f.IsoFaultA,
+			IsoFaultB:         f.IsoFaultB,
+			AcOverVoltStage1:  f.ACOverVoltStage1,
+			AcOverVoltStage2:  f.ACOverVoltStage2,
+			AcUnderVoltStage1: f.ACUnderVoltStage1,
+			AcUnderVoltStage2: f.ACUnderVoltStage2,
+			OverFreqStage1:    f.OverFreqStage1,
+			OverFreqStage2:    f.OverFreqStage2,
+			OverFreqAux:       f.OverFreqAux,
+			OverFreqExtra:     f.OverFreqExtra,
+			UnderFreqStage1:   f.UnderFreqStage1,
+			UnderFreqStage2:   f.UnderFreqStage2,
+			UnderFreqAux:      f.UnderFreqAux,
+			UnderFreqExtra:    f.UnderFreqExtra,
 		}}}
 	case codec.CmdReplyQS1A:
 		f := r.QS1AStatus.Faults()
 		return &wire.InverterFaults{Family: &wire.InverterFaults_Qs1A{Qs1A: &wire.QS1AFaults{
-			GridRelayFault:    f.GridRelayFault,
-			DcContactorFault:  f.DCContactorFault,
-			DcGroundFault:     f.DCGroundFault,
-			DcBusFault:        f.DCBusFault,
-			CommFault:         f.CommFault,
-			OverTemperature:   f.OverTemperature,
-			IsoFaultA:         f.IsoFaultA,
-			IsoFaultB:         f.IsoFaultB,
-			IsoFaultC:         f.IsoFaultC,
-			IsoFaultD:         f.IsoFaultD,
-			AcOverVoltFast:    f.ACOverVoltFast,
-			AcOverVoltSlow:    f.ACOverVoltSlow,
-			AcUnderVoltFast:   f.ACUnderVoltFast,
-			AcUnderVoltSlow:   f.ACUnderVoltSlow,
-			OverFreqFast:      f.OverFreqFast,
-			OverFreqSlow:      f.OverFreqSlow,
-			OverFreqExtra:     f.OverFreqExtra,
-			OverFreqRms:       f.OverFreqRMS,
-			UnderFreqFast:     f.UnderFreqFast,
-			UnderFreqSlow:     f.UnderFreqSlow,
-			UnderFreqExtra:    f.UnderFreqExtra,
-			UnderFreqRms:      f.UnderFreqRMS,
-			ZbLinkA:           f.ZBLinkA,
-			ZbLinkB:           f.ZBLinkB,
+			GridRelayFault:   f.GridRelayFault,
+			DcContactorFault: f.DCContactorFault,
+			DcGroundFault:    f.DCGroundFault,
+			DcBusFault:       f.DCBusFault,
+			CommFault:        f.CommFault,
+			OverTemperature:  f.OverTemperature,
+			IsoFaultA:        f.IsoFaultA,
+			IsoFaultB:        f.IsoFaultB,
+			IsoFaultC:        f.IsoFaultC,
+			IsoFaultD:        f.IsoFaultD,
+			AcOverVoltFast:   f.ACOverVoltFast,
+			AcOverVoltSlow:   f.ACOverVoltSlow,
+			AcUnderVoltFast:  f.ACUnderVoltFast,
+			AcUnderVoltSlow:  f.ACUnderVoltSlow,
+			OverFreqFast:     f.OverFreqFast,
+			OverFreqSlow:     f.OverFreqSlow,
+			OverFreqExtra:    f.OverFreqExtra,
+			OverFreqRms:      f.OverFreqRMS,
+			UnderFreqFast:    f.UnderFreqFast,
+			UnderFreqSlow:    f.UnderFreqSlow,
+			UnderFreqExtra:   f.UnderFreqExtra,
+			UnderFreqRms:     f.UnderFreqRMS,
+			ZbLinkA:          f.ZBLinkA,
+			ZbLinkB:          f.ZBLinkB,
 		}}}
 	}
 	return nil

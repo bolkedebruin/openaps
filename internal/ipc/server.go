@@ -429,8 +429,8 @@ ORDER  BY uid`)
 	count := 0
 	for rows.Next() {
 		var (
-			uid                                                       string
-			shortAddr, model, sw, phase, zigbee, rptOff, lastSeen     sql.NullInt64
+			uid                                                   string
+			shortAddr, model, sw, phase, zigbee, rptOff, lastSeen sql.NullInt64
 		)
 		if err := rows.Scan(&uid, &shortAddr, &model, &sw, &phase, &zigbee, &rptOff, &lastSeen); err != nil {
 			return fmt.Errorf("scan: %w", err)
@@ -482,6 +482,21 @@ ORDER  BY uid`)
 	if s.Ingestor == nil {
 		return nil
 	}
+
+	// Replay the latest grid-protection state per inverter so a late
+	// subscriber sees current thresholds without waiting for the next
+	// poll cycle.
+	if prots := s.Ingestor.SnapshotProtection(); len(prots) > 0 {
+		for _, p := range prots {
+			env := &wire.Envelope{Body: &wire.Envelope_Protection{Protection: p}}
+			_ = conn.SetWriteDeadline(time.Now().Add(writeDeadline))
+			if err := wire.WriteFrame(conn, env); err != nil {
+				return err
+			}
+		}
+		log.Printf("ipc: replayed %d Protection row(s) to subscriber", len(prots))
+	}
+
 	fleet := s.Ingestor.BuildFleetSummary(ctx)
 	if fleet == nil || fleet.GetInverterCount() == 0 {
 		return nil

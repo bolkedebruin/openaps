@@ -44,6 +44,13 @@ const (
 	// at [4..5], no sub-byte.
 	CmdGridRecoveryQS1 byte = 0x5D
 
+	// Protection-param READ queries. main.exe's get_parameters_from_inverter
+	// sends three paged read requests per inverter; the inverter replies
+	// page A/B/C with the protection thresholds. All-zero body.
+	CmdProtReadPageA byte = 0xDD
+	CmdProtReadPageB byte = 0xDE
+	CmdProtReadPageC byte = 0xD9
+
 	CmdInfoQuery        byte = 0xDC
 	CmdInfoExtended     byte = 0xDD // wraps CmdInfoQuery on newer reply forms
 	CmdTelemetryBBQuery byte = 0xBB

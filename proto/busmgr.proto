@@ -19,6 +19,7 @@ message Envelope {
     RawFrame      raw_frame     = 4;
     InverterInfo  info          = 5;
     FleetSummary  fleet         = 6;
+    Protection    protection    = 7;
 
     Send          send          = 10;
     Broadcast     broadcast     = 11;
@@ -241,4 +242,56 @@ message InverterInfo {
   optional uint32 phase            = 6;   // 0 unknown, 1 single, 3 three
   optional bool   zigbee_bound     = 7;
   optional bool   turned_off_rpt   = 8;
+}
+
+// Protection carries one inverter's active grid-protection thresholds,
+// read back from the inverter (the 0xDD/0xDE/0xD9 reply, decoded by
+// codec.DecodeProtectionReply). Mirrors ecu-sunspec's ProtectionParams.
+// Values are in native units (V, Hz, seconds; mode/PF are enums). Each
+// is optional: absence = the inverter didn't report that field, matching
+// the SQLite reader's per-code presence map. This replaces ecu-sunspec's
+// read of main.exe's protection_parameters60code.
+message Protection {
+  string peer_uid = 1;   // 12-char hex
+  int64  ts_ms    = 2;   // wall-clock at decode time
+  string model    = 3;   // "DS3" / "QS1A"
+
+  optional double uv_stg2  = 4;   // AC
+  optional double ov_stg2  = 5;   // AD
+  optional double uv_fast  = 6;   // AQ
+  optional double ov_stg3  = 7;   // AY
+  optional double avg_ov   = 8;   // AB
+  optional double vwin_low = 9;   // AH
+  optional double vwin_hi  = 10;  // AI
+
+  optional double uf_slow = 11;   // AE
+  optional double of_slow = 12;   // AF
+  optional double uf_fast = 13;   // AJ
+  optional double of_fast = 14;   // AK
+
+  optional double reconnect_s  = 15;  // AG
+  optional double start_s      = 16;  // AS
+  optional double reconn_v_low = 17;  // BN
+  optional double reconn_v_hi  = 18;  // BO
+  optional double reconn_f_low = 19;  // BP
+  optional double reconn_f_hi  = 20;  // BQ
+
+  optional double uv2_clr_s = 21;  // BB
+  optional double ov2_clr_s = 22;  // BC
+  optional double uv3_clr_s = 23;  // BD
+  optional double ov3_clr_s = 24;  // BE
+  optional double uf1_clr_s = 25;  // BH
+  optional double of1_clr_s = 26;  // BI
+  optional double uf2_clr_s = 27;  // BJ
+  optional double of2_clr_s = 28;  // BK
+
+  optional double pf_mode = 29;    // CH
+
+  optional double of_droop_start  = 30;  // DC
+  optional double of_droop_end    = 31;  // CC
+  optional double of_droop_slope  = 32;  // DD
+  optional double of_droop_mode   = 33;  // CV
+  optional double of_curve_uf_low = 34;  // DH
+  optional double of_curve_uf_hi  = 35;  // DI
+  optional double of_curve_of_low = 36;  // CB
 }
