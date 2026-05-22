@@ -51,6 +51,8 @@ func qsFreq(raw int) float64 {
 var (
 	qs1ReadPageB = []protReadField{
 		{"BN", 0x01, 2, qsVolt}, {"BO", 0x03, 2, qsVolt}, {"BP", 0x05, 3, qsFreq}, {"BQ", 0x08, 3, qsFreq},
+		// freq-watt curve (over-freq), offsets pinned by differential write:
+		{"CC", 0x25, 3, qsFreq}, {"CB", 0x28, 3, qsFreq},
 	}
 	qs1ReadPageC = []protReadField{
 		{"DH", 0x0c, 3, qsFreq}, {"DI", 0x0f, 3, qsFreq},

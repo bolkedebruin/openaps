@@ -111,7 +111,8 @@ func TestDecodeProtectionReply_QS1_LiveCapture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	want := map[string]float64{"BN": 196, "BO": 253, "BP": 49.5, "BQ": 50.2, "DH": 47, "DI": 49.75}
+	want := map[string]float64{"BN": 196, "BO": 253, "BP": 49.5, "BQ": 50.2, "DH": 47, "DI": 49.75,
+		"CB": 50.2, "CC": 52}
 	for code, w := range want {
 		got, ok := r.Values[code]
 		if !ok {
