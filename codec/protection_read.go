@@ -22,6 +22,11 @@ func ProtectionQueryFrames() [][]byte {
 // 0x06 = 1 cmd + 5 body), matching the firmware's query immediates.
 const protQueryBodyLen = 5
 
+// protReadSaneMax is the upper plausibility bound for any decoded
+// protection value (volts ≤ ~600, Hz ≤ ~70, seconds ≤ ~1000, enums small);
+// anything beyond it is garbage and dropped rather than published.
+const protReadSaneMax = 2000
+
 // ProtectionReading is one inverter's decoded grid-protection thresholds,
 // keyed by APsystems 2-letter code in native units (V, Hz, seconds; the
 // mode/PF enums as their raw index). Only codes the reply actually
@@ -81,7 +86,16 @@ func DecodeProtectionReply(modelCode uint8, frames [][]byte) (*ProtectionReading
 			if i+fld.width > len(f) {
 				continue
 			}
-			r.Values[fld.code] = fld.scale(readBE(f, i, fld.width))
+			v := fld.scale(readBE(f, i, fld.width))
+			// Drop implausible values: every protection threshold is a
+			// small non-negative quantity (V/Hz/s/enum, all < ~600).
+			// Guards against garbage from a misclassified, noisy, or
+			// hostile reply (and a future-firmware offset mismap) reaching
+			// SunSpec as a real threshold.
+			if v < 0 || v > protReadSaneMax {
+				continue
+			}
+			r.Values[fld.code] = v
 		}
 	}
 	if len(r.Values) == 0 {

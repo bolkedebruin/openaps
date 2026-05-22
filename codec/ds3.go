@@ -79,9 +79,9 @@ func encodeProtectionDS3(paramName string, value float64) ([][]byte, error) {
 // 16/16; page B freq-watt) — see security/protection-param-read.md. Volts
 // ×0.268 rounded (truncation under-reads by 1 LSB); freq ×0.01; AG
 // reconnect = raw×0.02 (50 Hz line-cycle count); AS identity.
-func dsVolt(raw int) float64  { return float64(int(float64(raw)*0.268 + 0.5)) }
-func dsFreq(raw int) float64  { return float64(raw) * 0.01 }
-func dsAG(raw int) float64    { return float64(raw) * 0.02 }
+func dsVolt(raw int) float64  { return float64(int(float64(raw)*ds3GridVScale + 0.5)) }
+func dsFreq(raw int) float64  { return float64(raw) * ds3FreqScale }
+func dsAG(raw int) float64    { return float64(raw) / ds3ProtRecoveryScale } // read = inverse of write ×50
 func dsIdent(raw int) float64 { return float64(raw) }
 
 var (

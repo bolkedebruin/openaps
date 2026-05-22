@@ -22,11 +22,15 @@ const protRecoveryScaleQS1 = 100.0
 // retrievable this way — only reconnect (0xDE) + DH/DI (0xD9), validated
 // on live captures vs 60code. Volts = (raw/1.332)/4 rounded; freq =
 // 50_000_000/raw (24-bit BE).
+// qsProtVoltDenom is the QS1 protection-read voltage divisor (DAT_4fff0):
+// volts = (raw/1.332)/4. Distinct from the telemetry grid-V denom (1.32).
+const qsProtVoltDenom = 1.332
+
 func qsVolt(raw int) float64 {
 	if raw == 0 {
 		return 0
 	}
-	return float64(int((float64(raw)/1.332)/4 + 0.5))
+	return float64(int((float64(raw)/qsProtVoltDenom)/4 + 0.5))
 }
 
 func qsFreq(raw int) float64 {
