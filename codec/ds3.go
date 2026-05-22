@@ -73,6 +73,46 @@ func encodeProtectionDS3(paramName string, value float64) ([][]byte, error) {
 	return [][]byte{BuildL2Frame(CmdSetPowerDS3Unicast, []byte{pp.sub, 0, 0, byte(wire >> 8), byte(wire)})}, nil
 }
 
+// DS3 protection-READ scales + page field maps. Offsets are relative to
+// the page-tag byte (reply[4]); the reply cmd is always 0xDD and the page
+// is selected by reply[4]. Validated on live captures vs 60code (page A
+// 16/16; page B freq-watt) — see security/protection-param-read.md. Volts
+// ×0.268 rounded (truncation under-reads by 1 LSB); freq ×0.01; AG
+// reconnect = raw×0.02 (50 Hz line-cycle count); AS identity.
+func dsVolt(raw int) float64  { return float64(int(float64(raw)*0.268 + 0.5)) }
+func dsFreq(raw int) float64  { return float64(raw) * 0.01 }
+func dsAG(raw int) float64    { return float64(raw) * 0.02 }
+func dsIdent(raw int) float64 { return float64(raw) }
+
+var (
+	ds3ReadPageA = []protReadField{
+		{"AI", 0x01, 2, dsVolt}, {"AH", 0x03, 2, dsVolt}, {"AD", 0x05, 2, dsVolt},
+		{"AQ", 0x07, 2, dsVolt}, {"AY", 0x09, 2, dsVolt}, {"AC", 0x0b, 2, dsVolt},
+		{"AK", 0x11, 2, dsFreq}, {"AJ", 0x13, 2, dsFreq}, {"AF", 0x15, 2, dsFreq}, {"AE", 0x17, 2, dsFreq},
+		{"AS", 0x39, 2, dsIdent}, {"BO", 0x3d, 2, dsVolt}, {"BN", 0x3f, 2, dsVolt},
+		{"BQ", 0x41, 2, dsFreq}, {"BP", 0x43, 2, dsFreq}, {"AG", 0x45, 2, dsAG},
+	}
+	ds3ReadPageB = []protReadField{
+		{"DC", 0x06, 2, dsFreq}, {"CC", 0x08, 2, dsFreq}, {"CB", 0x0a, 2, dsFreq},
+		{"DI", 0x3f, 2, dsFreq}, {"DH", 0x41, 2, dsFreq},
+	}
+)
+
+// ds3ProtectionPage resolves a DS3 protection reply (cmd always 0xDD,
+// page tag at byte[4]) to its field table; data base = byte[4].
+func ds3ProtectionPage(f []byte, _ byte) ([]protReadField, int, bool) {
+	if len(f) < 5 {
+		return nil, 0, false
+	}
+	switch f[4] {
+	case CmdProtReadPageA:
+		return ds3ReadPageA, 4, true
+	case CmdProtReadPageB:
+		return ds3ReadPageB, 4, true
+	}
+	return nil, 0, false
+}
+
 // DS3 set-power scaling. Watts → on-wire register value is
 // round(watts / setPowerScaleDS3Inv), saturated at setPowerRegMaxDS3.
 const (

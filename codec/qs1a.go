@@ -16,6 +16,47 @@ var qs1ProtFreqSubs = map[string]byte{
 // int(s*100), 16-bit. Uses the YC600 builder (opcode 0x5D), not 0x1C.
 const protRecoveryScaleQS1 = 100.0
 
+// QS1 protection-READ scales + page field maps. Offsets are relative to
+// the cmd byte (reply[3]); the cmd byte itself is the page (0xDE/0xD9).
+// QS1A returns NO 0xDD page-A reply, so the volt/freq trips aren't
+// retrievable this way — only reconnect (0xDE) + DH/DI (0xD9), validated
+// on live captures vs 60code. Volts = (raw/1.332)/4 rounded; freq =
+// 50_000_000/raw (24-bit BE).
+func qsVolt(raw int) float64 {
+	if raw == 0 {
+		return 0
+	}
+	return float64(int((float64(raw)/1.332)/4 + 0.5))
+}
+
+func qsFreq(raw int) float64 {
+	if raw == 0 {
+		return 0
+	}
+	return qs1aFreqDivBy / float64(raw)
+}
+
+var (
+	qs1ReadPageB = []protReadField{
+		{"BN", 0x01, 2, qsVolt}, {"BO", 0x03, 2, qsVolt}, {"BP", 0x05, 3, qsFreq}, {"BQ", 0x08, 3, qsFreq},
+	}
+	qs1ReadPageC = []protReadField{
+		{"DH", 0x0c, 3, qsFreq}, {"DI", 0x0f, 3, qsFreq},
+	}
+)
+
+// qs1ProtectionPage resolves a QS1 protection reply to its field table;
+// the cmd byte is the page and data base = byte[3].
+func qs1ProtectionPage(_ []byte, cmd byte) ([]protReadField, int, bool) {
+	switch cmd {
+	case CmdProtReadPageB:
+		return qs1ReadPageB, 3, true
+	case CmdProtReadPageC:
+		return qs1ReadPageC, 3, true
+	}
+	return nil, 0, false
+}
+
 // encodeProtectionQS1A builds the QS1 (0x1C) unicast frame(s) for one
 // protection param. Frequency thresholds are single 0x1C frames with
 // byte_count 3 (24-bit value left-aligned at [6..8]); the over-frequency
