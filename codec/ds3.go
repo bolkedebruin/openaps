@@ -50,10 +50,32 @@ func ds3ModeEnum(v float64) int64 {
 	}
 }
 
+// ds3VoltScale is the DS3 voltage trip write scale: raw = int(V × ds3VoltWriteScale).
+// Inversion of the read scale ds3GridVScale = 0.268 (1/0.268 = 3.73134...).
+// Confirmed by golden capture: 264 V → 985 (int(264/0.268)=985); 253 V → 944; etc.
+const ds3VoltWriteScale = 1.0 / ds3GridVScale // 3.73134...
+
+// ds3ClearTimeScale is the DS3 trip-clearance time write scale: raw = int(s × 100).
+// Inversion of dsSec read scale (raw × 0.01). Captures confirm:
+// BC raw=10 (0.10 s), BB raw=2 (0.02 s), BE raw=5 (0.05 s), BD raw=120 (1.2 s),
+// BI raw=30 (0.30 s), BH raw=16 (0.16 s), BK raw=30 (0.30 s), BJ raw=30 (0.30 s).
+const ds3ClearTimeScale = 100.0
+
+func ds3ScaleVolt(v float64) int64  { return int64(v * ds3VoltWriteScale) }
+func ds3ScaleClear(v float64) int64 { return int64(v * ds3ClearTimeScale) }
+
 // ds3ProtParams maps each writable DS3 protection param to its sub-byte
 // and scaling. Over_frequency_Watt_Start_set (CA) has no DS3 branch in
 // main.exe and so is intentionally absent.
+//
+// Trip sub-bytes sourced from main.exe set_parameters_boardcast @ 0x440fc
+// (set_protection_dsp_DS3_D_all call sites) and set_paraName_paraValue_inverter
+// @ 0x69bdc (set_protection_dsp_ds3_D_one call sites). Voltage scale is
+// int(V × DAT_00044430) = int(V/0.268). Freq scale is int(Hz × DAT_00044a88) = int(Hz×100).
+// Clear-time scale is int(s × DAT_00045910 / DAT_00045fc0) = int(s×100).
+// All golden captures confirm 16-bit values (max captured: BD=120, well within 0xFFFF).
 var ds3ProtParams = map[string]ds3ProtParam{
+	// Freq-watt curve + droop (existing)
 	"Over_frequency_Watt_Low_set":        {0x2B, ds3ScaleHz},     // CB
 	"Over_frequency_Watt_High_set":       {0x2A, ds3ScaleHz},     // CC
 	"Under_Frequency_Watt_Low_set":       {0x56, ds3ScaleHz},     // DH
@@ -62,13 +84,48 @@ var ds3ProtParams = map[string]ds3ProtParam{
 	"Over_frequency_Watt_Delay_Time_set": {0x2E, ds3RoundSec},    // CG
 	"Over_frequency_Watt_set":            {0x28, ds3ModeEnum},    // CV (mode enum)
 	"grid_recovery_time":                 {0x25, ds3RecoverySec}, // AG
+
+	// Voltage trip thresholds (main.exe names: over/under_voltage_fast/slow/slow_90/stage_2_90)
+	// Scale: int(V × DAT_00044430) = int(V/0.268), 16-bit, sub from set_protection_dsp_DS3_D_all.
+	"over_voltage_fast":      {0x01, ds3ScaleVolt}, // AI — golden: 264 V → 985
+	"under_voltage_fast":     {0x02, ds3ScaleVolt}, // AH — golden: 196 V → 731
+	"over_voltage_slow":      {0x03, ds3ScaleVolt}, // AD — golden: 264 V → 985
+	"under_voltage_stage_2":  {0x04, ds3ScaleVolt}, // AQ — golden: 184 V → 686
+	"over_voltage_slow_90":   {0x05, ds3ScaleVolt}, // AY — golden: 253 V → 944
+	"under_voltage_stage_2_90": {0x06, ds3ScaleVolt}, // AC — golden: 196 V → 731
+
+	// Frequency trip thresholds (main.exe names: over/under_frequency_fast/slow)
+	// Scale: int(Hz × DAT_00044a88) = int(Hz × 100), 16-bit.
+	"over_frequency_fast":  {0x09, ds3ScaleHz}, // AK — golden: 52.0 Hz → 5200
+	"under_frequency_fast": {0x0a, ds3ScaleHz}, // AJ — golden: 47.0 Hz → 4700
+	"over_frequency_slow":  {0x0b, ds3ScaleHz}, // AF — golden: 52.0 Hz → 5200
+	"under_frequency_slow": {0x0c, ds3ScaleHz}, // AE — golden: 47.5 Hz → 4750
+
+	// Voltage trip clearance times (main.exe names: Over/Under_Voltage[1/2]_clearance_time)
+	// Scale: int(s × DAT_00045910) = int(s × 100), centiseconds, 16-bit.
+	"Over_Voltage1_clearance_time":  {0x0f, ds3ScaleClear}, // BC — golden: 0.10 s → 10
+	"Under_Voltage1_clearance_time": {0x10, ds3ScaleClear}, // BB — golden: 0.02 s → 2
+	"Over_Voltage2_clearance_time":  {0x11, ds3ScaleClear}, // BE — golden: 0.05 s → 5
+	"Under_Voltage2_clearance_time": {0x12, ds3ScaleClear}, // BD — golden: 1.2 s → 120
+
+	// Frequency trip clearance times (main.exe names: Over/Under_Frequency[1/2]_clearance_time)
+	// Scale: int(s × DAT_00045fc0) = int(s × 100), centiseconds, 16-bit.
+	"Over_Frequency1_clearance_time":  {0x15, ds3ScaleClear}, // BI — golden: 0.30 s → 30
+	"Under_Frequency1_clearance_time": {0x16, ds3ScaleClear}, // BH — golden: 0.16 s → 16
+	"Over_Frequency2_clearance_time":  {0x17, ds3ScaleClear}, // BK — golden: 0.30 s → 30
+	"Under_Frequency2_clearance_time": {0x18, ds3ScaleClear}, // BJ — golden: 0.30 s → 30
+
+	// 10-min average over-voltage (main.exe: min10_Over_average_voltage / ac_600s)
+	// Scale: int(V/ds3GridVScale), truncates, 16-bit. Golden capture: 253 V → 944.
+	"min10_Over_average_voltage": {0x42, ds3ScaleVolt}, // AB
 }
 
-// encodeProtectionDS3 builds the DS3 (0xAA) unicast frame for one
-// protection param. The value is right-aligned big-endian ending at byte
-// [8] (16-bit max); the opcode is the DS3 family SET opcode, shared with
-// set-power and distinguished by the sub-byte at [4]. Always single-frame.
-func encodeProtectionDS3(paramName string, value float64) ([][]byte, error) {
+// encodeProtectionDS3 builds a DS3 protection frame for one param using
+// the supplied opcode (CmdSetPowerDS3Unicast for unicast, CmdSetPowerDS3Broadcast
+// for broadcast). The value is right-aligned big-endian ending at byte [8]
+// (16-bit max); the sub-byte at [4] distinguishes the param from set-power
+// on the same opcode family. Always single-frame.
+func encodeProtectionDS3(paramName string, value float64, opcode byte) ([][]byte, error) {
 	pp, ok := ds3ProtParams[paramName]
 	if !ok {
 		return nil, fmt.Errorf("%w: %q on DS3", ErrUnsupportedProtectionParam, paramName)
@@ -77,7 +134,7 @@ func encodeProtectionDS3(paramName string, value float64) ([][]byte, error) {
 	if wire < 0 || wire > 0xFFFF {
 		return nil, fmt.Errorf("set-protection: %q=%g → wire %d out of 16-bit range", paramName, value, wire)
 	}
-	return [][]byte{BuildL2Frame(CmdSetPowerDS3Unicast, []byte{pp.sub, 0, 0, byte(wire >> 8), byte(wire)})}, nil
+	return [][]byte{BuildL2Frame(opcode, []byte{pp.sub, 0, 0, byte(wire >> 8), byte(wire)})}, nil
 }
 
 // DS3 protection-READ scales + page field maps. Offsets are relative to

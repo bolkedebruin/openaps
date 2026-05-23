@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/bolke/inv-driver/codec/codectest"
 	"github.com/bolke/inv-driver/internal/events"
@@ -673,5 +675,94 @@ func TestFamilyFromModel(t *testing.T) {
 		if got := familyFromModel(c.model); got != c.want {
 			t.Errorf("familyFromModel(%q) = %q, want %q", c.model, got, c.want)
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// OnFirstSeen hook fires exactly once on first telemetry for a UID.
+// ---------------------------------------------------------------------------
+
+func TestOnFirstSeen_HookFiresOnce(t *testing.T) {
+	in := newIngestor(t)
+
+	var mu sync.Mutex
+	seen := map[string]int{}
+	in.OnFirstSeen = func(uid string) {
+		mu.Lock()
+		seen[uid]++
+		mu.Unlock()
+	}
+
+	uid := "704000006835"
+	tel := makeTelemetry(uid, "DS3")
+
+	// First telemetry — hook should fire once.
+	if err := in.Handle(context.Background(), "backend", &wire.Envelope{
+		Body: &wire.Envelope_Telemetry{Telemetry: tel},
+	}); err != nil {
+		t.Fatalf("Handle telemetry: %v", err)
+	}
+	// Give the goroutine a moment to fire (hook is async).
+	time.Sleep(20 * time.Millisecond)
+
+	mu.Lock()
+	c := seen[uid]
+	mu.Unlock()
+	if c != 1 {
+		t.Errorf("OnFirstSeen call count after first telemetry: got %d want 1", c)
+	}
+
+	// Second telemetry for same UID — hook must NOT fire again.
+	if err := in.Handle(context.Background(), "backend", &wire.Envelope{
+		Body: &wire.Envelope_Telemetry{Telemetry: tel},
+	}); err != nil {
+		t.Fatalf("Handle telemetry (second): %v", err)
+	}
+	time.Sleep(20 * time.Millisecond)
+
+	mu.Lock()
+	c = seen[uid]
+	mu.Unlock()
+	if c != 1 {
+		t.Errorf("OnFirstSeen call count after second telemetry: got %d want 1 (must fire once only)", c)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ReadbackSeq increments on each cacheProtectionValues call.
+// ---------------------------------------------------------------------------
+
+func TestReadbackSeq_IncrementOnCache(t *testing.T) {
+	in := newIngestor(t)
+	uid := "704000006835"
+
+	if seq := in.ReadbackSeq(uid); seq != 0 {
+		t.Errorf("initial ReadbackSeq: got %d want 0", seq)
+	}
+
+	in.cacheProtectionValues(uid, map[string]float64{"DD": 16.7})
+	if seq := in.ReadbackSeq(uid); seq != 1 {
+		t.Errorf("after first cache: got %d want 1", seq)
+	}
+
+	in.cacheProtectionValues(uid, map[string]float64{"DD": 16.57})
+	if seq := in.ReadbackSeq(uid); seq != 2 {
+		t.Errorf("after second cache: got %d want 2", seq)
+	}
+
+	// Different UID must not affect the first.
+	in.cacheProtectionValues("aabbccddeeff", map[string]float64{"CB": 50.2})
+	if seq := in.ReadbackSeq(uid); seq != 2 {
+		t.Errorf("after cache for other uid: got %d want 2 (first uid unaffected)", seq)
+	}
+}
+
+// makeTelemetry constructs a minimal Telemetry for a given uid and model string.
+func makeTelemetry(uid, model string) *wire.Telemetry {
+	return &wire.Telemetry{
+		PeerUid: uid,
+		TsMs:    1000,
+		Model:   model,
+		Cmd:     0x20,
 	}
 }

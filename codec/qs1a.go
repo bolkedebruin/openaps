@@ -5,22 +5,125 @@ import (
 	"math"
 )
 
-// isQS1ProtectionWrite reports whether a QS1 L2 (cmd,sub) is a protection
-// write: the 0x1C opcode is shared with set-power (any sub other than the
-// set-power sub 0x8C is a protection param), and 0x5D (grid_recovery via
-// the YC600 builder) is always protection.
-func isQS1ProtectionWrite(cmd, sub byte) bool {
-	return (cmd == CmdSetPowerQS1Unicast && sub != SubMaxPowerQS1) || cmd == CmdGridRecoveryQS1
+// QS1YC600ProtCmds is the set of L2 cmd bytes the QS1 yc600 protection
+// builder (set_protection_yc600_one @ 0x66728) emits as frame[3] — the sub
+// is the cmd, so these frames carry no 0x1C opcode. Includes the slow volt
+// trips (AQ/AD/AC/AY), grid freq trips (AJ/AK/AE/AF), and grid_recovery (AG).
+//
+// These cmds are UNICAST-ONLY: there is no broadcast opcode to swap to (the
+// sub IS the cmd), so they must never be emitted on the broadcast path.
+// Exported so ecu-zb's bus-mgr can reject them on broadcast and keep its
+// allow-list in sync from this single source (no duplicated byte list).
+var QS1YC600ProtCmds = map[byte]bool{
+	0x11: true, 0x12: true, 0x13: true, 0x14: true, // AQ/AD/AC/AY
+	0x57: true, 0x58: true, 0x59: true, 0x5a: true, // AK/AJ/AF/AE
+	CmdGridRecoveryQS1: true, // 0x5D — AG
 }
 
+// isQS1ProtectionWrite reports whether a QS1 L2 (cmd,sub) is a protection
+// write: the 0x1C opcode is shared with set-power (any sub other than the
+// set-power sub 0x8C is a protection param), and the yc600-builder frames
+// carry the sub directly as the cmd (QS1YC600ProtCmds, incl. 0x5D
+// grid_recovery).
+func isQS1ProtectionWrite(cmd, sub byte) bool {
+	return (cmd == CmdSetPowerQS1Unicast && sub != SubMaxPowerQS1) || QS1YC600ProtCmds[cmd]
+}
+
+// isQS1YC600BuilderParam reports whether a QS1 protection param is encoded
+// via the yc600 builder (sub-as-cmd at frame[3]) rather than the 0x1C
+// builder. These params have no opcode to swap for broadcast.
+func isQS1YC600BuilderParam(paramName string) bool {
+	if paramName == "grid_recovery_time" {
+		return true
+	}
+	if _, ok := qs1VoltTripSubsYC600[paramName]; ok {
+		return true
+	}
+	_, ok := qs1FreqTripSubsYC600[paramName]
+	return ok
+}
+
+// qs1VoltTripScale is the QS1A voltage-trip write scale:
+// raw = int(V × 1.332 × 4) = int(V × 5.328).
+// Source: set_paraName_paraValue_inverter @ 0x69bdc for model 0x18/8:
+//
+//	iVar1 = int(V × DAT_69ee8 × 4.0)  (DAT_69ee8 = DAT_6a540 = 1.332)
+//
+// Inverse of qsVolt read: float(int((raw/1.332)/4 + 0.5)).
+// Now wire-readable via the 0xDB page-A reply (qs1ReadPageA).
+const qs1VoltTripWriteScale = qsProtVoltDenom * 4.0 // 1.332 × 4 = 5.328
+
+// qs1ClearTimeWriteScale is the QS1A clearance-time write scale:
+// raw = int(s × DAT_6bc08) = int(s × 100), centiseconds, 16-bit.
+// Source: set_paraName_paraValue_inverter @ 0x69bdc for model 0x18/8.
+const qs1ClearTimeWriteScale = 100.0
+
+// qs1AvgOvWriteScale is the QS1A 10-min average over-voltage (AB) write
+// scale: raw = int(V × DAT_6e920 × DAT_6e928 × 4) = int(V × 1.332 × 600 × 4)
+// = int(V × 3196.8), 24-bit, via set_protection_new_one sub 0x7d byte_count 3.
+// Source: min10_Over_average_voltage block in set_paraName_paraValue_inverter
+// for model 0x18/8. Inverse of qsAvgOv read.
+const qs1AvgOvWriteScale = qsProtVoltDenom * 600.0 * 4.0 // 1.332 × 600 × 4 = 3196.8
+
 // qs1ProtFreqSubs maps the long-form param name to its QS1 0x1C sub-byte
-// for the single-frame frequency-threshold protection params.
+// for the single-frame frequency-threshold protection params (freq-watt curve).
 var qs1ProtFreqSubs = map[string]byte{
 	"Over_frequency_Watt_Start_set": 0x62, // CA
 	"Over_frequency_Watt_Low_set":   0x68, // CB
 	"Over_frequency_Watt_High_set":  0x65, // CC
 	"Under_Frequency_Watt_Low_set":  0xA1, // DH
 	"Under_Frequency_Watt_High_set": 0xA4, // DI
+}
+
+// qs1VoltTripSubs maps voltage-trip params that use the QS1 0x1C builder
+// (set_protection_new_one — sub at frame[4], byte_count tag at frame[5],
+// value left-aligned at frame[6..]). Only AH/AI take this builder for
+// model 0x18; the slow volt trips use the yc600 builder (qs1VoltTripSubsYC600).
+// Source: set_protection_new_one calls in set_paraName_paraValue_inverter
+// @ 0x69bdc for model 8/0x18.
+var qs1VoltTripSubs = map[string]byte{
+	"over_voltage_fast":  0x90, // AI
+	"under_voltage_fast": 0x8e, // AH
+}
+
+// qs1VoltTripSubsYC600 maps the slow voltage trips that route through
+// set_protection_yc600_one @ 0x66728 for model 8/0x18. That builder places
+// the sub directly at frame[3] (the L2 cmd slot) — there is NO 0x1C opcode
+// and NO byte_count tag — with the value left-aligned at frame[4..]. Scale
+// is int(V × 1.332 × 4), 16-bit. Source: set_paraName_paraValue_inverter
+// @ 0x69bdc (over_voltage_fast_90 / under_voltage_fast_90 / *_stage_2 /
+// over_voltage_slow_90 blocks).
+var qs1VoltTripSubsYC600 = map[string]byte{
+	"under_voltage_stage_2":    0x11, // AQ (alias under_voltage_fast_90)
+	"over_voltage_slow":        0x12, // AD (alias over_voltage_fast_90)
+	"under_voltage_stage_2_90": 0x13, // AC (alias under_voltage_slow)
+	"over_voltage_slow_90":     0x14, // AY
+}
+
+// qs1FreqTripSubsYC600 maps the four grid frequency trips that route through
+// set_protection_yc600_one @ 0x66728 for model 8/0x18 (sub at frame[3],
+// value left-aligned at frame[4..6], 24-bit). Scale is int(5e7 / Hz).
+// Source: set_paraName_paraValue_inverter @ 0x69bdc (under/over_frequency_
+// fast/slow blocks).
+var qs1FreqTripSubsYC600 = map[string]byte{
+	"under_frequency_fast": 0x58, // AJ
+	"over_frequency_fast":  0x57, // AK
+	"under_frequency_slow": 0x5a, // AE
+	"over_frequency_slow":  0x59, // AF
+}
+
+// qs1ClearTimeSubs maps clearance-time params to their QS1 0x1C sub-bytes.
+// Source: set_protection_new_one calls in set_paraName_paraValue_inverter
+// for model 0x18.
+var qs1ClearTimeSubs = map[string]byte{
+	"Under_Voltage1_clearance_time":   0x36, // BB
+	"Over_Voltage1_clearance_time":    0x38, // BC
+	"Under_Voltage2_clearance_time":   0x3A, // BD
+	"Over_Voltage2_clearance_time":    0x3C, // BE
+	"Under_Frequency1_clearance_time": 0x3E, // BH
+	"Over_Frequency1_clearance_time":  0x40, // BI
+	"Under_Frequency2_clearance_time": 0x42, // BJ
+	"Over_Frequency2_clearance_time":  0x44, // BK
 }
 
 // protRecoveryScaleQS1 is the QS1 grid_recovery_time wire scale:
@@ -69,6 +172,18 @@ func qsAvgOv(raw int) float64 {
 	return math.Round((float64(raw/600) / qsProtAvgOvDenom) / 4)
 }
 
+// qsSec is the QS1 page-A clearance/time read: raw centiseconds → seconds
+// (raw / DAT_50838 = raw / 100). Mirrors the page-A SET scale (×100).
+func qsSec(raw int) float64 { return float64(raw) / 100.0 }
+
+// qsRecovery is the QS1 page-A grid-recovery / start-ramp time (AG/AS):
+// raw / DAT_50c18 = raw / 100, the inverse of the QS1 write scale int(s×100).
+func qsRecovery(raw int) float64 { return float64(raw) / 100.0 }
+
+// qsIdent passes a raw 16-bit value through unchanged (page-A AX, which the
+// firmware stores without any scale division).
+func qsIdent(raw int) float64 { return float64(raw) }
+
 // qsDroop is the QS1 over-frequency-watt droop slope (DD): raw×0.169.
 // ~16.7 = EN 50549-1 max.
 func qsDroop(raw int) float64 { return float64(raw) * qsProtDroopScale }
@@ -93,7 +208,57 @@ func qsModeFromPageB(f []byte, base int) (float64, bool) {
 	}
 }
 
+// qs1PageAEnum builds an fn that extracts an enum field packed into the
+// page-A flags byte at base+0x01 (reply byte right after the 0xDB cmd).
+// main.exe (resolve_protection60_paras_YC600 @ 0x4f968) unpacks four enums
+// from this single byte: AT=b>>6, AU=(b>>4)&3, AV=(b>>1)&3, AW=b&1.
+func qs1PageAEnum(shift, mask byte) func(f []byte, base int) (float64, bool) {
+	return func(f []byte, base int) (float64, bool) {
+		i := base + 0x01
+		if i >= len(f) {
+			return 0, false
+		}
+		return float64((f[i] >> shift) & mask), true
+	}
+}
+
 var (
+	// qs1ReadPageA decodes the QS1/QS1A page-A protection reply (L2 cmd
+	// 0xDB). Offsets are relative to base = reply[3] (the 0xDB cmd byte),
+	// matching get_parameters_from_inverter @ 0x6462c, which passes
+	// &reply[3] as param_2 to resolve_protection60_paras_YC600 @ 0x4f968.
+	//
+	// Field map (param_2+offset → code → scale), from the @0x4f968
+	// param_5%2==1 block:
+	//   +0x01 byte → AT/AU/AV/AW enum nibbles
+	//   +0x03 → AX (raw 16-bit, no scale)
+	//   +0x05/07/09/0b/0d/0f → AQ/AD/AC/AY/AZ/BA volts (raw/1.332/4, %.0f)
+	//   +0x11/14/17/1a → AJ/AK/AE/AF freq (24-bit, 5e7/raw)
+	//   +0x1d..0x30 → BB..BK clear times (raw/100)
+	//   +0x31/33 → AG/AS recovery / start-ramp (raw/100)
+	//   +0x35/37 → AH/AI volts (raw/1.332/4)
+	//   +0x39/3b → BL/BM volts (raw/100; transtemp-window times)
+	// The DW..EE columns the firmware also writes are hardcoded float
+	// constants (not reply bytes) — decoded only as defaults by main.exe,
+	// so they are intentionally omitted here.
+	qs1ReadPageA = []protReadField{
+		{code: "AT", fn: qs1PageAEnum(6, 3)}, {code: "AU", fn: qs1PageAEnum(4, 3)},
+		{code: "AV", fn: qs1PageAEnum(1, 3)}, {code: "AW", fn: qs1PageAEnum(0, 1)},
+		{code: "AX", off: 0x03, width: 2, scale: qsIdent},
+		{code: "AQ", off: 0x05, width: 2, scale: qsVolt}, {code: "AD", off: 0x07, width: 2, scale: qsVolt},
+		{code: "AC", off: 0x09, width: 2, scale: qsVolt}, {code: "AY", off: 0x0b, width: 2, scale: qsVolt},
+		{code: "AZ", off: 0x0d, width: 2, scale: qsVolt}, {code: "BA", off: 0x0f, width: 2, scale: qsVolt},
+		{code: "AJ", off: 0x11, width: 3, scale: qsFreq}, {code: "AK", off: 0x14, width: 3, scale: qsFreq},
+		{code: "AE", off: 0x17, width: 3, scale: qsFreq}, {code: "AF", off: 0x1a, width: 3, scale: qsFreq},
+		{code: "BB", off: 0x1d, width: 2, scale: qsSec}, {code: "BC", off: 0x1f, width: 2, scale: qsSec},
+		{code: "BD", off: 0x21, width: 2, scale: qsSec}, {code: "BE", off: 0x23, width: 2, scale: qsSec},
+		{code: "BF", off: 0x25, width: 2, scale: qsSec}, {code: "BG", off: 0x27, width: 2, scale: qsSec},
+		{code: "BH", off: 0x29, width: 2, scale: qsSec}, {code: "BI", off: 0x2b, width: 2, scale: qsSec},
+		{code: "BJ", off: 0x2d, width: 2, scale: qsSec}, {code: "BK", off: 0x2f, width: 2, scale: qsSec},
+		{code: "AG", off: 0x31, width: 2, scale: qsRecovery}, {code: "AS", off: 0x33, width: 2, scale: qsRecovery},
+		{code: "AH", off: 0x35, width: 2, scale: qsVolt}, {code: "AI", off: 0x37, width: 2, scale: qsVolt},
+		{code: "BL", off: 0x39, width: 2, scale: qsSec}, {code: "BM", off: 0x3b, width: 2, scale: qsSec},
+	}
 	qs1ReadPageB = []protReadField{
 		{code: "BN", off: 0x01, width: 2, scale: qsVolt}, {code: "BO", off: 0x03, width: 2, scale: qsVolt},
 		{code: "BP", off: 0x05, width: 3, scale: qsFreq}, {code: "BQ", off: 0x08, width: 3, scale: qsFreq},
@@ -115,6 +280,8 @@ var (
 // the cmd byte is the page and data base = byte[3].
 func qs1ProtectionPage(_ []byte, cmd byte) ([]protReadField, int, bool) {
 	switch cmd {
+	case CmdReplyQS1PageA:
+		return qs1ReadPageA, 3, true
 	case CmdProtReadPageB:
 		return qs1ReadPageB, 3, true
 	case CmdProtReadPageC:
@@ -123,30 +290,110 @@ func qs1ProtectionPage(_ []byte, cmd byte) ([]protReadField, int, bool) {
 	return nil, 0, false
 }
 
-// encodeProtectionQS1A builds the QS1 (0x1C) unicast frame(s) for one
-// protection param. Frequency thresholds are single 0x1C frames with
-// byte_count 3 (24-bit value left-aligned at [6..8]); the over-frequency
-// mode enum is a 2-3 frame 0x1C sequence; grid_recovery_time uses the
-// YC600 builder (opcode 0x5D). The opcode shares the family SET byte with
-// set-power; the sub-byte at [4] distinguishes.
-func encodeProtectionQS1A(paramName string, value float64) ([][]byte, error) {
+// qs1NewOneBody builds the body for set_protection_new_one @ 0x66f2c:
+// frame is FB FB 06 0x1C [sub] [byte_count] [value left-aligned at 6..8].
+// width 2 → value big-endian at [6..7], [8]=0; width 3 → at [6..8].
+// (BuildL2Frame writes the body starting at frame[4], so the sub lands at
+// [4], byte_count at [5], value at [6..].)
+func qs1NewOneBody(sub byte, wire int64, width byte) []byte {
+	switch width {
+	case 3:
+		return []byte{sub, 3, byte(wire >> 16), byte(wire >> 8), byte(wire)}
+	default:
+		return []byte{sub, 2, byte(wire >> 8), byte(wire), 0}
+	}
+}
+
+// qs1YC600Frame builds a set_protection_yc600_one @ 0x66728 frame: the sub
+// is the L2 cmd at frame[3] (no 0x1C opcode, no byte_count tag), and the
+// value is left-aligned big-endian at frame[4..]. width 2 → [4..5]; width
+// 3 → [4..6]. BuildL2Frame's cmd argument is the sub.
+func qs1YC600Frame(sub byte, wire int64, width byte) []byte {
+	switch width {
+	case 3:
+		return BuildL2Frame(sub, []byte{byte(wire >> 16), byte(wire >> 8), byte(wire), 0, 0})
+	default:
+		return BuildL2Frame(sub, []byte{byte(wire >> 8), byte(wire), 0, 0, 0})
+	}
+}
+
+// encodeProtectionQS1A builds a QS1 protection frame for one param. The
+// opcode argument (CmdSetPowerQS1Unicast 0x1C / CmdSetPowerQS1Broadcast
+// 0x2C) is used only for the params that route through the 0x1C builder
+// (set_protection_new_one): the freq-watt curve, AH/AI/AB volt trips, and
+// the clearance times — there the sub-byte at [4] distinguishes the param
+// from set-power on the shared opcode.
+//
+// The slow voltage trips (AQ/AD/AC/AY) and grid frequency trips
+// (AJ/AK/AE/AF) route through set_protection_yc600_one, which puts the sub
+// directly at frame[3] (the L2 cmd slot) — those frames ignore the opcode
+// argument. grid_recovery_time (AG) uses the 0x5D YC600 builder; CV is a
+// multi-frame mode enum. Source: set_paraName_paraValue_inverter @ 0x69bdc
+// for model 8/0x18 + the two builders @ 0x66f2c / 0x66728.
+func encodeProtectionQS1A(paramName string, value float64, opcode byte) ([][]byte, error) {
+	// Freq-watt curve (CA/CB/CC/DH/DI): 0x1C builder, 24-bit, int(50e6/Hz).
 	if sub, ok := qs1ProtFreqSubs[paramName]; ok {
-		wire := int64(qs1aFreqDivBy / value) // wire = int(50e6/Hz), truncate toward zero
+		wire := int64(qs1aFreqDivBy / value) // truncate toward zero
 		if wire < 0 || wire > 0xFFFFFF {
 			return nil, fmt.Errorf("set-protection: %q=%g Hz → wire %d out of 24-bit range", paramName, value, wire)
 		}
-		return [][]byte{BuildL2Frame(CmdSetPowerQS1Unicast, []byte{sub, 3, byte(wire >> 16), byte(wire >> 8), byte(wire)})}, nil
+		return [][]byte{BuildL2Frame(opcode, qs1NewOneBody(sub, wire, 3))}, nil
+	}
+	// Voltage trips AH/AI: 0x1C builder, 16-bit, int(V × 1.332 × 4).
+	if sub, ok := qs1VoltTripSubs[paramName]; ok {
+		wire := int64(value * qs1VoltTripWriteScale)
+		if wire < 0 || wire > 0xFFFF {
+			return nil, fmt.Errorf("set-protection: %q=%g V → wire %d out of 16-bit range", paramName, value, wire)
+		}
+		return [][]byte{BuildL2Frame(opcode, qs1NewOneBody(sub, wire, 2))}, nil
+	}
+	// Slow voltage trips AQ/AD/AC/AY: yc600 builder, 16-bit, int(V × 1.332 × 4).
+	if sub, ok := qs1VoltTripSubsYC600[paramName]; ok {
+		wire := int64(value * qs1VoltTripWriteScale)
+		if wire < 0 || wire > 0xFFFF {
+			return nil, fmt.Errorf("set-protection: %q=%g V → wire %d out of 16-bit range", paramName, value, wire)
+		}
+		return [][]byte{qs1YC600Frame(sub, wire, 2)}, nil
+	}
+	// Grid frequency trips AJ/AK/AE/AF: yc600 builder, 24-bit, int(50e6/Hz).
+	if sub, ok := qs1FreqTripSubsYC600[paramName]; ok {
+		wire := int64(qs1aFreqDivBy / value) // truncate toward zero
+		if wire < 0 || wire > 0xFFFFFF {
+			return nil, fmt.Errorf("set-protection: %q=%g Hz → wire %d out of 24-bit range", paramName, value, wire)
+		}
+		return [][]byte{qs1YC600Frame(sub, wire, 3)}, nil
+	}
+	// Clearance times BB..BK: 0x1C builder, 16-bit, int(s × 100).
+	if sub, ok := qs1ClearTimeSubs[paramName]; ok {
+		wire := int64(value * qs1ClearTimeWriteScale)
+		if wire < 0 || wire > 0xFFFF {
+			return nil, fmt.Errorf("set-protection: %q=%g s → wire %d out of 16-bit range", paramName, value, wire)
+		}
+		return [][]byte{BuildL2Frame(opcode, qs1NewOneBody(sub, wire, 2))}, nil
 	}
 	switch paramName {
+	case "min10_Over_average_voltage": // AB — 0x1C builder sub 0x7d, 24-bit, int(V × 1.332 × 600 × 4)
+		wire := int64(value * qs1AvgOvWriteScale)
+		if wire < 0 || wire > 0xFFFFFF {
+			return nil, fmt.Errorf("set-protection: min10_Over_average_voltage=%g V → wire %d out of 24-bit range", value, wire)
+		}
+		return [][]byte{BuildL2Frame(opcode, qs1NewOneBody(0x7d, wire, 3))}, nil
 	case "Over_frequency_Watt_set": // CV — multi-frame mode enum
-		return qs1ModeFrames(value), nil
-	case "grid_recovery_time": // AG — YC600 0x5D builder, int(s*100)
+		// The firmware's default branch packs the mode as a single byte, so
+		// guard against the int→byte wrap (e.g. 300 → 44) silently selecting
+		// a different mode; in-range modes pass through to the builder.
+		if mode := int(value); mode < 0 || mode > 0xFF {
+			return nil, fmt.Errorf("set-protection: Over_frequency_Watt_set mode %d out of byte range [0,255]", mode)
+		}
+		return qs1ModeFrames(value, opcode), nil
+	case "grid_recovery_time": // AG — YC600 0x5D builder, int(s*100), 16-bit
 		wire := int64(value * protRecoveryScaleQS1)
 		if wire < 0 || wire > 0xFFFF {
 			return nil, fmt.Errorf("set-protection: grid_recovery_time=%g → wire %d out of 16-bit range", value, wire)
 		}
-		// 0x5D body: value left-aligned big-endian at [4..5], rest zero.
-		return [][]byte{BuildL2Frame(CmdGridRecoveryQS1, []byte{byte(wire >> 8), byte(wire), 0, 0, 0})}, nil
+		// The opcode argument is intentionally ignored: this param uses the
+		// 0x5D YC600 builder on both unicast and broadcast paths.
+		return [][]byte{qs1YC600Frame(CmdGridRecoveryQS1, wire, 2)}, nil
 	}
 	return nil, fmt.Errorf("%w: %q on QS1A", ErrUnsupportedProtectionParam, paramName)
 }
@@ -155,11 +402,12 @@ func encodeProtectionQS1A(paramName string, value float64) ([][]byte, error) {
 // (Over_frequency_Watt_set, sub 0x5F + 0x99), replicating main.exe's
 // branch+remap: 0xF (disabled) → 5F=0x30, 5F=0x0F, 99=0; {3,4,0xD}
 // (AS/NZS, 0xD→4) → 5F=0x10, 5F=v, 99=1; else (e.g. 0xE→1) → 5F=0x20,
-// 5F=v. Each is a 0x1C frame with byte_count 1 (value at [6]).
-func qs1ModeFrames(value float64) [][]byte {
+// 5F=v. Each frame uses opcode (0x1C unicast or 0x2C broadcast) with
+// byte_count 1 (value at [6]).
+func qs1ModeFrames(value float64, opcode byte) [][]byte {
 	mode := int(value)
 	frame := func(sub, v byte) []byte {
-		return BuildL2Frame(CmdSetPowerQS1Unicast, []byte{sub, 1, v, 0, 0})
+		return BuildL2Frame(opcode, []byte{sub, 1, v, 0, 0})
 	}
 	switch mode {
 	case 0xF:

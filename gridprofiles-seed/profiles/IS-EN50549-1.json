@@ -1,0 +1,234 @@
+{
+  "schema": "invdriver.gridprofile/v1",
+  "id": "IS-EN50549-1",
+  "vnom_v": 230,
+  "source": {
+    "system": "apsystems",
+    "ref": "TY=59",
+    "bundle": "protection_parameters60_info",
+    "version": "1",
+    "fetched": "2026-05-23T11:36:13+00:00"
+  },
+  "points": [
+    {
+      "model": 707,
+      "group": "MustTrip",
+      "point": "V",
+      "native": {
+        "value": 191.0,
+        "unit": "V"
+      },
+      "apply": {
+        "aps_code": "AC"
+      },
+      "index": 0,
+      "sf_ref": "V_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 8304
+      },
+      "range": {
+        "min": 191.0,
+        "max": 229.0
+      }
+    },
+    {
+      "model": 707,
+      "group": "MustTrip",
+      "point": "Tms",
+      "native": {
+        "value": 0.7,
+        "unit": "s"
+      },
+      "apply": {
+        "aps_code": "BD"
+      },
+      "index": 1,
+      "sf_ref": "Tms_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 70
+      },
+      "range": {
+        "min": 0.02,
+        "max": 610.0
+      }
+    },
+    {
+      "model": 708,
+      "group": "MustTrip",
+      "point": "Tms",
+      "native": {
+        "value": 0.7,
+        "unit": "s"
+      },
+      "apply": {
+        "aps_code": "BC"
+      },
+      "index": 0,
+      "sf_ref": "Tms_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 70
+      },
+      "range": {
+        "min": 0.02,
+        "max": 610.0
+      }
+    },
+    {
+      "model": 708,
+      "group": "MustTrip",
+      "point": "V",
+      "native": {
+        "value": 281.0,
+        "unit": "V"
+      },
+      "apply": {
+        "aps_code": "AD"
+      },
+      "index": 0,
+      "sf_ref": "V_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 12217
+      },
+      "range": {
+        "min": 231.0,
+        "max": 288.0
+      }
+    },
+    {
+      "model": 708,
+      "group": "MustTrip",
+      "point": "Tms",
+      "native": {
+        "value": 70.0,
+        "unit": "s"
+      },
+      "apply": {
+        "aps_code": "BE"
+      },
+      "index": 1,
+      "sf_ref": "Tms_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 7000
+      },
+      "range": {
+        "min": 0.02,
+        "max": 610.0
+      }
+    },
+    {
+      "model": 708,
+      "group": "MustTrip",
+      "point": "V",
+      "native": {
+        "value": 269.0,
+        "unit": "V"
+      },
+      "apply": {
+        "aps_code": "AY"
+      },
+      "index": 1,
+      "sf_ref": "V_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 11696
+      },
+      "range": {
+        "min": 231.0,
+        "max": 275.0
+      }
+    },
+    {
+      "model": 709,
+      "group": "MustTrip",
+      "point": "Hz",
+      "native": {
+        "value": 47.0,
+        "unit": "Hz"
+      },
+      "apply": {
+        "aps_code": "AE"
+      },
+      "index": 0,
+      "sf_ref": "Hz_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 4700
+      },
+      "range": {
+        "min": 45.0,
+        "max": 49.9
+      }
+    },
+    {
+      "model": 709,
+      "group": "MustTrip",
+      "point": "Tms",
+      "native": {
+        "value": 0.5,
+        "unit": "s"
+      },
+      "apply": {
+        "aps_code": "BJ"
+      },
+      "index": 0,
+      "sf_ref": "Tms_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 50
+      },
+      "range": {
+        "min": 0.06,
+        "max": 610.0
+      }
+    },
+    {
+      "model": 710,
+      "group": "MustTrip",
+      "point": "Hz",
+      "native": {
+        "value": 52.0,
+        "unit": "Hz"
+      },
+      "apply": {
+        "aps_code": "AF"
+      },
+      "index": 0,
+      "sf_ref": "Hz_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 5200
+      },
+      "range": {
+        "min": 50.1,
+        "max": 55.0
+      }
+    },
+    {
+      "model": 710,
+      "group": "MustTrip",
+      "point": "Tms",
+      "native": {
+        "value": 0.5,
+        "unit": "s"
+      },
+      "apply": {
+        "aps_code": "BK"
+      },
+      "index": 0,
+      "sf_ref": "Tms_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 50
+      },
+      "range": {
+        "min": 0.06,
+        "max": 610.0
+      }
+    }
+  ]
+}

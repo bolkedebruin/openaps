@@ -51,6 +51,13 @@ const (
 	CmdProtReadPageB byte = 0xDE
 	CmdProtReadPageC byte = 0xD9
 
+	// CmdReplyQS1PageA is the L2 cmd a QS1/QS1A inverter uses for its
+	// page-A protection reply. The outbound page-A query is 0xDD (shared
+	// across families), but QS1A answers it with a 0xDB-tagged page (DS3
+	// answers 0xDD); main.exe distinguishes via reply[3] == 0xDB
+	// (get_parameters_from_inverter @ 0x6462c, local_41d == -0x25).
+	CmdReplyQS1PageA byte = 0xDB
+
 	CmdInfoQuery        byte = 0xDC
 	CmdInfoExtended     byte = 0xDD // wraps CmdInfoQuery on newer reply forms
 	CmdTelemetryBBQuery byte = 0xBB

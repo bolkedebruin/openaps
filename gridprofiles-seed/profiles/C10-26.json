@@ -1,0 +1,388 @@
+{
+  "schema": "invdriver.gridprofile/v1",
+  "id": "C10-26",
+  "vnom_v": 230,
+  "source": {
+    "system": "apsystems",
+    "ref": "TY=26",
+    "bundle": "protection_parameters60_info",
+    "version": "1",
+    "fetched": "2026-05-23T11:36:13+00:00"
+  },
+  "points": [
+    {
+      "model": 703,
+      "group": "DEREnterService",
+      "point": "ESDlyTms",
+      "native": {
+        "value": 60.0,
+        "unit": "s"
+      },
+      "apply": {
+        "aps_code": "AG"
+      },
+      "index": 0,
+      "sf_ref": null,
+      "sf": 0,
+      "sunspec": {
+        "value": 60
+      },
+      "range": {
+        "min": 10.0,
+        "max": 610.0
+      }
+    },
+    {
+      "model": 703,
+      "group": "DEREnterService",
+      "point": "ESHzHi",
+      "native": {
+        "value": 50.2,
+        "unit": "Hz"
+      },
+      "apply": {
+        "aps_code": "BQ"
+      },
+      "index": 0,
+      "sf_ref": "Hz_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 5020
+      },
+      "range": {
+        "min": 50.1,
+        "max": 54.9
+      }
+    },
+    {
+      "model": 703,
+      "group": "DEREnterService",
+      "point": "ESHzLo",
+      "native": {
+        "value": 49.8,
+        "unit": "Hz"
+      },
+      "apply": {
+        "aps_code": "BP"
+      },
+      "index": 0,
+      "sf_ref": "Hz_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 4980
+      },
+      "range": {
+        "min": 45.1,
+        "max": 49.9
+      }
+    },
+    {
+      "model": 703,
+      "group": "DEREnterService",
+      "point": "ESRmpTms",
+      "native": {
+        "value": 60.0,
+        "unit": "s"
+      },
+      "apply": {
+        "aps_code": "AS"
+      },
+      "index": 0,
+      "sf_ref": null,
+      "sf": 0,
+      "sunspec": {
+        "value": 60
+      },
+      "range": {
+        "min": 10.0,
+        "max": 610.0
+      }
+    },
+    {
+      "model": 703,
+      "group": "DEREnterService",
+      "point": "ESVHi",
+      "native": {
+        "value": 253.0,
+        "unit": "V"
+      },
+      "apply": {
+        "aps_code": "BO"
+      },
+      "index": 0,
+      "sf_ref": "V_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 11000
+      },
+      "range": {
+        "min": 231.0,
+        "max": 270.0
+      }
+    },
+    {
+      "model": 703,
+      "group": "DEREnterService",
+      "point": "ESVLo",
+      "native": {
+        "value": 196.0,
+        "unit": "V"
+      },
+      "apply": {
+        "aps_code": "BN"
+      },
+      "index": 0,
+      "sf_ref": "V_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 8522
+      },
+      "range": {
+        "min": 60.0,
+        "max": 229.0
+      }
+    },
+    {
+      "model": 707,
+      "group": "MustTrip",
+      "point": "V",
+      "native": {
+        "value": 184.0,
+        "unit": "V"
+      },
+      "apply": {
+        "aps_code": "AC"
+      },
+      "index": 0,
+      "sf_ref": "V_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 8000
+      },
+      "range": {
+        "min": 60.0,
+        "max": 229.0
+      }
+    },
+    {
+      "model": 707,
+      "group": "MustTrip",
+      "point": "Tms",
+      "native": {
+        "value": 0.05,
+        "unit": "s"
+      },
+      "apply": {
+        "aps_code": "BD"
+      },
+      "index": 1,
+      "sf_ref": "Tms_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 5
+      },
+      "range": {
+        "min": 0.02,
+        "max": 610.0
+      }
+    },
+    {
+      "model": 708,
+      "group": "MustTrip",
+      "point": "Tms",
+      "native": {
+        "value": 0.02,
+        "unit": "s"
+      },
+      "apply": {
+        "aps_code": "BC"
+      },
+      "index": 0,
+      "sf_ref": "Tms_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 2
+      },
+      "range": {
+        "min": 0.02,
+        "max": 610.0
+      }
+    },
+    {
+      "model": 708,
+      "group": "MustTrip",
+      "point": "V",
+      "native": {
+        "value": 264.0,
+        "unit": "V"
+      },
+      "apply": {
+        "aps_code": "AD"
+      },
+      "index": 0,
+      "sf_ref": "V_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 11478
+      },
+      "range": {
+        "min": 231.0,
+        "max": 276.0
+      }
+    },
+    {
+      "model": 708,
+      "group": "MustTrip",
+      "point": "Tms",
+      "native": {
+        "value": 0.05,
+        "unit": "s"
+      },
+      "apply": {
+        "aps_code": "BE"
+      },
+      "index": 1,
+      "sf_ref": "Tms_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 5
+      },
+      "range": {
+        "min": 0.02,
+        "max": 610.0
+      }
+    },
+    {
+      "model": 708,
+      "group": "MustTrip",
+      "point": "V",
+      "native": {
+        "value": 253.0,
+        "unit": "V"
+      },
+      "apply": {
+        "aps_code": "AY"
+      },
+      "index": 1,
+      "sf_ref": "V_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 11000
+      },
+      "range": {
+        "min": 231.0,
+        "max": 276.0
+      }
+    },
+    {
+      "model": 708,
+      "group": "MustTrip",
+      "point": "V",
+      "native": {
+        "value": 253.0,
+        "unit": "V"
+      },
+      "apply": {
+        "aps_code": "AB"
+      },
+      "index": 2,
+      "sf_ref": "V_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 11000
+      },
+      "range": {
+        "min": 253.0,
+        "max": 300.0
+      }
+    },
+    {
+      "model": 709,
+      "group": "MustTrip",
+      "point": "Hz",
+      "native": {
+        "value": 47.5,
+        "unit": "Hz"
+      },
+      "apply": {
+        "aps_code": "AE"
+      },
+      "index": 0,
+      "sf_ref": "Hz_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 4750
+      },
+      "range": {
+        "min": 45.1,
+        "max": 49.9
+      }
+    },
+    {
+      "model": 709,
+      "group": "MustTrip",
+      "point": "Tms",
+      "native": {
+        "value": 0.16,
+        "unit": "s"
+      },
+      "apply": {
+        "aps_code": "BJ"
+      },
+      "index": 0,
+      "sf_ref": "Tms_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 16
+      },
+      "range": {
+        "min": 0.06,
+        "max": 610.0
+      }
+    },
+    {
+      "model": 710,
+      "group": "MustTrip",
+      "point": "Hz",
+      "native": {
+        "value": 51.5,
+        "unit": "Hz"
+      },
+      "apply": {
+        "aps_code": "AF"
+      },
+      "index": 0,
+      "sf_ref": "Hz_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 5150
+      },
+      "range": {
+        "min": 50.1,
+        "max": 54.9
+      }
+    },
+    {
+      "model": 710,
+      "group": "MustTrip",
+      "point": "Tms",
+      "native": {
+        "value": 0.16,
+        "unit": "s"
+      },
+      "apply": {
+        "aps_code": "BK"
+      },
+      "index": 0,
+      "sf_ref": "Tms_SF",
+      "sf": -2,
+      "sunspec": {
+        "value": 16
+      },
+      "range": {
+        "min": 0.06,
+        "max": 610.0
+      }
+    }
+  ]
+}

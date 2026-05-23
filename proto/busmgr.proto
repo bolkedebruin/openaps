@@ -21,10 +21,13 @@ message Envelope {
     FleetSummary  fleet         = 6;
     Protection    protection    = 7;
 
-    Send          send          = 10;
-    Broadcast     broadcast     = 11;
-    Reset         reset         = 12;
-    SubscribeRaw  subscribe_raw = 13;
+    Send                 send              = 10;
+    Broadcast            broadcast         = 11;
+    Reset                reset             = 12;
+    SubscribeRaw         subscribe_raw     = 13;
+
+    GridProfileRequest   grid_profile_req  = 14;
+    GridProfileResponse  grid_profile_resp = 15;
   }
 }
 
@@ -184,10 +187,15 @@ message DecodeFailed {
 // Send addresses one inverter by peer_uid. frame carries the L2 body
 // (FB FB ... FE FE) only; the bus-mgr backend resolves peer_uid to a
 // short-address and wraps the outer L1 envelope before injection.
+// short_addr, when nonzero, names the target short-address directly so
+// the sender (e.g. inv-driver's telemetry poller, which holds the
+// inventory) does not depend on the bus-mgr's learned peer_uid->SA map;
+// zero means resolve peer_uid via inventory as before.
 message Send {
   string peer_uid    = 1;
   bytes  frame       = 2;  // L2 only (FB FB ... FE FE)
   int64  deadline_ms = 3;
+  uint32 short_addr  = 4;  // optional direct target SA; 0 = resolve peer_uid
 }
 
 // Broadcast carries an L2 body addressed to every inverter on the bus.
@@ -294,4 +302,53 @@ message Protection {
   optional double of_curve_uf_low = 34;  // DH
   optional double of_curve_uf_hi  = 35;  // DI
   optional double of_curve_of_low = 36;  // CB
+}
+
+// GridProfileRequest carries one grid-profile management operation. The
+// client sets exactly one oneof field to indicate which operation to perform.
+// Results are returned in a GridProfileResponse on the same connection.
+message GridProfileRequest {
+  oneof op {
+    Empty        list_profiles    = 1;  // return all stored base profiles as JSON
+    Empty        refresh_profiles = 2;  // reload profiles from the on-disk dir
+    SelectBase   select_base      = 3;  // set the active base profile
+    OverlaySet   set_overlay      = 4;  // upsert a per-inverter overlay
+    ClearOverlay clear_overlay    = 5;  // remove the overlay for one inverter
+    GetEffective get_effective    = 6;  // compute effective profile for one inverter
+    Empty        get_status       = 7;  // return latest reconcile/verify reports
+  }
+}
+
+// Empty is a placeholder for operations that carry no parameters.
+message Empty {}
+
+// SelectBase selects a stored base profile by its ID.
+message SelectBase {
+  string id = 1;
+}
+
+// OverlaySet upserts a per-inverter overlay. overlay_json must be a valid
+// v1 overlay document (validated server-side before applying).
+message OverlaySet {
+  string uid          = 1;  // 12-char hex inverter UID
+  bytes  overlay_json = 2;  // serialised Overlay document
+}
+
+// ClearOverlay removes the stored overlay for one inverter UID.
+message ClearOverlay {
+  string uid = 1;
+}
+
+// GetEffective requests the computed effective profile for one inverter.
+message GetEffective {
+  string uid = 1;
+}
+
+// GridProfileResponse is returned after every GridProfileRequest.
+// ok=false and error non-empty indicate a failure; ok=true and json
+// non-nil carry the structured result serialised as JSON.
+message GridProfileResponse {
+  bool   ok    = 1;
+  string error = 2;
+  bytes  json  = 3;  // structured result: profile list, effective profile, or status
 }

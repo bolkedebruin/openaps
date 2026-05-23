@@ -114,6 +114,15 @@ func parseInboundPair(l2 []byte) (PairFrame, bool) {
 	if len(l2) < 10 {
 		return PairFrame{}, false
 	}
+	// Inbound pair replies are flat L0 bodies; they never carry the L2
+	// wrapper. A frame that still begins with the L2 SOF (FB FB) is a
+	// telemetry / protection / info reply whose first two bytes would be
+	// misread by the ShortAddrReply branch below as a short address
+	// (0xFBFB). Reject it so such frames fall through to "no decoder
+	// matched" instead of corrupting the inverter's stored short_addr.
+	if l2[0] == L2SOF1 && l2[1] == L2SOF2 {
+		return PairFrame{}, false
+	}
 	if l2[4] == 0xA5 && l2[5] == 0xA5 {
 		return PairFrame{
 			Kind:   PairBindAck,

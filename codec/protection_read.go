@@ -53,6 +53,28 @@ type protReadField struct {
 	fn    func(f []byte, base int) (float64, bool)
 }
 
+// AllProtectionCodes returns every 2-letter code the protection decoder can
+// emit, across all DS3 and QS1 reply pages, in first-seen order with no
+// duplicates. It lets the publish layer guard against silently dropping a
+// decoded code: a code that is neither mapped to the wire.Protection message
+// nor explicitly listed as deliberately-unpublished is a bug.
+func AllProtectionCodes() []string {
+	seen := make(map[string]bool)
+	var out []string
+	for _, tbl := range [][]protReadField{
+		ds3ReadPageA, ds3ReadPageB,
+		qs1ReadPageA, qs1ReadPageB, qs1ReadPageC,
+	} {
+		for _, f := range tbl {
+			if !seen[f.code] {
+				seen[f.code] = true
+				out = append(out, f.code)
+			}
+		}
+	}
+	return out
+}
+
 // protectionPager resolves one reply frame to its field table + data
 // base (the byte the offsets are relative to), or ok=false if the frame
 // isn't a recognised page. Implemented per family (ds3ProtectionPage /

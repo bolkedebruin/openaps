@@ -24,6 +24,12 @@ import (
 	"github.com/bolke/inv-driver/wire"
 )
 
+// GridProfileHandler handles GridProfileRequest envelopes from
+// controller-gated connections. Implemented by gridprofile.Manager.
+type GridProfileHandler interface {
+	Handle(ctx context.Context, req *wire.GridProfileRequest) *wire.GridProfileResponse
+}
+
 const (
 	// shutdownGrace bounds how long Serve waits for in-flight per-conn
 	// goroutines to drain after the context is cancelled.
@@ -67,6 +73,12 @@ type Server struct {
 	// observance. Used by the cold-start probe to fire downstream
 	// queries the moment a publisher comes online.
 	OnPublisherAttach func(backend string)
+
+	// GridProfile, when non-nil, handles GridProfileRequest envelopes
+	// received from controller-gated connections. The same
+	// ControllerBackends/ControllerUIDs gates that guard Send/Broadcast
+	// apply here; only allowed controllers may issue grid-profile ops.
+	GridProfile GridProfileHandler
 
 	connSeq atomic.Uint64
 	// conns tracks live connections so Serve can close them on
@@ -246,6 +258,16 @@ func (s *Server) handlePublisher(ctx context.Context, peerUID int, tag, backend 
 			log.Printf("ipc %s: read: %v", tag, err)
 			return
 		}
+		// GridProfileRequest is a synchronous request/response op.
+		// The same ControllerBackends/ControllerUIDs gates that guard
+		// Send/Broadcast also apply here (enforced by routeDownstream
+		// semantics; we mirror the gate explicitly).
+		if req := next.GetGridProfileReq(); req != nil {
+			if err := s.handleGridProfileReq(ctx, peerUID, backend, tag, c, req); err != nil {
+				log.Printf("ipc %s: grid-profile: %v", tag, err)
+			}
+			continue
+		}
 		if err := s.Ingestor.HandleWithPeer(ctx, peerUID, backend, &next); err != nil {
 			// Per-event error: log and continue. Connection is still
 			// synchronised on the next length prefix. Unknown body
@@ -255,6 +277,44 @@ func (s *Server) handlePublisher(ctx context.Context, peerUID int, tag, backend 
 			log.Printf("ipc %s: ingest: %v", tag, err)
 		}
 	}
+}
+
+// handleGridProfileReq processes a GridProfileRequest received on a
+// publisher connection. The same controller gate as Send/Broadcast applies:
+// the sender backend must be on ControllerBackends and the peer UID must be
+// on ControllerUIDs (when non-empty). The response is written synchronously
+// back on the same conn.
+func (s *Server) handleGridProfileReq(ctx context.Context, peerUID int, backend, tag string, c net.Conn, req *wire.GridProfileRequest) error {
+	// Apply controller gate (mirrors routeDownstream logic in ingest).
+	if !s.Ingestor.IsControllerBackend(backend) {
+		resp := &wire.GridProfileResponse{Ok: false, Error: fmt.Sprintf("grid-profile refused: backend %q not an allowed controller", backend)}
+		return writeGridProfileResp(tag, c, resp)
+	}
+	if !s.Ingestor.IsControllerUID(peerUID) {
+		resp := &wire.GridProfileResponse{Ok: false, Error: fmt.Sprintf("grid-profile refused: peer uid=%d not in controller-uids allow-list", peerUID)}
+		return writeGridProfileResp(tag, c, resp)
+	}
+	if s.GridProfile == nil {
+		resp := &wire.GridProfileResponse{Ok: false, Error: "grid-profile manager not configured"}
+		return writeGridProfileResp(tag, c, resp)
+	}
+	resp := s.GridProfile.Handle(ctx, req)
+	if resp == nil {
+		resp = &wire.GridProfileResponse{Ok: false, Error: "grid-profile handler returned nil"}
+	}
+	return writeGridProfileResp(tag, c, resp)
+}
+
+// writeGridProfileResp wraps a GridProfileResponse in an Envelope and writes
+// it to conn with the configured write deadline.
+func writeGridProfileResp(tag string, c net.Conn, resp *wire.GridProfileResponse) error {
+	env := &wire.Envelope{Body: &wire.Envelope_GridProfileResp{GridProfileResp: resp}}
+	_ = c.SetWriteDeadline(time.Now().Add(writeDeadline))
+	if err := wire.WriteFrame(c, env); err != nil {
+		return fmt.Errorf("write grid-profile response: %w", err)
+	}
+	log.Printf("ipc %s: grid-profile response ok=%v", tag, resp.GetOk())
+	return nil
 }
 
 // publisherWriter drains the per-publisher outbound channel onto the

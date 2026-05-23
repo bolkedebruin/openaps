@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bolke/inv-driver/gridprofile/v1.schema.json",
+  "title": "inv-driver grid-profile / overlay file (v1)",
+  "description": "Canonical contract for SunSpec-symbol-keyed grid profiles and per-inverter overlays. A document is either a profile file or an overlay file. Validated on every load, fetch, and apply.",
+  "oneOf": [
+    { "$ref": "#/$defs/profileFile" },
+    { "$ref": "#/$defs/overlayFile" }
+  ],
+  "$defs": {
+    "schemaVersion": { "const": "invdriver.gridprofile/v1" },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9._-]+$",
+      "description": "Human profile name, filename-safe. Origin (APsystems TY, utility) lives in source.ref, NOT here."
+    },
+    "uid": {
+      "type": "string",
+      "pattern": "^[0-9A-Fa-f]{12}$",
+      "description": "12-hex inverter UID."
+    },
+    "vnom": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Per-inverter nominal voltage used for V <-> %VNom conversion (e.g. 230)."
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system", "ref"],
+      "properties": {
+        "system": { "type": "string", "minLength": 1, "description": "e.g. apsystems" },
+        "ref": { "type": "string", "minLength": 1, "description": "link to source profile, e.g. \"TY=36\"" },
+        "bundle": { "type": "string" },
+        "version": { "type": "string" },
+        "fetched": { "type": "string" }
+      }
+    },
+    "model": {
+      "type": "integer",
+      "enum": [134, 703, 705, 706, 707, 708, 709, 710, 711],
+      "description": "SunSpec model number for this point."
+    },
+    "point": {
+      "type": "string",
+      "enum": [
+        "V", "Hz", "Tms",
+        "ESVLo", "ESVHi", "ESHzLo", "ESHzHi", "ESDlyTms", "ESRmpTms", "ESRndTms",
+        "Ena", "DbOf", "DbUf", "KOf", "KUf", "RspTms",
+        "Hz1", "Hz2", "Hz3", "Hz4", "W1", "W2", "W3", "W4"
+      ],
+      "description": "SunSpec point symbol (subset relevant to grid protection, per design §3)."
+    },
+    "sf_ref": {
+      "type": ["string", "null"],
+      "enum": ["V_SF", "Hz_SF", "Tms_SF", "Db_SF", "K_SF", "RspTms_SF", "W_SF", null],
+      "description": "Name of the SunSpec scale-factor point governing this value; null for unscaled (e.g. ESDlyTms)."
+    },
+    "apsCode": {
+      "type": "string",
+      "pattern": "^[A-Z]{2}$",
+      "description": "APsystems 2-letter parameter code — the forward apply key only."
+    },
+    "point_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "group", "point", "native", "apply"],
+      "properties": {
+        "model": { "$ref": "#/$defs/model" },
+        "group": { "type": "string", "minLength": 1, "description": "SunSpec group name, e.g. DERFreqDroop / MustTrip / DEREnterService." },
+        "index": { "type": "integer", "minimum": 0, "description": "Repeating-group / curve-point index (0-based). Omit or 0 for scalars." },
+        "point": { "$ref": "#/$defs/point" },
+        "sf_ref": { "$ref": "#/$defs/sf_ref" },
+        "sf": { "type": "integer", "minimum": -10, "maximum": 10, "description": "Scale-factor exponent: sunspec.value = round(native / 10^sf)." },
+        "native": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["value", "unit"],
+          "properties": {
+            "value": { "type": "number" },
+            "unit": { "type": "string" }
+          }
+        },
+        "sunspec": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["value"],
+          "properties": { "value": { "type": "number" } }
+        },
+        "range": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["min", "max"],
+          "properties": {
+            "min": { "type": "number" },
+            "max": { "type": "number" }
+          }
+        },
+        "apply": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["aps_code"],
+          "properties": { "aps_code": { "$ref": "#/$defs/apsCode" } }
+        }
+      },
+      "$comment": "range.min <= range.max enforced by loader code; JSON Schema cannot cross-reference sibling property values."
+    },
+    "profileFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "id", "vnom_v", "source", "points"],
+      "properties": {
+        "schema": { "$ref": "#/$defs/schemaVersion" },
+        "id": { "$ref": "#/$defs/id" },
+        "vnom_v": { "$ref": "#/$defs/vnom" },
+        "source": { "$ref": "#/$defs/source" },
+        "points": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/point_entry" }
+        }
+      }
+    },
+    "overlayFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "id", "uids", "points"],
+      "properties": {
+        "schema": { "$ref": "#/$defs/schemaVersion" },
+        "id": { "$ref": "#/$defs/id" },
+        "vnom_v": { "$ref": "#/$defs/vnom" },
+        "uids": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/uid" }
+        },
+        "points": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/point_entry" }
+        }
+      }
+    }
+  }
+}

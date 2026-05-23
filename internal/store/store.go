@@ -467,6 +467,40 @@ ON CONFLICT(inverter_uid, channel_idx) DO UPDATE SET
 	return nil
 }
 
+// InverterPollRef is one inventory entry for poll dispatch; returned by
+// ListInvertersForPoll.
+type InverterPollRef struct {
+	UID       string
+	ShortAddr uint32
+}
+
+// ListInvertersForPoll returns every inverter row whose short_addr is
+// known and non-zero, ordered by uid. Used by the telemetry poller to
+// build its round schedule from inv-driver's own inventory, independent
+// of any main.exe state. short_addr = 0 (broadcast/coordinator sentinel)
+// is excluded to prevent mis-fall-back to the inventory on the dispatch path.
+func (s *Store) ListInvertersForPoll(ctx context.Context) ([]InverterPollRef, error) {
+	rows, err := s.db.QueryContext(ctx, `
+SELECT uid, short_addr
+FROM   inverters
+WHERE  short_addr IS NOT NULL AND short_addr != 0
+ORDER  BY uid ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("ListInvertersForPoll: %w", err)
+	}
+	defer rows.Close()
+	var out []InverterPollRef
+	for rows.Next() {
+		var uid string
+		var sa int64
+		if err := rows.Scan(&uid, &sa); err != nil {
+			return nil, fmt.Errorf("ListInvertersForPoll: scan: %w", err)
+		}
+		out = append(out, InverterPollRef{UID: uid, ShortAddr: uint32(sa)})
+	}
+	return out, rows.Err()
+}
+
 // AppendEvent inserts an append-only event row with the typed columns.
 // short_addr / error / raw_hex stay NULL for non-decode_failed kinds —
 // use AppendDecodeFailed for those.

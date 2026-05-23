@@ -22,10 +22,12 @@ import (
 	"time"
 
 	"github.com/bolke/inv-driver/internal/events"
+	"github.com/bolke/inv-driver/internal/gridprofile"
 	"github.com/bolke/inv-driver/internal/ingest"
 	"github.com/bolke/inv-driver/internal/ipc"
 	"github.com/bolke/inv-driver/internal/probe"
 	"github.com/bolke/inv-driver/internal/store"
+	"github.com/bolke/inv-driver/internal/telemetrypoll"
 )
 
 const (
@@ -81,6 +83,10 @@ Run 'inv-driver <subcommand> -h' for subcommand-specific flags.
 `)
 }
 
+const (
+	defaultGridProfilesDir = "/var/lib/inv-driver/gridprofiles"
+)
+
 func runServe(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	defSock := defaultSocket
@@ -99,6 +105,14 @@ func runServe(args []string) error {
 		"comma-separated list of peer backends permitted to inject Envelope_Send / Envelope_Broadcast frames")
 	controllerUIDs := fs.String("controller-uids", "0",
 		"comma-separated list of OS user-ids whose UDS connections may inject Envelope_Send / Envelope_Broadcast frames (Linux SO_PEERCRED; empty disables UID gate)")
+	gridProfilesDir := fs.String("gridprofiles-dir", defaultGridProfilesDir,
+		"directory containing grid-profile JSON files (profiles/ and overlays/ subdirs)")
+	gridProfileBroadcast := fs.Bool("gridprofile-broadcast", false,
+		"enable broadcast whole-profile apply path in SelectBase (default false; requires on-wire validation)")
+	telemetryPoll := fs.Bool("telemetry-poll", true,
+		"enable periodic 0xBB telemetry queries originated by inv-driver (default true; disable only for diagnostics)")
+	telemetryPollInterval := fs.Duration("telemetry-poll-interval", 1*time.Second,
+		"cadence between 0xBB poll rounds; per-inverter Sends are spaced by -probe-interval within the round")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -126,6 +140,23 @@ func runServe(args []string) error {
 	}
 	defer st.Close()
 
+	// Apply gridprofile schema migrations (idempotent).
+	if err := gridprofile.ApplySchema(ctx, st.DB()); err != nil {
+		return fmt.Errorf("gridprofile schema: %w", err)
+	}
+
+	// Build the gridprofile store and load on-disk profiles/overlays.
+	gpStore := gridprofile.NewStore(st.DB())
+	profilesDir := filepath.Join(*gridProfilesDir, "profiles")
+	overlaysDir := filepath.Join(*gridProfilesDir, "overlays")
+	if err := gpStore.LoadProfilesFromDir(ctx, profilesDir); err != nil {
+		// Non-fatal: missing dir on first install is expected.
+		log.Printf("gridprofile: LoadProfilesFromDir %q: %v", profilesDir, err)
+	}
+	if err := gpStore.LoadOverlaysFromDir(ctx, overlaysDir); err != nil {
+		log.Printf("gridprofile: LoadOverlaysFromDir %q: %v", overlaysDir, err)
+	}
+
 	pruneOnce(ctx, st, *retainTelemetry, *retainOther)
 	if *pruneInterval > 0 {
 		go pruneLoop(ctx, st, *retainTelemetry, *retainOther, *pruneInterval)
@@ -141,7 +172,7 @@ func runServe(args []string) error {
 		Publisher:  pub,
 		Store:      st,
 	}
-	srv.Ingestor = &ingest.Ingestor{
+	ingestor := &ingest.Ingestor{
 		S:                  st,
 		Pub:                pub,
 		Probe:              trigger,
@@ -150,6 +181,66 @@ func runServe(args []string) error {
 		ControllerBackends: controllers,
 		ControllerUIDs:     uids,
 	}
+	srv.Ingestor = ingestor
+
+	// Wire the gridprofile VerifyStartup hook (non-blocking; fires once per
+	// first-seen inverter after the protection read is enqueued).
+	// The hook is set after gpReconciler is constructed below; declare a
+	// pointer-capture so the closure always sees the final reconciler value.
+	var gpReconcilerPtr *gridprofile.Reconciler
+
+	// Wire the gridprofile manager. The Reconciler is component B; when it
+	// is available it will be wired here. Until then, ops that require
+	// reconciliation return an error from the manager.
+	gpSender := &gridprofile.IPCSender{Router: srv, Backend: *probeBackend}
+	gpReadback := &gridprofile.IngestReadback{Ingestor: ingestor}
+	modelOf := func(uid string) (uint8, bool) {
+		return modelCodeFromStore(ctx, st, uid)
+	}
+	gpReconciler := gridprofile.NewReconciler(gpStore, gpSender, gpReadback, modelOf, gridprofile.Options{
+		AutoReassert:  true,
+		ReadSettle:    4 * time.Second,
+		PeriodicSweep: 0, // disabled until user selects a base
+	})
+	gpReconcilerPtr = gpReconciler
+
+	// Wire the OnFirstSeen hook: on first telemetry from an inverter, run
+	// VerifyStartup non-blocking after the protection read settles.
+	ingestor.OnFirstSeen = func(uid string) {
+		rec := gpReconcilerPtr
+		if rec == nil {
+			return
+		}
+		mc, ok := modelCodeFromStore(ctx, st, uid)
+		if !ok {
+			return
+		}
+		go func() {
+			// Wait for the protection read pipeline to deliver the first pages.
+			time.Sleep(2 * 4 * time.Second) // 2 × ReadSettle
+			rpt, err := rec.VerifyStartup(ctx, uid, mc)
+			if err != nil {
+				log.Printf("gridprofile VerifyStartup uid=%s: %v", uid, err)
+				return
+			}
+			log.Printf("gridprofile VerifyStartup uid=%s identified=%q score=%.2f desiredState=%v reconciledOnStartup=%v",
+				uid, rpt.IdentifiedID, rpt.IdentifiedScore, rpt.HasDesiredState, rpt.ReconciledOnStartup)
+		}()
+	}
+	gpBroadcaster := &gridprofile.IPCBroadcaster{Router: srv, Backend: *probeBackend}
+	gpManager := &gridprofile.Manager{
+		Store:       gpStore,
+		Reconciler:  gpReconciler,
+		ProfilesDir: profilesDir,
+		OverlaysDir: overlaysDir,
+		// Broadcast path defaults off; enable with -gridprofile-broadcast.
+		// Targets DS3 and QS1A families (the two families the codec handles).
+		BroadcastEnabled:    *gridProfileBroadcast,
+		BroadcastSender:     gpBroadcaster,
+		BroadcastModelCodes: []uint8{0x20, 0x18}, // ModelDS3=0x20, ModelQS1A=0x18
+	}
+	srv.GridProfile = gpManager
+
 	if *probeBackend != "" {
 		p := &probe.Probe{
 			Store:        st,
@@ -169,7 +260,38 @@ func runServe(args []string) error {
 			}
 		}
 	}
+
+	if *telemetryPoll {
+		if *probeBackend == "" {
+			log.Printf("telemetrypoll: -probe-backend is empty; telemetry polling disabled")
+		} else {
+			tp := &telemetrypoll.Poller{
+				Store:        telemetrypoll.NewStoreAdapter(st),
+				Server:       srv,
+				Backend:      *probeBackend,
+				Interval:     *telemetryPollInterval,
+				SendInterval: *probeInterval,
+			}
+			go tp.Run(ctx)
+			log.Printf("telemetrypoll: started (interval=%s per-inverter-spacing=%s backend=%q)",
+				*telemetryPollInterval, *probeInterval, *probeBackend)
+		}
+	}
+
 	return srv.Serve(ctx)
+}
+
+// modelCodeFromStore looks up the model code for a given inverter UID from
+// the state store. Returns (0, false) when the UID is not known or has no
+// model code yet.
+func modelCodeFromStore(ctx context.Context, st *store.Store, uid string) (uint8, bool) {
+	var modelCode sql.NullInt64
+	err := st.DB().QueryRowContext(ctx,
+		`SELECT model_code FROM inverters WHERE uid = ?`, uid).Scan(&modelCode)
+	if err != nil || !modelCode.Valid {
+		return 0, false
+	}
+	return uint8(modelCode.Int64), true
 }
 
 // pruneOnce runs both retention tiers once. Telemetry events rotate

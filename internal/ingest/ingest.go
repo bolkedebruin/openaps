@@ -76,10 +76,25 @@ type Ingestor struct {
 	// protSig is the last-logged decoded-values signature per UID, so a
 	// steady poll only logs grid-protection state when it changes.
 	protSig map[string]string
+	// protValues caches the latest decoded protection values per UID, keyed
+	// by APsystems 2-letter code in native units (V, Hz, s). Populated
+	// alongside latestProt from DecodeProtectionReply.Values so callers can
+	// read native values without re-decoding the wire.Protection proto.
+	protValues map[string]map[string]float64
 	// protSeen marks UIDs already given their one-shot startup protection
 	// read (on first telemetry), so reads are on-demand (first-seen +
 	// after-write) rather than a continuous poll.
 	protSeen map[string]bool
+	// protValueSeq is a per-UID monotonic counter incremented each time
+	// cacheProtectionValues updates the values map.  Callers can compare
+	// the sequence before and after a send to detect a stale cache.
+	protValueSeq map[string]uint64
+
+	// OnFirstSeen, when non-nil, is called in a new goroutine the first
+	// time telemetry is received for a UID.  The model code is resolved
+	// by the hook implementation (e.g. from the state store).
+	// Intended for hooking VerifyStartup from the gridprofile reconciler.
+	OnFirstSeen func(uid string)
 	// protFamily caches whether each UID is DS3-family (from telemetry),
 	// so a protection reply whose inferred family contradicts the known
 	// model is rejected (guards against reply cross-talk on the modem).
@@ -244,6 +259,23 @@ func isControllerBackend(allow []string, sender string) bool {
 	return false
 }
 
+// IsControllerBackend reports whether backend is on the ControllerBackends
+// allow-list. Exported so the IPC server can apply the same gate to
+// GridProfileRequest envelopes without duplicating the logic.
+func (in *Ingestor) IsControllerBackend(backend string) bool {
+	return isControllerBackend(in.ControllerBackends, backend)
+}
+
+// IsControllerUID reports whether peerUID satisfies the ControllerUIDs gate.
+// Returns true when the allow-list is empty (gate disabled) or when peerUID
+// is peerUIDUnknown (non-Linux host where SO_PEERCRED is unavailable).
+func (in *Ingestor) IsControllerUID(peerUID int) bool {
+	if len(in.ControllerUIDs) == 0 || peerUID == peerUIDUnknown {
+		return true
+	}
+	return isControllerUID(in.ControllerUIDs, peerUID)
+}
+
 // Telemetry-row caps. Real frames carry at most 4 panels (QS1A) and at
 // most 4 lifetime rows; the caps add headroom for future models without
 // permitting a hostile peer to grow store rows unbounded.
@@ -266,8 +298,12 @@ func (in *Ingestor) handleTelemetry(ctx context.Context, t *wire.Telemetry) erro
 		return fmt.Errorf("telemetry: lifetime row count %d exceeds cap %d", n, maxTelemetryLifetimeRows)
 	}
 	fam := familyFromModel(t.GetModel())
-	// short_addr on the wire is uint32 (proto has no uint16); narrow
-	// at the store boundary which retains the uint16 column type.
+	// short_addr on the wire is uint32 (proto has no uint16); guard
+	// before narrowing so a malformed frame doesn't silently alias to
+	// a different inverter's SA at the store boundary.
+	if t.GetShortAddr() > 0xFFFF {
+		return fmt.Errorf("telemetry: short_addr 0x%X exceeds uint16 max", t.GetShortAddr())
+	}
 	shortAddr := uint16(t.GetShortAddr())
 	tsMs := t.GetTsMs()
 	if err := in.S.UpsertInverterFromTelemetry(ctx, uid, shortAddr, fam, t.GetModel(), tsMs); err != nil {
@@ -403,15 +439,16 @@ func (in *Ingestor) rawFrameDecoders() []rawFrameTryFunc {
 	}
 }
 
-// tryProtectionReply handles the paged grid-protection read replies
-// (0xDD page A / 0xDE page B / 0xD9 page C). 0xDD is shared with the
-// info-extended query, so a 0xDD frame is treated as protection only
-// when it's longer than any info reply (≥ protReplyMinLen); shorter
-// 0xDD frames fall through to tryInfoReply. 0xDE/0xD9 are unambiguous.
+// tryProtectionReply handles the paged grid-protection read replies.
+// DS3 answers all three pages with cmd 0xDD (page selector at byte[4]);
+// QS1/QS1A answers with a distinct cmd per page (0xDB page A / 0xDE page
+// B / 0xD9 page C). 0xDD is shared with the info-extended query, so a
+// 0xDD frame is treated as protection only when it's longer than any
+// info reply (≥ protReplyMinLen); shorter 0xDD frames fall through to
+// tryInfoReply. 0xDB/0xDE/0xD9 are unambiguous QS1 pages.
 //
-// The family is inferred from the reply cmd: DS3 tags every page 0xDD
-// (page selector at byte[4]); QS1 uses the page byte as the cmd. The
-// page is buffered and the per-UID set re-decoded + published.
+// The family is inferred from the reply cmd: 0xDD → DS3, 0xDB/0xDE/0xD9
+// → QS1A. The page is buffered and the per-UID set re-decoded + published.
 func (in *Ingestor) tryProtectionReply(ctx context.Context, tsMs int64, env codec.L1Envelope) (bool, error) {
 	l2, err := codec.ParseL2(env.L2Frame)
 	if err != nil {
@@ -424,6 +461,8 @@ func (in *Ingestor) tryProtectionReply(ctx context.Context, tsMs int64, env code
 			return false, nil // short 0xDD = info-extended; let tryInfoReply handle
 		}
 		model = codec.ModelDS3
+	case codec.CmdReplyQS1PageA: // 0xDB → QS1 page-A (reply to the 0xDD query)
+		model = codec.ModelQS1A
 	case codec.CmdProtReadPageB, codec.CmdProtReadPageC: // 0xDE/0xD9 → QS1
 		model = codec.ModelQS1A
 	default:

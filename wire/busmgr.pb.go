@@ -97,6 +97,8 @@ type Envelope struct {
 	//	*Envelope_Broadcast
 	//	*Envelope_Reset_
 	//	*Envelope_SubscribeRaw
+	//	*Envelope_GridProfileReq
+	//	*Envelope_GridProfileResp
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -238,6 +240,24 @@ func (x *Envelope) GetSubscribeRaw() *SubscribeRaw {
 	return nil
 }
 
+func (x *Envelope) GetGridProfileReq() *GridProfileRequest {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_GridProfileReq); ok {
+			return x.GridProfileReq
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetGridProfileResp() *GridProfileResponse {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_GridProfileResp); ok {
+			return x.GridProfileResp
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -286,6 +306,14 @@ type Envelope_SubscribeRaw struct {
 	SubscribeRaw *SubscribeRaw `protobuf:"bytes,13,opt,name=subscribe_raw,json=subscribeRaw,proto3,oneof"`
 }
 
+type Envelope_GridProfileReq struct {
+	GridProfileReq *GridProfileRequest `protobuf:"bytes,14,opt,name=grid_profile_req,json=gridProfileReq,proto3,oneof"`
+}
+
+type Envelope_GridProfileResp struct {
+	GridProfileResp *GridProfileResponse `protobuf:"bytes,15,opt,name=grid_profile_resp,json=gridProfileResp,proto3,oneof"`
+}
+
 func (*Envelope_Hello) isEnvelope_Body() {}
 
 func (*Envelope_Telemetry) isEnvelope_Body() {}
@@ -307,6 +335,10 @@ func (*Envelope_Broadcast) isEnvelope_Body() {}
 func (*Envelope_Reset_) isEnvelope_Body() {}
 
 func (*Envelope_SubscribeRaw) isEnvelope_Body() {}
+
+func (*Envelope_GridProfileReq) isEnvelope_Body() {}
+
+func (*Envelope_GridProfileResp) isEnvelope_Body() {}
 
 // Hello is the first frame on every backend connection. The driver
 // uses it to identify the bus backend (e.g. apsystems-stock-zb) and
@@ -1298,11 +1330,16 @@ func (x *DecodeFailed) GetRawHex() string {
 // Send addresses one inverter by peer_uid. frame carries the L2 body
 // (FB FB ... FE FE) only; the bus-mgr backend resolves peer_uid to a
 // short-address and wraps the outer L1 envelope before injection.
+// short_addr, when nonzero, names the target short-address directly so
+// the sender (e.g. inv-driver's telemetry poller, which holds the
+// inventory) does not depend on the bus-mgr's learned peer_uid->SA map;
+// zero means resolve peer_uid via inventory as before.
 type Send struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PeerUid       string                 `protobuf:"bytes,1,opt,name=peer_uid,json=peerUid,proto3" json:"peer_uid,omitempty"`
 	Frame         []byte                 `protobuf:"bytes,2,opt,name=frame,proto3" json:"frame,omitempty"` // L2 only (FB FB ... FE FE)
 	DeadlineMs    int64                  `protobuf:"varint,3,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`
+	ShortAddr     uint32                 `protobuf:"varint,4,opt,name=short_addr,json=shortAddr,proto3" json:"short_addr,omitempty"` // optional direct target SA; 0 = resolve peer_uid
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1354,6 +1391,13 @@ func (x *Send) GetFrame() []byte {
 func (x *Send) GetDeadlineMs() int64 {
 	if x != nil {
 		return x.DeadlineMs
+	}
+	return 0
+}
+
+func (x *Send) GetShortAddr() uint32 {
+	if x != nil {
+		return x.ShortAddr
 	}
 	return 0
 }
@@ -2029,11 +2073,465 @@ func (x *Protection) GetOfCurveOfLow() float64 {
 	return 0
 }
 
+// GridProfileRequest carries one grid-profile management operation. The
+// client sets exactly one oneof field to indicate which operation to perform.
+// Results are returned in a GridProfileResponse on the same connection.
+type GridProfileRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Op:
+	//
+	//	*GridProfileRequest_ListProfiles
+	//	*GridProfileRequest_RefreshProfiles
+	//	*GridProfileRequest_SelectBase
+	//	*GridProfileRequest_SetOverlay
+	//	*GridProfileRequest_ClearOverlay
+	//	*GridProfileRequest_GetEffective
+	//	*GridProfileRequest_GetStatus
+	Op            isGridProfileRequest_Op `protobuf_oneof:"op"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GridProfileRequest) Reset() {
+	*x = GridProfileRequest{}
+	mi := &file_busmgr_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GridProfileRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GridProfileRequest) ProtoMessage() {}
+
+func (x *GridProfileRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GridProfileRequest.ProtoReflect.Descriptor instead.
+func (*GridProfileRequest) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *GridProfileRequest) GetOp() isGridProfileRequest_Op {
+	if x != nil {
+		return x.Op
+	}
+	return nil
+}
+
+func (x *GridProfileRequest) GetListProfiles() *Empty {
+	if x != nil {
+		if x, ok := x.Op.(*GridProfileRequest_ListProfiles); ok {
+			return x.ListProfiles
+		}
+	}
+	return nil
+}
+
+func (x *GridProfileRequest) GetRefreshProfiles() *Empty {
+	if x != nil {
+		if x, ok := x.Op.(*GridProfileRequest_RefreshProfiles); ok {
+			return x.RefreshProfiles
+		}
+	}
+	return nil
+}
+
+func (x *GridProfileRequest) GetSelectBase() *SelectBase {
+	if x != nil {
+		if x, ok := x.Op.(*GridProfileRequest_SelectBase); ok {
+			return x.SelectBase
+		}
+	}
+	return nil
+}
+
+func (x *GridProfileRequest) GetSetOverlay() *OverlaySet {
+	if x != nil {
+		if x, ok := x.Op.(*GridProfileRequest_SetOverlay); ok {
+			return x.SetOverlay
+		}
+	}
+	return nil
+}
+
+func (x *GridProfileRequest) GetClearOverlay() *ClearOverlay {
+	if x != nil {
+		if x, ok := x.Op.(*GridProfileRequest_ClearOverlay); ok {
+			return x.ClearOverlay
+		}
+	}
+	return nil
+}
+
+func (x *GridProfileRequest) GetGetEffective() *GetEffective {
+	if x != nil {
+		if x, ok := x.Op.(*GridProfileRequest_GetEffective); ok {
+			return x.GetEffective
+		}
+	}
+	return nil
+}
+
+func (x *GridProfileRequest) GetGetStatus() *Empty {
+	if x != nil {
+		if x, ok := x.Op.(*GridProfileRequest_GetStatus); ok {
+			return x.GetStatus
+		}
+	}
+	return nil
+}
+
+type isGridProfileRequest_Op interface {
+	isGridProfileRequest_Op()
+}
+
+type GridProfileRequest_ListProfiles struct {
+	ListProfiles *Empty `protobuf:"bytes,1,opt,name=list_profiles,json=listProfiles,proto3,oneof"` // return all stored base profiles as JSON
+}
+
+type GridProfileRequest_RefreshProfiles struct {
+	RefreshProfiles *Empty `protobuf:"bytes,2,opt,name=refresh_profiles,json=refreshProfiles,proto3,oneof"` // reload profiles from the on-disk dir
+}
+
+type GridProfileRequest_SelectBase struct {
+	SelectBase *SelectBase `protobuf:"bytes,3,opt,name=select_base,json=selectBase,proto3,oneof"` // set the active base profile
+}
+
+type GridProfileRequest_SetOverlay struct {
+	SetOverlay *OverlaySet `protobuf:"bytes,4,opt,name=set_overlay,json=setOverlay,proto3,oneof"` // upsert a per-inverter overlay
+}
+
+type GridProfileRequest_ClearOverlay struct {
+	ClearOverlay *ClearOverlay `protobuf:"bytes,5,opt,name=clear_overlay,json=clearOverlay,proto3,oneof"` // remove the overlay for one inverter
+}
+
+type GridProfileRequest_GetEffective struct {
+	GetEffective *GetEffective `protobuf:"bytes,6,opt,name=get_effective,json=getEffective,proto3,oneof"` // compute effective profile for one inverter
+}
+
+type GridProfileRequest_GetStatus struct {
+	GetStatus *Empty `protobuf:"bytes,7,opt,name=get_status,json=getStatus,proto3,oneof"` // return latest reconcile/verify reports
+}
+
+func (*GridProfileRequest_ListProfiles) isGridProfileRequest_Op() {}
+
+func (*GridProfileRequest_RefreshProfiles) isGridProfileRequest_Op() {}
+
+func (*GridProfileRequest_SelectBase) isGridProfileRequest_Op() {}
+
+func (*GridProfileRequest_SetOverlay) isGridProfileRequest_Op() {}
+
+func (*GridProfileRequest_ClearOverlay) isGridProfileRequest_Op() {}
+
+func (*GridProfileRequest_GetEffective) isGridProfileRequest_Op() {}
+
+func (*GridProfileRequest_GetStatus) isGridProfileRequest_Op() {}
+
+// Empty is a placeholder for operations that carry no parameters.
+type Empty struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Empty) Reset() {
+	*x = Empty{}
+	mi := &file_busmgr_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Empty) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Empty) ProtoMessage() {}
+
+func (x *Empty) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Empty.ProtoReflect.Descriptor instead.
+func (*Empty) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{17}
+}
+
+// SelectBase selects a stored base profile by its ID.
+type SelectBase struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SelectBase) Reset() {
+	*x = SelectBase{}
+	mi := &file_busmgr_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SelectBase) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SelectBase) ProtoMessage() {}
+
+func (x *SelectBase) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SelectBase.ProtoReflect.Descriptor instead.
+func (*SelectBase) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *SelectBase) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+// OverlaySet upserts a per-inverter overlay. overlay_json must be a valid
+// v1 overlay document (validated server-side before applying).
+type OverlaySet struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Uid           string                 `protobuf:"bytes,1,opt,name=uid,proto3" json:"uid,omitempty"`                                    // 12-char hex inverter UID
+	OverlayJson   []byte                 `protobuf:"bytes,2,opt,name=overlay_json,json=overlayJson,proto3" json:"overlay_json,omitempty"` // serialised Overlay document
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OverlaySet) Reset() {
+	*x = OverlaySet{}
+	mi := &file_busmgr_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OverlaySet) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OverlaySet) ProtoMessage() {}
+
+func (x *OverlaySet) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OverlaySet.ProtoReflect.Descriptor instead.
+func (*OverlaySet) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *OverlaySet) GetUid() string {
+	if x != nil {
+		return x.Uid
+	}
+	return ""
+}
+
+func (x *OverlaySet) GetOverlayJson() []byte {
+	if x != nil {
+		return x.OverlayJson
+	}
+	return nil
+}
+
+// ClearOverlay removes the stored overlay for one inverter UID.
+type ClearOverlay struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Uid           string                 `protobuf:"bytes,1,opt,name=uid,proto3" json:"uid,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClearOverlay) Reset() {
+	*x = ClearOverlay{}
+	mi := &file_busmgr_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClearOverlay) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClearOverlay) ProtoMessage() {}
+
+func (x *ClearOverlay) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClearOverlay.ProtoReflect.Descriptor instead.
+func (*ClearOverlay) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *ClearOverlay) GetUid() string {
+	if x != nil {
+		return x.Uid
+	}
+	return ""
+}
+
+// GetEffective requests the computed effective profile for one inverter.
+type GetEffective struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Uid           string                 `protobuf:"bytes,1,opt,name=uid,proto3" json:"uid,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetEffective) Reset() {
+	*x = GetEffective{}
+	mi := &file_busmgr_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetEffective) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetEffective) ProtoMessage() {}
+
+func (x *GetEffective) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetEffective.ProtoReflect.Descriptor instead.
+func (*GetEffective) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *GetEffective) GetUid() string {
+	if x != nil {
+		return x.Uid
+	}
+	return ""
+}
+
+// GridProfileResponse is returned after every GridProfileRequest.
+// ok=false and error non-empty indicate a failure; ok=true and json
+// non-nil carry the structured result serialised as JSON.
+type GridProfileResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	Json          []byte                 `protobuf:"bytes,3,opt,name=json,proto3" json:"json,omitempty"` // structured result: profile list, effective profile, or status
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GridProfileResponse) Reset() {
+	*x = GridProfileResponse{}
+	mi := &file_busmgr_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GridProfileResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GridProfileResponse) ProtoMessage() {}
+
+func (x *GridProfileResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GridProfileResponse.ProtoReflect.Descriptor instead.
+func (*GridProfileResponse) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *GridProfileResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *GridProfileResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *GridProfileResponse) GetJson() []byte {
+	if x != nil {
+		return x.Json
+	}
+	return nil
+}
+
 var File_busmgr_proto protoreflect.FileDescriptor
 
 const file_busmgr_proto_rawDesc = "" +
 	"\n" +
-	"\fbusmgr.proto\x12\tbusmgr.v1\"\xc6\x04\n" +
+	"\fbusmgr.proto\x12\tbusmgr.v1\"\xdf\x05\n" +
 	"\bEnvelope\x12(\n" +
 	"\x05hello\x18\x01 \x01(\v2\x10.busmgr.v1.HelloH\x00R\x05hello\x124\n" +
 	"\ttelemetry\x18\x02 \x01(\v2\x14.busmgr.v1.TelemetryH\x00R\ttelemetry\x12>\n" +
@@ -2048,7 +2546,9 @@ const file_busmgr_proto_rawDesc = "" +
 	" \x01(\v2\x0f.busmgr.v1.SendH\x00R\x04send\x124\n" +
 	"\tbroadcast\x18\v \x01(\v2\x14.busmgr.v1.BroadcastH\x00R\tbroadcast\x12(\n" +
 	"\x05reset\x18\f \x01(\v2\x10.busmgr.v1.ResetH\x00R\x05reset\x12>\n" +
-	"\rsubscribe_raw\x18\r \x01(\v2\x17.busmgr.v1.SubscribeRawH\x00R\fsubscribeRawB\x06\n" +
+	"\rsubscribe_raw\x18\r \x01(\v2\x17.busmgr.v1.SubscribeRawH\x00R\fsubscribeRaw\x12I\n" +
+	"\x10grid_profile_req\x18\x0e \x01(\v2\x1d.busmgr.v1.GridProfileRequestH\x00R\x0egridProfileReq\x12L\n" +
+	"\x11grid_profile_resp\x18\x0f \x01(\v2\x1e.busmgr.v1.GridProfileResponseH\x00R\x0fgridProfileRespB\x06\n" +
 	"\x04body\"\xbb\x01\n" +
 	"\x05Hello\x12\x18\n" +
 	"\abackend\x18\x01 \x01(\tR\abackend\x12\x18\n" +
@@ -2148,12 +2648,14 @@ const file_busmgr_proto_rawDesc = "" +
 	"\n" +
 	"short_addr\x18\x02 \x01(\rR\tshortAddr\x12\x14\n" +
 	"\x05error\x18\x03 \x01(\tR\x05error\x12\x17\n" +
-	"\araw_hex\x18\x04 \x01(\tR\x06rawHex\"X\n" +
+	"\araw_hex\x18\x04 \x01(\tR\x06rawHex\"w\n" +
 	"\x04Send\x12\x19\n" +
 	"\bpeer_uid\x18\x01 \x01(\tR\apeerUid\x12\x14\n" +
 	"\x05frame\x18\x02 \x01(\fR\x05frame\x12\x1f\n" +
 	"\vdeadline_ms\x18\x03 \x01(\x03R\n" +
-	"deadlineMs\"B\n" +
+	"deadlineMs\x12\x1d\n" +
+	"\n" +
+	"short_addr\x18\x04 \x01(\rR\tshortAddr\"B\n" +
 	"\tBroadcast\x12\x14\n" +
 	"\x05frame\x18\x01 \x01(\fR\x05frame\x12\x1f\n" +
 	"\vdeadline_ms\x18\x02 \x01(\x03R\n" +
@@ -2280,7 +2782,35 @@ const file_busmgr_proto_rawDesc = "" +
 	"\x0e_of_droop_modeB\x12\n" +
 	"\x10_of_curve_uf_lowB\x11\n" +
 	"\x0f_of_curve_uf_hiB\x12\n" +
-	"\x10_of_curve_of_low*;\n" +
+	"\x10_of_curve_of_low\"\xb9\x03\n" +
+	"\x12GridProfileRequest\x127\n" +
+	"\rlist_profiles\x18\x01 \x01(\v2\x10.busmgr.v1.EmptyH\x00R\flistProfiles\x12=\n" +
+	"\x10refresh_profiles\x18\x02 \x01(\v2\x10.busmgr.v1.EmptyH\x00R\x0frefreshProfiles\x128\n" +
+	"\vselect_base\x18\x03 \x01(\v2\x15.busmgr.v1.SelectBaseH\x00R\n" +
+	"selectBase\x128\n" +
+	"\vset_overlay\x18\x04 \x01(\v2\x15.busmgr.v1.OverlaySetH\x00R\n" +
+	"setOverlay\x12>\n" +
+	"\rclear_overlay\x18\x05 \x01(\v2\x17.busmgr.v1.ClearOverlayH\x00R\fclearOverlay\x12>\n" +
+	"\rget_effective\x18\x06 \x01(\v2\x17.busmgr.v1.GetEffectiveH\x00R\fgetEffective\x121\n" +
+	"\n" +
+	"get_status\x18\a \x01(\v2\x10.busmgr.v1.EmptyH\x00R\tgetStatusB\x04\n" +
+	"\x02op\"\a\n" +
+	"\x05Empty\"\x1c\n" +
+	"\n" +
+	"SelectBase\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"A\n" +
+	"\n" +
+	"OverlaySet\x12\x10\n" +
+	"\x03uid\x18\x01 \x01(\tR\x03uid\x12!\n" +
+	"\foverlay_json\x18\x02 \x01(\fR\voverlayJson\" \n" +
+	"\fClearOverlay\x12\x10\n" +
+	"\x03uid\x18\x01 \x01(\tR\x03uid\" \n" +
+	"\fGetEffective\x12\x10\n" +
+	"\x03uid\x18\x01 \x01(\tR\x03uid\"O\n" +
+	"\x13GridProfileResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\x12\x12\n" +
+	"\x04json\x18\x03 \x01(\fR\x04json*;\n" +
 	"\x04Role\x12\x14\n" +
 	"\x10ROLE_UNSPECIFIED\x10\x00\x12\r\n" +
 	"\tPUBLISHER\x10\x01\x12\x0e\n" +
@@ -2300,25 +2830,32 @@ func file_busmgr_proto_rawDescGZIP() []byte {
 }
 
 var file_busmgr_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_busmgr_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_busmgr_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_busmgr_proto_goTypes = []any{
-	(Role)(0),              // 0: busmgr.v1.Role
-	(*Envelope)(nil),       // 1: busmgr.v1.Envelope
-	(*Hello)(nil),          // 2: busmgr.v1.Hello
-	(*RawFrame)(nil),       // 3: busmgr.v1.RawFrame
-	(*Telemetry)(nil),      // 4: busmgr.v1.Telemetry
-	(*InverterFaults)(nil), // 5: busmgr.v1.InverterFaults
-	(*DS3Faults)(nil),      // 6: busmgr.v1.DS3Faults
-	(*QS1AFaults)(nil),     // 7: busmgr.v1.QS1AFaults
-	(*Panel)(nil),          // 8: busmgr.v1.Panel
-	(*DecodeFailed)(nil),   // 9: busmgr.v1.DecodeFailed
-	(*Send)(nil),           // 10: busmgr.v1.Send
-	(*Broadcast)(nil),      // 11: busmgr.v1.Broadcast
-	(*Reset)(nil),          // 12: busmgr.v1.Reset
-	(*SubscribeRaw)(nil),   // 13: busmgr.v1.SubscribeRaw
-	(*FleetSummary)(nil),   // 14: busmgr.v1.FleetSummary
-	(*InverterInfo)(nil),   // 15: busmgr.v1.InverterInfo
-	(*Protection)(nil),     // 16: busmgr.v1.Protection
+	(Role)(0),                   // 0: busmgr.v1.Role
+	(*Envelope)(nil),            // 1: busmgr.v1.Envelope
+	(*Hello)(nil),               // 2: busmgr.v1.Hello
+	(*RawFrame)(nil),            // 3: busmgr.v1.RawFrame
+	(*Telemetry)(nil),           // 4: busmgr.v1.Telemetry
+	(*InverterFaults)(nil),      // 5: busmgr.v1.InverterFaults
+	(*DS3Faults)(nil),           // 6: busmgr.v1.DS3Faults
+	(*QS1AFaults)(nil),          // 7: busmgr.v1.QS1AFaults
+	(*Panel)(nil),               // 8: busmgr.v1.Panel
+	(*DecodeFailed)(nil),        // 9: busmgr.v1.DecodeFailed
+	(*Send)(nil),                // 10: busmgr.v1.Send
+	(*Broadcast)(nil),           // 11: busmgr.v1.Broadcast
+	(*Reset)(nil),               // 12: busmgr.v1.Reset
+	(*SubscribeRaw)(nil),        // 13: busmgr.v1.SubscribeRaw
+	(*FleetSummary)(nil),        // 14: busmgr.v1.FleetSummary
+	(*InverterInfo)(nil),        // 15: busmgr.v1.InverterInfo
+	(*Protection)(nil),          // 16: busmgr.v1.Protection
+	(*GridProfileRequest)(nil),  // 17: busmgr.v1.GridProfileRequest
+	(*Empty)(nil),               // 18: busmgr.v1.Empty
+	(*SelectBase)(nil),          // 19: busmgr.v1.SelectBase
+	(*OverlaySet)(nil),          // 20: busmgr.v1.OverlaySet
+	(*ClearOverlay)(nil),        // 21: busmgr.v1.ClearOverlay
+	(*GetEffective)(nil),        // 22: busmgr.v1.GetEffective
+	(*GridProfileResponse)(nil), // 23: busmgr.v1.GridProfileResponse
 }
 var file_busmgr_proto_depIdxs = []int32{
 	2,  // 0: busmgr.v1.Envelope.hello:type_name -> busmgr.v1.Hello
@@ -2332,16 +2869,25 @@ var file_busmgr_proto_depIdxs = []int32{
 	11, // 8: busmgr.v1.Envelope.broadcast:type_name -> busmgr.v1.Broadcast
 	12, // 9: busmgr.v1.Envelope.reset:type_name -> busmgr.v1.Reset
 	13, // 10: busmgr.v1.Envelope.subscribe_raw:type_name -> busmgr.v1.SubscribeRaw
-	0,  // 11: busmgr.v1.Hello.role:type_name -> busmgr.v1.Role
-	8,  // 12: busmgr.v1.Telemetry.panels:type_name -> busmgr.v1.Panel
-	5,  // 13: busmgr.v1.Telemetry.faults:type_name -> busmgr.v1.InverterFaults
-	6,  // 14: busmgr.v1.InverterFaults.ds3:type_name -> busmgr.v1.DS3Faults
-	7,  // 15: busmgr.v1.InverterFaults.qs1a:type_name -> busmgr.v1.QS1AFaults
-	16, // [16:16] is the sub-list for method output_type
-	16, // [16:16] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	17, // 11: busmgr.v1.Envelope.grid_profile_req:type_name -> busmgr.v1.GridProfileRequest
+	23, // 12: busmgr.v1.Envelope.grid_profile_resp:type_name -> busmgr.v1.GridProfileResponse
+	0,  // 13: busmgr.v1.Hello.role:type_name -> busmgr.v1.Role
+	8,  // 14: busmgr.v1.Telemetry.panels:type_name -> busmgr.v1.Panel
+	5,  // 15: busmgr.v1.Telemetry.faults:type_name -> busmgr.v1.InverterFaults
+	6,  // 16: busmgr.v1.InverterFaults.ds3:type_name -> busmgr.v1.DS3Faults
+	7,  // 17: busmgr.v1.InverterFaults.qs1a:type_name -> busmgr.v1.QS1AFaults
+	18, // 18: busmgr.v1.GridProfileRequest.list_profiles:type_name -> busmgr.v1.Empty
+	18, // 19: busmgr.v1.GridProfileRequest.refresh_profiles:type_name -> busmgr.v1.Empty
+	19, // 20: busmgr.v1.GridProfileRequest.select_base:type_name -> busmgr.v1.SelectBase
+	20, // 21: busmgr.v1.GridProfileRequest.set_overlay:type_name -> busmgr.v1.OverlaySet
+	21, // 22: busmgr.v1.GridProfileRequest.clear_overlay:type_name -> busmgr.v1.ClearOverlay
+	22, // 23: busmgr.v1.GridProfileRequest.get_effective:type_name -> busmgr.v1.GetEffective
+	18, // 24: busmgr.v1.GridProfileRequest.get_status:type_name -> busmgr.v1.Empty
+	25, // [25:25] is the sub-list for method output_type
+	25, // [25:25] is the sub-list for method input_type
+	25, // [25:25] is the sub-list for extension type_name
+	25, // [25:25] is the sub-list for extension extendee
+	0,  // [0:25] is the sub-list for field type_name
 }
 
 func init() { file_busmgr_proto_init() }
@@ -2361,6 +2907,8 @@ func file_busmgr_proto_init() {
 		(*Envelope_Broadcast)(nil),
 		(*Envelope_Reset_)(nil),
 		(*Envelope_SubscribeRaw)(nil),
+		(*Envelope_GridProfileReq)(nil),
+		(*Envelope_GridProfileResp)(nil),
 	}
 	file_busmgr_proto_msgTypes[4].OneofWrappers = []any{
 		(*InverterFaults_Ds3)(nil),
@@ -2368,13 +2916,22 @@ func file_busmgr_proto_init() {
 	}
 	file_busmgr_proto_msgTypes[14].OneofWrappers = []any{}
 	file_busmgr_proto_msgTypes[15].OneofWrappers = []any{}
+	file_busmgr_proto_msgTypes[16].OneofWrappers = []any{
+		(*GridProfileRequest_ListProfiles)(nil),
+		(*GridProfileRequest_RefreshProfiles)(nil),
+		(*GridProfileRequest_SelectBase)(nil),
+		(*GridProfileRequest_SetOverlay)(nil),
+		(*GridProfileRequest_ClearOverlay)(nil),
+		(*GridProfileRequest_GetEffective)(nil),
+		(*GridProfileRequest_GetStatus)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_busmgr_proto_rawDesc), len(file_busmgr_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   16,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
