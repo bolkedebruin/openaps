@@ -79,12 +79,16 @@ func TestDecodeProtectionReply_DS3_LiveCapture(t *testing.T) {
 		"AK": 52, "AJ": 47, "AF": 52, "AE": 47.5, "AG": 60, "AS": 60,
 		"BN": 196, "BO": 253, "BP": 49.5, "BQ": 50.2,
 		"DC": 50.2, "CC": 52, "CB": 50.2, "DH": 47, "DI": 49.75,
+		// page-B residuals recovered statically (security/protection-param-read.md):
+		"CV": 13, "DD": 16.5698, "AB": 253,
+		// page-A clearance times (seconds): capture-sane spot values.
+		"BC": 0.09, "BB": 0.02, "BE": 0.04, "BD": 1.19, "BI": 0.29, "BH": 0.16,
 	}
 	// Voltage thresholds carry a ±1 LSB truncate-vs-round ambiguity in
 	// main.exe's 60code storage (the same raw 731 backs AH=195 and
 	// AC=196), so allow ±1 V; frequencies/seconds must be exact.
 	volts := map[string]bool{"AC": true, "AD": true, "AQ": true, "AY": true,
-		"AH": true, "AI": true, "BN": true, "BO": true}
+		"AH": true, "AI": true, "BN": true, "BO": true, "AB": true}
 	for code, w := range want {
 		got, ok := r.Values[code]
 		if !ok {
@@ -112,7 +116,10 @@ func TestDecodeProtectionReply_QS1_LiveCapture(t *testing.T) {
 		t.Fatalf("decode: %v", err)
 	}
 	want := map[string]float64{"BN": 196, "BO": 253, "BP": 49.5, "BQ": 50.2, "DH": 47, "DI": 49.75,
-		"CB": 50.2, "CC": 52}
+		"CB": 50.2, "CC": 52,
+		// page-B/C residuals recovered statically: AB (24-bit avg-OV), DD
+		// (droop), CV (page-f mode nibble), DC (24-bit, zero in this capture).
+		"AB": 253, "DD": 16.562, "CV": 15, "DC": 0}
 	for code, w := range want {
 		got, ok := r.Values[code]
 		if !ok {

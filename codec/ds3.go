@@ -90,18 +90,53 @@ func dsVolt(raw int) float64  { return float64(int(float64(raw)*ds3GridVScale + 
 func dsFreq(raw int) float64  { return float64(raw) * ds3FreqScale }
 func dsAG(raw int) float64    { return float64(raw) / ds3ProtRecoveryScale } // read = inverse of write ×50
 func dsIdent(raw int) float64 { return float64(raw) }
+func dsSec(raw int) float64   { return float64(raw) * ds3FreqScale } // clearance time, raw×0.01 s
+
+// dsVoltAvg is the 10-min average over-voltage (AB): (int)(raw×0.268),
+// truncated (the firmware drops the +0.5 the other volt reads use).
+func dsVoltAvg(raw int) float64 { return float64(int(float64(raw) * ds3GridVScale)) }
+
+// dsDroop is the over-frequency-watt droop slope (DD): ((raw×6000)/2208898)×100,
+// the same factor main.exe applies on page A for AG. ~16.7 = EN 50549-1 max.
+func dsDroop(raw int) float64 { return float64(raw) * ds3DroopNum / ds3DroopDen * 100.0 }
+
+// dsMode is the over-frequency-watt mode (CV): a 1-byte enum the firmware
+// remaps 0→0xF, 1→0xD, 2→0xE (else 0xF) into the 60code column.
+func dsMode(raw int) float64 {
+	switch raw {
+	case 1:
+		return 0xD
+	case 2:
+		return 0xE
+	default:
+		return 0xF
+	}
+}
+
+const (
+	ds3DroopNum = 6000.0    // DAT_5b3f0
+	ds3DroopDen = 2208898.0 // DAT_5b3f8
+)
 
 var (
 	ds3ReadPageA = []protReadField{
-		{"AI", 0x01, 2, dsVolt}, {"AH", 0x03, 2, dsVolt}, {"AD", 0x05, 2, dsVolt},
-		{"AQ", 0x07, 2, dsVolt}, {"AY", 0x09, 2, dsVolt}, {"AC", 0x0b, 2, dsVolt},
-		{"AK", 0x11, 2, dsFreq}, {"AJ", 0x13, 2, dsFreq}, {"AF", 0x15, 2, dsFreq}, {"AE", 0x17, 2, dsFreq},
-		{"AS", 0x39, 2, dsIdent}, {"BO", 0x3d, 2, dsVolt}, {"BN", 0x3f, 2, dsVolt},
-		{"BQ", 0x41, 2, dsFreq}, {"BP", 0x43, 2, dsFreq}, {"AG", 0x45, 2, dsAG},
+		{code: "AI", off: 0x01, width: 2, scale: dsVolt}, {code: "AH", off: 0x03, width: 2, scale: dsVolt}, {code: "AD", off: 0x05, width: 2, scale: dsVolt},
+		{code: "AQ", off: 0x07, width: 2, scale: dsVolt}, {code: "AY", off: 0x09, width: 2, scale: dsVolt}, {code: "AC", off: 0x0b, width: 2, scale: dsVolt},
+		{code: "AK", off: 0x11, width: 2, scale: dsFreq}, {code: "AJ", off: 0x13, width: 2, scale: dsFreq}, {code: "AF", off: 0x15, width: 2, scale: dsFreq}, {code: "AE", off: 0x17, width: 2, scale: dsFreq},
+		// clearance times (seconds, raw×0.01): 16-bit volt-clear + 24-bit freq/stage-clear.
+		{code: "BC", off: 0x1d, width: 2, scale: dsSec}, {code: "BB", off: 0x1f, width: 2, scale: dsSec},
+		{code: "BE", off: 0x21, width: 2, scale: dsSec}, {code: "BD", off: 0x23, width: 2, scale: dsSec},
+		{code: "BI", off: 0x29, width: 3, scale: dsSec}, {code: "BH", off: 0x2c, width: 3, scale: dsSec},
+		{code: "BK", off: 0x4c, width: 3, scale: dsSec}, {code: "BJ", off: 0x4f, width: 3, scale: dsSec},
+		{code: "AS", off: 0x39, width: 2, scale: dsIdent}, {code: "BO", off: 0x3d, width: 2, scale: dsVolt}, {code: "BN", off: 0x3f, width: 2, scale: dsVolt},
+		{code: "BQ", off: 0x41, width: 2, scale: dsFreq}, {code: "BP", off: 0x43, width: 2, scale: dsFreq}, {code: "AG", off: 0x45, width: 2, scale: dsAG},
 	}
 	ds3ReadPageB = []protReadField{
-		{"DC", 0x06, 2, dsFreq}, {"CC", 0x08, 2, dsFreq}, {"CB", 0x0a, 2, dsFreq},
-		{"DI", 0x3f, 2, dsFreq}, {"DH", 0x41, 2, dsFreq},
+		{code: "CV", off: 0x05, width: 1, scale: dsMode},
+		{code: "DC", off: 0x06, width: 2, scale: dsFreq}, {code: "CC", off: 0x08, width: 2, scale: dsFreq}, {code: "CB", off: 0x0a, width: 2, scale: dsFreq},
+		{code: "DD", off: 0x0c, width: 2, scale: dsDroop},
+		{code: "AB", off: 0x31, width: 2, scale: dsVoltAvg},
+		{code: "DI", off: 0x3f, width: 2, scale: dsFreq}, {code: "DH", off: 0x41, width: 2, scale: dsFreq},
 	}
 )
 

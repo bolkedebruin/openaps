@@ -41,12 +41,16 @@ type protReadScale func(raw int) float64
 
 // protReadField binds a code to its byte offset (relative to the page's
 // data base) and scale. The per-family field tables live in ds3.go /
-// qs1a.go so offsets stay with their family.
+// qs1a.go so offsets stay with their family. A field whose value depends
+// on more than one byte (e.g. QS1's CV nibble, gated by a page-variant
+// flag elsewhere in the page) sets fn instead of off/width/scale; fn gets
+// the whole frame + data base and returns ok=false to skip the code.
 type protReadField struct {
 	code  string
 	off   int
-	width int // 2 or 3 bytes, big-endian
+	width int // 1, 2 or 3 bytes, big-endian
 	scale protReadScale
+	fn    func(f []byte, base int) (float64, bool)
 }
 
 // protectionPager resolves one reply frame to its field table + data
@@ -82,11 +86,20 @@ func DecodeProtectionReply(modelCode uint8, frames [][]byte) (*ProtectionReading
 			continue
 		}
 		for _, fld := range fields {
-			i := base + fld.off
-			if i+fld.width > len(f) {
-				continue
+			var v float64
+			if fld.fn != nil {
+				vv, ok := fld.fn(f, base)
+				if !ok {
+					continue
+				}
+				v = vv
+			} else {
+				i := base + fld.off
+				if i+fld.width > len(f) {
+					continue
+				}
+				v = fld.scale(readBE(f, i, fld.width))
 			}
-			v := fld.scale(readBE(f, i, fld.width))
 			// Drop implausible values: every protection threshold is a
 			// small non-negative quantity (V/Hz/s/enum, all < ~600).
 			// Guards against garbage from a misclassified, noisy, or
@@ -104,15 +117,20 @@ func DecodeProtectionReply(modelCode uint8, frames [][]byte) (*ProtectionReading
 	return r, nil
 }
 
-// readBE reads a 2- or 3-byte big-endian register; the 2-byte form is
-// signed (the firmware's VectorSignedToFloat).
+// readBE reads a 1-, 2- or 3-byte big-endian register; the 2-byte form is
+// signed (the firmware's VectorSignedToFloat). The 1- and 3-byte forms are
+// unsigned (1-byte enums/flags; 24-byte freq/clearance, always positive).
 func readBE(f []byte, i, width int) int {
-	if width == 3 {
+	switch width {
+	case 1:
+		return int(f[i])
+	case 3:
 		return int(f[i])<<16 | int(f[i+1])<<8 | int(f[i+2])
+	default:
+		v := int(f[i])<<8 | int(f[i+1])
+		if v >= 0x8000 {
+			v -= 0x10000
+		}
+		return v
 	}
-	v := int(f[i])<<8 | int(f[i+1])
-	if v >= 0x8000 {
-		v -= 0x10000
-	}
-	return v
 }

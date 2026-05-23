@@ -1,6 +1,9 @@
 package codec
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 // isQS1ProtectionWrite reports whether a QS1 L2 (cmd,sub) is a protection
 // write: the 0x1C opcode is shared with set-power (any sub other than the
@@ -48,14 +51,63 @@ func qsFreq(raw int) float64 {
 	return qs1aFreqDivBy / float64(raw)
 }
 
+// qsProtAvgOvDenom (DAT_52490) and qsProtDroopScale (DAT_532f0) are the
+// QS1 read scales for the 10-min average over-voltage (AB) and the
+// over-frequency-watt droop slope (DD).
+const (
+	qsProtAvgOvDenom = 1.3315
+	qsProtDroopScale = 0.169
+)
+
+// qsAvgOv is the QS1 10-min average over-voltage (AB), from a 24-bit raw:
+// (((raw/600)/1.3315)/4), the firmware integer-dividing by 600 before the
+// float convert; the 60code column is the %.0f-rounded result (~253 V).
+func qsAvgOv(raw int) float64 {
+	if raw == 0 {
+		return 0
+	}
+	return math.Round((float64(raw/600) / qsProtAvgOvDenom) / 4)
+}
+
+// qsDroop is the QS1 over-frequency-watt droop slope (DD): raw×0.169.
+// ~16.7 = EN 50549-1 max.
+func qsDroop(raw int) float64 { return float64(raw) * qsProtDroopScale }
+
+// qsModeFromPageB decodes the QS1 over-frequency-watt mode (CV), a nibble
+// of base+0x3f selected by the page-variant flag at base+0x4a: flag==0 →
+// low nibble; flag=='f' → ((b>>4)&3)+0xc (the page-f packing). Any other
+// flag means the firmware leaves the mode unset, so the code isn't reported.
+func qsModeFromPageB(f []byte, base int) (float64, bool) {
+	nib, flag := base+0x3f, base+0x4a
+	if nib >= len(f) || flag >= len(f) {
+		return 0, false
+	}
+	b := f[nib]
+	switch f[flag] {
+	case 'f':
+		return float64(((b >> 4) & 3) + 0xc), true
+	case 0:
+		return float64(b & 0xf), true
+	default:
+		return 0, false
+	}
+}
+
 var (
 	qs1ReadPageB = []protReadField{
-		{"BN", 0x01, 2, qsVolt}, {"BO", 0x03, 2, qsVolt}, {"BP", 0x05, 3, qsFreq}, {"BQ", 0x08, 3, qsFreq},
+		{code: "BN", off: 0x01, width: 2, scale: qsVolt}, {code: "BO", off: 0x03, width: 2, scale: qsVolt},
+		{code: "BP", off: 0x05, width: 3, scale: qsFreq}, {code: "BQ", off: 0x08, width: 3, scale: qsFreq},
+		// 10-min average over-voltage (24-bit) + freq-watt droop slope:
+		{code: "AB", off: 0x19, width: 3, scale: qsAvgOv}, {code: "DD", off: 0x45, width: 2, scale: qsDroop},
+		// over-freq-watt mode nibble (page-variant gated):
+		{code: "CV", fn: qsModeFromPageB},
 		// freq-watt curve (over-freq), offsets pinned by differential write:
-		{"CC", 0x25, 3, qsFreq}, {"CB", 0x28, 3, qsFreq},
+		{code: "CC", off: 0x25, width: 3, scale: qsFreq}, {code: "CB", off: 0x28, width: 3, scale: qsFreq},
 	}
 	qs1ReadPageC = []protReadField{
-		{"DH", 0x0c, 3, qsFreq}, {"DI", 0x0f, 3, qsFreq},
+		// over-freq-watt recover-high (DC, 24-bit) + under-freq-watt curve:
+		{code: "DC", off: 0x01, width: 3, scale: qsFreq},
+		{code: "DH", off: 0x0c, width: 3, scale: qsFreq}, {code: "DI", off: 0x0f, width: 3, scale: qsFreq},
 	}
 )
 
