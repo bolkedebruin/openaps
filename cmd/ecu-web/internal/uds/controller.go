@@ -118,6 +118,25 @@ func (c *Controller) GetSettings(ctx context.Context) (*wire.SettingsResponse, e
 	return resp, nil
 }
 
+// GridProfile issues one grid-profile management op (the request carries
+// exactly one oneof field) and returns inv-driver's response. A response
+// with ok=false is returned alongside a non-nil error; the response may
+// still carry a Json payload (e.g. select_base returns reconcile reports
+// even when one or more points are not confirmed).
+func (c *Controller) GridProfile(ctx context.Context, req *wire.GridProfileRequest) (*wire.GridProfileResponse, error) {
+	env, err := c.roundtrip(ctx,
+		&wire.Envelope{Body: &wire.Envelope_GridProfileReq{GridProfileReq: req}},
+		func(e *wire.Envelope) bool { return e.GetGridProfileResp() != nil })
+	if err != nil {
+		return nil, err
+	}
+	resp := env.GetGridProfileResp()
+	if !resp.GetOk() {
+		return resp, fmt.Errorf("inv-driver: %s", resp.GetError())
+	}
+	return resp, nil
+}
+
 // SetSettings writes ECU settings to inv-driver and returns the values in
 // effect afterwards.
 func (c *Controller) SetSettings(ctx context.Context, s *wire.Settings) (*wire.SettingsResponse, error) {

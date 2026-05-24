@@ -145,6 +145,20 @@ export interface SettingsResult {
   error?: string;
 }
 
+export interface GridProfileSummary {
+  id: string;
+  vnom_v: number;
+  source_ref?: string;
+  point_count: number;
+}
+
+export interface GridProfileState {
+  active_base: string;
+  reconciler_ready: boolean;
+  profiles: GridProfileSummary[];
+  error?: string;
+}
+
 export const api = {
   authStatus: () => getJSON<AuthStatus>("/api/auth/status"),
   setup: (password: string) => postJSON("/api/auth/setup", { password }),
@@ -177,6 +191,8 @@ export const api = {
     };
   },
   saveSettings: (s: Settings) => putJSON<Settings>("/api/settings", s),
+  gridProfile: () => getJSON<GridProfileState>("/api/gridprofile"),
+  selectGridProfile: (id: string) => postJSON("/api/gridprofile/select", { id }),
 };
 
 /**

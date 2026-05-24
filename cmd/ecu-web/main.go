@@ -67,17 +67,18 @@ func main() {
 	}
 
 	srv := httpserver.New(httpserver.Config{
-		Listen:      *listen,
-		StateDir:    *stateDir,
-		Assets:      assets,
-		Snap:        snap,
-		Auth:        authMgr,
-		Conn:        sub.Connected,
-		PushRate:    *pushRate,
-		SysStatus:   ctrl.SystemStatus,
-		EventsFn:    ctrl.Events,
-		SettingsGet: ctrl.GetSettings,
-		SettingsSet: ctrl.SetSettings,
+		Listen:        *listen,
+		StateDir:      *stateDir,
+		Assets:        assets,
+		Snap:          snap,
+		Auth:          authMgr,
+		Conn:          sub.Connected,
+		PushRate:      *pushRate,
+		SysStatus:     ctrl.SystemStatus,
+		EventsFn:      ctrl.Events,
+		SettingsGet:   ctrl.GetSettings,
+		SettingsSet:   ctrl.SetSettings,
+		GridProfileFn: ctrl.GridProfile,
 	})
 	snap.SetOnChange(srv.MarkDirty)
 
