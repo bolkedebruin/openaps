@@ -326,6 +326,7 @@ message GridProfileRequest {
     GetEffective get_effective    = 6;  // compute effective profile for one inverter
     Empty        get_status       = 7;  // return latest reconcile/verify reports
     Empty        list_overlays    = 8;  // return all stored overlays as JSON
+    Empty        get_base         = 9;  // return the active base profile's per-code defaults
   }
 }
 

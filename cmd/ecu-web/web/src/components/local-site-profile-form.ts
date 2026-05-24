@@ -1,5 +1,5 @@
 import { LitElement, html, css, nothing, type PropertyValues } from "lit";
-import type { ParamInfo, ProfileInverter, LocalSiteProfile, OverlayPoint } from "../api.ts";
+import type { ParamInfo, ProfileInverter, LocalSiteProfile, OverlayPoint, BaseDefault } from "../api.ts";
 
 export interface OverlayDraft {
   id: string;
@@ -19,6 +19,7 @@ export class LocalSiteProfileForm extends LitElement {
   static properties = {
     params: { attribute: false },
     inverters: { attribute: false },
+    defaults: { attribute: false },
     profile: { attribute: false },
     names: { attribute: false },
     busy: { attribute: false },
@@ -31,6 +32,7 @@ export class LocalSiteProfileForm extends LitElement {
 
   declare params: ParamInfo[];
   declare inverters: ProfileInverter[];
+  declare defaults: Record<string, BaseDefault>;
   declare profile: LocalSiteProfile | null;
   declare names: Record<string, string>;
   declare busy: boolean;
@@ -44,6 +46,7 @@ export class LocalSiteProfileForm extends LitElement {
     super();
     this.params = [];
     this.inverters = [];
+    this.defaults = {};
     this.profile = null;
     this.names = {};
     this.busy = false;
@@ -73,8 +76,17 @@ export class LocalSiteProfileForm extends LitElement {
     td { padding: 4px 8px; border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent); }
     td.val input { width: 110px; }
     tr.off td { color: var(--muted); }
+    tr.over td { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+    tr.over td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
     .pcode { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .def { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
     .unit { color: var(--muted); }
+    .otag {
+      margin-left: 8px; font-size: 10px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--accent);
+      border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+      border-radius: 999px; padding: 1px 6px;
+    }
     .actions { display: flex; gap: 12px; align-items: center; }
     button { border-radius: 8px; padding: 9px 18px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; }
     button.save { background: var(--accent); color: #04121a; }
@@ -185,21 +197,28 @@ export class LocalSiteProfileForm extends LitElement {
             : html`<div class="tablewrap">
                 <table>
                   <thead>
-                    <tr><th>Parameter</th><th>Code</th><th>Override</th></tr>
+                    <tr><th>Parameter</th><th>Code</th><th>Base default</th><th>Override</th></tr>
                   </thead>
                   <tbody>
                     ${this.params.map((p) => {
                       const on = writable.has(p.aps_code);
-                      return html`<tr class=${on ? "" : "off"}>
-                        <td>${p.long_name || p.aps_code} <span class="hint">${p.group}</span></td>
+                      const def = this.defaults[p.aps_code];
+                      const raw = (this.values[p.aps_code] ?? "").trim();
+                      const overridden = on && raw !== "" && (!def || Number(raw) !== def.value);
+                      return html`<tr class="${on ? "" : "off"} ${overridden ? "over" : ""}">
+                        <td>
+                          ${p.long_name || p.aps_code} <span class="hint">${p.group}</span>
+                          ${overridden ? html`<span class="otag">overridden</span>` : nothing}
+                        </td>
                         <td class="pcode">${p.aps_code}</td>
+                        <td class="def">${def ? `${def.value} ${def.unit}` : "—"}</td>
                         <td class="val">
                           <input
                             type="number"
                             step="any"
                             ?disabled=${!on}
                             .value=${this.values[p.aps_code] ?? ""}
-                            placeholder=${on ? "—" : "n/a"}
+                            placeholder=${def ? String(def.value) : on ? "—" : "n/a"}
                             @input=${(e: Event) => this.setValue(p.aps_code, (e.target as HTMLInputElement).value)}
                           />
                           <span class="unit">${p.unit}</span>

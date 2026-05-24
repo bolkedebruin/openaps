@@ -179,12 +179,18 @@ export interface ProfileInverter {
   writable_codes: string[];
 }
 
+export interface BaseDefault {
+  value: number;
+  unit: string;
+}
+
 export interface ProfilesState {
   base: {
     active_base: string;
     reconciler_ready: boolean;
     profiles: GridProfileSummary[];
   };
+  base_defaults: Record<string, BaseDefault>;
   overlays: LocalSiteProfile[];
   inverters: ProfileInverter[];
   params: ParamInfo[];

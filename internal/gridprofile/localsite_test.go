@@ -2,6 +2,7 @@ package gridprofile
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 )
 
@@ -73,6 +74,55 @@ func TestStore_ListOverlays_Empty(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Errorf("want 0 overlays, got %d", len(got))
+	}
+}
+
+func TestManager_GetBase(t *testing.T) {
+	db, done := openTestDB(t)
+	defer done()
+	s := NewStore(db)
+	ctx := context.Background()
+	p := Profile{
+		Schema: SchemaVersion, ID: "EN50549-1", VNomV: 230,
+		Source: Source{System: "test", Ref: "TY=36"},
+		Points: []PointEntry{
+			{Model: 134, Group: "CrvSet", Point: "Hz3", Native: NativeValue{Value: 50.2, Unit: "Hz"}, Apply: Apply{ApsCode: "CB"}},
+			{Model: 710, Group: "MustTrip", Point: "Hz", Native: NativeValue{Value: 52.0, Unit: "Hz"}, Apply: Apply{ApsCode: "AF"}},
+		},
+	}
+	if err := s.UpsertProfile(ctx, p, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetActiveBase(ctx, "EN50549-1"); err != nil {
+		t.Fatal(err)
+	}
+	resp := (&Manager{Store: s}).getBase(ctx)
+	if !resp.Ok {
+		t.Fatalf("getBase: %s", resp.Error)
+	}
+	var defs map[string]baseDefault
+	if err := json.Unmarshal(resp.Json, &defs); err != nil {
+		t.Fatal(err)
+	}
+	if defs["CB"].Value != 50.2 || defs["CB"].Unit != "Hz" {
+		t.Errorf("CB default wrong: %+v", defs["CB"])
+	}
+	if defs["AF"].Value != 52.0 {
+		t.Errorf("AF default wrong: %+v", defs["AF"])
+	}
+}
+
+func TestManager_GetBase_NoActive(t *testing.T) {
+	db, done := openTestDB(t)
+	defer done()
+	resp := (&Manager{Store: NewStore(db)}).getBase(context.Background())
+	if !resp.Ok {
+		t.Fatalf("getBase with no active base should be ok: %s", resp.Error)
+	}
+	var defs map[string]baseDefault
+	json.Unmarshal(resp.Json, &defs)
+	if len(defs) != 0 {
+		t.Errorf("want empty defaults, got %+v", defs)
 	}
 }
 

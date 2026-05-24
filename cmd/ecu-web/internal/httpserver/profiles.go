@@ -14,11 +14,18 @@ import (
 // the named Local Site profiles (overlays), the inverters available as targets
 // (with their writable parameter codes), and the editable parameter catalog.
 type profilesDTO struct {
-	Base      profileBaseDTO          `json:"base"`
-	Overlays  []localSiteDTO          `json:"overlays"`
-	Inverters []profileInvDTO         `json:"inverters"`
-	Params    []gridprofile.ParamInfo `json:"params"`
-	Error     string                  `json:"error,omitempty"`
+	Base         profileBaseDTO          `json:"base"`
+	BaseDefaults map[string]defaultDTO   `json:"base_defaults"`
+	Overlays     []localSiteDTO          `json:"overlays"`
+	Inverters    []profileInvDTO         `json:"inverters"`
+	Params       []gridprofile.ParamInfo `json:"params"`
+	Error        string                  `json:"error,omitempty"`
+}
+
+// defaultDTO is the active base profile's value for one parameter.
+type defaultDTO struct {
+	Value float64 `json:"value"`
+	Unit  string  `json:"unit"`
 }
 
 type profileBaseDTO struct {
@@ -52,9 +59,10 @@ type profileInvDTO struct {
 // overlays come from inv-driver and degrade to an error field, never a 5xx.
 func (s *Server) handleGetProfiles(w http.ResponseWriter, r *http.Request) {
 	out := profilesDTO{
-		Inverters: s.fleetTargets(),
-		Params:    gridprofile.ParamCatalog(),
-		Overlays:  []localSiteDTO{},
+		Inverters:    s.fleetTargets(),
+		Params:       gridprofile.ParamCatalog(),
+		Overlays:     []localSiteDTO{},
+		BaseDefaults: map[string]defaultDTO{},
 	}
 	if s.cfg.GridProfileFn == nil {
 		out.Error = "grid profile unavailable"
@@ -93,6 +101,18 @@ func (s *Server) handleGetProfiles(w http.ResponseWriter, r *http.Request) {
 			out.Base.Profiles = append(out.Base.Profiles, gridProfileSummaryDTO{
 				ID: p.ID, VNomV: p.VNomV, SourceRef: p.Source.Ref, PointCount: p.PointCount})
 		}
+	}
+
+	// Base defaults: the active base profile's per-code values.
+	baseResp, err := s.cfg.GridProfileFn(r.Context(), &wire.GridProfileRequest{
+		Op: &wire.GridProfileRequest_GetBase{GetBase: &wire.Empty{}}})
+	if err != nil {
+		out.Error = err.Error()
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	if defs := map[string]defaultDTO{}; json.Unmarshal(baseResp.GetJson(), &defs) == nil {
+		out.BaseDefaults = defs
 	}
 
 	// Overlays (Local Site profiles).

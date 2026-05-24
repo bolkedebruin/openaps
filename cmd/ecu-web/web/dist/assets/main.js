@@ -652,7 +652,7 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
           ${!this.reconcilerReady?B`<span class="hint">reconciler not ready</span>`:X&&X!==this.activeBase?B`<span class="hint">applies to all inverters</span>`:G}
         </div>
       </div>
-    `}}customElements.define("grid-profile-form",FZ);class qZ extends z{static properties={params:{attribute:!1},inverters:{attribute:!1},profile:{attribute:!1},names:{attribute:!1},busy:{attribute:!1},editing:{attribute:!1},name:{state:!0},selectedUids:{state:!0},values:{state:!0},localError:{state:!0}};constructor(){super();this.params=[],this.inverters=[],this.profile=null,this.names={},this.busy=!1,this.editing=!1,this.name="",this.selectedUids=[],this.values={},this.localError=""}static styles=U`
+    `}}customElements.define("grid-profile-form",FZ);class qZ extends z{static properties={params:{attribute:!1},inverters:{attribute:!1},defaults:{attribute:!1},profile:{attribute:!1},names:{attribute:!1},busy:{attribute:!1},editing:{attribute:!1},name:{state:!0},selectedUids:{state:!0},values:{state:!0},localError:{state:!0}};constructor(){super();this.params=[],this.inverters=[],this.defaults={},this.profile=null,this.names={},this.busy=!1,this.editing=!1,this.name="",this.selectedUids=[],this.values={},this.localError=""}static styles=U`
     :host { display: block; }
     .grid { display: grid; gap: 18px; }
     label.field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
@@ -671,8 +671,17 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
     td { padding: 4px 8px; border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent); }
     td.val input { width: 110px; }
     tr.off td { color: var(--muted); }
+    tr.over td { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+    tr.over td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
     .pcode { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .def { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
     .unit { color: var(--muted); }
+    .otag {
+      margin-left: 8px; font-size: 10px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--accent);
+      border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+      border-radius: 999px; padding: 1px 6px;
+    }
     .actions { display: flex; gap: 12px; align-items: center; }
     button { border-radius: 8px; padding: 9px 18px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; }
     button.save { background: var(--accent); color: #04121a; }
@@ -714,20 +723,24 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
           ${!Z?B`<span class="hint">Select a target to choose editable parameters.</span>`:B`<div class="tablewrap">
                 <table>
                   <thead>
-                    <tr><th>Parameter</th><th>Code</th><th>Override</th></tr>
+                    <tr><th>Parameter</th><th>Code</th><th>Base default</th><th>Override</th></tr>
                   </thead>
                   <tbody>
-                    ${this.params.map((K)=>{let Y=X.has(K.aps_code);return B`<tr class=${Y?"":"off"}>
-                        <td>${K.long_name||K.aps_code} <span class="hint">${K.group}</span></td>
+                    ${this.params.map((K)=>{let Y=X.has(K.aps_code),Q=this.defaults[K.aps_code],$=(this.values[K.aps_code]??"").trim(),j=Y&&$!==""&&(!Q||Number($)!==Q.value);return B`<tr class="${Y?"":"off"} ${j?"over":""}">
+                        <td>
+                          ${K.long_name||K.aps_code} <span class="hint">${K.group}</span>
+                          ${j?B`<span class="otag">overridden</span>`:G}
+                        </td>
                         <td class="pcode">${K.aps_code}</td>
+                        <td class="def">${Q?`${Q.value} ${Q.unit}`:"—"}</td>
                         <td class="val">
                           <input
                             type="number"
                             step="any"
                             ?disabled=${!Y}
                             .value=${this.values[K.aps_code]??""}
-                            placeholder=${Y?"—":"n/a"}
-                            @input=${(Q)=>this.setValue(K.aps_code,Q.target.value)}
+                            placeholder=${Q?String(Q.value):Y?"—":"n/a"}
+                            @input=${(H)=>this.setValue(K.aps_code,H.target.value)}
                           />
                           <span class="unit">${K.unit}</span>
                         </td>
@@ -797,6 +810,7 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
         ${this.editing!==null?B`<local-site-profile-form
               .params=${X?.params??[]}
               .inverters=${X?.inverters??[]}
+              .defaults=${X?.base_defaults??{}}
               .names=${this.names}
               .profile=${this.editing}
               .editing=${this.editingExisting}

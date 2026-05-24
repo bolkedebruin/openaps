@@ -205,6 +205,7 @@ export class ProfilesView extends LitElement {
           ? html`<local-site-profile-form
               .params=${d?.params ?? []}
               .inverters=${d?.inverters ?? []}
+              .defaults=${d?.base_defaults ?? {}}
               .names=${this.names}
               .profile=${this.editing}
               .editing=${this.editingExisting}

@@ -63,6 +63,8 @@ func (m *Manager) Handle(ctx context.Context, req *wire.GridProfileRequest) *wir
 		return m.getStatus(ctx)
 	case *wire.GridProfileRequest_ListOverlays:
 		return m.listOverlays(ctx)
+	case *wire.GridProfileRequest_GetBase:
+		return m.getBase(ctx)
 	default:
 		return errResp(fmt.Sprintf("unknown GridProfileRequest op %T", req.GetOp()))
 	}
@@ -348,6 +350,34 @@ func (m *Manager) listOverlays(ctx context.Context) *wire.GridProfileResponse {
 	raw, err := json.Marshal(overlays)
 	if err != nil {
 		return errResp(fmt.Sprintf("ListOverlays: marshal: %v", err))
+	}
+	return okResp(raw)
+}
+
+// baseDefault is one parameter's value in the active base profile.
+type baseDefault struct {
+	Value float64 `json:"value"`
+	Unit  string  `json:"unit"`
+}
+
+// getBase returns the active base profile's per-aps-code values as a JSON
+// object {aps_code: {value, unit}} — the defaults an overlay overrides. An
+// empty object means no base is selected.
+func (m *Manager) getBase(ctx context.Context) *wire.GridProfileResponse {
+	id, _ := m.Store.ActiveBase(ctx)
+	defaults := map[string]baseDefault{}
+	if id != "" {
+		p, err := m.Store.GetProfile(ctx, id)
+		if err != nil {
+			return errResp(fmt.Sprintf("GetBase: %v", err))
+		}
+		for _, pt := range p.Points {
+			defaults[pt.Apply.ApsCode] = baseDefault{Value: pt.Native.Value, Unit: pt.Native.Unit}
+		}
+	}
+	raw, err := json.Marshal(defaults)
+	if err != nil {
+		return errResp(fmt.Sprintf("GetBase: marshal: %v", err))
 	}
 	return okResp(raw)
 }

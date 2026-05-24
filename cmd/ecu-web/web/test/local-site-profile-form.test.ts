@@ -11,11 +11,13 @@ const INVERTERS: ProfileInverter[] = [
   { uid: "ds3aaaaaaaaa", model: "DS3", model_code: 32, writable_codes: ["CB", "DD"] },
   { uid: "qs1aaaaaaaaa", model: "QS1A", model_code: 24, writable_codes: ["CB"] },
 ];
+const DEFAULTS = { CB: { value: 50.2, unit: "Hz" }, DD: { value: 16.7, unit: "%Pref/Hz" } };
 
 async function mount(props: Partial<LocalSiteProfileForm> = {}): Promise<LocalSiteProfileForm> {
   const el = document.createElement("local-site-profile-form") as LocalSiteProfileForm;
   el.params = props.params ?? PARAMS;
   el.inverters = props.inverters ?? INVERTERS;
+  el.defaults = props.defaults ?? DEFAULTS;
   el.names = props.names ?? {};
   el.profile = props.profile ?? { id: "", uids: [], points: [] };
   el.editing = props.editing ?? false;
@@ -111,6 +113,37 @@ describe("<local-site-profile-form>", () => {
     expect(nameInput.disabled).toBe(true);
     // target prefilled => params visible, CB prefilled with 50.3
     expect(valueInputs(el)[0].value).toBe("50.3");
+  });
+
+  test("shows the base default and uses it as placeholder", async () => {
+    const el = await mount();
+    await selectTarget(el, 0); // DS3 -> CB and DD editable
+    const defCells = Array.from(el.shadowRoot!.querySelectorAll("td.def")).map((c) => c.textContent?.trim());
+    expect(defCells).toContain("50.2 Hz");
+    expect(defCells).toContain("16.7 %Pref/Hz");
+    const cb = valueInputs(el)[0];
+    expect(cb.placeholder).toBe("50.2");
+  });
+
+  test("a value different from the default marks the row overridden", async () => {
+    const el = await mount();
+    await selectTarget(el, 0);
+    const cb = valueInputs(el)[0];
+    cb.value = "50.3";
+    cb.dispatchEvent(new Event("input"));
+    await el.updateComplete;
+    expect(el.shadowRoot?.querySelector("tr.over")).not.toBeNull();
+    expect(el.shadowRoot?.textContent).toContain("overridden");
+  });
+
+  test("a value equal to the default is NOT overridden", async () => {
+    const el = await mount();
+    await selectTarget(el, 0);
+    const cb = valueInputs(el)[0];
+    cb.value = "50.2"; // equals base default
+    cb.dispatchEvent(new Event("input"));
+    await el.updateComplete;
+    expect(el.shadowRoot?.querySelector("tr.over")).toBeNull();
   });
 
   test("Cancel emits cancel", async () => {
