@@ -61,6 +61,8 @@ func (m *Manager) Handle(ctx context.Context, req *wire.GridProfileRequest) *wir
 		return m.getEffective(ctx, req.GetGetEffective().GetUid())
 	case *wire.GridProfileRequest_GetStatus:
 		return m.getStatus(ctx)
+	case *wire.GridProfileRequest_ListOverlays:
+		return m.listOverlays(ctx)
 	default:
 		return errResp(fmt.Sprintf("unknown GridProfileRequest op %T", req.GetOp()))
 	}
@@ -329,6 +331,23 @@ func (m *Manager) getStatus(ctx context.Context) *wire.GridProfileResponse {
 	raw, err := json.Marshal(status)
 	if err != nil {
 		return errResp(fmt.Sprintf("GetStatus: marshal: %v", err))
+	}
+	return okResp(raw)
+}
+
+// listOverlays returns all stored overlays — the named "Local Site profiles" —
+// one per id with its full target uids and points, serialised as JSON.
+func (m *Manager) listOverlays(ctx context.Context) *wire.GridProfileResponse {
+	overlays, err := m.Store.ListOverlays(ctx)
+	if err != nil {
+		return errResp(fmt.Sprintf("ListOverlays: %v", err))
+	}
+	if overlays == nil {
+		overlays = []Overlay{}
+	}
+	raw, err := json.Marshal(overlays)
+	if err != nil {
+		return errResp(fmt.Sprintf("ListOverlays: marshal: %v", err))
 	}
 	return okResp(raw)
 }

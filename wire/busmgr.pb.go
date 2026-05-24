@@ -2183,6 +2183,7 @@ type GridProfileRequest struct {
 	//	*GridProfileRequest_ClearOverlay
 	//	*GridProfileRequest_GetEffective
 	//	*GridProfileRequest_GetStatus
+	//	*GridProfileRequest_ListOverlays
 	Op            isGridProfileRequest_Op `protobuf_oneof:"op"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2288,6 +2289,15 @@ func (x *GridProfileRequest) GetGetStatus() *Empty {
 	return nil
 }
 
+func (x *GridProfileRequest) GetListOverlays() *Empty {
+	if x != nil {
+		if x, ok := x.Op.(*GridProfileRequest_ListOverlays); ok {
+			return x.ListOverlays
+		}
+	}
+	return nil
+}
+
 type isGridProfileRequest_Op interface {
 	isGridProfileRequest_Op()
 }
@@ -2320,6 +2330,10 @@ type GridProfileRequest_GetStatus struct {
 	GetStatus *Empty `protobuf:"bytes,7,opt,name=get_status,json=getStatus,proto3,oneof"` // return latest reconcile/verify reports
 }
 
+type GridProfileRequest_ListOverlays struct {
+	ListOverlays *Empty `protobuf:"bytes,8,opt,name=list_overlays,json=listOverlays,proto3,oneof"` // return all stored overlays as JSON
+}
+
 func (*GridProfileRequest_ListProfiles) isGridProfileRequest_Op() {}
 
 func (*GridProfileRequest_RefreshProfiles) isGridProfileRequest_Op() {}
@@ -2333,6 +2347,8 @@ func (*GridProfileRequest_ClearOverlay) isGridProfileRequest_Op() {}
 func (*GridProfileRequest_GetEffective) isGridProfileRequest_Op() {}
 
 func (*GridProfileRequest_GetStatus) isGridProfileRequest_Op() {}
+
+func (*GridProfileRequest_ListOverlays) isGridProfileRequest_Op() {}
 
 // Empty is a placeholder for operations that carry no parameters.
 type Empty struct {
@@ -3617,7 +3633,7 @@ const file_busmgr_proto_rawDesc = "" +
 	"\x0e_of_droop_modeB\x12\n" +
 	"\x10_of_curve_uf_lowB\x11\n" +
 	"\x0f_of_curve_uf_hiB\x12\n" +
-	"\x10_of_curve_of_low\"\xb9\x03\n" +
+	"\x10_of_curve_of_low\"\xf2\x03\n" +
 	"\x12GridProfileRequest\x127\n" +
 	"\rlist_profiles\x18\x01 \x01(\v2\x10.busmgr.v1.EmptyH\x00R\flistProfiles\x12=\n" +
 	"\x10refresh_profiles\x18\x02 \x01(\v2\x10.busmgr.v1.EmptyH\x00R\x0frefreshProfiles\x128\n" +
@@ -3628,7 +3644,8 @@ const file_busmgr_proto_rawDesc = "" +
 	"\rclear_overlay\x18\x05 \x01(\v2\x17.busmgr.v1.ClearOverlayH\x00R\fclearOverlay\x12>\n" +
 	"\rget_effective\x18\x06 \x01(\v2\x17.busmgr.v1.GetEffectiveH\x00R\fgetEffective\x121\n" +
 	"\n" +
-	"get_status\x18\a \x01(\v2\x10.busmgr.v1.EmptyH\x00R\tgetStatusB\x04\n" +
+	"get_status\x18\a \x01(\v2\x10.busmgr.v1.EmptyH\x00R\tgetStatus\x127\n" +
+	"\rlist_overlays\x18\b \x01(\v2\x10.busmgr.v1.EmptyH\x00R\flistOverlaysB\x04\n" +
 	"\x02op\"\a\n" +
 	"\x05Empty\"\x1c\n" +
 	"\n" +
@@ -3794,18 +3811,19 @@ var file_busmgr_proto_depIdxs = []int32{
 	21, // 28: busmgr.v1.GridProfileRequest.clear_overlay:type_name -> busmgr.v1.ClearOverlay
 	22, // 29: busmgr.v1.GridProfileRequest.get_effective:type_name -> busmgr.v1.GetEffective
 	18, // 30: busmgr.v1.GridProfileRequest.get_status:type_name -> busmgr.v1.Empty
-	26, // 31: busmgr.v1.SystemStatusResponse.ecu:type_name -> busmgr.v1.EcuIdentity
-	27, // 32: busmgr.v1.SystemStatusResponse.peers:type_name -> busmgr.v1.PeerStatus
-	30, // 33: busmgr.v1.EventsResponse.events:type_name -> busmgr.v1.Event
-	34, // 34: busmgr.v1.Settings.inverter_names:type_name -> busmgr.v1.Settings.InverterNamesEntry
-	18, // 35: busmgr.v1.SettingsRequest.get:type_name -> busmgr.v1.Empty
-	31, // 36: busmgr.v1.SettingsRequest.set:type_name -> busmgr.v1.Settings
-	31, // 37: busmgr.v1.SettingsResponse.settings:type_name -> busmgr.v1.Settings
-	38, // [38:38] is the sub-list for method output_type
-	38, // [38:38] is the sub-list for method input_type
-	38, // [38:38] is the sub-list for extension type_name
-	38, // [38:38] is the sub-list for extension extendee
-	0,  // [0:38] is the sub-list for field type_name
+	18, // 31: busmgr.v1.GridProfileRequest.list_overlays:type_name -> busmgr.v1.Empty
+	26, // 32: busmgr.v1.SystemStatusResponse.ecu:type_name -> busmgr.v1.EcuIdentity
+	27, // 33: busmgr.v1.SystemStatusResponse.peers:type_name -> busmgr.v1.PeerStatus
+	30, // 34: busmgr.v1.EventsResponse.events:type_name -> busmgr.v1.Event
+	34, // 35: busmgr.v1.Settings.inverter_names:type_name -> busmgr.v1.Settings.InverterNamesEntry
+	18, // 36: busmgr.v1.SettingsRequest.get:type_name -> busmgr.v1.Empty
+	31, // 37: busmgr.v1.SettingsRequest.set:type_name -> busmgr.v1.Settings
+	31, // 38: busmgr.v1.SettingsResponse.settings:type_name -> busmgr.v1.Settings
+	39, // [39:39] is the sub-list for method output_type
+	39, // [39:39] is the sub-list for method input_type
+	39, // [39:39] is the sub-list for extension type_name
+	39, // [39:39] is the sub-list for extension extendee
+	0,  // [0:39] is the sub-list for field type_name
 }
 
 func init() { file_busmgr_proto_init() }
@@ -3848,6 +3866,7 @@ func file_busmgr_proto_init() {
 		(*GridProfileRequest_ClearOverlay)(nil),
 		(*GridProfileRequest_GetEffective)(nil),
 		(*GridProfileRequest_GetStatus)(nil),
+		(*GridProfileRequest_ListOverlays)(nil),
 	}
 	file_busmgr_proto_msgTypes[31].OneofWrappers = []any{
 		(*SettingsRequest_Get)(nil),

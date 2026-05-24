@@ -1,0 +1,281 @@
+package httpserver
+
+import (
+	"encoding/json"
+	"net/http"
+	"time"
+
+	"github.com/bolke/inv-driver/internal/gridprofile"
+	"github.com/bolke/inv-driver/wire"
+)
+
+// profilesDTO is the GET /api/profiles payload: the fleet-wide base profile,
+// the named Local Site profiles (overlays), the inverters available as targets
+// (with their writable parameter codes), and the editable parameter catalog.
+type profilesDTO struct {
+	Base      profileBaseDTO          `json:"base"`
+	Overlays  []localSiteDTO          `json:"overlays"`
+	Inverters []profileInvDTO         `json:"inverters"`
+	Params    []gridprofile.ParamInfo `json:"params"`
+	Error     string                  `json:"error,omitempty"`
+}
+
+type profileBaseDTO struct {
+	ActiveBase      string                  `json:"active_base"`
+	ReconcilerReady bool                    `json:"reconciler_ready"`
+	Profiles        []gridProfileSummaryDTO `json:"profiles"`
+}
+
+// localSiteDTO is one named Local Site profile (an overlay) and its targets.
+type localSiteDTO struct {
+	ID     string              `json:"id"`
+	UIDs   []string            `json:"uids"`
+	Points []localSitePointDTO `json:"points"`
+}
+
+type localSitePointDTO struct {
+	ApsCode string  `json:"aps_code"`
+	Value   float64 `json:"value"`
+	Unit    string  `json:"unit,omitempty"`
+}
+
+type profileInvDTO struct {
+	UID           string   `json:"uid"`
+	Model         string   `json:"model"`
+	ModelCode     uint8    `json:"model_code"`
+	WritableCodes []string `json:"writable_codes"`
+}
+
+// handleGetProfiles aggregates everything the Profiles screen needs. The
+// inverters and parameter catalog are local (always returned); the base and
+// overlays come from inv-driver and degrade to an error field, never a 5xx.
+func (s *Server) handleGetProfiles(w http.ResponseWriter, r *http.Request) {
+	out := profilesDTO{
+		Inverters: s.fleetTargets(),
+		Params:    gridprofile.ParamCatalog(),
+		Overlays:  []localSiteDTO{},
+	}
+	if s.cfg.GridProfileFn == nil {
+		out.Error = "grid profile unavailable"
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+
+	// Base: status (active + reconciler) + list (rich summaries).
+	statusResp, err := s.cfg.GridProfileFn(r.Context(), &wire.GridProfileRequest{
+		Op: &wire.GridProfileRequest_GetStatus{GetStatus: &wire.Empty{}}})
+	if err != nil {
+		out.Error = err.Error()
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	var st ipcStatus
+	if err := json.Unmarshal(statusResp.GetJson(), &st); err != nil {
+		out.Error = "parse status: " + err.Error()
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	out.Base.ActiveBase = st.ActiveBase
+	out.Base.ReconcilerReady = st.ReconcilerReady
+
+	listResp, err := s.cfg.GridProfileFn(r.Context(), &wire.GridProfileRequest{
+		Op: &wire.GridProfileRequest_ListProfiles{ListProfiles: &wire.Empty{}}})
+	if err != nil {
+		out.Error = err.Error()
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	var summaries []ipcProfileSummary
+	if err := json.Unmarshal(listResp.GetJson(), &summaries); err == nil {
+		out.Base.Profiles = make([]gridProfileSummaryDTO, 0, len(summaries))
+		for _, p := range summaries {
+			out.Base.Profiles = append(out.Base.Profiles, gridProfileSummaryDTO{
+				ID: p.ID, VNomV: p.VNomV, SourceRef: p.Source.Ref, PointCount: p.PointCount})
+		}
+	}
+
+	// Overlays (Local Site profiles).
+	ovResp, err := s.cfg.GridProfileFn(r.Context(), &wire.GridProfileRequest{
+		Op: &wire.GridProfileRequest_ListOverlays{ListOverlays: &wire.Empty{}}})
+	if err != nil {
+		out.Error = err.Error()
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	var overlays []gridprofile.Overlay
+	if err := json.Unmarshal(ovResp.GetJson(), &overlays); err == nil {
+		for _, o := range overlays {
+			ls := localSiteDTO{ID: o.ID, UIDs: o.UIDs, Points: []localSitePointDTO{}}
+			for _, p := range o.Points {
+				ls.Points = append(ls.Points, localSitePointDTO{
+					ApsCode: p.Apply.ApsCode, Value: p.Native.Value, Unit: p.Native.Unit})
+			}
+			out.Overlays = append(out.Overlays, ls)
+		}
+	}
+
+	writeJSON(w, http.StatusOK, out)
+}
+
+// fleetTargets lists the inverters as overlay targets, each annotated with the
+// parameter codes writable on that model (capability filter).
+func (s *Server) fleetTargets() []profileInvDTO {
+	catalog := gridprofile.ParamCatalog()
+	fleet := s.cfg.Snap.Fleet(time.Now())
+	out := make([]profileInvDTO, 0, len(fleet.Inverters))
+	for _, inv := range fleet.Inverters {
+		writable := make([]string, 0, len(catalog))
+		for _, p := range catalog {
+			if gridprofile.Writeable(inv.ModelCode, p.ApsCode) {
+				writable = append(writable, p.ApsCode)
+			}
+		}
+		out = append(out, profileInvDTO{
+			UID: inv.UID, Model: inv.Model, ModelCode: inv.ModelCode, WritableCodes: writable})
+	}
+	return out
+}
+
+// handleSelectBase sets the active fleet-wide base profile (moved here from the
+// Settings screen). Reconcile failures return 400 with inv-driver's summary.
+func (s *Server) handleSelectBase(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.GridProfileFn == nil {
+		http.Error(w, "grid profile unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	var body struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if body.ID == "" {
+		http.Error(w, "id is required", http.StatusBadRequest)
+		return
+	}
+	resp, err := s.cfg.GridProfileFn(r.Context(), &wire.GridProfileRequest{
+		Op: &wire.GridProfileRequest_SelectBase{SelectBase: &wire.SelectBase{Id: body.ID}}})
+	if err != nil {
+		msg := err.Error()
+		if resp != nil && resp.GetError() != "" {
+			msg = resp.GetError()
+		}
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"active_base": body.ID})
+}
+
+// overlayWriteReq is the PUT /api/profiles/overlay body.
+type overlayWriteReq struct {
+	ID     string `json:"id"`
+	UIDs   []string `json:"uids"`
+	Points []struct {
+		ApsCode string  `json:"aps_code"`
+		Value   float64 `json:"value"`
+	} `json:"points"`
+}
+
+// applyResult is one inverter's outcome from a per-UID overlay apply/clear.
+type applyResult struct {
+	UID   string `json:"uid"`
+	OK    bool   `json:"ok"`
+	Error string `json:"error,omitempty"`
+}
+
+// handlePutOverlay creates or updates a Local Site profile: it builds the
+// overlay document and applies it to each target inverter (per-UID set_overlay,
+// which reconciles). Build/validation errors are 400; per-inverter apply
+// outcomes are returned 200 in a results array (the overlay is persisted even
+// when an apply is not confirmed, e.g. an offline inverter).
+func (s *Server) handlePutOverlay(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.GridProfileFn == nil {
+		http.Error(w, "grid profile unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	var body overlayWriteReq
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 65536)).Decode(&body); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if body.ID == "" {
+		http.Error(w, "id is required", http.StatusBadRequest)
+		return
+	}
+	if len(body.UIDs) == 0 {
+		http.Error(w, "at least one target inverter is required", http.StatusBadRequest)
+		return
+	}
+	if len(body.Points) == 0 {
+		http.Error(w, "at least one parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	points := make([]gridprofile.PointEntry, 0, len(body.Points))
+	for _, p := range body.Points {
+		pe, err := gridprofile.BuildOverlayPoint(p.ApsCode, p.Value)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		points = append(points, pe)
+	}
+	overlay := gridprofile.Overlay{
+		Schema: gridprofile.SchemaVersion,
+		ID:     body.ID,
+		UIDs:   body.UIDs,
+		Points: points,
+	}
+	raw, err := json.Marshal(overlay)
+	if err != nil {
+		http.Error(w, "encode overlay: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	results := make([]applyResult, 0, len(body.UIDs))
+	for _, uid := range body.UIDs {
+		resp, err := s.cfg.GridProfileFn(r.Context(), &wire.GridProfileRequest{
+			Op: &wire.GridProfileRequest_SetOverlay{SetOverlay: &wire.OverlaySet{Uid: uid, OverlayJson: raw}}})
+		results = append(results, toApplyResult(uid, resp, err))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": body.ID, "results": results})
+}
+
+// handleDeleteOverlay removes a Local Site profile from each of its targets.
+func (s *Server) handleDeleteOverlay(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.GridProfileFn == nil {
+		http.Error(w, "grid profile unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	var body struct {
+		ID   string   `json:"id"`
+		UIDs []string `json:"uids"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if len(body.UIDs) == 0 {
+		http.Error(w, "uids are required", http.StatusBadRequest)
+		return
+	}
+	results := make([]applyResult, 0, len(body.UIDs))
+	for _, uid := range body.UIDs {
+		resp, err := s.cfg.GridProfileFn(r.Context(), &wire.GridProfileRequest{
+			Op: &wire.GridProfileRequest_ClearOverlay{ClearOverlay: &wire.ClearOverlay{Uid: uid}}})
+		results = append(results, toApplyResult(uid, resp, err))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": body.ID, "results": results})
+}
+
+func toApplyResult(uid string, resp *wire.GridProfileResponse, err error) applyResult {
+	if err != nil {
+		msg := err.Error()
+		if resp != nil && resp.GetError() != "" {
+			msg = resp.GetError()
+		}
+		return applyResult{UID: uid, OK: false, Error: msg}
+	}
+	return applyResult{UID: uid, OK: resp.GetOk(), Error: resp.GetError()}
+}

@@ -1,6 +1,78 @@
 package gridprofile
 
-import "math"
+import (
+	"fmt"
+	"math"
+	"sort"
+)
+
+// nativeUnit returns the unit a point's native value is expressed in. Voltage
+// thresholds are %VNom in SunSpec but stored/entered as absolute volts, so
+// their native unit is "V" rather than the forward map's SunSpec unit label.
+func (e mapEntry) nativeUnit() string {
+	if e.IsVoltagePct {
+		return "V"
+	}
+	return e.Unit
+}
+
+// ParamInfo describes one editable grid-protection parameter, for clients
+// (e.g. the web overlay editor) that need the parameter universe and its
+// display metadata without duplicating the forward map.
+type ParamInfo struct {
+	ApsCode  string `json:"aps_code"`
+	LongName string `json:"long_name,omitempty"`
+	Unit     string `json:"unit"`
+	Group    string `json:"group"`
+	Model    int    `json:"model"`
+}
+
+// ParamCatalog returns every encodable parameter in the forward map (those
+// with a firmware encoder, i.e. a non-empty LongName), sorted by aps code.
+// It is the single source of truth for what an overlay can set; per-inverter
+// writability is then narrowed by Writeable(modelCode, apsCode).
+func ParamCatalog() []ParamInfo {
+	out := make([]ParamInfo, 0, len(forwardMap))
+	for code, e := range forwardMap {
+		if e.LongName == "" {
+			continue // readable but not encodable — not editable
+		}
+		out = append(out, ParamInfo{
+			ApsCode:  code,
+			LongName: e.LongName,
+			Unit:     e.nativeUnit(),
+			Group:    e.Group,
+			Model:    e.Model,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ApsCode < out[j].ApsCode })
+	return out
+}
+
+// BuildOverlayPoint constructs a v1 overlay PointEntry for the given aps code
+// and native value, filling the SunSpec location and encoding metadata from
+// the forward map. SunSpec and range are left unset: reconcile re-encodes from
+// the native value and clamps against the base profile's range. Returns an
+// error if the code is unknown or has no firmware encoder.
+func BuildOverlayPoint(apsCode string, value float64) (PointEntry, error) {
+	e, ok := forwardMap[apsCode]
+	if !ok {
+		return PointEntry{}, fmt.Errorf("aps_code %q not in forward map", apsCode)
+	}
+	if e.LongName == "" {
+		return PointEntry{}, fmt.Errorf("aps_code %q has no firmware encoder", apsCode)
+	}
+	return PointEntry{
+		Model:  e.Model,
+		Group:  e.Group,
+		Index:  e.Index,
+		Point:  e.Point,
+		SFRef:  e.SFRef,
+		SF:     e.SF,
+		Native: NativeValue{Value: value, Unit: e.nativeUnit()},
+		Apply:  Apply{ApsCode: apsCode},
+	}, nil
+}
 
 // mapEntry is one row in the §3 forward map: APsystems 2-letter code →
 // SunSpec location + encoding metadata.

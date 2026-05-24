@@ -152,11 +152,68 @@ export interface GridProfileSummary {
   point_count: number;
 }
 
-export interface GridProfileState {
-  active_base: string;
-  reconciler_ready: boolean;
-  profiles: GridProfileSummary[];
+export interface ParamInfo {
+  aps_code: string;
+  long_name?: string;
+  unit: string;
+  group: string;
+  model: number;
+}
+
+export interface OverlayPoint {
+  aps_code: string;
+  value: number;
+  unit?: string;
+}
+
+export interface LocalSiteProfile {
+  id: string;
+  uids: string[];
+  points: OverlayPoint[];
+}
+
+export interface ProfileInverter {
+  uid: string;
+  model: string;
+  model_code: number;
+  writable_codes: string[];
+}
+
+export interface ProfilesState {
+  base: {
+    active_base: string;
+    reconciler_ready: boolean;
+    profiles: GridProfileSummary[];
+  };
+  overlays: LocalSiteProfile[];
+  inverters: ProfileInverter[];
+  params: ParamInfo[];
   error?: string;
+}
+
+export interface ApplyResult {
+  uid: string;
+  ok: boolean;
+  error?: string;
+}
+
+export interface OverlayApplyResponse {
+  id: string;
+  results: ApplyResult[];
+}
+
+async function delJSON<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method: "DELETE",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text.trim() || `${path}: ${res.status}`);
+  }
+  return (await res.json()) as T;
 }
 
 export const api = {
@@ -191,8 +248,12 @@ export const api = {
     };
   },
   saveSettings: (s: Settings) => putJSON<Settings>("/api/settings", s),
-  gridProfile: () => getJSON<GridProfileState>("/api/gridprofile"),
-  selectGridProfile: (id: string) => postJSON("/api/gridprofile/select", { id }),
+  profiles: () => getJSON<ProfilesState>("/api/profiles"),
+  selectBase: (id: string) => postJSON("/api/profiles/base", { id }),
+  saveOverlay: (p: { id: string; uids: string[]; points: OverlayPoint[] }) =>
+    putJSON<OverlayApplyResponse>("/api/profiles/overlay", p),
+  deleteOverlay: (id: string, uids: string[]) =>
+    delJSON<OverlayApplyResponse>("/api/profiles/overlay", { id, uids }),
 };
 
 /**

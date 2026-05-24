@@ -325,6 +325,7 @@ message GridProfileRequest {
     ClearOverlay clear_overlay    = 5;  // remove the overlay for one inverter
     GetEffective get_effective    = 6;  // compute effective profile for one inverter
     Empty        get_status       = 7;  // return latest reconcile/verify reports
+    Empty        list_overlays    = 8;  // return all stored overlays as JSON
   }
 }
 

@@ -1,13 +1,11 @@
 import { LitElement, html, css, nothing } from "lit";
-import { api, type Settings, type GridProfileState } from "../api.ts";
+import { api, type Settings } from "../api.ts";
 import "../components/settings-form.ts";
-import "../components/grid-profile-form.ts";
 
 /**
  * <settings-view> fetches the current ECU settings, renders them in an
- * editable form, and writes changes back through inv-driver on save. It
- * also shows the active grid profile and lets the operator select a new
- * base, which inv-driver applies to every inverter.
+ * editable form, and writes changes back through inv-driver on save. Grid
+ * profile selection lives on the Profiles screen.
  */
 export class SettingsView extends LitElement {
   static properties = {
@@ -16,10 +14,6 @@ export class SettingsView extends LitElement {
     notice: { state: true },
     loading: { state: true },
     saving: { state: true },
-    grid: { state: true },
-    gridError: { state: true },
-    gridNotice: { state: true },
-    gridBusy: { state: true },
   };
 
   declare settings: Settings | null;
@@ -27,10 +21,6 @@ export class SettingsView extends LitElement {
   declare notice: string;
   declare loading: boolean;
   declare saving: boolean;
-  declare grid: GridProfileState | null;
-  declare gridError: string;
-  declare gridNotice: string;
-  declare gridBusy: boolean;
 
   constructor() {
     super();
@@ -39,31 +29,16 @@ export class SettingsView extends LitElement {
     this.notice = "";
     this.loading = false;
     this.saving = false;
-    this.grid = null;
-    this.gridError = "";
-    this.gridNotice = "";
-    this.gridBusy = false;
   }
 
   static styles = css`
     :host { display: block; }
-    .cols {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 20px;
-      align-items: start;
-      max-width: 1140px;
-    }
-    /* Stack the panels on narrow screens. */
-    @media (max-width: 760px) {
-      .cols { grid-template-columns: 1fr; }
-    }
     .panel {
-      min-width: 0;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 24px;
+      max-width: 560px;
     }
     h2 { font-size: 15px; margin: 0 0 16px; color: var(--text); }
     .banner { border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-bottom: 16px; }
@@ -75,7 +50,6 @@ export class SettingsView extends LitElement {
   connectedCallback(): void {
     super.connectedCallback();
     void this.load();
-    void this.loadGrid();
   }
 
   private async load() {
@@ -88,16 +62,6 @@ export class SettingsView extends LitElement {
       this.error = (e as Error).message;
     } finally {
       this.loading = false;
-    }
-  }
-
-  private async loadGrid() {
-    try {
-      const g = await api.gridProfile();
-      this.grid = g;
-      this.gridError = g.error ?? "";
-    } catch (e) {
-      this.gridError = (e as Error).message;
     }
   }
 
@@ -116,56 +80,18 @@ export class SettingsView extends LitElement {
     }
   };
 
-  private onApplyProfile = async (e: CustomEvent<string>) => {
-    const id = e.detail;
-    if (!window.confirm(`Apply grid profile "${id}" to every inverter? This writes grid-protection settings across the whole fleet.`)) {
-      return;
-    }
-    this.gridBusy = true;
-    this.gridNotice = "";
-    this.gridError = "";
-    try {
-      await api.selectGridProfile(id);
-      this.gridNotice = `Grid profile "${id}" applied.`;
-    } catch (err) {
-      this.gridError = (err as Error).message;
-    } finally {
-      this.gridBusy = false;
-      await this.loadGrid();
-    }
-  };
-
   render() {
     return html`
-      <div class="cols">
-        <div class="panel">
-          <h2>ECU settings</h2>
-          ${this.notice ? html`<div class="banner ok">${this.notice}</div>` : nothing}
-          ${this.error ? html`<div class="banner err">⚠ ${this.error}</div>` : nothing}
-          ${this.loading && !this.settings
-            ? html`<div class="loading">Loading…</div>`
-            : html`<settings-form
-                .settings=${this.settings ?? { ecu_id: "", mac: "", pan_override: "", zigbee_type: "apsystems" }}
-                @save=${this.onSave}
-              ></settings-form>`}
-        </div>
-
-        <div class="panel">
-          <h2>Grid profile</h2>
-          ${this.gridNotice ? html`<div class="banner ok">${this.gridNotice}</div>` : nothing}
-          ${this.gridError ? html`<div class="banner err">⚠ ${this.gridError}</div>` : nothing}
-          ${this.grid
-            ? html`<grid-profile-form
-                .profiles=${this.grid.profiles ?? []}
-                .activeBase=${this.grid.active_base ?? ""}
-                .reconcilerReady=${this.grid.reconciler_ready ?? false}
-                .busy=${this.gridBusy}
-                @apply=${this.onApplyProfile}
-              ></grid-profile-form>`
-            : this.gridError
-              ? nothing
-              : html`<div class="loading">Loading…</div>`}
-        </div>
+      <div class="panel">
+        <h2>ECU settings</h2>
+        ${this.notice ? html`<div class="banner ok">${this.notice}</div>` : nothing}
+        ${this.error ? html`<div class="banner err">⚠ ${this.error}</div>` : nothing}
+        ${this.loading && !this.settings
+          ? html`<div class="loading">Loading…</div>`
+          : html`<settings-form
+              .settings=${this.settings ?? { ecu_id: "", mac: "", pan_override: "", zigbee_type: "apsystems" }}
+              @save=${this.onSave}
+            ></settings-form>`}
       </div>
     `;
   }

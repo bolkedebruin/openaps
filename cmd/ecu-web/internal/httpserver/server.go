@@ -126,8 +126,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/events", s.cfg.Auth.Require(http.HandlerFunc(s.handleEvents)))
 	mux.Handle("GET /api/settings", s.cfg.Auth.Require(http.HandlerFunc(s.handleGetSettings)))
 	mux.Handle("PUT /api/settings", s.cfg.Auth.Require(http.HandlerFunc(s.handleSetSettings)))
-	mux.Handle("GET /api/gridprofile", s.cfg.Auth.Require(http.HandlerFunc(s.handleGetGridProfile)))
-	mux.Handle("POST /api/gridprofile/select", s.cfg.Auth.Require(http.HandlerFunc(s.handleSelectGridProfile)))
+	mux.Handle("GET /api/profiles", s.cfg.Auth.Require(http.HandlerFunc(s.handleGetProfiles)))
+	mux.Handle("POST /api/profiles/base", s.cfg.Auth.Require(http.HandlerFunc(s.handleSelectBase)))
+	mux.Handle("PUT /api/profiles/overlay", s.cfg.Auth.Require(http.HandlerFunc(s.handlePutOverlay)))
+	mux.Handle("DELETE /api/profiles/overlay", s.cfg.Auth.Require(http.HandlerFunc(s.handleDeleteOverlay)))
 	mux.Handle("GET /api/history", s.cfg.Auth.Require(http.HandlerFunc(s.handleHistory)))
 	mux.Handle("GET /api/stream", s.cfg.Auth.Require(s.hub))
 
@@ -453,15 +455,8 @@ func (s *Server) handleSetSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, settingsToDTO(resp.GetSettings()))
 }
 
-// gridProfileDTO shapes the GET /api/gridprofile response: the active base,
-// whether the reconciler can apply, and the selectable base profiles.
-type gridProfileDTO struct {
-	ActiveBase      string                  `json:"active_base"`
-	ReconcilerReady bool                    `json:"reconciler_ready"`
-	Profiles        []gridProfileSummaryDTO `json:"profiles"`
-	Error           string                  `json:"error,omitempty"`
-}
-
+// gridProfileSummaryDTO is one selectable base profile (shared by the
+// Profiles screen's base selector).
 type gridProfileSummaryDTO struct {
 	ID         string `json:"id"`
 	VNomV      int    `json:"vnom_v"`
@@ -483,80 +478,6 @@ type ipcProfileSummary struct {
 		Ref string `json:"ref"`
 	} `json:"source"`
 	PointCount int `json:"point_count"`
-}
-
-// handleGetGridProfile reports the active base profile and the selectable
-// profiles. A missing fetcher or an inv-driver fetch failure degrades to an
-// error field, never a 5xx (matching /api/system and /api/settings).
-func (s *Server) handleGetGridProfile(w http.ResponseWriter, r *http.Request) {
-	if s.cfg.GridProfileFn == nil {
-		writeJSON(w, http.StatusOK, gridProfileDTO{Error: "grid profile unavailable"})
-		return
-	}
-	statusResp, err := s.cfg.GridProfileFn(r.Context(), &wire.GridProfileRequest{
-		Op: &wire.GridProfileRequest_GetStatus{GetStatus: &wire.Empty{}}})
-	if err != nil {
-		writeJSON(w, http.StatusOK, gridProfileDTO{Error: err.Error()})
-		return
-	}
-	var st ipcStatus
-	if err := json.Unmarshal(statusResp.GetJson(), &st); err != nil {
-		writeJSON(w, http.StatusOK, gridProfileDTO{Error: "parse status: " + err.Error()})
-		return
-	}
-	listResp, err := s.cfg.GridProfileFn(r.Context(), &wire.GridProfileRequest{
-		Op: &wire.GridProfileRequest_ListProfiles{ListProfiles: &wire.Empty{}}})
-	if err != nil {
-		writeJSON(w, http.StatusOK, gridProfileDTO{Error: err.Error()})
-		return
-	}
-	var summaries []ipcProfileSummary
-	if err := json.Unmarshal(listResp.GetJson(), &summaries); err != nil {
-		writeJSON(w, http.StatusOK, gridProfileDTO{Error: "parse profiles: " + err.Error()})
-		return
-	}
-	out := gridProfileDTO{
-		ActiveBase:      st.ActiveBase,
-		ReconcilerReady: st.ReconcilerReady,
-		Profiles:        make([]gridProfileSummaryDTO, 0, len(summaries)),
-	}
-	for _, p := range summaries {
-		out.Profiles = append(out.Profiles, gridProfileSummaryDTO{
-			ID: p.ID, VNomV: p.VNomV, SourceRef: p.Source.Ref, PointCount: p.PointCount})
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
-// handleSelectGridProfile sets the active base profile, which triggers a
-// fleet-wide reconcile in inv-driver. A rejected or unconfirmed apply
-// (resp.Ok==false) returns HTTP 400 with inv-driver's error/summary.
-func (s *Server) handleSelectGridProfile(w http.ResponseWriter, r *http.Request) {
-	if s.cfg.GridProfileFn == nil {
-		http.Error(w, "grid profile unavailable", http.StatusServiceUnavailable)
-		return
-	}
-	var body struct {
-		ID string `json:"id"`
-	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
-		return
-	}
-	if body.ID == "" {
-		http.Error(w, "id is required", http.StatusBadRequest)
-		return
-	}
-	resp, err := s.cfg.GridProfileFn(r.Context(), &wire.GridProfileRequest{
-		Op: &wire.GridProfileRequest_SelectBase{SelectBase: &wire.SelectBase{Id: body.ID}}})
-	if err != nil {
-		msg := err.Error()
-		if resp != nil && resp.GetError() != "" {
-			msg = resp.GetError()
-		}
-		http.Error(w, msg, http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"active_base": body.ID})
 }
 
 // systemStatus returns a cached SystemStatus (<=sysCacheTTL old) or

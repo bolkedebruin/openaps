@@ -3,6 +3,10 @@
 // overlays are per-inverter sparse overrides on top of a base profile.
 package gridprofile
 
+// SchemaVersion is the value of the "schema" field in every v1 profile and
+// overlay document (the schemaVersion const in v1.schema.json).
+const SchemaVersion = "invdriver.gridprofile/v1"
+
 // Source describes the origin of a profile (e.g. an APsystems TY catalog
 // entry). All fields are informational; system+ref are required.
 type Source struct {

@@ -298,7 +298,9 @@ func newSettingsServer(t *testing.T, cfg Config) (http.Handler, []*http.Cookie) 
 	}
 	cfg.StateDir = t.TempDir()
 	cfg.Assets = fstest.MapFS{"index.html": {Data: []byte("x")}}
-	cfg.Snap = snapshot.New(nil)
+	if cfg.Snap == nil {
+		cfg.Snap = snapshot.New(nil)
+	}
 	cfg.Auth = authMgr
 	srv := New(cfg)
 	h := srv.Handler()

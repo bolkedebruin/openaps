@@ -187,6 +187,31 @@ func (s *Store) ClearOverlay(ctx context.Context, uid string) error {
 	return err
 }
 
+// ListOverlays returns one Overlay per overlay id. An overlay applied to
+// several inverters is stored once per UID with identical JSON (each row's
+// body carries the full uids list), so grouping by id yields the distinct
+// named overlays with their complete target lists.
+func (s *Store) ListOverlays(ctx context.Context) ([]Overlay, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT json FROM gp_overlays GROUP BY id ORDER BY id`)
+	if err != nil {
+		return nil, fmt.Errorf("ListOverlays: %w", err)
+	}
+	defer rows.Close()
+	var out []Overlay
+	for rows.Next() {
+		var raw string
+		if err := rows.Scan(&raw); err != nil {
+			return nil, fmt.Errorf("ListOverlays: scan: %w", err)
+		}
+		var o Overlay
+		if err := json.Unmarshal([]byte(raw), &o); err != nil {
+			return nil, fmt.Errorf("ListOverlays: unmarshal: %w", err)
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
 // AppendApplyLog records one apply-then-read attempt for a single parameter.
 // result is one of: "in_sync", "applied", "unconfirmed", "drift",
 // "unsupported", "no_readback", "unknown", "encode_error: ...", "send_error: ...",
