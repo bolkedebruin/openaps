@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -95,26 +96,53 @@ func (s *Server) handleGetProfiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Overlays (Local Site profiles).
-	ovResp, err := s.cfg.GridProfileFn(r.Context(), &wire.GridProfileRequest{
-		Op: &wire.GridProfileRequest_ListOverlays{ListOverlays: &wire.Empty{}}})
+	overlays, err := s.overlaysList(r.Context())
 	if err != nil {
 		out.Error = err.Error()
 		writeJSON(w, http.StatusOK, out)
 		return
 	}
-	var overlays []gridprofile.Overlay
-	if err := json.Unmarshal(ovResp.GetJson(), &overlays); err == nil {
-		for _, o := range overlays {
-			ls := localSiteDTO{ID: o.ID, UIDs: o.UIDs, Points: []localSitePointDTO{}}
-			for _, p := range o.Points {
-				ls.Points = append(ls.Points, localSitePointDTO{
-					ApsCode: p.Apply.ApsCode, Value: p.Native.Value, Unit: p.Native.Unit})
-			}
-			out.Overlays = append(out.Overlays, ls)
-		}
-	}
-
+	out.Overlays = overlays
 	writeJSON(w, http.StatusOK, out)
+}
+
+// overlaysList fetches the stored Local Site profiles (overlays) and reduces
+// each point to {aps_code, value, unit}.
+func (s *Server) overlaysList(ctx context.Context) ([]localSiteDTO, error) {
+	resp, err := s.cfg.GridProfileFn(ctx, &wire.GridProfileRequest{
+		Op: &wire.GridProfileRequest_ListOverlays{ListOverlays: &wire.Empty{}}})
+	if err != nil {
+		return nil, err
+	}
+	var overlays []gridprofile.Overlay
+	if err := json.Unmarshal(resp.GetJson(), &overlays); err != nil {
+		return nil, err
+	}
+	out := make([]localSiteDTO, 0, len(overlays))
+	for _, o := range overlays {
+		ls := localSiteDTO{ID: o.ID, UIDs: o.UIDs, Points: []localSitePointDTO{}}
+		for _, p := range o.Points {
+			ls.Points = append(ls.Points, localSitePointDTO{
+				ApsCode: p.Apply.ApsCode, Value: p.Native.Value, Unit: p.Native.Unit})
+		}
+		out = append(out, ls)
+	}
+	return out, nil
+}
+
+// handleGetOverlays returns just the Local Site profiles (lighter than
+// /api/profiles): the dashboard uses it to flag inverters with an active
+// custom profile. Degrades to an empty list, never a 5xx.
+func (s *Server) handleGetOverlays(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.GridProfileFn == nil {
+		writeJSON(w, http.StatusOK, []localSiteDTO{})
+		return
+	}
+	overlays, err := s.overlaysList(r.Context())
+	if err != nil {
+		overlays = []localSiteDTO{}
+	}
+	writeJSON(w, http.StatusOK, overlays)
 }
 
 // fleetTargets lists the inverters as overlay targets, each annotated with the

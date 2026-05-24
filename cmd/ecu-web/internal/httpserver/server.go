@@ -127,6 +127,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/settings", s.cfg.Auth.Require(http.HandlerFunc(s.handleGetSettings)))
 	mux.Handle("PUT /api/settings", s.cfg.Auth.Require(http.HandlerFunc(s.handleSetSettings)))
 	mux.Handle("GET /api/profiles", s.cfg.Auth.Require(http.HandlerFunc(s.handleGetProfiles)))
+	mux.Handle("GET /api/overlays", s.cfg.Auth.Require(http.HandlerFunc(s.handleGetOverlays)))
 	mux.Handle("POST /api/profiles/base", s.cfg.Auth.Require(http.HandlerFunc(s.handleSelectBase)))
 	mux.Handle("PUT /api/profiles/overlay", s.cfg.Auth.Require(http.HandlerFunc(s.handlePutOverlay)))
 	mux.Handle("DELETE /api/profiles/overlay", s.cfg.Auth.Require(http.HandlerFunc(s.handleDeleteOverlay)))

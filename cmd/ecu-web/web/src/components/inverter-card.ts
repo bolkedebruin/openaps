@@ -10,14 +10,17 @@ export class InverterCard extends LitElement {
   static properties = {
     inverter: { attribute: false },
     name: { type: String },
+    profile: { type: String },
   };
 
   declare inverter: Inverter;
   declare name: string;
+  declare profile: string;
 
   constructor() {
     super();
     this.name = "";
+    this.profile = "";
   }
 
   static styles = css`
@@ -42,6 +45,19 @@ export class InverterCard extends LitElement {
       color: var(--muted);
       font-size: 12px;
       font-family: var(--mono);
+    }
+    .profile {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 6px;
+      background: color-mix(in srgb, var(--accent) 16%, transparent);
+      color: var(--accent);
+      border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 11px;
+      font-weight: 600;
     }
     .dot {
       width: 9px;
@@ -135,6 +151,9 @@ export class InverterCard extends LitElement {
         <div>
           <div class="model">${this.name || inv.model || "unknown"}</div>
           <div class="uid">${this.name ? `${inv.model} · ${inv.uid}` : inv.uid}</div>
+          ${this.profile
+            ? html`<div class="profile" title="Local Site profile active">⚙ ${this.profile}</div>`
+            : nothing}
         </div>
         <div class="state">
           <span class="dot ${inv.online ? "on" : "off"}"></span>

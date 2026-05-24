@@ -19,12 +19,14 @@ export class DashboardView extends LitElement {
     fleet: { attribute: false },
     system: { attribute: false },
     names: { attribute: false },
+    profiles: { attribute: false },
     history: { state: true },
   };
 
   declare fleet: Fleet | null;
   declare system: SystemStatus | null;
   declare names: Record<string, string>;
+  declare profiles: Record<string, string>;
   declare history: PowerPoint[];
 
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -34,6 +36,7 @@ export class DashboardView extends LitElement {
     this.fleet = null;
     this.system = null;
     this.names = {};
+    this.profiles = {};
     this.history = [];
   }
 
@@ -119,7 +122,11 @@ export class DashboardView extends LitElement {
       ${f.inverters.length
         ? html`<div class="cards">
             ${f.inverters.map(
-              (inv) => html`<inverter-card .inverter=${inv} .name=${this.names?.[inv.uid] ?? ""}></inverter-card>`,
+              (inv) => html`<inverter-card
+                .inverter=${inv}
+                .name=${this.names?.[inv.uid] ?? ""}
+                .profile=${this.profiles?.[inv.uid] ?? ""}
+              ></inverter-card>`,
             )}
           </div>`
         : html`<div class="empty">No inverters discovered yet.</div>`}

@@ -31,9 +31,10 @@ function sample(over: Partial<Inverter> = {}): Inverter {
   };
 }
 
-async function mount(inv: Inverter): Promise<InverterCard> {
+async function mount(inv: Inverter, profile = ""): Promise<InverterCard> {
   const el = document.createElement("inverter-card") as InverterCard;
   el.inverter = inv;
+  el.profile = profile;
   document.body.appendChild(el);
   await el.updateComplete;
   return el;
@@ -85,5 +86,17 @@ describe("<inverter-card>", () => {
   test("no faults -> no chips", async () => {
     const el = await mount(sample());
     expect((el.shadowRoot?.querySelectorAll(".chip") ?? []).length).toBe(0);
+  });
+
+  test("active custom profile shows a badge with its name", async () => {
+    const el = await mount(sample(), "victron-shift");
+    const badge = el.shadowRoot?.querySelector(".profile");
+    expect(badge).not.toBeNull();
+    expect(badge?.textContent).toContain("victron-shift");
+  });
+
+  test("no custom profile -> no badge", async () => {
+    const el = await mount(sample());
+    expect(el.shadowRoot?.querySelector(".profile")).toBeNull();
   });
 });

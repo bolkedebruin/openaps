@@ -37,6 +37,7 @@ export class EcuApp extends LitElement {
     fleet: { state: true },
     system: { state: true },
     names: { state: true },
+    customProfiles: { state: true },
   };
 
   declare ready: boolean;
@@ -46,6 +47,7 @@ export class EcuApp extends LitElement {
   declare fleet: Fleet | null;
   declare system: SystemStatus | null;
   declare names: Record<string, string>;
+  declare customProfiles: Record<string, string>; // inverter uid -> active Local Site profile name
 
   private closeSSE: (() => void) | null = null;
   private sysTimer: ReturnType<typeof setInterval> | null = null;
@@ -60,6 +62,7 @@ export class EcuApp extends LitElement {
     this.fleet = null;
     this.system = null;
     this.names = {};
+    this.customProfiles = {};
   }
 
   static styles = css`
@@ -133,6 +136,9 @@ export class EcuApp extends LitElement {
   private onHash = () => {
     const id = (location.hash.replace(/^#\/?/, "") || "dashboard").split("/")[0];
     this.route = NAV.some((n) => n.id === id) ? id : "dashboard";
+    // Refresh the custom-profile flags when returning to the dashboard, so an
+    // overlay just created/cleared on the Profiles screen is reflected.
+    if (this.route === "dashboard" && this.authed) void this.fetchOverlays();
   };
 
   private async init() {
@@ -174,6 +180,7 @@ export class EcuApp extends LitElement {
     void poll();
     this.sysTimer = setInterval(poll, 5000);
     void this.fetchSettings();
+    void this.fetchOverlays();
   }
 
   private async fetchSettings() {
@@ -185,6 +192,20 @@ export class EcuApp extends LitElement {
       }
     } catch {
       /* names stay as-is */
+    }
+  }
+
+  // fetchOverlays maps each inverter uid to the Local Site profile active on
+  // it, so the dashboard can flag inverters with a custom profile. Overlays
+  // change rarely, so this is fetched on connect and on entering the dashboard.
+  private async fetchOverlays() {
+    try {
+      const overlays = await api.overlays();
+      const map: Record<string, string> = {};
+      for (const o of overlays) for (const uid of o.uids) map[uid] = o.id;
+      this.customProfiles = map;
+    } catch {
+      /* keep prior map */
     }
   }
 
@@ -230,7 +251,12 @@ export class EcuApp extends LitElement {
       case "settings":
         return html`<settings-view></settings-view>`;
       default:
-        return html`<dashboard-view .fleet=${this.fleet} .system=${this.system} .names=${this.names}></dashboard-view>`;
+        return html`<dashboard-view
+          .fleet=${this.fleet}
+          .system=${this.system}
+          .names=${this.names}
+          .profiles=${this.customProfiles}
+        ></dashboard-view>`;
     }
   }
 

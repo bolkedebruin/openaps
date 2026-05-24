@@ -249,6 +249,7 @@ export const api = {
   },
   saveSettings: (s: Settings) => putJSON<Settings>("/api/settings", s),
   profiles: () => getJSON<ProfilesState>("/api/profiles"),
+  overlays: () => getJSON<LocalSiteProfile[]>("/api/overlays"),
   selectBase: (id: string) => postJSON("/api/profiles/base", { id }),
   saveOverlay: (p: { id: string; uids: string[]; points: OverlayPoint[] }) =>
     putJSON<OverlayApplyResponse>("/api/profiles/overlay", p),

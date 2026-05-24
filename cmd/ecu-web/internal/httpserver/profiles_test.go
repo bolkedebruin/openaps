@@ -238,10 +238,48 @@ func TestSelectBaseRejected(t *testing.T) {
 	}
 }
 
+func TestGetOverlaysEndpoint(t *testing.T) {
+	h, cookies := newSettingsServer(t, Config{GridProfileFn: fakeProfiles})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, withCookies(httptest.NewRequest("GET", "/api/overlays", nil), cookies))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("overlays => %d (%s)", rec.Code, rec.Body)
+	}
+	var out []localSiteDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 1 || out[0].ID != "victron-shift" || out[0].UIDs[0] != "704000006835" {
+		t.Errorf("overlays wrong: %+v", out)
+	}
+	if out[0].Points[0].ApsCode != "CB" {
+		t.Errorf("overlay point wrong: %+v", out[0].Points)
+	}
+}
+
+func TestGetOverlaysDegradesToEmpty(t *testing.T) {
+	h, cookies := newSettingsServer(t, Config{
+		GridProfileFn: func(context.Context, *wire.GridProfileRequest) (*wire.GridProfileResponse, error) {
+			return nil, errors.New("inv-driver down")
+		},
+	})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, withCookies(httptest.NewRequest("GET", "/api/overlays", nil), cookies))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("should degrade to 200, got %d", rec.Code)
+	}
+	var out []localSiteDTO
+	json.Unmarshal(rec.Body.Bytes(), &out)
+	if len(out) != 0 {
+		t.Errorf("want empty list on error, got %+v", out)
+	}
+}
+
 func TestProfilesRequireAuth(t *testing.T) {
 	_, h := newTestServer(t)
 	for _, ep := range []struct{ m, p string }{
 		{"GET", "/api/profiles"},
+		{"GET", "/api/overlays"},
 		{"POST", "/api/profiles/base"},
 		{"PUT", "/api/profiles/overlay"},
 		{"DELETE", "/api/profiles/overlay"},
