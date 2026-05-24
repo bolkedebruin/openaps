@@ -102,12 +102,12 @@ export class ProfilesView extends LitElement {
     this.error = "";
     try {
       await api.selectBase(id);
+      await this.load(); // refresh before showing the result so load() can't clobber it
       this.notice = `Base profile "${id}" applied.`;
     } catch (err) {
       this.error = (err as Error).message;
     } finally {
       this.baseBusy = false;
-      await this.load();
     }
   };
 
@@ -137,13 +137,13 @@ export class ProfilesView extends LitElement {
     this.error = "";
     try {
       const resp = await api.saveOverlay(d);
-      this.reportResults(d.id, resp.results);
       this.editing = null;
+      await this.load(); // refresh before reporting so load() can't clobber the result
+      this.reportResults(d.id, resp.results);
     } catch (err) {
       this.error = (err as Error).message;
     } finally {
       this.overlayBusy = false;
-      await this.load();
     }
   };
 
@@ -154,13 +154,13 @@ export class ProfilesView extends LitElement {
     this.error = "";
     try {
       const resp = await api.deleteOverlay(p.id, p.uids);
-      this.reportResults(p.id, resp.results, "cleared");
       if (this.editing?.id === p.id) this.editing = null;
+      await this.load(); // refresh before reporting so load() can't clobber the result
+      this.reportResults(p.id, resp.results, "cleared");
     } catch (err) {
       this.error = (err as Error).message;
     } finally {
       this.overlayBusy = false;
-      await this.load();
     }
   };
 
@@ -169,8 +169,12 @@ export class ProfilesView extends LitElement {
     if (bad.length === 0) {
       this.notice = `Profile "${id}" ${verb} to ${results.length} inverter(s).`;
     } else {
-      this.notice = `Profile "${id}" saved; not confirmed on ${bad.length} of ${results.length}.`;
-      this.error = bad.map((r) => `${this.invName(r.uid)}: ${r.error || "unconfirmed"}`).join("; ");
+      // The change is persisted on the ECU; the per-inverter apply just could
+      // not be confirmed (e.g. the inverter is offline). That's expected, not
+      // an error — report it in the notice, not the red error banner.
+      const act = verb === "cleared" ? "clearing" : "applying";
+      const detail = bad.map((r) => `${this.invName(r.uid)}: ${r.error || "unconfirmed"}`).join("; ");
+      this.notice = `Profile "${id}" saved on the ECU, but ${act} was not confirmed on ${bad.length} of ${results.length} inverter(s) (offline?) — ${detail}`;
     }
   }
 
