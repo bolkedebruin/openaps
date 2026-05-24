@@ -19,11 +19,11 @@ func TestFaultsFromReply_UnknownCmdReturnsNil(t *testing.T) {
 func TestFaultsFromReply_DS3PreservesNamedBits(t *testing.T) {
 	// body[0x0d] bit 4 → DCBusFault; body[0x0e] bit 4 → IsoFaultA.
 	r := codec.Reply{Cmd: 0xBB, DS3Status: codec.DS3Status{Raw: [5]byte{
-		0,          // 0x0b
-		0,          // 0x0c
-		1 << 4,     // 0x0d — DCBusFault
-		1 << 4,     // 0x0e — IsoFaultA
-		0,          // 0x0f
+		0,      // 0x0b
+		0,      // 0x0c
+		1 << 4, // 0x0d — DCBusFault
+		1 << 4, // 0x0e — IsoFaultA
+		0,      // 0x0f
 	}}}
 	got := faultsFromReply(r)
 	if got == nil {

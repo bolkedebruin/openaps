@@ -8,7 +8,7 @@ package busmgr.v1;
 option go_package = "github.com/bolke/inv-driver/wire;wire";
 
 // Envelope is the single top-level message on every frame. Tag
-// numbers 1..9 are upstream (backend -> driver); 10..19 are reserved
+// numbers 1..9 are upstream (backend -> driver); 10..29 are reserved
 // for downstream (driver -> backend) so adding upstream fields cannot
 // collide with downstream additions.
 message Envelope {
@@ -28,6 +28,15 @@ message Envelope {
 
     GridProfileRequest   grid_profile_req  = 14;
     GridProfileResponse  grid_profile_resp = 15;
+
+    SystemStatusRequest  system_status_req  = 16;
+    SystemStatusResponse system_status_resp = 17;
+
+    EventsRequest        events_req         = 18;
+    EventsResponse       events_resp        = 19;
+
+    SettingsRequest      settings_req       = 20;
+    SettingsResponse     settings_resp      = 21;
   }
 }
 
@@ -351,4 +360,96 @@ message GridProfileResponse {
   bool   ok    = 1;
   string error = 2;
   bytes  json  = 3;  // structured result: profile list, effective profile, or status
+}
+
+// SystemStatusRequest asks inv-driver for ECU identity and the set of
+// peers currently connected on the UDS (bus backend, north-side
+// adapters, the web UI itself). Read-only; carries no parameters. Like
+// GridProfileRequest it is handled on a controller-gated connection.
+message SystemStatusRequest {}
+
+// SystemStatusResponse describes the ECU and its connected peers at the
+// moment the request was served.
+message SystemStatusResponse {
+  bool        ok    = 1;
+  string      error = 2;
+  int64       ts_ms = 3;
+  EcuIdentity ecu   = 4;
+  repeated PeerStatus peers = 5;
+}
+
+// EcuIdentity is the ECU's identity. ecu_id is operator-set in
+// inv-driver's settings file; hostname is the box's OS hostname.
+message EcuIdentity {
+  string ecu_id   = 1;  // operator-set, from inv-driver settings
+  string hostname = 2;  // OS hostname
+}
+
+// PeerStatus is one live UDS peer as inv-driver sees it (from the Hello
+// frame + the OS peer credentials of the connection).
+message PeerStatus {
+  string backend         = 1;
+  string version         = 2;
+  string hostname        = 3;
+  string role            = 4;  // "PUBLISHER" | "SUBSCRIBER"
+  int64  connected_at_ms = 5;
+  int32  peer_uid        = 6;  // SO_PEERCRED uid (-1 if unavailable)
+  bool   controller      = 7;  // backend is on the controller allow-list
+}
+
+// EventsRequest queries the append-only events log. Empty string filters
+// match any value; limit 0 uses the server default.
+message EventsRequest {
+  int64  since_ms     = 1;  // ts_ms >= since_ms
+  string kind         = 2;  // exact kind, or "" for any
+  string severity     = 3;  // exact severity, or "" for any
+  string inverter_uid = 4;  // exact uid, or "" for any
+  uint32 limit        = 5;  // 0 -> server default
+}
+
+// EventsResponse returns events newest-first.
+message EventsResponse {
+  bool            ok     = 1;
+  string          error  = 2;
+  repeated Event  events = 3;
+}
+
+// Event is one row of the append-only events log.
+message Event {
+  int64  id           = 1;
+  int64  ts_ms        = 2;
+  string inverter_uid = 3;
+  string kind         = 4;
+  string severity     = 5;  // info | warn | error | …
+  uint32 short_addr   = 6;
+  string detail       = 7;  // error / message text (events.error column)
+  string raw_hex      = 8;
+}
+
+// Settings is the operator-owned configuration inv-driver persists in its
+// own settings file. Used as both the set payload and the response body.
+message Settings {
+  string ecu_id       = 1;
+  string mac          = 2;
+  string pan_override = 3;  // hex 16-bit, e.g. "0DCE"; empty = derive
+  string zigbee_type  = 4;  // "apsystems" | "general" | "" (=apsystems)
+  // inverter_names maps an inverter UID (12-char hex) to an operator
+  // label shown in place of the UID.
+  map<string, string> inverter_names = 5;
+}
+
+// SettingsRequest reads (get) or replaces (set) the settings. Set carries
+// the full desired Settings; the server validates before persisting.
+message SettingsRequest {
+  oneof op {
+    Empty    get = 1;
+    Settings set = 2;
+  }
+}
+
+// SettingsResponse returns ok/error plus the current settings after the op.
+message SettingsResponse {
+  bool     ok       = 1;
+  string   error    = 2;
+  Settings settings = 3;
 }

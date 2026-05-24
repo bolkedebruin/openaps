@@ -355,14 +355,15 @@ func (in *Ingestor) handleTelemetry(ctx context.Context, t *wire.Telemetry) erro
 			return err
 		}
 	}
-	// Light-touch audit row.
-	return in.S.AppendEvent(ctx, tsMs, uid, "telemetry", "info")
+	// Telemetry is stored in telemetry_live; it is not an audit event, so
+	// it is not appended to the events log (which would flood it and slow
+	// operational-event queries).
+	return nil
 }
 
-// handleInverterInfo stores the identity / pair-state columns and
-// appends an inverter_info audit row. Optional proto3 fields map to
-// pointer-typed store columns so an unset field leaves the prior
-// column value untouched.
+// handleInverterInfo stores the identity / pair-state columns. Optional
+// proto3 fields map to pointer-typed store columns so an unset field
+// leaves the prior column value untouched.
 func (in *Ingestor) handleInverterInfo(ctx context.Context, info *wire.InverterInfo) error {
 	uid := info.GetPeerUid()
 	if !isValidPeerUID(uid) {
@@ -379,10 +380,7 @@ func (in *Ingestor) handleInverterInfo(ctx context.Context, info *wire.InverterI
 		Bound:       info.ZigbeeBound,
 		RptOff:      info.TurnedOffRpt,
 	}
-	if err := in.S.UpsertInverterInfo(ctx, upd); err != nil {
-		return err
-	}
-	return in.S.AppendEvent(ctx, tsMs, uid, "inverter_info", "info")
+	return in.S.UpsertInverterInfo(ctx, upd)
 }
 
 // handleRawFrame parses the L1 envelope once, then dispatches the L2
@@ -436,7 +434,25 @@ func (in *Ingestor) rawFrameDecoders() []rawFrameTryFunc {
 		in.tryProtectionReply,
 		in.tryInfoReply,
 		in.tryPairFrame,
+		in.tryIgnorableFrame,
 	}
+}
+
+// cmdIdleFrame is a well-formed L2 cmd the inverters emit that carries no
+// telemetry we model — observed as a near-empty frame from QS1A units in
+// a dusk/shutdown window. It is consumed quietly so it doesn't surface as
+// a spurious "no decoder matched" warning in the events log.
+const cmdIdleFrame = 0x00
+
+// tryIgnorableFrame consumes well-formed frames whose L2 cmd is on the
+// known-benign list. Genuinely unrecognised cmds still fall through to
+// decode_failed so a new frame type isn't silently swallowed.
+func (in *Ingestor) tryIgnorableFrame(_ context.Context, _ int64, env codec.L1Envelope) (bool, error) {
+	l2, err := codec.ParseL2(env.L2Frame)
+	if err != nil {
+		return false, nil
+	}
+	return l2.Cmd == cmdIdleFrame, nil
 }
 
 // tryProtectionReply handles the paged grid-protection read replies.

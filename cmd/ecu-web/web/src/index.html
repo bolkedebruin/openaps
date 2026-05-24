@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0e1822" />
+    <meta name="robots" content="noindex" />
+    <title>ECU Console</title>
+    <style>
+      :root {
+        --bg: #0e1822;
+        --surface: #16232f;
+        --bar-bg: #1e2f3d;
+        --border: #25394a;
+        --text: #e8eef3;
+        --muted: #8aa0b2;
+        --accent: #00b7c3;
+        --ok: #36c759;
+        --warn: #ffb020;
+        --err: #ff4d4f;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        color-scheme: dark;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: var(--accent); }
+      .boot { display: grid; place-items: center; height: 100%; color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <ecu-app><div class="boot">Loading…</div></ecu-app>
+    <script type="module" src="/assets/main.js"></script>
+  </body>
+</html>

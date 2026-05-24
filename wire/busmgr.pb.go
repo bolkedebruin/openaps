@@ -79,7 +79,7 @@ func (Role) EnumDescriptor() ([]byte, []int) {
 }
 
 // Envelope is the single top-level message on every frame. Tag
-// numbers 1..9 are upstream (backend -> driver); 10..19 are reserved
+// numbers 1..9 are upstream (backend -> driver); 10..29 are reserved
 // for downstream (driver -> backend) so adding upstream fields cannot
 // collide with downstream additions.
 type Envelope struct {
@@ -99,6 +99,12 @@ type Envelope struct {
 	//	*Envelope_SubscribeRaw
 	//	*Envelope_GridProfileReq
 	//	*Envelope_GridProfileResp
+	//	*Envelope_SystemStatusReq
+	//	*Envelope_SystemStatusResp
+	//	*Envelope_EventsReq
+	//	*Envelope_EventsResp
+	//	*Envelope_SettingsReq
+	//	*Envelope_SettingsResp
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -258,6 +264,60 @@ func (x *Envelope) GetGridProfileResp() *GridProfileResponse {
 	return nil
 }
 
+func (x *Envelope) GetSystemStatusReq() *SystemStatusRequest {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_SystemStatusReq); ok {
+			return x.SystemStatusReq
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetSystemStatusResp() *SystemStatusResponse {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_SystemStatusResp); ok {
+			return x.SystemStatusResp
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetEventsReq() *EventsRequest {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_EventsReq); ok {
+			return x.EventsReq
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetEventsResp() *EventsResponse {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_EventsResp); ok {
+			return x.EventsResp
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetSettingsReq() *SettingsRequest {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_SettingsReq); ok {
+			return x.SettingsReq
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetSettingsResp() *SettingsResponse {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_SettingsResp); ok {
+			return x.SettingsResp
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -314,6 +374,30 @@ type Envelope_GridProfileResp struct {
 	GridProfileResp *GridProfileResponse `protobuf:"bytes,15,opt,name=grid_profile_resp,json=gridProfileResp,proto3,oneof"`
 }
 
+type Envelope_SystemStatusReq struct {
+	SystemStatusReq *SystemStatusRequest `protobuf:"bytes,16,opt,name=system_status_req,json=systemStatusReq,proto3,oneof"`
+}
+
+type Envelope_SystemStatusResp struct {
+	SystemStatusResp *SystemStatusResponse `protobuf:"bytes,17,opt,name=system_status_resp,json=systemStatusResp,proto3,oneof"`
+}
+
+type Envelope_EventsReq struct {
+	EventsReq *EventsRequest `protobuf:"bytes,18,opt,name=events_req,json=eventsReq,proto3,oneof"`
+}
+
+type Envelope_EventsResp struct {
+	EventsResp *EventsResponse `protobuf:"bytes,19,opt,name=events_resp,json=eventsResp,proto3,oneof"`
+}
+
+type Envelope_SettingsReq struct {
+	SettingsReq *SettingsRequest `protobuf:"bytes,20,opt,name=settings_req,json=settingsReq,proto3,oneof"`
+}
+
+type Envelope_SettingsResp struct {
+	SettingsResp *SettingsResponse `protobuf:"bytes,21,opt,name=settings_resp,json=settingsResp,proto3,oneof"`
+}
+
 func (*Envelope_Hello) isEnvelope_Body() {}
 
 func (*Envelope_Telemetry) isEnvelope_Body() {}
@@ -339,6 +423,18 @@ func (*Envelope_SubscribeRaw) isEnvelope_Body() {}
 func (*Envelope_GridProfileReq) isEnvelope_Body() {}
 
 func (*Envelope_GridProfileResp) isEnvelope_Body() {}
+
+func (*Envelope_SystemStatusReq) isEnvelope_Body() {}
+
+func (*Envelope_SystemStatusResp) isEnvelope_Body() {}
+
+func (*Envelope_EventsReq) isEnvelope_Body() {}
+
+func (*Envelope_EventsResp) isEnvelope_Body() {}
+
+func (*Envelope_SettingsReq) isEnvelope_Body() {}
+
+func (*Envelope_SettingsResp) isEnvelope_Body() {}
 
 // Hello is the first frame on every backend connection. The driver
 // uses it to identify the bus backend (e.g. apsystems-stock-zb) and
@@ -2527,11 +2623,742 @@ func (x *GridProfileResponse) GetJson() []byte {
 	return nil
 }
 
+// SystemStatusRequest asks inv-driver for ECU identity and the set of
+// peers currently connected on the UDS (bus backend, north-side
+// adapters, the web UI itself). Read-only; carries no parameters. Like
+// GridProfileRequest it is handled on a controller-gated connection.
+type SystemStatusRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SystemStatusRequest) Reset() {
+	*x = SystemStatusRequest{}
+	mi := &file_busmgr_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SystemStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SystemStatusRequest) ProtoMessage() {}
+
+func (x *SystemStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SystemStatusRequest.ProtoReflect.Descriptor instead.
+func (*SystemStatusRequest) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{23}
+}
+
+// SystemStatusResponse describes the ECU and its connected peers at the
+// moment the request was served.
+type SystemStatusResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	TsMs          int64                  `protobuf:"varint,3,opt,name=ts_ms,json=tsMs,proto3" json:"ts_ms,omitempty"`
+	Ecu           *EcuIdentity           `protobuf:"bytes,4,opt,name=ecu,proto3" json:"ecu,omitempty"`
+	Peers         []*PeerStatus          `protobuf:"bytes,5,rep,name=peers,proto3" json:"peers,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SystemStatusResponse) Reset() {
+	*x = SystemStatusResponse{}
+	mi := &file_busmgr_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SystemStatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SystemStatusResponse) ProtoMessage() {}
+
+func (x *SystemStatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SystemStatusResponse.ProtoReflect.Descriptor instead.
+func (*SystemStatusResponse) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *SystemStatusResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *SystemStatusResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *SystemStatusResponse) GetTsMs() int64 {
+	if x != nil {
+		return x.TsMs
+	}
+	return 0
+}
+
+func (x *SystemStatusResponse) GetEcu() *EcuIdentity {
+	if x != nil {
+		return x.Ecu
+	}
+	return nil
+}
+
+func (x *SystemStatusResponse) GetPeers() []*PeerStatus {
+	if x != nil {
+		return x.Peers
+	}
+	return nil
+}
+
+// EcuIdentity is the ECU's identity. ecu_id is operator-set in
+// inv-driver's settings file; hostname is the box's OS hostname.
+type EcuIdentity struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	EcuId         string                 `protobuf:"bytes,1,opt,name=ecu_id,json=ecuId,proto3" json:"ecu_id,omitempty"` // operator-set, from inv-driver settings
+	Hostname      string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`        // OS hostname
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EcuIdentity) Reset() {
+	*x = EcuIdentity{}
+	mi := &file_busmgr_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EcuIdentity) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EcuIdentity) ProtoMessage() {}
+
+func (x *EcuIdentity) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EcuIdentity.ProtoReflect.Descriptor instead.
+func (*EcuIdentity) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *EcuIdentity) GetEcuId() string {
+	if x != nil {
+		return x.EcuId
+	}
+	return ""
+}
+
+func (x *EcuIdentity) GetHostname() string {
+	if x != nil {
+		return x.Hostname
+	}
+	return ""
+}
+
+// PeerStatus is one live UDS peer as inv-driver sees it (from the Hello
+// frame + the OS peer credentials of the connection).
+type PeerStatus struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Backend       string                 `protobuf:"bytes,1,opt,name=backend,proto3" json:"backend,omitempty"`
+	Version       string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	Hostname      string                 `protobuf:"bytes,3,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	Role          string                 `protobuf:"bytes,4,opt,name=role,proto3" json:"role,omitempty"` // "PUBLISHER" | "SUBSCRIBER"
+	ConnectedAtMs int64                  `protobuf:"varint,5,opt,name=connected_at_ms,json=connectedAtMs,proto3" json:"connected_at_ms,omitempty"`
+	PeerUid       int32                  `protobuf:"varint,6,opt,name=peer_uid,json=peerUid,proto3" json:"peer_uid,omitempty"` // SO_PEERCRED uid (-1 if unavailable)
+	Controller    bool                   `protobuf:"varint,7,opt,name=controller,proto3" json:"controller,omitempty"`          // backend is on the controller allow-list
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PeerStatus) Reset() {
+	*x = PeerStatus{}
+	mi := &file_busmgr_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PeerStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PeerStatus) ProtoMessage() {}
+
+func (x *PeerStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PeerStatus.ProtoReflect.Descriptor instead.
+func (*PeerStatus) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *PeerStatus) GetBackend() string {
+	if x != nil {
+		return x.Backend
+	}
+	return ""
+}
+
+func (x *PeerStatus) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *PeerStatus) GetHostname() string {
+	if x != nil {
+		return x.Hostname
+	}
+	return ""
+}
+
+func (x *PeerStatus) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
+func (x *PeerStatus) GetConnectedAtMs() int64 {
+	if x != nil {
+		return x.ConnectedAtMs
+	}
+	return 0
+}
+
+func (x *PeerStatus) GetPeerUid() int32 {
+	if x != nil {
+		return x.PeerUid
+	}
+	return 0
+}
+
+func (x *PeerStatus) GetController() bool {
+	if x != nil {
+		return x.Controller
+	}
+	return false
+}
+
+// EventsRequest queries the append-only events log. Empty string filters
+// match any value; limit 0 uses the server default.
+type EventsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SinceMs       int64                  `protobuf:"varint,1,opt,name=since_ms,json=sinceMs,proto3" json:"since_ms,omitempty"`            // ts_ms >= since_ms
+	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`                                  // exact kind, or "" for any
+	Severity      string                 `protobuf:"bytes,3,opt,name=severity,proto3" json:"severity,omitempty"`                          // exact severity, or "" for any
+	InverterUid   string                 `protobuf:"bytes,4,opt,name=inverter_uid,json=inverterUid,proto3" json:"inverter_uid,omitempty"` // exact uid, or "" for any
+	Limit         uint32                 `protobuf:"varint,5,opt,name=limit,proto3" json:"limit,omitempty"`                               // 0 -> server default
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EventsRequest) Reset() {
+	*x = EventsRequest{}
+	mi := &file_busmgr_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EventsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EventsRequest) ProtoMessage() {}
+
+func (x *EventsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EventsRequest.ProtoReflect.Descriptor instead.
+func (*EventsRequest) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *EventsRequest) GetSinceMs() int64 {
+	if x != nil {
+		return x.SinceMs
+	}
+	return 0
+}
+
+func (x *EventsRequest) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *EventsRequest) GetSeverity() string {
+	if x != nil {
+		return x.Severity
+	}
+	return ""
+}
+
+func (x *EventsRequest) GetInverterUid() string {
+	if x != nil {
+		return x.InverterUid
+	}
+	return ""
+}
+
+func (x *EventsRequest) GetLimit() uint32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+// EventsResponse returns events newest-first.
+type EventsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	Events        []*Event               `protobuf:"bytes,3,rep,name=events,proto3" json:"events,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EventsResponse) Reset() {
+	*x = EventsResponse{}
+	mi := &file_busmgr_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EventsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EventsResponse) ProtoMessage() {}
+
+func (x *EventsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EventsResponse.ProtoReflect.Descriptor instead.
+func (*EventsResponse) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *EventsResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *EventsResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *EventsResponse) GetEvents() []*Event {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
+// Event is one row of the append-only events log.
+type Event struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	TsMs          int64                  `protobuf:"varint,2,opt,name=ts_ms,json=tsMs,proto3" json:"ts_ms,omitempty"`
+	InverterUid   string                 `protobuf:"bytes,3,opt,name=inverter_uid,json=inverterUid,proto3" json:"inverter_uid,omitempty"`
+	Kind          string                 `protobuf:"bytes,4,opt,name=kind,proto3" json:"kind,omitempty"`
+	Severity      string                 `protobuf:"bytes,5,opt,name=severity,proto3" json:"severity,omitempty"` // info | warn | error | …
+	ShortAddr     uint32                 `protobuf:"varint,6,opt,name=short_addr,json=shortAddr,proto3" json:"short_addr,omitempty"`
+	Detail        string                 `protobuf:"bytes,7,opt,name=detail,proto3" json:"detail,omitempty"` // error / message text (events.error column)
+	RawHex        string                 `protobuf:"bytes,8,opt,name=raw_hex,json=rawHex,proto3" json:"raw_hex,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Event) Reset() {
+	*x = Event{}
+	mi := &file_busmgr_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Event) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Event) ProtoMessage() {}
+
+func (x *Event) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Event.ProtoReflect.Descriptor instead.
+func (*Event) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *Event) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *Event) GetTsMs() int64 {
+	if x != nil {
+		return x.TsMs
+	}
+	return 0
+}
+
+func (x *Event) GetInverterUid() string {
+	if x != nil {
+		return x.InverterUid
+	}
+	return ""
+}
+
+func (x *Event) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *Event) GetSeverity() string {
+	if x != nil {
+		return x.Severity
+	}
+	return ""
+}
+
+func (x *Event) GetShortAddr() uint32 {
+	if x != nil {
+		return x.ShortAddr
+	}
+	return 0
+}
+
+func (x *Event) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+func (x *Event) GetRawHex() string {
+	if x != nil {
+		return x.RawHex
+	}
+	return ""
+}
+
+// Settings is the operator-owned configuration inv-driver persists in its
+// own settings file. Used as both the set payload and the response body.
+type Settings struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	EcuId       string                 `protobuf:"bytes,1,opt,name=ecu_id,json=ecuId,proto3" json:"ecu_id,omitempty"`
+	Mac         string                 `protobuf:"bytes,2,opt,name=mac,proto3" json:"mac,omitempty"`
+	PanOverride string                 `protobuf:"bytes,3,opt,name=pan_override,json=panOverride,proto3" json:"pan_override,omitempty"` // hex 16-bit, e.g. "0DCE"; empty = derive
+	ZigbeeType  string                 `protobuf:"bytes,4,opt,name=zigbee_type,json=zigbeeType,proto3" json:"zigbee_type,omitempty"`    // "apsystems" | "general" | "" (=apsystems)
+	// inverter_names maps an inverter UID (12-char hex) to an operator
+	// label shown in place of the UID.
+	InverterNames map[string]string `protobuf:"bytes,5,rep,name=inverter_names,json=inverterNames,proto3" json:"inverter_names,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Settings) Reset() {
+	*x = Settings{}
+	mi := &file_busmgr_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Settings) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Settings) ProtoMessage() {}
+
+func (x *Settings) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Settings.ProtoReflect.Descriptor instead.
+func (*Settings) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *Settings) GetEcuId() string {
+	if x != nil {
+		return x.EcuId
+	}
+	return ""
+}
+
+func (x *Settings) GetMac() string {
+	if x != nil {
+		return x.Mac
+	}
+	return ""
+}
+
+func (x *Settings) GetPanOverride() string {
+	if x != nil {
+		return x.PanOverride
+	}
+	return ""
+}
+
+func (x *Settings) GetZigbeeType() string {
+	if x != nil {
+		return x.ZigbeeType
+	}
+	return ""
+}
+
+func (x *Settings) GetInverterNames() map[string]string {
+	if x != nil {
+		return x.InverterNames
+	}
+	return nil
+}
+
+// SettingsRequest reads (get) or replaces (set) the settings. Set carries
+// the full desired Settings; the server validates before persisting.
+type SettingsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Op:
+	//
+	//	*SettingsRequest_Get
+	//	*SettingsRequest_Set
+	Op            isSettingsRequest_Op `protobuf_oneof:"op"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SettingsRequest) Reset() {
+	*x = SettingsRequest{}
+	mi := &file_busmgr_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SettingsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SettingsRequest) ProtoMessage() {}
+
+func (x *SettingsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SettingsRequest.ProtoReflect.Descriptor instead.
+func (*SettingsRequest) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *SettingsRequest) GetOp() isSettingsRequest_Op {
+	if x != nil {
+		return x.Op
+	}
+	return nil
+}
+
+func (x *SettingsRequest) GetGet() *Empty {
+	if x != nil {
+		if x, ok := x.Op.(*SettingsRequest_Get); ok {
+			return x.Get
+		}
+	}
+	return nil
+}
+
+func (x *SettingsRequest) GetSet() *Settings {
+	if x != nil {
+		if x, ok := x.Op.(*SettingsRequest_Set); ok {
+			return x.Set
+		}
+	}
+	return nil
+}
+
+type isSettingsRequest_Op interface {
+	isSettingsRequest_Op()
+}
+
+type SettingsRequest_Get struct {
+	Get *Empty `protobuf:"bytes,1,opt,name=get,proto3,oneof"`
+}
+
+type SettingsRequest_Set struct {
+	Set *Settings `protobuf:"bytes,2,opt,name=set,proto3,oneof"`
+}
+
+func (*SettingsRequest_Get) isSettingsRequest_Op() {}
+
+func (*SettingsRequest_Set) isSettingsRequest_Op() {}
+
+// SettingsResponse returns ok/error plus the current settings after the op.
+type SettingsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	Settings      *Settings              `protobuf:"bytes,3,opt,name=settings,proto3" json:"settings,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SettingsResponse) Reset() {
+	*x = SettingsResponse{}
+	mi := &file_busmgr_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SettingsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SettingsResponse) ProtoMessage() {}
+
+func (x *SettingsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SettingsResponse.ProtoReflect.Descriptor instead.
+func (*SettingsResponse) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *SettingsResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *SettingsResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *SettingsResponse) GetSettings() *Settings {
+	if x != nil {
+		return x.Settings
+	}
+	return nil
+}
+
 var File_busmgr_proto protoreflect.FileDescriptor
 
 const file_busmgr_proto_rawDesc = "" +
 	"\n" +
-	"\fbusmgr.proto\x12\tbusmgr.v1\"\xdf\x05\n" +
+	"\fbusmgr.proto\x12\tbusmgr.v1\"\xfc\b\n" +
 	"\bEnvelope\x12(\n" +
 	"\x05hello\x18\x01 \x01(\v2\x10.busmgr.v1.HelloH\x00R\x05hello\x124\n" +
 	"\ttelemetry\x18\x02 \x01(\v2\x14.busmgr.v1.TelemetryH\x00R\ttelemetry\x12>\n" +
@@ -2548,7 +3375,15 @@ const file_busmgr_proto_rawDesc = "" +
 	"\x05reset\x18\f \x01(\v2\x10.busmgr.v1.ResetH\x00R\x05reset\x12>\n" +
 	"\rsubscribe_raw\x18\r \x01(\v2\x17.busmgr.v1.SubscribeRawH\x00R\fsubscribeRaw\x12I\n" +
 	"\x10grid_profile_req\x18\x0e \x01(\v2\x1d.busmgr.v1.GridProfileRequestH\x00R\x0egridProfileReq\x12L\n" +
-	"\x11grid_profile_resp\x18\x0f \x01(\v2\x1e.busmgr.v1.GridProfileResponseH\x00R\x0fgridProfileRespB\x06\n" +
+	"\x11grid_profile_resp\x18\x0f \x01(\v2\x1e.busmgr.v1.GridProfileResponseH\x00R\x0fgridProfileResp\x12L\n" +
+	"\x11system_status_req\x18\x10 \x01(\v2\x1e.busmgr.v1.SystemStatusRequestH\x00R\x0fsystemStatusReq\x12O\n" +
+	"\x12system_status_resp\x18\x11 \x01(\v2\x1f.busmgr.v1.SystemStatusResponseH\x00R\x10systemStatusResp\x129\n" +
+	"\n" +
+	"events_req\x18\x12 \x01(\v2\x18.busmgr.v1.EventsRequestH\x00R\teventsReq\x12<\n" +
+	"\vevents_resp\x18\x13 \x01(\v2\x19.busmgr.v1.EventsResponseH\x00R\n" +
+	"eventsResp\x12?\n" +
+	"\fsettings_req\x18\x14 \x01(\v2\x1a.busmgr.v1.SettingsRequestH\x00R\vsettingsReq\x12B\n" +
+	"\rsettings_resp\x18\x15 \x01(\v2\x1b.busmgr.v1.SettingsResponseH\x00R\fsettingsRespB\x06\n" +
 	"\x04body\"\xbb\x01\n" +
 	"\x05Hello\x12\x18\n" +
 	"\abackend\x18\x01 \x01(\tR\abackend\x12\x18\n" +
@@ -2810,7 +3645,66 @@ const file_busmgr_proto_rawDesc = "" +
 	"\x13GridProfileResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12\x12\n" +
-	"\x04json\x18\x03 \x01(\fR\x04json*;\n" +
+	"\x04json\x18\x03 \x01(\fR\x04json\"\x15\n" +
+	"\x13SystemStatusRequest\"\xa8\x01\n" +
+	"\x14SystemStatusResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\x12\x13\n" +
+	"\x05ts_ms\x18\x03 \x01(\x03R\x04tsMs\x12(\n" +
+	"\x03ecu\x18\x04 \x01(\v2\x16.busmgr.v1.EcuIdentityR\x03ecu\x12+\n" +
+	"\x05peers\x18\x05 \x03(\v2\x15.busmgr.v1.PeerStatusR\x05peers\"@\n" +
+	"\vEcuIdentity\x12\x15\n" +
+	"\x06ecu_id\x18\x01 \x01(\tR\x05ecuId\x12\x1a\n" +
+	"\bhostname\x18\x02 \x01(\tR\bhostname\"\xd3\x01\n" +
+	"\n" +
+	"PeerStatus\x12\x18\n" +
+	"\abackend\x18\x01 \x01(\tR\abackend\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\x12\x1a\n" +
+	"\bhostname\x18\x03 \x01(\tR\bhostname\x12\x12\n" +
+	"\x04role\x18\x04 \x01(\tR\x04role\x12&\n" +
+	"\x0fconnected_at_ms\x18\x05 \x01(\x03R\rconnectedAtMs\x12\x19\n" +
+	"\bpeer_uid\x18\x06 \x01(\x05R\apeerUid\x12\x1e\n" +
+	"\n" +
+	"controller\x18\a \x01(\bR\n" +
+	"controller\"\x93\x01\n" +
+	"\rEventsRequest\x12\x19\n" +
+	"\bsince_ms\x18\x01 \x01(\x03R\asinceMs\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x1a\n" +
+	"\bseverity\x18\x03 \x01(\tR\bseverity\x12!\n" +
+	"\finverter_uid\x18\x04 \x01(\tR\vinverterUid\x12\x14\n" +
+	"\x05limit\x18\x05 \x01(\rR\x05limit\"`\n" +
+	"\x0eEventsResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\x12(\n" +
+	"\x06events\x18\x03 \x03(\v2\x10.busmgr.v1.EventR\x06events\"\xcf\x01\n" +
+	"\x05Event\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x13\n" +
+	"\x05ts_ms\x18\x02 \x01(\x03R\x04tsMs\x12!\n" +
+	"\finverter_uid\x18\x03 \x01(\tR\vinverterUid\x12\x12\n" +
+	"\x04kind\x18\x04 \x01(\tR\x04kind\x12\x1a\n" +
+	"\bseverity\x18\x05 \x01(\tR\bseverity\x12\x1d\n" +
+	"\n" +
+	"short_addr\x18\x06 \x01(\rR\tshortAddr\x12\x16\n" +
+	"\x06detail\x18\a \x01(\tR\x06detail\x12\x17\n" +
+	"\araw_hex\x18\b \x01(\tR\x06rawHex\"\x88\x02\n" +
+	"\bSettings\x12\x15\n" +
+	"\x06ecu_id\x18\x01 \x01(\tR\x05ecuId\x12\x10\n" +
+	"\x03mac\x18\x02 \x01(\tR\x03mac\x12!\n" +
+	"\fpan_override\x18\x03 \x01(\tR\vpanOverride\x12\x1f\n" +
+	"\vzigbee_type\x18\x04 \x01(\tR\n" +
+	"zigbeeType\x12M\n" +
+	"\x0einverter_names\x18\x05 \x03(\v2&.busmgr.v1.Settings.InverterNamesEntryR\rinverterNames\x1a@\n" +
+	"\x12InverterNamesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"f\n" +
+	"\x0fSettingsRequest\x12$\n" +
+	"\x03get\x18\x01 \x01(\v2\x10.busmgr.v1.EmptyH\x00R\x03get\x12'\n" +
+	"\x03set\x18\x02 \x01(\v2\x13.busmgr.v1.SettingsH\x00R\x03setB\x04\n" +
+	"\x02op\"i\n" +
+	"\x10SettingsResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\x12/\n" +
+	"\bsettings\x18\x03 \x01(\v2\x13.busmgr.v1.SettingsR\bsettings*;\n" +
 	"\x04Role\x12\x14\n" +
 	"\x10ROLE_UNSPECIFIED\x10\x00\x12\r\n" +
 	"\tPUBLISHER\x10\x01\x12\x0e\n" +
@@ -2830,32 +3724,43 @@ func file_busmgr_proto_rawDescGZIP() []byte {
 }
 
 var file_busmgr_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_busmgr_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_busmgr_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
 var file_busmgr_proto_goTypes = []any{
-	(Role)(0),                   // 0: busmgr.v1.Role
-	(*Envelope)(nil),            // 1: busmgr.v1.Envelope
-	(*Hello)(nil),               // 2: busmgr.v1.Hello
-	(*RawFrame)(nil),            // 3: busmgr.v1.RawFrame
-	(*Telemetry)(nil),           // 4: busmgr.v1.Telemetry
-	(*InverterFaults)(nil),      // 5: busmgr.v1.InverterFaults
-	(*DS3Faults)(nil),           // 6: busmgr.v1.DS3Faults
-	(*QS1AFaults)(nil),          // 7: busmgr.v1.QS1AFaults
-	(*Panel)(nil),               // 8: busmgr.v1.Panel
-	(*DecodeFailed)(nil),        // 9: busmgr.v1.DecodeFailed
-	(*Send)(nil),                // 10: busmgr.v1.Send
-	(*Broadcast)(nil),           // 11: busmgr.v1.Broadcast
-	(*Reset)(nil),               // 12: busmgr.v1.Reset
-	(*SubscribeRaw)(nil),        // 13: busmgr.v1.SubscribeRaw
-	(*FleetSummary)(nil),        // 14: busmgr.v1.FleetSummary
-	(*InverterInfo)(nil),        // 15: busmgr.v1.InverterInfo
-	(*Protection)(nil),          // 16: busmgr.v1.Protection
-	(*GridProfileRequest)(nil),  // 17: busmgr.v1.GridProfileRequest
-	(*Empty)(nil),               // 18: busmgr.v1.Empty
-	(*SelectBase)(nil),          // 19: busmgr.v1.SelectBase
-	(*OverlaySet)(nil),          // 20: busmgr.v1.OverlaySet
-	(*ClearOverlay)(nil),        // 21: busmgr.v1.ClearOverlay
-	(*GetEffective)(nil),        // 22: busmgr.v1.GetEffective
-	(*GridProfileResponse)(nil), // 23: busmgr.v1.GridProfileResponse
+	(Role)(0),                    // 0: busmgr.v1.Role
+	(*Envelope)(nil),             // 1: busmgr.v1.Envelope
+	(*Hello)(nil),                // 2: busmgr.v1.Hello
+	(*RawFrame)(nil),             // 3: busmgr.v1.RawFrame
+	(*Telemetry)(nil),            // 4: busmgr.v1.Telemetry
+	(*InverterFaults)(nil),       // 5: busmgr.v1.InverterFaults
+	(*DS3Faults)(nil),            // 6: busmgr.v1.DS3Faults
+	(*QS1AFaults)(nil),           // 7: busmgr.v1.QS1AFaults
+	(*Panel)(nil),                // 8: busmgr.v1.Panel
+	(*DecodeFailed)(nil),         // 9: busmgr.v1.DecodeFailed
+	(*Send)(nil),                 // 10: busmgr.v1.Send
+	(*Broadcast)(nil),            // 11: busmgr.v1.Broadcast
+	(*Reset)(nil),                // 12: busmgr.v1.Reset
+	(*SubscribeRaw)(nil),         // 13: busmgr.v1.SubscribeRaw
+	(*FleetSummary)(nil),         // 14: busmgr.v1.FleetSummary
+	(*InverterInfo)(nil),         // 15: busmgr.v1.InverterInfo
+	(*Protection)(nil),           // 16: busmgr.v1.Protection
+	(*GridProfileRequest)(nil),   // 17: busmgr.v1.GridProfileRequest
+	(*Empty)(nil),                // 18: busmgr.v1.Empty
+	(*SelectBase)(nil),           // 19: busmgr.v1.SelectBase
+	(*OverlaySet)(nil),           // 20: busmgr.v1.OverlaySet
+	(*ClearOverlay)(nil),         // 21: busmgr.v1.ClearOverlay
+	(*GetEffective)(nil),         // 22: busmgr.v1.GetEffective
+	(*GridProfileResponse)(nil),  // 23: busmgr.v1.GridProfileResponse
+	(*SystemStatusRequest)(nil),  // 24: busmgr.v1.SystemStatusRequest
+	(*SystemStatusResponse)(nil), // 25: busmgr.v1.SystemStatusResponse
+	(*EcuIdentity)(nil),          // 26: busmgr.v1.EcuIdentity
+	(*PeerStatus)(nil),           // 27: busmgr.v1.PeerStatus
+	(*EventsRequest)(nil),        // 28: busmgr.v1.EventsRequest
+	(*EventsResponse)(nil),       // 29: busmgr.v1.EventsResponse
+	(*Event)(nil),                // 30: busmgr.v1.Event
+	(*Settings)(nil),             // 31: busmgr.v1.Settings
+	(*SettingsRequest)(nil),      // 32: busmgr.v1.SettingsRequest
+	(*SettingsResponse)(nil),     // 33: busmgr.v1.SettingsResponse
+	nil,                          // 34: busmgr.v1.Settings.InverterNamesEntry
 }
 var file_busmgr_proto_depIdxs = []int32{
 	2,  // 0: busmgr.v1.Envelope.hello:type_name -> busmgr.v1.Hello
@@ -2871,23 +3776,36 @@ var file_busmgr_proto_depIdxs = []int32{
 	13, // 10: busmgr.v1.Envelope.subscribe_raw:type_name -> busmgr.v1.SubscribeRaw
 	17, // 11: busmgr.v1.Envelope.grid_profile_req:type_name -> busmgr.v1.GridProfileRequest
 	23, // 12: busmgr.v1.Envelope.grid_profile_resp:type_name -> busmgr.v1.GridProfileResponse
-	0,  // 13: busmgr.v1.Hello.role:type_name -> busmgr.v1.Role
-	8,  // 14: busmgr.v1.Telemetry.panels:type_name -> busmgr.v1.Panel
-	5,  // 15: busmgr.v1.Telemetry.faults:type_name -> busmgr.v1.InverterFaults
-	6,  // 16: busmgr.v1.InverterFaults.ds3:type_name -> busmgr.v1.DS3Faults
-	7,  // 17: busmgr.v1.InverterFaults.qs1a:type_name -> busmgr.v1.QS1AFaults
-	18, // 18: busmgr.v1.GridProfileRequest.list_profiles:type_name -> busmgr.v1.Empty
-	18, // 19: busmgr.v1.GridProfileRequest.refresh_profiles:type_name -> busmgr.v1.Empty
-	19, // 20: busmgr.v1.GridProfileRequest.select_base:type_name -> busmgr.v1.SelectBase
-	20, // 21: busmgr.v1.GridProfileRequest.set_overlay:type_name -> busmgr.v1.OverlaySet
-	21, // 22: busmgr.v1.GridProfileRequest.clear_overlay:type_name -> busmgr.v1.ClearOverlay
-	22, // 23: busmgr.v1.GridProfileRequest.get_effective:type_name -> busmgr.v1.GetEffective
-	18, // 24: busmgr.v1.GridProfileRequest.get_status:type_name -> busmgr.v1.Empty
-	25, // [25:25] is the sub-list for method output_type
-	25, // [25:25] is the sub-list for method input_type
-	25, // [25:25] is the sub-list for extension type_name
-	25, // [25:25] is the sub-list for extension extendee
-	0,  // [0:25] is the sub-list for field type_name
+	24, // 13: busmgr.v1.Envelope.system_status_req:type_name -> busmgr.v1.SystemStatusRequest
+	25, // 14: busmgr.v1.Envelope.system_status_resp:type_name -> busmgr.v1.SystemStatusResponse
+	28, // 15: busmgr.v1.Envelope.events_req:type_name -> busmgr.v1.EventsRequest
+	29, // 16: busmgr.v1.Envelope.events_resp:type_name -> busmgr.v1.EventsResponse
+	32, // 17: busmgr.v1.Envelope.settings_req:type_name -> busmgr.v1.SettingsRequest
+	33, // 18: busmgr.v1.Envelope.settings_resp:type_name -> busmgr.v1.SettingsResponse
+	0,  // 19: busmgr.v1.Hello.role:type_name -> busmgr.v1.Role
+	8,  // 20: busmgr.v1.Telemetry.panels:type_name -> busmgr.v1.Panel
+	5,  // 21: busmgr.v1.Telemetry.faults:type_name -> busmgr.v1.InverterFaults
+	6,  // 22: busmgr.v1.InverterFaults.ds3:type_name -> busmgr.v1.DS3Faults
+	7,  // 23: busmgr.v1.InverterFaults.qs1a:type_name -> busmgr.v1.QS1AFaults
+	18, // 24: busmgr.v1.GridProfileRequest.list_profiles:type_name -> busmgr.v1.Empty
+	18, // 25: busmgr.v1.GridProfileRequest.refresh_profiles:type_name -> busmgr.v1.Empty
+	19, // 26: busmgr.v1.GridProfileRequest.select_base:type_name -> busmgr.v1.SelectBase
+	20, // 27: busmgr.v1.GridProfileRequest.set_overlay:type_name -> busmgr.v1.OverlaySet
+	21, // 28: busmgr.v1.GridProfileRequest.clear_overlay:type_name -> busmgr.v1.ClearOverlay
+	22, // 29: busmgr.v1.GridProfileRequest.get_effective:type_name -> busmgr.v1.GetEffective
+	18, // 30: busmgr.v1.GridProfileRequest.get_status:type_name -> busmgr.v1.Empty
+	26, // 31: busmgr.v1.SystemStatusResponse.ecu:type_name -> busmgr.v1.EcuIdentity
+	27, // 32: busmgr.v1.SystemStatusResponse.peers:type_name -> busmgr.v1.PeerStatus
+	30, // 33: busmgr.v1.EventsResponse.events:type_name -> busmgr.v1.Event
+	34, // 34: busmgr.v1.Settings.inverter_names:type_name -> busmgr.v1.Settings.InverterNamesEntry
+	18, // 35: busmgr.v1.SettingsRequest.get:type_name -> busmgr.v1.Empty
+	31, // 36: busmgr.v1.SettingsRequest.set:type_name -> busmgr.v1.Settings
+	31, // 37: busmgr.v1.SettingsResponse.settings:type_name -> busmgr.v1.Settings
+	38, // [38:38] is the sub-list for method output_type
+	38, // [38:38] is the sub-list for method input_type
+	38, // [38:38] is the sub-list for extension type_name
+	38, // [38:38] is the sub-list for extension extendee
+	0,  // [0:38] is the sub-list for field type_name
 }
 
 func init() { file_busmgr_proto_init() }
@@ -2909,6 +3827,12 @@ func file_busmgr_proto_init() {
 		(*Envelope_SubscribeRaw)(nil),
 		(*Envelope_GridProfileReq)(nil),
 		(*Envelope_GridProfileResp)(nil),
+		(*Envelope_SystemStatusReq)(nil),
+		(*Envelope_SystemStatusResp)(nil),
+		(*Envelope_EventsReq)(nil),
+		(*Envelope_EventsResp)(nil),
+		(*Envelope_SettingsReq)(nil),
+		(*Envelope_SettingsResp)(nil),
 	}
 	file_busmgr_proto_msgTypes[4].OneofWrappers = []any{
 		(*InverterFaults_Ds3)(nil),
@@ -2925,13 +3849,17 @@ func file_busmgr_proto_init() {
 		(*GridProfileRequest_GetEffective)(nil),
 		(*GridProfileRequest_GetStatus)(nil),
 	}
+	file_busmgr_proto_msgTypes[31].OneofWrappers = []any{
+		(*SettingsRequest_Get)(nil),
+		(*SettingsRequest_Set)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_busmgr_proto_rawDesc), len(file_busmgr_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   23,
+			NumMessages:   34,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -1,0 +1,4 @@
+# Register a happy-dom global DOM before tests so Lit custom elements can
+# render and be queried in `bun test`.
+[test]
+preload = ["./test/setup.ts"]

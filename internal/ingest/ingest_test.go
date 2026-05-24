@@ -3,6 +3,7 @@ package ingest
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -27,8 +28,8 @@ func newIngestor(t *testing.T) *Ingestor {
 }
 
 type fakeRouter struct {
-	calls   []routedCall
-	refuse  bool
+	calls  []routedCall
+	refuse bool
 }
 
 type routedCall struct {
@@ -186,6 +187,33 @@ func TestHandle_Broadcast_UnknownSenderRejected(t *testing.T) {
 	}
 }
 
+// A real captured QS1A cmd-0x00 frame (near-empty idle/shutdown frame)
+// that previously logged "no decoder matched"; it must now be consumed
+// with no events row.
+func TestHandle_RawFrame_IdleCmd00_Consumed(t *testing.T) {
+	t.Parallel()
+	in := newIngestor(t)
+	raw, err := hex.DecodeString("FCFCC459CFA5806000041211FBFB5F00000F0011100000000000FFFFFFFF" +
+		"00000000008900000000000000000000000000000000000000000000000000000000000000000000" +
+		"000000000000000000000000000000000000000000000000000000000000007DDBFEFE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := &wire.Envelope{Body: &wire.Envelope_RawFrame{RawFrame: &wire.RawFrame{
+		TsMs: 1000, ShortAddr: 0xC459, L1Frame: raw,
+	}}}
+	if err := in.Handle(context.Background(), "be", env); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	var n int
+	if err := in.S.DB().QueryRow(`SELECT COUNT(*) FROM events`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("cmd 0x00 idle frame should be consumed, got %d event rows", n)
+	}
+}
+
 func equalBytes(a, b []byte) bool {
 	if len(a) != len(b) {
 		return false
@@ -252,12 +280,12 @@ func TestHandle_Telemetry_QS1A(t *testing.T) {
 		t.Fatalf("live values: ac_w=%v ac_v=%v freq=%v bus=%v", acW, acV, freq, busV)
 	}
 
-	var kind string
-	if err := in.S.DB().QueryRow(`SELECT kind FROM events WHERE inverter_uid='806000042582'`).Scan(&kind); err != nil {
-		t.Fatalf("event: %v", err)
+	var nEvents int
+	if err := in.S.DB().QueryRow(`SELECT COUNT(*) FROM events WHERE inverter_uid='806000042582'`).Scan(&nEvents); err != nil {
+		t.Fatalf("event count: %v", err)
 	}
-	if kind != "telemetry" {
-		t.Fatalf("event kind: got %q want telemetry", kind)
+	if nEvents != 0 {
+		t.Fatalf("telemetry should not create an event row, got %d", nEvents)
 	}
 }
 
@@ -408,12 +436,12 @@ func TestHandle_RawFrame_QS1A(t *testing.T) {
 	}
 
 	// telemetry event row landed.
-	var kind string
-	if err := in.S.DB().QueryRow(`SELECT kind FROM events WHERE inverter_uid='806000042582'`).Scan(&kind); err != nil {
-		t.Fatalf("event: %v", err)
+	var nEvents int
+	if err := in.S.DB().QueryRow(`SELECT COUNT(*) FROM events WHERE inverter_uid='806000042582'`).Scan(&nEvents); err != nil {
+		t.Fatalf("event count: %v", err)
 	}
-	if kind != "telemetry" {
-		t.Fatalf("event kind: got %q want telemetry", kind)
+	if nEvents != 0 {
+		t.Fatalf("telemetry should not create an event row, got %d", nEvents)
 	}
 
 	// inverter_panels populated (QS1A has 4 channels).
@@ -505,7 +533,7 @@ func TestHandle_Telemetry_PublishesToSubscribers(t *testing.T) {
 }
 
 func u32p(v uint32) *uint32 { return &v }
-func boolp(b bool) *bool     { return &b }
+func boolp(b bool) *bool    { return &b }
 
 func TestHandle_InverterInfo_ModelOnly(t *testing.T) {
 	t.Parallel()
@@ -537,12 +565,12 @@ func TestHandle_InverterInfo_ModelOnly(t *testing.T) {
 		t.Fatalf("expected unset columns NULL: sw=%+v phase=%+v bound=%+v rpt=%+v", sw, phase, bound, rpt)
 	}
 
-	var kind string
-	if err := in.S.DB().QueryRow(`SELECT kind FROM events WHERE inverter_uid='806000042582'`).Scan(&kind); err != nil {
-		t.Fatalf("event scan: %v", err)
+	var nEvents int
+	if err := in.S.DB().QueryRow(`SELECT COUNT(*) FROM events WHERE inverter_uid='806000042582'`).Scan(&nEvents); err != nil {
+		t.Fatalf("event count: %v", err)
 	}
-	if kind != "inverter_info" {
-		t.Fatalf("event kind: got %q want inverter_info", kind)
+	if nEvents != 0 {
+		t.Fatalf("inverter_info should not create an event row, got %d", nEvents)
 	}
 
 	select {

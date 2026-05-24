@@ -149,17 +149,19 @@ func TestServer_HappyPath(t *testing.T) {
 		}
 	}
 
-	got := waitForRowCount(t, srv, `SELECT COUNT(*) FROM events WHERE kind='telemetry'`, 3)
-	if got != 3 {
-		t.Fatalf("telemetry events: got %d want 3", got)
+	// Telemetry is stored in telemetry_live (not as per-frame events);
+	// wait until the latest sample (300 W) has been ingested.
+	got := waitForRowCount(t, srv, `SELECT COUNT(*) FROM telemetry_live WHERE inverter_uid='00000000000a' AND ac_w=300`, 1)
+	if got != 1 {
+		t.Fatalf("telemetry_live not updated to 300 W (count %d)", got)
 	}
-
-	var acW float64
-	if err := srv.Ingestor.S.DB().QueryRow(`SELECT ac_w FROM telemetry_live WHERE inverter_uid='00000000000a'`).Scan(&acW); err != nil {
-		t.Fatalf("scan ac_w: %v", err)
+	// Telemetry must not write event rows.
+	var nEvents int
+	if err := srv.Ingestor.S.DB().QueryRow(`SELECT COUNT(*) FROM events`).Scan(&nEvents); err != nil {
+		t.Fatal(err)
 	}
-	if acW != 300 {
-		t.Fatalf("ac_w: got %v want 300", acW)
+	if nEvents != 0 {
+		t.Fatalf("telemetry should not write events, got %d", nEvents)
 	}
 }
 
@@ -684,6 +686,89 @@ func TestServer_SendToBackend_DeliversToPublisher(t *testing.T) {
 	}
 	if string(send.GetFrame()) != string([]byte{0xAA, 0xBB, 0xCC}) {
 		t.Fatalf("frame: % X", send.GetFrame())
+	}
+}
+
+// stubSettings is a SettingsHandler that records whether a set op reached
+// the handler. A get op echoes the stored EcuId.
+type stubSettings struct {
+	mu     sync.Mutex
+	ecuID  string
+	setHit bool
+}
+
+func (s *stubSettings) Handle(_ context.Context, req *wire.SettingsRequest) *wire.SettingsResponse {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if set := req.GetSet(); set != nil {
+		s.setHit = true
+		s.ecuID = set.GetEcuId()
+		return &wire.SettingsResponse{Ok: true, Settings: &wire.Settings{EcuId: s.ecuID}}
+	}
+	return &wire.SettingsResponse{Ok: true, Settings: &wire.Settings{EcuId: s.ecuID}}
+}
+
+// TestServer_SettingsGate proves a SET op from a non-controller backend is
+// refused without reaching the handler, while a GET op is served for the
+// same peer. newServer's Ingestor has no ControllerBackends, so any backend
+// is a non-controller.
+func TestServer_SettingsGate(t *testing.T) {
+	srv, path, cancel, doneCh := newServer(t)
+	t.Cleanup(func() { cancel(); <-doneCh })
+
+	stub := &stubSettings{ecuID: "stored"}
+	srv.Settings = stub
+
+	c := dial(t, path)
+	defer c.Close()
+	if err := wire.WriteFrame(c, helloEnv()); err != nil {
+		t.Fatalf("hello: %v", err)
+	}
+
+	// SET is controller-gated; a non-controller peer is refused.
+	setEnv := &wire.Envelope{Body: &wire.Envelope_SettingsReq{SettingsReq: &wire.SettingsRequest{
+		Op: &wire.SettingsRequest_Set{Set: &wire.Settings{EcuId: "evil"}},
+	}}}
+	if err := wire.WriteFrame(c, setEnv); err != nil {
+		t.Fatalf("set write: %v", err)
+	}
+	_ = c.SetReadDeadline(time.Now().Add(2 * time.Second))
+	var setResp wire.Envelope
+	if err := wire.ReadFrame(c, &setResp); err != nil {
+		t.Fatalf("set read: %v", err)
+	}
+	r := setResp.GetSettingsResp()
+	if r == nil {
+		t.Fatalf("expected SettingsResp, got %T", setResp.GetBody())
+	}
+	if r.GetOk() {
+		t.Fatalf("set from non-controller was allowed")
+	}
+	stub.mu.Lock()
+	hit := stub.setHit
+	stub.mu.Unlock()
+	if hit {
+		t.Fatalf("refused set still reached the handler")
+	}
+
+	// GET is allowed for any peer.
+	getEnv := &wire.Envelope{Body: &wire.Envelope_SettingsReq{SettingsReq: &wire.SettingsRequest{
+		Op: &wire.SettingsRequest_Get{Get: &wire.Empty{}},
+	}}}
+	if err := wire.WriteFrame(c, getEnv); err != nil {
+		t.Fatalf("get write: %v", err)
+	}
+	_ = c.SetReadDeadline(time.Now().Add(2 * time.Second))
+	var getResp wire.Envelope
+	if err := wire.ReadFrame(c, &getResp); err != nil {
+		t.Fatalf("get read: %v", err)
+	}
+	g := getResp.GetSettingsResp()
+	if g == nil || !g.GetOk() {
+		t.Fatalf("get refused: %+v", g)
+	}
+	if g.GetSettings().GetEcuId() != "stored" {
+		t.Fatalf("get returned %q, want %q", g.GetSettings().GetEcuId(), "stored")
 	}
 }
 

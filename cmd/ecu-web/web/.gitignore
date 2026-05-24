@@ -1,0 +1,5 @@
+# Bun toolchain output; reinstall with `bun install`.
+node_modules/
+
+# dist/ IS committed: it is embedded into the ecu-web binary via go:embed
+# so `go build` works without Bun. Rebuild with `bun run build`.

@@ -21,13 +21,17 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/bolke/inv-driver/internal/eventlog"
 	"github.com/bolke/inv-driver/internal/events"
 	"github.com/bolke/inv-driver/internal/gridprofile"
 	"github.com/bolke/inv-driver/internal/ingest"
 	"github.com/bolke/inv-driver/internal/ipc"
 	"github.com/bolke/inv-driver/internal/probe"
+	"github.com/bolke/inv-driver/internal/settings"
 	"github.com/bolke/inv-driver/internal/store"
+	"github.com/bolke/inv-driver/internal/systemstatus"
 	"github.com/bolke/inv-driver/internal/telemetrypoll"
+	"github.com/bolke/inv-driver/wire"
 )
 
 const (
@@ -85,6 +89,8 @@ Run 'inv-driver <subcommand> -h' for subcommand-specific flags.
 
 const (
 	defaultGridProfilesDir = "/var/lib/inv-driver/gridprofiles"
+	// defaultSettings is inv-driver's own config file.
+	defaultSettings = "/etc/inv-driver/settings.json"
 )
 
 func runServe(args []string) error {
@@ -107,6 +113,8 @@ func runServe(args []string) error {
 		"comma-separated list of OS user-ids whose UDS connections may inject Envelope_Send / Envelope_Broadcast frames (Linux SO_PEERCRED; empty disables UID gate)")
 	gridProfilesDir := fs.String("gridprofiles-dir", defaultGridProfilesDir,
 		"directory containing grid-profile JSON files (profiles/ and overlays/ subdirs)")
+	settingsPath := fs.String("settings", defaultSettings,
+		"inv-driver's settings file (ecu-id, mac, pan-override, zigbee-type)")
 	gridProfileBroadcast := fs.Bool("gridprofile-broadcast", false,
 		"enable broadcast whole-profile apply path in SelectBase (default false; requires on-wire validation)")
 	telemetryPoll := fs.Bool("telemetry-poll", true,
@@ -240,6 +248,29 @@ func runServe(args []string) error {
 		BroadcastModelCodes: []uint8{0x20, 0x18}, // ModelDS3=0x20, ModelQS1A=0x18
 	}
 	srv.GridProfile = gpManager
+
+	// inv-driver's settings file (ecu-id, mac, pan, zigbee-type).
+	settingsStore, err := settings.Open(*settingsPath)
+	if err != nil {
+		return fmt.Errorf("settings: %w", err)
+	}
+
+	// SystemStatus: peer registry (fed by every Hello) + ECU identity
+	// from inv-driver's settings.
+	hostname, _ := os.Hostname()
+	ssManager := systemstatus.NewManager(hostname, controllers)
+	ssManager.Identity = func() *wire.EcuIdentity {
+		s := settingsStore.Get()
+		return &wire.EcuIdentity{EcuId: s.EcuID}
+	}
+	srv.SystemStatus = ssManager
+	srv.Peers = ssManager
+
+	// Events read API over the append-only events store.
+	srv.Events = eventlog.NewHandler(st)
+
+	// Settings read/write API over inv-driver's settings file.
+	srv.Settings = settings.NewHandler(settingsStore)
 
 	if *probeBackend != "" {
 		p := &probe.Probe{
@@ -400,16 +431,16 @@ type telemetryRow struct {
 	ReportSec       any             `json:"report_sec"`
 	Panels          []telemetryPan  `json:"panels"`
 	Lifetime        []telemetryEner `json:"lifetime"`
-	LastIntervalMs  any             `json:"last_interval_ms"`  // gap to previous frame for this UID
-	AvgIntervalMs   any             `json:"avg_interval_ms"`   // EWMA over recent frames
-	IntervalSamples any             `json:"interval_samples"`  // EWMA sample count
+	LastIntervalMs  any             `json:"last_interval_ms"` // gap to previous frame for this UID
+	AvgIntervalMs   any             `json:"avg_interval_ms"`  // EWMA over recent frames
+	IntervalSamples any             `json:"interval_samples"` // EWMA sample count
 }
 
 type telemetryPan struct {
-	ChannelIdx int     `json:"i"`
-	DCV        any     `json:"dc_v"`
-	DCI        any     `json:"dc_i"`
-	W          any     `json:"w"`
+	ChannelIdx int `json:"i"`
+	DCV        any `json:"dc_v"`
+	DCI        any `json:"dc_i"`
+	W          any `json:"w"`
 }
 
 type telemetryEner struct {
@@ -450,22 +481,22 @@ ORDER  BY t.inverter_uid ASC
 	enc := json.NewEncoder(os.Stdout)
 	for rows.Next() {
 		var (
-			uid        string
-			tsMs       int64
-			cmd        int64
-			acW        sqlNullFloat
-			acV        sqlNullFloat
-			acFreq     sqlNullFloat
-			busV       sqlNullFloat
-			reportSec  sqlNullInt
-			shortAddr  sqlNullInt
-			family     sqlNullString
-			model      sqlNullString
-			modelCode  sqlNullInt
-			swVersion  sqlNullInt
-			phase      sqlNullInt
-			zbBound    sqlNullInt
-			rptOff     sqlNullInt
+			uid       string
+			tsMs      int64
+			cmd       int64
+			acW       sqlNullFloat
+			acV       sqlNullFloat
+			acFreq    sqlNullFloat
+			busV      sqlNullFloat
+			reportSec sqlNullInt
+			shortAddr sqlNullInt
+			family    sqlNullString
+			model     sqlNullString
+			modelCode sqlNullInt
+			swVersion sqlNullInt
+			phase     sqlNullInt
+			zbBound   sqlNullInt
+			rptOff    sqlNullInt
 		)
 		if err := rows.Scan(&uid, &tsMs, &cmd, &acW, &acV, &acFreq, &busV, &reportSec,
 			&shortAddr, &family, &model,
@@ -606,53 +637,46 @@ func runDumpEvents(args []string) error {
 	}
 	defer st.Close()
 
-	q := `
-SELECT id, ts_ms, inverter_uid, kind, severity, short_addr, error, raw_hex
-FROM   events
-WHERE  ts_ms >= ?
-`
-	qargs := []any{*sinceMs}
-	if *kind != "" {
-		q += " AND kind = ?"
-		qargs = append(qargs, *kind)
-	}
-	q += " ORDER BY ts_ms ASC LIMIT ?"
-	qargs = append(qargs, *limit)
-
-	rows, err := st.DB().QueryContext(ctx, q, qargs...)
+	evs, err := st.QueryEvents(ctx, store.EventFilter{
+		SinceMs: *sinceMs,
+		Kind:    *kind,
+		Limit:   *limit,
+	})
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
 
 	enc := json.NewEncoder(os.Stdout)
-	for rows.Next() {
-		var (
-			id        int64
-			tsMs      int64
-			uid       sqlNullString
-			rowKind   string
-			severity  string
-			shortAddr sqlNullInt
-			errMsg    sqlNullString
-			rawHex    sqlNullString
-		)
-		if err := rows.Scan(&id, &tsMs, &uid, &rowKind, &severity, &shortAddr, &errMsg, &rawHex); err != nil {
-			return err
-		}
+	for _, e := range evs {
 		row := map[string]any{
-			"id":           id,
-			"ts_ms":        tsMs,
-			"inverter_uid": uid.toAny(),
-			"kind":         rowKind,
-			"severity":     severity,
-			"short_addr":   shortAddr.toAny(),
-			"error":        errMsg.toAny(),
-			"raw_hex":      rawHex.toAny(),
+			"id":           e.ID,
+			"ts_ms":        e.TsMs,
+			"inverter_uid": orNil(e.InverterUID),
+			"kind":         e.Kind,
+			"severity":     e.Severity,
+			"short_addr":   orNilU32(e.ShortAddr),
+			"error":        orNil(e.Detail),
+			"raw_hex":      orNil(e.RawHex),
 		}
 		if err := enc.Encode(row); err != nil {
 			return err
 		}
 	}
-	return rows.Err()
+	return nil
+}
+
+// orNil maps an empty string to nil so JSON output shows null for unset
+// optional columns (matching the previous sql.Null* behaviour).
+func orNil(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
+func orNilU32(v uint32) any {
+	if v == 0 {
+		return nil
+	}
+	return v
 }

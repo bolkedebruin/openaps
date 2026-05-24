@@ -20,10 +20,12 @@ SOCK=/var/run/inv-driver.sock
 RUN=/home/applications/inv-driver
 LOG=$RUN/inv-driver.log
 PIDFILE=$RUN/inv-driver.pid
-# -controller-backends: peers allowed to inject downstream Send/Broadcast
-# frames. inv-driver-cli is the operator CLI; ecu-sunspec is the Modbus
-# adapter routing Model 123 set-power / on-off writes through inv-driver.
-ARGS="serve -socket $SOCK -db $DATA/state.db -controller-backends inv-driver-cli,ecu-sunspec"
+# -controller-backends: peers allowed to issue controller ops (Send /
+# Broadcast / GridProfile / SystemStatus). inv-driver-cli is the operator
+# CLI; ecu-sunspec is the Modbus adapter routing Model 123 set-power /
+# on-off writes; ecu-web is the web console (SystemStatus now, settings /
+# commands in later milestones).
+ARGS="serve -socket $SOCK -db $DATA/state.db -controller-backends inv-driver-cli,ecu-sunspec,ecu-web"
 
 start() {
     if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then

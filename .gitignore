@@ -2,3 +2,7 @@ build/
 .idea/
 *.test
 *.out
+/inv-driver
+/ecu-web
+/legacy-bridge
+/protbcast

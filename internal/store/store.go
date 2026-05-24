@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/bolke/inv-driver/codec"
@@ -71,10 +72,26 @@ type EnergyRow struct {
 // at twice their nameplate average and flag genuine spikes (>5× max).
 const energyAnomalySafetyFactor = 5.0
 
-// minElapsedSecForCheck guards against zero / tiny deltas-t. Below
-// this, the cap would collapse and false-flag everything; we skip the
-// log line. Real poll windows are 17–60+ s.
-const minElapsedSecForCheck = 5.0
+// minDeltaWindowSec floors the elapsed window used for the anomaly
+// ceiling so a fast poll cadence (≈1 s) still yields a sane cap rather
+// than collapsing to near-zero.
+const minDeltaWindowSec = 1.0
+
+// isAnomalousDelta reports whether deltaWh exceeds what this channel
+// could physically produce over the elapsed window (rated watts ×
+// hours × safety factor). A single garbage raw read produces an
+// impossible delta; the caller drops it and re-anchors.
+func isAnomalousDelta(deltaWh float64, maxChannelW uint32, elapsedMs int64) bool {
+	if maxChannelW == 0 {
+		return false
+	}
+	elapsedSec := float64(elapsedMs) / 1000
+	if elapsedSec < minDeltaWindowSec {
+		elapsedSec = minDeltaWindowSec
+	}
+	maxDeltaWh := float64(maxChannelW) * elapsedSec / 3600 * energyAnomalySafetyFactor
+	return deltaWh > maxDeltaWh
+}
 
 // UpsertInverterFromTelemetry promotes a never-before-seen inverter
 // to the inventory and bumps last_seen on every subsequent telemetry
@@ -445,17 +462,14 @@ ON CONFLICT(inverter_uid, channel_idx) DO UPDATE SET
 		default:
 			delta := newRaw - prevRaw.Int64
 			deltaWh := float64(delta) * e.Scale * 1000
-			if maxChannelW > 0 && prevTs.Valid {
-				elapsedSec := float64(tsMs-prevTs.Int64) / 1000
-				if elapsedSec >= minElapsedSecForCheck {
-					maxDeltaWh := float64(maxChannelW) * elapsedSec / 3600 * energyAnomalySafetyFactor
-					if deltaWh > maxDeltaWh {
-						fmt.Printf("ANOMALY-LARGE-DELTA uid=%s ch=%d elapsed_s=%.1f prev=%d new=%d delta=%d scale=%g deltaWh=%.3f thresh=%.3f\n",
-							uid, e.ChannelIdx, elapsedSec, prevRaw.Int64, newRaw, delta, e.Scale, deltaWh, maxDeltaWh)
-					}
-				}
+			if prevTs.Valid && isAnomalousDelta(deltaWh, maxChannelW, tsMs-prevTs.Int64) {
+				// Garbage raw read: re-anchor at newRaw, drop the delta.
+				fmt.Printf("energy: rejected anomalous delta uid=%s ch=%d elapsed_s=%.1f prev=%d new=%d deltaWh=%.1f\n",
+					uid, e.ChannelIdx, float64(tsMs-prevTs.Int64)/1000, prevRaw.Int64, newRaw, deltaWh)
+				newCum = prevCum.Float64
+			} else {
+				newCum = prevCum.Float64 + deltaWh
 			}
-			newCum = prevCum.Float64 + deltaWh
 		}
 		if _, err := insStmt.ExecContext(ctx, uid, e.ChannelIdx, newCum, newRaw, e.Scale, tsMs); err != nil {
 			return fmt.Errorf("WriteEnergyLifetime: upsert ch=%d: %w", e.ChannelIdx, err)
@@ -531,6 +545,94 @@ VALUES (?, NULL, 'decode_failed', 'warn', ?, ?, ?)
 		return fmt.Errorf("AppendDecodeFailed: %w", err)
 	}
 	return nil
+}
+
+// Event is one row from the events table. Optional columns are empty
+// string / 0 when SQL NULL.
+type Event struct {
+	ID          int64
+	TsMs        int64
+	InverterUID string
+	Kind        string
+	Severity    string
+	ShortAddr   uint32
+	Detail      string // events.error column (decode error / message)
+	RawHex      string
+}
+
+// EventFilter parameterises QueryEvents. Zero-value string fields mean
+// "any"; Limit <= 0 is rejected by the caller.
+type EventFilter struct {
+	SinceMs      int64
+	Kind         string
+	Severity     string
+	InverterUID  string
+	ExcludeKinds []string // kinds to omit (e.g. high-volume telemetry chatter)
+	Limit        int
+	Desc         bool // newest-first when true (UI default)
+}
+
+// QueryEvents returns events matching f. Shared by the dump-events CLI
+// and the Events UDS API so the filter/scan logic lives in one place.
+func (s *Store) QueryEvents(ctx context.Context, f EventFilter) ([]Event, error) {
+	q := `
+SELECT id, ts_ms, inverter_uid, kind, severity, short_addr, error, raw_hex
+FROM   events
+WHERE  ts_ms >= ?`
+	args := []any{f.SinceMs}
+	if f.Kind != "" {
+		q += " AND kind = ?"
+		args = append(args, f.Kind)
+	}
+	if f.Severity != "" {
+		q += " AND severity = ?"
+		args = append(args, f.Severity)
+	}
+	if f.InverterUID != "" {
+		q += " AND inverter_uid = ?"
+		args = append(args, f.InverterUID)
+	}
+	if len(f.ExcludeKinds) > 0 {
+		ph := make([]string, len(f.ExcludeKinds))
+		for i, k := range f.ExcludeKinds {
+			ph[i] = "?"
+			args = append(args, k)
+		}
+		q += " AND kind NOT IN (" + strings.Join(ph, ",") + ")"
+	}
+	if f.Desc {
+		q += " ORDER BY ts_ms DESC, id DESC"
+	} else {
+		q += " ORDER BY ts_ms ASC, id ASC"
+	}
+	q += " LIMIT ?"
+	args = append(args, f.Limit)
+
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("QueryEvents: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Event
+	for rows.Next() {
+		var (
+			e         Event
+			uid       sql.NullString
+			shortAddr sql.NullInt64
+			detail    sql.NullString
+			rawHex    sql.NullString
+		)
+		if err := rows.Scan(&e.ID, &e.TsMs, &uid, &e.Kind, &e.Severity, &shortAddr, &detail, &rawHex); err != nil {
+			return nil, fmt.Errorf("QueryEvents scan: %w", err)
+		}
+		e.InverterUID = uid.String
+		e.ShortAddr = uint32(shortAddr.Int64)
+		e.Detail = detail.String
+		e.RawHex = rawHex.String
+		out = append(out, e)
+	}
+	return out, rows.Err()
 }
 
 // PruneEvents deletes rows from events with ts_ms < cutoffMs. When

@@ -379,7 +379,7 @@ func TestConcurrentWrites(t *testing.T) {
 }
 
 func u32p(v uint32) *uint32 { return &v }
-func boolp(b bool) *bool     { return &b }
+func boolp(b bool) *bool    { return &b }
 
 func TestUpsertInverterInfo_ModelOnly_LeavesOthersNull(t *testing.T) {
 	t.Parallel()

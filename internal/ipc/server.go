@@ -30,6 +30,33 @@ type GridProfileHandler interface {
 	Handle(ctx context.Context, req *wire.GridProfileRequest) *wire.GridProfileResponse
 }
 
+// SystemStatusHandler handles SystemStatusRequest envelopes from
+// controller-gated connections. Implemented by systemstatus.Manager.
+type SystemStatusHandler interface {
+	Handle(ctx context.Context, req *wire.SystemStatusRequest) *wire.SystemStatusResponse
+}
+
+// EventsHandler handles EventsRequest envelopes from controller-gated
+// connections. Implemented by eventlog.Handler.
+type EventsHandler interface {
+	Handle(ctx context.Context, req *wire.EventsRequest) *wire.EventsResponse
+}
+
+// SettingsHandler handles SettingsRequest envelopes. A get op is allowed
+// for any peer; a set op is controller-gated. Implemented by
+// settings.Handler.
+type SettingsHandler interface {
+	Handle(ctx context.Context, req *wire.SettingsRequest) *wire.SettingsResponse
+}
+
+// PeerRecorder is notified of UDS peer connect/disconnect so
+// SystemStatus can report the live peer set. Implemented by
+// systemstatus.Registry. id is the server's per-connection id.
+type PeerRecorder interface {
+	Record(id uint64, backend, version, hostname, role string, peerUID int, atMs int64)
+	Remove(id uint64)
+}
+
 const (
 	// shutdownGrace bounds how long Serve waits for in-flight per-conn
 	// goroutines to drain after the context is cancelled.
@@ -79,6 +106,22 @@ type Server struct {
 	// ControllerBackends/ControllerUIDs gates that guard Send/Broadcast
 	// apply here; only allowed controllers may issue grid-profile ops.
 	GridProfile GridProfileHandler
+
+	// SystemStatus, when non-nil, handles SystemStatusRequest envelopes
+	// from controller-gated connections (same gate as GridProfile).
+	SystemStatus SystemStatusHandler
+
+	// Events, when non-nil, handles EventsRequest envelopes from
+	// controller-gated connections (same gate as GridProfile).
+	Events EventsHandler
+
+	// Settings, when non-nil, handles SettingsRequest envelopes. A get op
+	// is served for any peer; a set op requires the controller gate.
+	Settings SettingsHandler
+
+	// Peers, when non-nil, is notified of every peer's connect/disconnect
+	// (from its Hello) so SystemStatus can list the live peer set.
+	Peers PeerRecorder
 
 	connSeq atomic.Uint64
 	// conns tracks live connections so Serve can close them on
@@ -199,6 +242,17 @@ func (s *Server) handleConn(ctx context.Context, id uint64, c net.Conn) {
 	role := hello.GetRole()
 	log.Printf("ipc %s: hello backend=%q version=%q host=%q role=%s peer_uid=%d",
 		tag, backend, hello.GetVersion(), hello.GetHostname(), role.String(), peerUID)
+
+	// Track this peer for SystemStatus reporting. ROLE_UNSPECIFIED peers
+	// run the publisher loop, so report them as PUBLISHER.
+	if s.Peers != nil {
+		roleStr := role.String()
+		if role == wire.Role_ROLE_UNSPECIFIED {
+			roleStr = wire.Role_PUBLISHER.String()
+		}
+		s.Peers.Record(id, backend, hello.GetVersion(), hello.GetHostname(), roleStr, peerUID, time.Now().UnixMilli())
+		defer s.Peers.Remove(id)
+	}
 	if err := s.Ingestor.HandleWithPeer(ctx, peerUID, backend, &env); err != nil {
 		log.Printf("ipc %s: hello ingest: %v", tag, err)
 	}
@@ -268,6 +322,24 @@ func (s *Server) handlePublisher(ctx context.Context, peerUID int, tag, backend 
 			}
 			continue
 		}
+		if req := next.GetSystemStatusReq(); req != nil {
+			if err := s.handleSystemStatusReq(ctx, peerUID, backend, tag, c, req); err != nil {
+				log.Printf("ipc %s: system-status: %v", tag, err)
+			}
+			continue
+		}
+		if req := next.GetEventsReq(); req != nil {
+			if err := s.handleEventsReq(ctx, peerUID, backend, tag, c, req); err != nil {
+				log.Printf("ipc %s: events: %v", tag, err)
+			}
+			continue
+		}
+		if req := next.GetSettingsReq(); req != nil {
+			if err := s.handleSettingsReq(ctx, peerUID, backend, tag, c, req); err != nil {
+				log.Printf("ipc %s: settings: %v", tag, err)
+			}
+			continue
+		}
 		if err := s.Ingestor.HandleWithPeer(ctx, peerUID, backend, &next); err != nil {
 			// Per-event error: log and continue. Connection is still
 			// synchronised on the next length prefix. Unknown body
@@ -303,6 +375,103 @@ func (s *Server) handleGridProfileReq(ctx context.Context, peerUID int, backend,
 		resp = &wire.GridProfileResponse{Ok: false, Error: "grid-profile handler returned nil"}
 	}
 	return writeGridProfileResp(tag, c, resp)
+}
+
+// handleSystemStatusReq processes a SystemStatusRequest on a publisher
+// connection. Same controller gate as Send/Broadcast/GridProfile.
+func (s *Server) handleSystemStatusReq(ctx context.Context, peerUID int, backend, tag string, c net.Conn, req *wire.SystemStatusRequest) error {
+	if !s.Ingestor.IsControllerBackend(backend) {
+		return writeSystemStatusResp(tag, c, &wire.SystemStatusResponse{Ok: false, Error: fmt.Sprintf("system-status refused: backend %q not an allowed controller", backend)})
+	}
+	if !s.Ingestor.IsControllerUID(peerUID) {
+		return writeSystemStatusResp(tag, c, &wire.SystemStatusResponse{Ok: false, Error: fmt.Sprintf("system-status refused: peer uid=%d not in controller-uids allow-list", peerUID)})
+	}
+	if s.SystemStatus == nil {
+		return writeSystemStatusResp(tag, c, &wire.SystemStatusResponse{Ok: false, Error: "system-status handler not configured"})
+	}
+	resp := s.SystemStatus.Handle(ctx, req)
+	if resp == nil {
+		resp = &wire.SystemStatusResponse{Ok: false, Error: "system-status handler returned nil"}
+	}
+	return writeSystemStatusResp(tag, c, resp)
+}
+
+// writeSystemStatusResp wraps a SystemStatusResponse in an Envelope and
+// writes it to conn with the configured write deadline.
+func writeSystemStatusResp(tag string, c net.Conn, resp *wire.SystemStatusResponse) error {
+	env := &wire.Envelope{Body: &wire.Envelope_SystemStatusResp{SystemStatusResp: resp}}
+	_ = c.SetWriteDeadline(time.Now().Add(writeDeadline))
+	if err := wire.WriteFrame(c, env); err != nil {
+		return fmt.Errorf("write system-status response: %w", err)
+	}
+	log.Printf("ipc %s: system-status response ok=%v peers=%d", tag, resp.GetOk(), len(resp.GetPeers()))
+	return nil
+}
+
+// handleEventsReq processes an EventsRequest on a publisher connection.
+// Same controller gate as Send/Broadcast/GridProfile.
+func (s *Server) handleEventsReq(ctx context.Context, peerUID int, backend, tag string, c net.Conn, req *wire.EventsRequest) error {
+	if !s.Ingestor.IsControllerBackend(backend) {
+		return writeEventsResp(tag, c, &wire.EventsResponse{Ok: false, Error: fmt.Sprintf("events refused: backend %q not an allowed controller", backend)})
+	}
+	if !s.Ingestor.IsControllerUID(peerUID) {
+		return writeEventsResp(tag, c, &wire.EventsResponse{Ok: false, Error: fmt.Sprintf("events refused: peer uid=%d not in controller-uids allow-list", peerUID)})
+	}
+	if s.Events == nil {
+		return writeEventsResp(tag, c, &wire.EventsResponse{Ok: false, Error: "events handler not configured"})
+	}
+	resp := s.Events.Handle(ctx, req)
+	if resp == nil {
+		resp = &wire.EventsResponse{Ok: false, Error: "events handler returned nil"}
+	}
+	return writeEventsResp(tag, c, resp)
+}
+
+// writeEventsResp wraps an EventsResponse in an Envelope and writes it to
+// conn with the configured write deadline.
+func writeEventsResp(tag string, c net.Conn, resp *wire.EventsResponse) error {
+	env := &wire.Envelope{Body: &wire.Envelope_EventsResp{EventsResp: resp}}
+	_ = c.SetWriteDeadline(time.Now().Add(writeDeadline))
+	if err := wire.WriteFrame(c, env); err != nil {
+		return fmt.Errorf("write events response: %w", err)
+	}
+	log.Printf("ipc %s: events response ok=%v rows=%d", tag, resp.GetOk(), len(resp.GetEvents()))
+	return nil
+}
+
+// handleSettingsReq processes a SettingsRequest on a publisher connection.
+// A get op (req.GetSet()==nil) is served for any peer so a backend can read
+// the settings it needs. A set op requires the controller gate (same as
+// Send/Broadcast/GridProfile).
+func (s *Server) handleSettingsReq(ctx context.Context, peerUID int, backend, tag string, c net.Conn, req *wire.SettingsRequest) error {
+	if req.GetSet() != nil {
+		if !s.Ingestor.IsControllerBackend(backend) {
+			return writeSettingsResp(tag, c, &wire.SettingsResponse{Ok: false, Error: fmt.Sprintf("settings set refused: backend %q not an allowed controller", backend)})
+		}
+		if !s.Ingestor.IsControllerUID(peerUID) {
+			return writeSettingsResp(tag, c, &wire.SettingsResponse{Ok: false, Error: fmt.Sprintf("settings set refused: peer uid=%d not in controller-uids allow-list", peerUID)})
+		}
+	}
+	if s.Settings == nil {
+		return writeSettingsResp(tag, c, &wire.SettingsResponse{Ok: false, Error: "settings handler not configured"})
+	}
+	resp := s.Settings.Handle(ctx, req)
+	if resp == nil {
+		resp = &wire.SettingsResponse{Ok: false, Error: "settings handler returned nil"}
+	}
+	return writeSettingsResp(tag, c, resp)
+}
+
+// writeSettingsResp wraps a SettingsResponse in an Envelope and writes it to
+// conn with the configured write deadline.
+func writeSettingsResp(tag string, c net.Conn, resp *wire.SettingsResponse) error {
+	env := &wire.Envelope{Body: &wire.Envelope_SettingsResp{SettingsResp: resp}}
+	_ = c.SetWriteDeadline(time.Now().Add(writeDeadline))
+	if err := wire.WriteFrame(c, env); err != nil {
+		return fmt.Errorf("write settings response: %w", err)
+	}
+	log.Printf("ipc %s: settings response ok=%v", tag, resp.GetOk())
+	return nil
 }
 
 // writeGridProfileResp wraps a GridProfileResponse in an Envelope and writes
