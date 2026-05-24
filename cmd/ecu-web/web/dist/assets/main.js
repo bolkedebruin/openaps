@@ -687,13 +687,23 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
       </div>
     `}}customElements.define("grid-profile-form",FY);class qY extends H{static properties={settings:{state:!0},error:{state:!0},notice:{state:!0},loading:{state:!0},saving:{state:!0},grid:{state:!0},gridError:{state:!0},gridNotice:{state:!0},gridBusy:{state:!0}};constructor(){super();this.settings=null,this.error="",this.notice="",this.loading=!1,this.saving=!1,this.grid=null,this.gridError="",this.gridNotice="",this.gridBusy=!1}static styles=F`
     :host { display: block; }
+    .cols {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px;
+      align-items: start;
+      max-width: 1140px;
+    }
+    /* Stack the panels on narrow screens. */
+    @media (max-width: 760px) {
+      .cols { grid-template-columns: 1fr; }
+    }
     .panel {
+      min-width: 0;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 24px;
-      max-width: 560px;
-      margin-bottom: 20px;
     }
     h2 { font-size: 15px; margin: 0 0 16px; color: var(--text); }
     .banner { border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-bottom: 16px; }
@@ -701,27 +711,29 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
     .banner.err { color: var(--err); border: 1px solid var(--err); background: color-mix(in srgb, var(--err) 12%, transparent); }
     .loading { color: var(--muted); font-size: 13px; }
   `;connectedCallback(){super.connectedCallback(),this.load(),this.loadGrid()}async load(){this.loading=!0;try{let X=await W.getSettings();this.settings=X.settings??null,this.error=X.error??""}catch(X){this.error=X.message}finally{this.loading=!1}}async loadGrid(){try{let X=await W.gridProfile();this.grid=X,this.gridError=X.error??""}catch(X){this.gridError=X.message}}onSave=async(X)=>{this.saving=!0,this.notice="",this.error="";try{this.settings=await W.saveSettings(X.detail),this.notice="Settings saved."}catch(Y){this.error=Y.message}finally{this.saving=!1,await this.load()}};onApplyProfile=async(X)=>{let Y=X.detail;if(!window.confirm(`Apply grid profile "${Y}" to every inverter? This writes grid-protection settings across the whole fleet.`))return;this.gridBusy=!0,this.gridNotice="",this.gridError="";try{await W.selectGridProfile(Y),this.gridNotice=`Grid profile "${Y}" applied.`}catch(Z){this.gridError=Z.message}finally{this.gridBusy=!1,await this.loadGrid()}};render(){return B`
-      <div class="panel">
-        <h2>Grid profile</h2>
-        ${this.gridNotice?B`<div class="banner ok">${this.gridNotice}</div>`:j}
-        ${this.gridError?B`<div class="banner err">⚠ ${this.gridError}</div>`:j}
-        ${this.grid?B`<grid-profile-form
-              .profiles=${this.grid.profiles??[]}
-              .activeBase=${this.grid.active_base??""}
-              .reconcilerReady=${this.grid.reconciler_ready??!1}
-              .busy=${this.gridBusy}
-              @apply=${this.onApplyProfile}
-            ></grid-profile-form>`:this.gridError?j:B`<div class="loading">Loading…</div>`}
-      </div>
+      <div class="cols">
+        <div class="panel">
+          <h2>ECU settings</h2>
+          ${this.notice?B`<div class="banner ok">${this.notice}</div>`:j}
+          ${this.error?B`<div class="banner err">⚠ ${this.error}</div>`:j}
+          ${this.loading&&!this.settings?B`<div class="loading">Loading…</div>`:B`<settings-form
+                .settings=${this.settings??{ecu_id:"",mac:"",pan_override:"",zigbee_type:"apsystems"}}
+                @save=${this.onSave}
+              ></settings-form>`}
+        </div>
 
-      <div class="panel">
-        <h2>ECU settings</h2>
-        ${this.notice?B`<div class="banner ok">${this.notice}</div>`:j}
-        ${this.error?B`<div class="banner err">⚠ ${this.error}</div>`:j}
-        ${this.loading&&!this.settings?B`<div class="loading">Loading…</div>`:B`<settings-form
-              .settings=${this.settings??{ecu_id:"",mac:"",pan_override:"",zigbee_type:"apsystems"}}
-              @save=${this.onSave}
-            ></settings-form>`}
+        <div class="panel">
+          <h2>Grid profile</h2>
+          ${this.gridNotice?B`<div class="banner ok">${this.gridNotice}</div>`:j}
+          ${this.gridError?B`<div class="banner err">⚠ ${this.gridError}</div>`:j}
+          ${this.grid?B`<grid-profile-form
+                .profiles=${this.grid.profiles??[]}
+                .activeBase=${this.grid.active_base??""}
+                .reconcilerReady=${this.grid.reconciler_ready??!1}
+                .busy=${this.gridBusy}
+                @apply=${this.onApplyProfile}
+              ></grid-profile-form>`:this.gridError?j:B`<div class="loading">Loading…</div>`}
+        </div>
       </div>
     `}}customElements.define("settings-view",qY);var DX=[{id:"dashboard",label:"Dashboard",icon:"▮▮"},{id:"inverters",label:"Inverters",icon:"⌁"},{id:"alarms",label:"Alarms",icon:"!"},{id:"events",label:"Events",icon:"≣"},{id:"settings",label:"Settings",icon:"⚙"}];class kY extends H{static properties={ready:{state:!0},authed:{state:!0},configured:{state:!0},route:{state:!0},fleet:{state:!0},system:{state:!0},names:{state:!0}};closeSSE=null;sysTimer=null;settingsCache=null;constructor(){super();this.ready=!1,this.authed=!1,this.configured=!0,this.route="dashboard",this.fleet=null,this.system=null,this.names={}}static styles=F`
     :host { display: block; }

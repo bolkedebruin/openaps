@@ -47,13 +47,23 @@ export class SettingsView extends LitElement {
 
   static styles = css`
     :host { display: block; }
+    .cols {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px;
+      align-items: start;
+      max-width: 1140px;
+    }
+    /* Stack the panels on narrow screens. */
+    @media (max-width: 760px) {
+      .cols { grid-template-columns: 1fr; }
+    }
     .panel {
+      min-width: 0;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 24px;
-      max-width: 560px;
-      margin-bottom: 20px;
     }
     h2 { font-size: 15px; margin: 0 0 16px; color: var(--text); }
     .banner { border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-bottom: 16px; }
@@ -127,33 +137,35 @@ export class SettingsView extends LitElement {
 
   render() {
     return html`
-      <div class="panel">
-        <h2>Grid profile</h2>
-        ${this.gridNotice ? html`<div class="banner ok">${this.gridNotice}</div>` : nothing}
-        ${this.gridError ? html`<div class="banner err">⚠ ${this.gridError}</div>` : nothing}
-        ${this.grid
-          ? html`<grid-profile-form
-              .profiles=${this.grid.profiles ?? []}
-              .activeBase=${this.grid.active_base ?? ""}
-              .reconcilerReady=${this.grid.reconciler_ready ?? false}
-              .busy=${this.gridBusy}
-              @apply=${this.onApplyProfile}
-            ></grid-profile-form>`
-          : this.gridError
-            ? nothing
-            : html`<div class="loading">Loading…</div>`}
-      </div>
+      <div class="cols">
+        <div class="panel">
+          <h2>ECU settings</h2>
+          ${this.notice ? html`<div class="banner ok">${this.notice}</div>` : nothing}
+          ${this.error ? html`<div class="banner err">⚠ ${this.error}</div>` : nothing}
+          ${this.loading && !this.settings
+            ? html`<div class="loading">Loading…</div>`
+            : html`<settings-form
+                .settings=${this.settings ?? { ecu_id: "", mac: "", pan_override: "", zigbee_type: "apsystems" }}
+                @save=${this.onSave}
+              ></settings-form>`}
+        </div>
 
-      <div class="panel">
-        <h2>ECU settings</h2>
-        ${this.notice ? html`<div class="banner ok">${this.notice}</div>` : nothing}
-        ${this.error ? html`<div class="banner err">⚠ ${this.error}</div>` : nothing}
-        ${this.loading && !this.settings
-          ? html`<div class="loading">Loading…</div>`
-          : html`<settings-form
-              .settings=${this.settings ?? { ecu_id: "", mac: "", pan_override: "", zigbee_type: "apsystems" }}
-              @save=${this.onSave}
-            ></settings-form>`}
+        <div class="panel">
+          <h2>Grid profile</h2>
+          ${this.gridNotice ? html`<div class="banner ok">${this.gridNotice}</div>` : nothing}
+          ${this.gridError ? html`<div class="banner err">⚠ ${this.gridError}</div>` : nothing}
+          ${this.grid
+            ? html`<grid-profile-form
+                .profiles=${this.grid.profiles ?? []}
+                .activeBase=${this.grid.active_base ?? ""}
+                .reconcilerReady=${this.grid.reconciler_ready ?? false}
+                .busy=${this.gridBusy}
+                @apply=${this.onApplyProfile}
+              ></grid-profile-form>`
+            : this.gridError
+              ? nothing
+              : html`<div class="loading">Loading…</div>`}
+        </div>
       </div>
     `;
   }
