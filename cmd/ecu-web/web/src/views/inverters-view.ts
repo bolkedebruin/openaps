@@ -48,6 +48,7 @@ export class InvertersView extends LitElement {
     .dot.on { background: var(--ok); }
     .dot.off { background: var(--muted); }
     .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .fw { font-variant-numeric: tabular-nums; color: var(--muted); }
     .fault { color: var(--err); }
     .empty { color: var(--muted); padding: 32px; text-align: center; }
   `;
@@ -61,7 +62,7 @@ export class InvertersView extends LitElement {
       <table>
         <thead>
           <tr>
-            <th>Inverter ID</th><th>Name</th><th>Model</th><th>Status</th>
+            <th>Inverter ID</th><th>Name</th><th>Model</th><th>Firmware</th><th>Status</th>
             <th class="num">Output</th><th class="num">Load</th>
             <th class="num">Grid</th><th class="num">Freq</th>
             <th class="num">Panels</th><th class="num">Faults</th>
@@ -81,6 +82,7 @@ export class InvertersView extends LitElement {
                 />
               </td>
               <td>${inv.model || "—"}</td>
+              <td class="fw">${inv.sw_version || "—"}</td>
               <td>
                 <span class="dot ${inv.online ? "on" : "off"}"></span>${inv.online ? "online" : "offline"}
               </td>
