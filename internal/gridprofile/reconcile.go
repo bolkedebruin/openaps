@@ -131,6 +131,11 @@ type Reconciler struct {
 	rb      ReadbackSource
 	modelOf func(uid string) (uint8, bool)
 	opts    Options
+
+	// KnownUIDs, when set, lists every inverter the daemon knows about so a
+	// fleet-wide base change reconciles inverters that have no overlay row too
+	// (not just UIDs present in gp_overlays). Nil = overlay UIDs only.
+	KnownUIDs func(ctx context.Context) []string
 }
 
 // NewReconciler constructs a Reconciler.
@@ -422,18 +427,32 @@ func (r *Reconciler) ReconcileAll(ctx context.Context) ([]ReconcileReport, error
 	if err != nil {
 		return nil, fmt.Errorf("ReconcileAll: query overlays: %w", err)
 	}
+	seen := map[string]bool{}
 	var uids []string
+	add := func(uid string) {
+		if uid != "" && !seen[uid] {
+			seen[uid] = true
+			uids = append(uids, uid)
+		}
+	}
 	for rows.Next() {
 		var uid string
 		if err := rows.Scan(&uid); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("ReconcileAll: scan uid: %w", err)
 		}
-		uids = append(uids, uid)
+		add(uid)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("ReconcileAll: rows.Err: %w", err)
+	}
+	// Include every known inverter so a base change reaches inverters without
+	// an overlay (ReconcileUID no-ops where there is no desired state).
+	if r.KnownUIDs != nil {
+		for _, uid := range r.KnownUIDs(ctx) {
+			add(uid)
+		}
 	}
 
 	var reports []ReconcileReport

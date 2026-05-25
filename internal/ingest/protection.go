@@ -148,13 +148,25 @@ func (in *Ingestor) noteProtFamily(uid, model string) {
 // continuous poll.  When OnFirstSeen is set it is also called in a new
 // goroutine after enqueueing the read, so the gridprofile reconciler can
 // run VerifyStartup once the inverter is known.
+// protReseenGap is how long telemetry must be absent before a UID's return is
+// treated as a reconnect (re-arming the startup read + reconcile). Normal
+// telemetry is ~1s; an inverter offline overnight is hours.
+const protReseenGap = 5 * time.Minute
+
 func (in *Ingestor) protReadOnFirstSeen(uid string) {
+	now := time.Now()
 	in.protMu.Lock()
 	if in.protSeen == nil {
 		in.protSeen = make(map[string]bool)
 	}
-	first := !in.protSeen[uid]
+	if in.protLastSeen == nil {
+		in.protLastSeen = make(map[string]time.Time)
+	}
+	last := in.protLastSeen[uid]
+	reseen := !last.IsZero() && now.Sub(last) > protReseenGap
+	first := !in.protSeen[uid] || reseen
 	in.protSeen[uid] = true
+	in.protLastSeen[uid] = now
 	in.protMu.Unlock()
 	if first {
 		go in.triggerProtectionRead(uid)

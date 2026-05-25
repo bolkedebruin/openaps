@@ -211,6 +211,18 @@ func runServe(args []string) error {
 		PeriodicSweep: 0, // disabled until user selects a base
 	})
 	gpReconcilerPtr = gpReconciler
+	// Let a fleet-wide base change reach inverters that have no overlay row.
+	gpReconciler.KnownUIDs = func(ctx context.Context) []string {
+		refs, err := st.ListInvertersForPoll(ctx)
+		if err != nil {
+			return nil
+		}
+		out := make([]string, 0, len(refs))
+		for _, ref := range refs {
+			out = append(out, ref.UID)
+		}
+		return out
+	}
 
 	// Wire the OnFirstSeen hook: on first telemetry from an inverter, run
 	// VerifyStartup non-blocking after the protection read settles.

@@ -85,6 +85,11 @@ type Ingestor struct {
 	// read (on first telemetry), so reads are on-demand (first-seen +
 	// after-write) rather than a continuous poll.
 	protSeen map[string]bool
+	// protLastSeen is the wall-clock of the last telemetry per UID. A gap
+	// larger than protReseenGap means the inverter dropped and rejoined, so
+	// the first-seen path (startup read + reconcile) is re-armed — this is how
+	// a setting applied while the inverter was dark gets pushed when it returns.
+	protLastSeen map[string]time.Time
 	// protValueSeq is a per-UID monotonic counter incremented each time
 	// cacheProtectionValues updates the values map.  Callers can compare
 	// the sequence before and after a send to detect a stale cache.

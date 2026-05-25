@@ -225,9 +225,9 @@ export class ProfilesView extends LitElement {
       // The change is persisted on the ECU; the per-inverter apply just could
       // not be confirmed (e.g. the inverter is offline). That's expected, not
       // an error — report it in the notice, not the red error banner.
-      const act = verb === "cleared" ? "clearing" : "applying";
+      const act = verb === "cleared" ? "Clearing" : "Applying";
       const detail = bad.map((r) => `${this.invName(r.uid)}: ${r.error || "unconfirmed"}`).join("; ");
-      this.notice = `Profile "${id}" saved on the ECU, but ${act} was not confirmed on ${bad.length} of ${results.length} inverter(s) (offline?) — ${detail}`;
+      this.notice = `Profile "${id}" saved. ${act} not confirmed on ${bad.length} of ${results.length} inverter(s) now — it is stored as the desired state and applied automatically when each inverter is next reached. ${detail}`;
     }
   }
 

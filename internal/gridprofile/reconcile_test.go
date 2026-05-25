@@ -817,3 +817,47 @@ func TestReconcileUID_NoLogOnModelError(t *testing.T) {
 // _ suppresses the "sql" unused import if the inline sql.ErrNoRows check is
 // removed; keep it explicit.
 var _ = sql.ErrNoRows
+
+func TestReconcileAll_KnownUIDsCoversBaseOnly(t *testing.T) {
+	db, done := openTestDB(t)
+	defer done()
+	s := NewStore(db)
+	ctx := context.Background()
+	base := Profile{
+		Schema: SchemaVersion, ID: "b", VNomV: 230, Source: Source{System: "t", Ref: "r"},
+		Points: []PointEntry{{Model: 134, Group: "CrvSet", Point: "Hz3",
+			Native: NativeValue{Value: 50.2, Unit: "Hz"}, Range: &Range{Min: 50, Max: 52}, Apply: Apply{ApsCode: "CB"}}},
+	}
+	if err := s.UpsertProfile(ctx, base, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetActiveBase(ctx, "b"); err != nil {
+		t.Fatal(err)
+	}
+	uid := "704000006835"
+	snd := &fakeSender{}
+	rb := newFakeReadback(true, map[string]float64{"CB": 51.0}) // drift from base 50.2
+	rec := NewReconciler(s, snd, rb, modelDS3, fastOpts())
+
+	// No overlays and no KnownUIDs: nobody is reconciled (the pre-fix behaviour).
+	reps, err := rec.ReconcileAll(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reps) != 0 {
+		t.Fatalf("no overlays + no KnownUIDs should reconcile nobody, got %d", len(reps))
+	}
+
+	// With KnownUIDs, the base-only inverter is reconciled and the base applied.
+	rec.KnownUIDs = func(context.Context) []string { return []string{uid} }
+	reps, err = rec.ReconcileAll(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reps) != 1 || reps[0].UID != uid {
+		t.Fatalf("expected base-only uid reconciled, got %+v", reps)
+	}
+	if snd.frameCount() == 0 {
+		t.Error("expected a frame applying the base to the base-only inverter")
+	}
+}
