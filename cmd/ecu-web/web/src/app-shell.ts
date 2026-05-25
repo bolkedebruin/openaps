@@ -7,12 +7,8 @@ import "./views/alarms-view.ts";
 import "./views/events-view.ts";
 import "./views/profiles-view.ts";
 import "./views/settings-view.ts";
-
-interface NavItem {
-  id: string;
-  label: string;
-  icon: string;
-}
+import "./components/app-nav.ts";
+import type { NavItem } from "./components/app-nav.ts";
 
 const NAV: NavItem[] = [
   { id: "dashboard", label: "Dashboard", icon: "▮▮" },
@@ -71,32 +67,6 @@ export class EcuApp extends LitElement {
   static styles = css`
     :host { display: block; }
     .layout { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
-    nav {
-      background: var(--surface);
-      border-right: 1px solid var(--border);
-      padding: 20px 12px;
-    }
-    .brand {
-      font-weight: 800;
-      letter-spacing: 0.06em;
-      color: var(--accent);
-      padding: 0 12px 20px;
-      font-size: 16px;
-    }
-    a.item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 12px;
-      border-radius: 8px;
-      color: var(--muted);
-      text-decoration: none;
-      font-size: 14px;
-      margin-bottom: 2px;
-    }
-    a.item:hover { background: var(--bar-bg); color: var(--text); }
-    a.item.active { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
-    .ic { width: 18px; text-align: center; opacity: 0.8; }
     main { padding: 24px 28px; }
     .topbar {
       display: flex;
@@ -133,24 +103,10 @@ export class EcuApp extends LitElement {
       line-height: 1;
       cursor: pointer;
     }
-    .scrim { display: none; }
     @media (max-width: 720px) {
       .layout { grid-template-columns: 1fr; }
       button.hamburger { display: inline-flex; }
       main { padding: 18px 16px; }
-      nav {
-        position: fixed;
-        top: 0;
-        left: 0;
-        bottom: 0;
-        width: 240px;
-        z-index: 30;
-        transform: translateX(-100%);
-        transition: transform 0.2s ease;
-        overflow-y: auto;
-      }
-      nav.open { transform: translateX(0); box-shadow: 4px 0 32px rgba(0, 0, 0, 0.5); }
-      .scrim { display: block; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); z-index: 20; }
     }
   `;
 
@@ -304,17 +260,12 @@ export class EcuApp extends LitElement {
     const connected = this.system?.invdriver_connected ?? false;
     return html`
       <div class="layout">
-        <nav class=${this.navOpen ? "open" : ""}>
-          <div class="brand">ECU CONSOLE</div>
-          ${NAV.map(
-            (n) => html`<a
-              class="item ${this.route === n.id ? "active" : ""}"
-              href="#/${n.id}"
-              @click=${() => (this.navOpen = false)}
-            ><span class="ic">${n.icon}</span>${n.label}</a>`,
-          )}
-        </nav>
-        ${this.navOpen ? html`<div class="scrim" @click=${() => (this.navOpen = false)}></div>` : nothing}
+        <app-nav
+          .items=${NAV}
+          .route=${this.route}
+          .open=${this.navOpen}
+          @close=${() => (this.navOpen = false)}
+        ></app-nav>
         <main>
           <div class="topbar">
             <div class="titlewrap">
