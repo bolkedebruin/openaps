@@ -98,30 +98,20 @@ export function paramDesc(apsCode: string): string {
   return PARAM_DOCS[apsCode]?.desc ?? "";
 }
 
-// A cross-parameter ordering constraint: effective(left) must be < effective(right).
-export interface ConflictRule {
-  left: string;
-  right: string;
-  message: string;
-}
-
-export const CONFLICT_RULES: ConflictRule[] = [
-  { left: "DH", right: "DI", message: "Under-frequency Watt: the low point (DH) must be below the high point (DI)." },
-  { left: "CB", right: "CC", message: "Over-frequency Watt: the start point (CB) must be below the end point (CC)." },
-  { left: "BN", right: "BO", message: "Enter-service voltage: the lower limit (BN) must be below the upper limit (BO)." },
-  { left: "BP", right: "BQ", message: "Enter-service frequency: the lower limit (BP) must be below the upper limit (BQ)." },
-  { left: "CA", right: "AF", message: "Over-frequency curtailment start (CA) must be below the over-frequency trip (AF), or the inverter trips instead of curtailing." },
-];
+// Cross-parameter ordering constraints come from the server (single source of
+// truth in Go; also enforced there), passed in from the /api/profiles payload.
+import type { ConflictRule } from "./api.ts";
 
 /**
- * conflicts evaluates the curated rules against the effective values
- * (override if set, else base default) and returns a message per violation.
+ * conflicts evaluates the server-provided rules against the effective values
+ * (override if set, else default) and returns a message per violation.
  */
 export function conflicts(
+  rules: ConflictRule[],
   effective: (apsCode: string) => number | undefined,
 ): string[] {
   const out: string[] = [];
-  for (const r of CONFLICT_RULES) {
+  for (const r of rules) {
     const a = effective(r.left);
     const b = effective(r.right);
     if (a !== undefined && b !== undefined && !(a < b)) out.push(r.message);

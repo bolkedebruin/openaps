@@ -15,6 +15,9 @@ const INVERTERS: ProfileInverter[] = [
   { uid: "ds3aaaaaaaaa", model: "DS3", model_code: 32, writable_codes: ["CB", "CC", "DD", "AF"], current: { CA: 50.2, DD: 16.6 } },
   { uid: "qs1aaaaaaaaa", model: "QS1A", model_code: 24, writable_codes: ["CB", "CC", "AF"], current: {} },
 ];
+const RULES = [
+  { left: "CB", right: "CC", message: "Over-frequency Watt: the start point (CB) must be below the end point (CC)." },
+];
 const DEFAULTS = {
   CB: { value: 50.2, unit: "Hz", min: 50.1, max: 52.0 },
   CC: { value: 51.5, unit: "Hz", min: 50.2, max: 53.0 },
@@ -27,6 +30,7 @@ async function mount(props: Partial<LocalSiteProfileForm> = {}): Promise<LocalSi
   el.params = props.params ?? PARAMS;
   el.inverters = props.inverters ?? INVERTERS;
   el.defaults = props.defaults ?? DEFAULTS;
+  el.rules = props.rules ?? RULES;
   el.names = props.names ?? {};
   el.profile = props.profile ?? { id: "", uids: [], points: [] };
   el.editing = props.editing ?? false;

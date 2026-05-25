@@ -197,12 +197,37 @@ func (r *Reconciler) buildDesired(ctx context.Context, uid string, modelCode uin
 			code := ovPt.Apply.ApsCode
 			effective := ovPt // copy
 
-			// Intersect overlay range with base range.
+			// Effective range = intersect(physical default, base range, overlay
+			// range). Including the per-code physical default means a code the
+			// base profile doesn't define is still clamped, so an overlay can't
+			// drive an out-of-envelope value to the inverter.
+			rng := defaultRange(code)
 			if basePt, hasBase := basePoints[code]; hasBase {
-				effective.Range = intersectRanges(basePt.Range, ovPt.Range)
+				rng = intersectRanges(rng, basePt.Range)
 			}
+			rng = intersectRanges(rng, ovPt.Range)
+			effective.Range = rng
 			merged[code] = effective
 		}
+	}
+
+	// Fail closed on cross-parameter conflicts (e.g. slope start past end,
+	// curtailment start above the over-frequency trip). Checked on the merged
+	// effective native values so no apply path can bypass the invariant.
+	effVals := make(map[string]float64, len(merged))
+	for code, entry := range merged {
+		v := entry.Native.Value
+		if entry.Range != nil && entry.Range.Min <= entry.Range.Max {
+			if v < entry.Range.Min {
+				v = entry.Range.Min
+			} else if v > entry.Range.Max {
+				v = entry.Range.Max
+			}
+		}
+		effVals[code] = v
+	}
+	if err := conflictError(CheckConflicts(effVals)); err != nil {
+		return nil, err
 	}
 
 	// Build EffectiveProfile: clamp to effective range + capability-filter.

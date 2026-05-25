@@ -49,6 +49,29 @@ func ParamCatalog() []ParamInfo {
 	return out
 }
 
+// defaultRange returns a per-code physical envelope by native unit, used to
+// clamp overlay values for codes the active base profile does NOT define, so an
+// override can never reach the encoder unbounded. Mirrors codec's write-side
+// envelope and extends it to slopes. nil = no generic bound (e.g. mode enums).
+func defaultRange(apsCode string) *Range {
+	e, ok := forwardMap[apsCode]
+	if !ok {
+		return nil
+	}
+	if e.IsVoltagePct {
+		return &Range{Min: 100, Max: 600} // volts
+	}
+	switch e.Unit {
+	case "Hz":
+		return &Range{Min: 40, Max: 70}
+	case "s":
+		return &Range{Min: 0, Max: 1000}
+	case "%Pref/Hz":
+		return &Range{Min: 0, Max: 200}
+	}
+	return nil
+}
+
 // BuildOverlayPoint constructs a v1 overlay PointEntry for the given aps code
 // and native value, filling the SunSpec location and encoding metadata from
 // the forward map. SunSpec and range are left unset: reconcile re-encodes from

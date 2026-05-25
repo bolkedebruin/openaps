@@ -1,5 +1,5 @@
 import { LitElement, html, css, nothing, type PropertyValues } from "lit";
-import type { ParamInfo, ProfileInverter, LocalSiteProfile, OverlayPoint, BaseDefault } from "../api.ts";
+import type { ParamInfo, ProfileInverter, LocalSiteProfile, OverlayPoint, BaseDefault, ConflictRule } from "../api.ts";
 import {
   GROUP_DOCS,
   GROUP_ORDER,
@@ -32,6 +32,7 @@ export class LocalSiteProfileForm extends LitElement {
     params: { attribute: false },
     inverters: { attribute: false },
     defaults: { attribute: false },
+    rules: { attribute: false },
     profile: { attribute: false },
     names: { attribute: false },
     busy: { attribute: false },
@@ -45,6 +46,7 @@ export class LocalSiteProfileForm extends LitElement {
   declare params: ParamInfo[];
   declare inverters: ProfileInverter[];
   declare defaults: Record<string, BaseDefault>;
+  declare rules: ConflictRule[];
   declare profile: LocalSiteProfile | null;
   declare names: Record<string, string>;
   declare busy: boolean;
@@ -59,6 +61,7 @@ export class LocalSiteProfileForm extends LitElement {
     this.params = [];
     this.inverters = [];
     this.defaults = {};
+    this.rules = [];
     this.profile = null;
     this.names = {};
     this.busy = false;
@@ -237,7 +240,7 @@ export class LocalSiteProfileForm extends LitElement {
     if (!this.name.trim()) return void (this.localError = "Profile name is required.");
     if (!this.selectedUids.length) return void (this.localError = "Select at least one target inverter.");
     if (!points.length) return void (this.localError = "Change at least one parameter from its default.");
-    if (conflicts((c) => this.effectiveValue(c)).length) return void (this.localError = "Resolve the conflicts before saving.");
+    if (conflicts(this.rules, (c) => this.effectiveValue(c)).length) return void (this.localError = "Resolve the conflicts before saving.");
 
     this.localError = "";
     const detail: OverlayDraft = { id: this.name.trim(), uids: this.selectedUids, points };
@@ -323,7 +326,7 @@ export class LocalSiteProfileForm extends LitElement {
   render() {
     const writable = this.effectiveWritable();
     const haveTargets = this.selectedUids.length > 0;
-    const conf = haveTargets ? conflicts((c) => this.effectiveValue(c)) : [];
+    const conf = haveTargets ? conflicts(this.rules, (c) => this.effectiveValue(c)) : [];
 
     return html`
       <div class="grid">

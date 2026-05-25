@@ -21,6 +21,7 @@ const (
 	protMinHz      = 40.0
 	protMaxHz      = 70.0
 	protMaxSeconds = 1000.0 // clear/trip/delay/recovery times (s); generous ceiling
+	protMaxSlope   = 200.0  // freq/volt-Watt droop slope (%Pref per Hz); generous ceiling
 )
 
 // protPhysicalRange classifies a protection param by physical quantity and
@@ -40,7 +41,7 @@ func protPhysicalRange(paramName string) (lo, hi float64, ok bool) {
 	case strings.Contains(n, "time"):
 		return 0, protMaxSeconds, true
 	case strings.Contains(n, "slope"):
-		return 0, 0, false // slope unit varies; not a volt/Hz/s
+		return 0, protMaxSlope, true // %Pref/Hz droop gradient; bound against absurd values
 	case strings.Contains(n, "bus"):
 		return 0, 0, false // DC-bus voltage; different range
 	case strings.Contains(n, "frequency"):

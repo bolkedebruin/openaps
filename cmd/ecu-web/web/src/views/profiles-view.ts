@@ -267,6 +267,7 @@ export class ProfilesView extends LitElement {
               .params=${d?.params ?? []}
               .inverters=${d?.inverters ?? []}
               .defaults=${d?.base_defaults ?? {}}
+              .rules=${d?.conflict_rules ?? []}
               .names=${this.names}
               .profile=${this.editing}
               .editing=${this.editingExisting}

@@ -2,9 +2,89 @@ package gridprofile
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"strings"
 	"testing"
+
+	"github.com/bolke/inv-driver/codec"
 )
+
+func TestSetOverlay_RejectsConflictBeforePersist(t *testing.T) {
+	db, done := openTestDB(t)
+	defer done()
+	s := NewStore(db)
+	ctx := context.Background()
+	base := Profile{
+		Schema: SchemaVersion, ID: "b", VNomV: 230, Source: Source{System: "t", Ref: "r"},
+		Points: []PointEntry{{Model: 134, Group: "CrvSet", Point: "Hz3", Native: NativeValue{Value: 50.2, Unit: "Hz"}, Apply: Apply{ApsCode: "CB"}}},
+	}
+	if err := s.UpsertProfile(ctx, base, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetActiveBase(ctx, "b"); err != nil {
+		t.Fatal(err)
+	}
+	uid := "704000006835"
+	// Overlay sets CC=50 → effective CB(50.2) < CC(50) is violated.
+	ovJSON := `{"schema":"invdriver.gridprofile/v1","id":"x","uids":["704000006835"],` +
+		`"points":[{"model":134,"group":"CrvSet","point":"Hz4","native":{"value":50,"unit":"Hz"},"apply":{"aps_code":"CC"}}]}`
+	resp := (&Manager{Store: s}).setOverlay(ctx, uid, []byte(ovJSON))
+	if resp.Ok {
+		t.Error("expected conflict rejection, got Ok=true")
+	}
+	if !strings.Contains(resp.Error, "conflicting") {
+		t.Errorf("want conflict error, got %q", resp.Error)
+	}
+	if _, err := s.GetOverlay(ctx, uid); err != sql.ErrNoRows {
+		t.Errorf("conflicting overlay must NOT be persisted, GetOverlay err=%v", err)
+	}
+}
+
+func TestBuildDesired_ClampsBaseAbsentOverlayToPhysicalRange(t *testing.T) {
+	db, done := openTestDB(t)
+	defer done()
+	s := NewStore(db)
+	ctx := context.Background()
+	// Base defines only CB — AF (over-frequency trip) is NOT in the base.
+	base := Profile{
+		Schema: SchemaVersion, ID: "b", VNomV: 230, Source: Source{System: "t", Ref: "r"},
+		Points: []PointEntry{{Model: 134, Group: "CrvSet", Point: "Hz3", Native: NativeValue{Value: 50.2, Unit: "Hz"}, Apply: Apply{ApsCode: "CB"}}},
+	}
+	if err := s.UpsertProfile(ctx, base, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetActiveBase(ctx, "b"); err != nil {
+		t.Fatal(err)
+	}
+	uid := "704000006835"
+	// Overlay drives AF to an absurd 999 Hz; the base has no range for it.
+	ov := Overlay{
+		Schema: SchemaVersion, ID: "x", UIDs: []string{uid},
+		Points: []PointEntry{{Model: 710, Group: "MustTrip", Point: "Hz", Native: NativeValue{Value: 999, Unit: "Hz"}, Apply: Apply{ApsCode: "AF"}}},
+	}
+	if err := s.UpsertOverlay(ctx, uid, ov); err != nil {
+		t.Fatal(err)
+	}
+	rec := NewReconciler(s, nil, nil, func(string) (uint8, bool) { return codec.ModelDS3, true }, Options{})
+	eff, err := rec.buildDesired(ctx, uid, codec.ModelDS3)
+	if err != nil {
+		t.Fatalf("buildDesired: %v", err)
+	}
+	var af float64
+	found := false
+	for _, p := range eff.Points {
+		if p.ApsCode == "AF" {
+			af, found = p.NativeValue, true
+		}
+	}
+	if !found {
+		t.Fatal("AF missing from desired profile")
+	}
+	if af != 70 {
+		t.Errorf("base-absent overlay AF clamped to %v, want 70 (physical Hz ceiling)", af)
+	}
+}
 
 func TestStore_ListOverlays_GroupsByID(t *testing.T) {
 	db, done := openTestDB(t)

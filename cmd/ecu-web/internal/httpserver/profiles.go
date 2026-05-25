@@ -14,12 +14,13 @@ import (
 // the named Local Site profiles (overlays), the inverters available as targets
 // (with their writable parameter codes), and the editable parameter catalog.
 type profilesDTO struct {
-	Base         profileBaseDTO          `json:"base"`
-	BaseDefaults map[string]defaultDTO   `json:"base_defaults"`
-	Overlays     []localSiteDTO          `json:"overlays"`
-	Inverters    []profileInvDTO         `json:"inverters"`
-	Params       []gridprofile.ParamInfo `json:"params"`
-	Error        string                  `json:"error,omitempty"`
+	Base          profileBaseDTO             `json:"base"`
+	BaseDefaults  map[string]defaultDTO      `json:"base_defaults"`
+	Overlays      []localSiteDTO             `json:"overlays"`
+	Inverters     []profileInvDTO            `json:"inverters"`
+	Params        []gridprofile.ParamInfo    `json:"params"`
+	ConflictRules []gridprofile.ConflictRule `json:"conflict_rules"`
+	Error         string                     `json:"error,omitempty"`
 }
 
 // defaultDTO is the active base profile's value (and allowed range, if any)
@@ -112,10 +113,11 @@ func currentValues(p *wire.Protection) map[string]float64 {
 // overlays come from inv-driver and degrade to an error field, never a 5xx.
 func (s *Server) handleGetProfiles(w http.ResponseWriter, r *http.Request) {
 	out := profilesDTO{
-		Inverters:    s.fleetTargets(),
-		Params:       gridprofile.ParamCatalog(),
-		Overlays:     []localSiteDTO{},
-		BaseDefaults: map[string]defaultDTO{},
+		Inverters:     s.fleetTargets(),
+		Params:        gridprofile.ParamCatalog(),
+		Overlays:      []localSiteDTO{},
+		BaseDefaults:  map[string]defaultDTO{},
+		ConflictRules: gridprofile.ConflictRules(),
 	}
 	if s.cfg.GridProfileFn == nil {
 		out.Error = "grid profile unavailable"
@@ -271,7 +273,7 @@ func (s *Server) handleSelectBase(w http.ResponseWriter, r *http.Request) {
 
 // overlayWriteReq is the PUT /api/profiles/overlay body.
 type overlayWriteReq struct {
-	ID     string `json:"id"`
+	ID     string   `json:"id"`
 	UIDs   []string `json:"uids"`
 	Points []struct {
 		ApsCode string  `json:"aps_code"`

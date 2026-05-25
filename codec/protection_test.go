@@ -326,3 +326,14 @@ func TestEncodeSetProtectionBroadcast_Unsupported(t *testing.T) {
 		t.Error("value=0: want error, got nil")
 	}
 }
+
+func TestValidateProtectionEnvelope_Slope(t *testing.T) {
+	// The droop slope is now envelope-bounded (was unchecked): an absurd value
+	// is rejected before any frame is built, a sane value still encodes.
+	if _, err := EncodeSetProtection(ModelDS3, "Over_Frequency_Watt_Slope_set", 999); err == nil {
+		t.Error("absurd slope 999 should be rejected by the physical envelope")
+	}
+	if _, err := EncodeSetProtection(ModelDS3, "Over_Frequency_Watt_Slope_set", 16.7); err != nil {
+		t.Errorf("sane slope 16.7 should pass the envelope: %v", err)
+	}
+}

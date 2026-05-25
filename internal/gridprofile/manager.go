@@ -214,6 +214,12 @@ func (m *Manager) setOverlay(ctx context.Context, uid string, overlayJSON []byte
 	if !overlayContainsUID(o, uid) {
 		return errResp(fmt.Sprintf("SetOverlay: uid %q not listed in overlay body uids[]", uid))
 	}
+	// Reject a conflicting overlay (base ⊕ overlay) before persisting it, so an
+	// incoherent profile never enters the store (the reconcile path is the
+	// ultimate backstop, but it would store-then-fail). Same rules as the editor.
+	if msgs := m.candidateConflicts(ctx, o); len(msgs) > 0 {
+		return errResp("SetOverlay: " + conflictError(msgs).Error())
+	}
 	if err := m.Store.UpsertOverlay(ctx, uid, o); err != nil {
 		return errResp(fmt.Sprintf("SetOverlay: upsert: %v", err))
 	}
@@ -389,6 +395,23 @@ func (m *Manager) getBase(ctx context.Context) *wire.GridProfileResponse {
 		return errResp(fmt.Sprintf("GetBase: marshal: %v", err))
 	}
 	return okResp(raw)
+}
+
+// candidateConflicts evaluates the conflict rules against base ⊕ candidate
+// overlay (effective native values), without persisting anything.
+func (m *Manager) candidateConflicts(ctx context.Context, ov Overlay) []string {
+	eff := map[string]float64{}
+	if id, err := m.Store.ActiveBase(ctx); err == nil && id != "" {
+		if base, err := m.Store.GetProfile(ctx, id); err == nil {
+			for _, p := range base.Points {
+				eff[p.Apply.ApsCode] = p.Native.Value
+			}
+		}
+	}
+	for _, p := range ov.Points {
+		eff[p.Apply.ApsCode] = p.Native.Value
+	}
+	return CheckConflicts(eff)
 }
 
 // okResp constructs a success response with an optional JSON payload.

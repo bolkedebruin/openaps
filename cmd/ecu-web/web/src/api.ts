@@ -187,6 +187,12 @@ export interface BaseDefault {
   max?: number;
 }
 
+export interface ConflictRule {
+  left: string;
+  right: string;
+  message: string;
+}
+
 export interface ProfilesState {
   base: {
     active_base: string;
@@ -197,6 +203,7 @@ export interface ProfilesState {
   overlays: LocalSiteProfile[];
   inverters: ProfileInverter[];
   params: ParamInfo[];
+  conflict_rules: ConflictRule[];
   error?: string;
 }
 
