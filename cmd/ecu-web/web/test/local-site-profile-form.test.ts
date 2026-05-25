@@ -4,14 +4,16 @@ import type { LocalSiteProfileForm, OverlayDraft } from "../src/components/local
 import type { ParamInfo, ProfileInverter } from "../src/api.ts";
 
 const PARAMS: ParamInfo[] = [
+  { aps_code: "CA", long_name: "Over_frequency_Watt_Start_set", unit: "Hz", group: "DERFreqDroop", model: 711 },
+  { aps_code: "DD", long_name: "Over_Frequency_Watt_Slope_set", unit: "%Pref/Hz", group: "DERFreqDroop", model: 711 },
   { aps_code: "CB", long_name: "Over_frequency_Watt_Low_set", unit: "Hz", group: "CrvSet", model: 134 },
   { aps_code: "CC", long_name: "Over_frequency_Watt_High_set", unit: "Hz", group: "CrvSet", model: 134 },
-  { aps_code: "DD", long_name: "Over_Frequency_Watt_Slope_set", unit: "%Pref/Hz", group: "DERFreqDroop", model: 711 },
   { aps_code: "AF", long_name: "over_frequency_slow", unit: "Hz", group: "MustTrip", model: 710 },
 ];
 const INVERTERS: ProfileInverter[] = [
-  { uid: "ds3aaaaaaaaa", model: "DS3", model_code: 32, writable_codes: ["CB", "CC", "DD", "AF"] },
-  { uid: "qs1aaaaaaaaa", model: "QS1A", model_code: 24, writable_codes: ["CB", "CC", "AF"] },
+  // DS3 cannot write CA but reports a current value for it (read-only default).
+  { uid: "ds3aaaaaaaaa", model: "DS3", model_code: 32, writable_codes: ["CB", "CC", "DD", "AF"], current: { CA: 50.2, DD: 16.6 } },
+  { uid: "qs1aaaaaaaaa", model: "QS1A", model_code: 24, writable_codes: ["CB", "CC", "AF"], current: {} },
 ];
 const DEFAULTS = {
   CB: { value: 50.2, unit: "Hz", min: 50.1, max: 52.0 },
@@ -150,6 +152,64 @@ describe("<local-site-profile-form>", () => {
     expect(nameInput.value).toBe("victron-shift");
     expect(nameInput.disabled).toBe(true);
     expect(rowInput(el, "CB").value).toBe("50.4");
+  });
+
+  test("shows a Code column with the aps_code", async () => {
+    const el = await mount();
+    await selectTarget(el, 0);
+    const headers = Array.from(el.shadowRoot!.querySelectorAll("th")).map((h) => h.textContent?.trim());
+    expect(headers).toContain("Code");
+    const codes = Array.from(el.shadowRoot!.querySelectorAll("tbody td.pcode")).map((c) => c.textContent?.trim());
+    expect(codes).toContain("CB");
+  });
+
+  test("uses the inverter's current value as default and shows it read-only when not writable", async () => {
+    const el = await mount();
+    await selectTarget(el, 0); // DS3: CA not writable, current 50.2
+    const ca = rowInput(el, "CA");
+    expect(ca.disabled).toBe(true); // not writable -> read-only
+    expect(ca.value).toBe("50.2"); // shows the inverter's current value
+    const t = el.shadowRoot?.textContent ?? "";
+    expect(t).toContain("read-only");
+    expect(t).toContain("inv"); // default sourced from the inverter
+  });
+
+  test("focusing an empty editable field prefills the default", async () => {
+    const el = await mount({ defaults: { CB: { value: 50.2, unit: "Hz" } } });
+    await selectTarget(el, 0);
+    const cb = rowInput(el, "CB");
+    expect(cb.value).toBe(""); // starts empty
+    cb.dispatchEvent(new Event("focus"));
+    await el.updateComplete;
+    expect(rowInput(el, "CB").value).toBe("50.2"); // prefilled from base default
+  });
+
+  test("clearing an override reverts to the default", async () => {
+    const el = await mount({ defaults: { CB: { value: 50.2, unit: "Hz" } } });
+    await selectTarget(el, 0);
+    await setVal(el, "CB", "50.6");
+    expect(el.shadowRoot?.querySelector("tr.over")).not.toBeNull();
+    const clear = el.shadowRoot!.querySelector("button.clear") as HTMLButtonElement;
+    expect(clear).not.toBeNull();
+    clear.click();
+    await el.updateComplete;
+    expect(rowInput(el, "CB").value).toBe("");
+    expect(el.shadowRoot?.querySelector("tr.over")).toBeNull();
+  });
+
+  test("a value equal to the default is not saved", async () => {
+    const el = await mount({ defaults: { CB: { value: 50.2, unit: "Hz" } } });
+    let emitted = false;
+    el.addEventListener("save", () => (emitted = true));
+    const nameInput = el.shadowRoot!.querySelector('input[type="text"]') as HTMLInputElement;
+    nameInput.value = "x";
+    nameInput.dispatchEvent(new Event("input"));
+    await selectTarget(el, 0);
+    await setVal(el, "CB", "50.2"); // equals default -> not an override
+    saveBtn(el).click();
+    await el.updateComplete;
+    expect(emitted).toBe(false);
+    expect(el.shadowRoot?.textContent).toContain("Change at least one");
   });
 
   test("Cancel emits cancel", async () => {

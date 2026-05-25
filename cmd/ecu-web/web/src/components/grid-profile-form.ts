@@ -37,8 +37,11 @@ export class GridProfileForm extends LitElement {
     .active { font-size: 14px; color: var(--text); }
     .active .muted { color: var(--muted); }
     .active .none { color: var(--muted); font-style: italic; }
-    label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+    label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); min-width: 0; }
     select {
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
       background: var(--bar-bg);
       border: 1px solid var(--border);
       color: var(--text);

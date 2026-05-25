@@ -177,6 +177,7 @@ export interface ProfileInverter {
   model: string;
   model_code: number;
   writable_codes: string[];
+  current: Record<string, number>; // aps_code -> the inverter's current value
 }
 
 export interface BaseDefault {

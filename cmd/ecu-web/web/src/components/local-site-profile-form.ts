@@ -114,6 +114,16 @@ export class LocalSiteProfileForm extends LitElement {
       margin-left: 8px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
       color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 999px; padding: 1px 6px;
     }
+    .rotag {
+      margin-left: 8px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+      color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 1px 6px;
+    }
+    .src { font-size: 10px; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 3px; cursor: help; }
+    button.clear {
+      margin-left: 6px; background: transparent; border: 1px solid var(--border); color: var(--muted);
+      border-radius: 6px; width: 24px; height: 24px; font-size: 12px; cursor: pointer; vertical-align: middle;
+    }
+    button.clear:hover { color: var(--text); border-color: var(--muted); }
     .warn { display: block; margin-top: 4px; font-size: 11px; color: var(--warn); }
 
     .conflicts { border-radius: 8px; padding: 10px 12px; font-size: 13px; color: var(--err);
@@ -152,11 +162,46 @@ export class LocalSiteProfileForm extends LitElement {
     return acc;
   }
 
-  // effectiveValue is the override if entered (and numeric), else the base default.
+  // targetDefault is the value a parameter defaults to for the selected
+  // target(s): the base grid profile value if it defines one, else the
+  // inverter's own current value — but only when every selected target agrees
+  // (otherwise it "varies" and there is no single default).
+  private targetDefault(code: string): { value: number; source: "base" | "inverter" } | undefined {
+    const b = this.defaults[code];
+    if (b) return { value: b.value, source: "base" };
+    if (!this.selectedUids.length) return undefined;
+    let v: number | undefined;
+    for (const uid of this.selectedUids) {
+      const cv = this.inverters.find((i) => i.uid === uid)?.current?.[code];
+      if (cv === undefined) return undefined;
+      if (v === undefined) v = cv;
+      else if (Math.abs(cv - v) > 1e-6) return undefined; // varies across targets
+    }
+    return v === undefined ? undefined : { value: v, source: "inverter" };
+  }
+
+  // effectiveValue is the override if entered (and numeric), else the default.
   private effectiveValue(code: string): number | undefined {
     const raw = (this.values[code] ?? "").trim();
     if (raw !== "" && !Number.isNaN(Number(raw))) return Number(raw);
-    return this.defaults[code]?.value;
+    return this.targetDefault(code)?.value;
+  }
+
+  // isOverride is true when the entered value differs from the default — only
+  // these are saved (a value equal to the default is a no-op).
+  private isOverride(code: string): boolean {
+    const raw = (this.values[code] ?? "").trim();
+    if (raw === "" || Number.isNaN(Number(raw))) return false;
+    const td = this.targetDefault(code);
+    return !td || Number(raw) !== td.value;
+  }
+
+  // prefill seeds an empty, editable field with its default so the operator
+  // adjusts from the real starting value rather than from blank.
+  private prefill(code: string) {
+    if ((this.values[code] ?? "").trim() !== "") return;
+    const td = this.targetDefault(code);
+    if (td) this.setValue(code, String(td.value));
   }
 
   private outOfRange(code: string): boolean {
@@ -191,14 +236,12 @@ export class LocalSiteProfileForm extends LitElement {
   private save = () => {
     const writable = this.effectiveWritable();
     const points: OverlayPoint[] = this.params
-      .filter((p) => writable.has(p.aps_code))
-      .map((p) => ({ p, raw: (this.values[p.aps_code] ?? "").trim() }))
-      .filter((x) => x.raw !== "" && !Number.isNaN(Number(x.raw)))
-      .map((x) => ({ aps_code: x.p.aps_code, value: Number(x.raw) }));
+      .filter((p) => writable.has(p.aps_code) && this.isOverride(p.aps_code))
+      .map((p) => ({ aps_code: p.aps_code, value: Number(this.values[p.aps_code]) }));
 
     if (!this.name.trim()) return void (this.localError = "Profile name is required.");
     if (!this.selectedUids.length) return void (this.localError = "Select at least one target inverter.");
-    if (!points.length) return void (this.localError = "Set at least one parameter value.");
+    if (!points.length) return void (this.localError = "Change at least one parameter from its default.");
     if (conflicts((c) => this.effectiveValue(c)).length) return void (this.localError = "Resolve the conflicts before saving.");
 
     this.localError = "";
@@ -246,26 +289,37 @@ export class LocalSiteProfileForm extends LitElement {
 
   private renderRow(p: ParamInfo, writable: Set<string>) {
     const on = writable.has(p.aps_code);
-    const def = this.defaults[p.aps_code];
+    const td = this.targetDefault(p.aps_code);
+    const def = this.defaults[p.aps_code]; // base profile entry (carries range)
     const raw = (this.values[p.aps_code] ?? "").trim();
-    const overridden = on && raw !== "" && (!def || Number(raw) !== def.value);
+    const overridden = this.isOverride(p.aps_code);
     const oor = on && this.outOfRange(p.aps_code);
+    const inputVal = on ? (this.values[p.aps_code] ?? "") : td ? String(td.value) : "";
     return html`<tr class="${on ? "" : "off"} ${overridden ? "over" : ""}">
       <td>
-        <div class="plabel">${paramLabel(p.aps_code, p.long_name)}${overridden ? html`<span class="otag">overridden</span>` : nothing}</div>
-        <div class="pdesc">${paramDesc(p.aps_code)} <span class="pcode">${p.aps_code}</span></div>
+        <div class="plabel">
+          ${paramLabel(p.aps_code, p.long_name)}
+          ${overridden ? html`<span class="otag">overridden</span>` : nothing}
+          ${!on && td ? html`<span class="rotag">read-only</span>` : nothing}
+        </div>
+        <div class="pdesc">${paramDesc(p.aps_code)}</div>
       </td>
-      <td class="def">${def ? `${def.value} ${def.unit}` : "—"}</td>
+      <td class="pcode">${p.aps_code}</td>
+      <td class="def">
+        ${td ? html`${td.value} ${p.unit}${td.source === "inverter" ? html` <span class="src" title="from the inverter's current value">inv</span>` : nothing}` : "—"}
+      </td>
       <td class="val">
         <input
           type="number" step="any" ?disabled=${!on}
-          .value=${this.values[p.aps_code] ?? ""}
-          placeholder=${def ? String(def.value) : on ? "—" : "n/a"}
+          .value=${inputVal}
+          placeholder=${td ? String(td.value) : on ? "—" : "n/a"}
+          @focus=${() => this.prefill(p.aps_code)}
           @input=${(e: Event) => this.setValue(p.aps_code, (e.target as HTMLInputElement).value)}
         />
         <span class="unit">${p.unit}</span>
+        ${on && raw !== "" ? html`<button class="clear" title="Clear override" @click=${() => this.setValue(p.aps_code, "")}>↺</button>` : nothing}
         ${oor
-          ? html`<span class="warn">⚠ outside base range${def?.min !== undefined ? ` (${def.min}–${def.max} ${def.unit})` : ""}</span>`
+          ? html`<span class="warn">⚠ outside base range${def?.min !== undefined ? ` (${def.min}–${def.max} ${p.unit})` : ""}</span>`
           : nothing}
       </td>
     </tr>`;
@@ -325,7 +379,7 @@ export class LocalSiteProfileForm extends LitElement {
                   </summary>
                   <div class="viz">${this.vizFor(g)}</div>
                   <table>
-                    <thead><tr><th>Setting</th><th>Base default</th><th>Override</th></tr></thead>
+                    <thead><tr><th>Setting</th><th>Code</th><th>Default</th><th>Override</th></tr></thead>
                     <tbody>${ps.map((p) => this.renderRow(p, writable))}</tbody>
                   </table>
                 </details>`;

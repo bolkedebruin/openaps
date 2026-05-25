@@ -206,6 +206,18 @@ func (s *Snapshot) ApplyProtection(p *wire.Protection) {
 	s.notify()
 }
 
+// Protection returns the last grid-protection readback for an inverter, or
+// nil if none has arrived. Used to surface each inverter's current parameter
+// values as overlay-editor defaults.
+func (s *Snapshot) Protection(uid string) *wire.Protection {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if st := s.inverters[uid]; st != nil {
+		return st.protection
+	}
+	return nil
+}
+
 // --- read side: JSON DTOs ---
 
 // PanelDTO mirrors one DC channel.

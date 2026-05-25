@@ -51,10 +51,60 @@ type localSitePointDTO struct {
 }
 
 type profileInvDTO struct {
-	UID           string   `json:"uid"`
-	Model         string   `json:"model"`
-	ModelCode     uint8    `json:"model_code"`
-	WritableCodes []string `json:"writable_codes"`
+	UID           string             `json:"uid"`
+	Model         string             `json:"model"`
+	ModelCode     uint8              `json:"model_code"`
+	WritableCodes []string           `json:"writable_codes"`
+	Current       map[string]float64 `json:"current"` // aps_code -> the inverter's current value
+}
+
+// currentValues maps an inverter's protection readback to aps-code -> value.
+// The mapping follows the Protection proto's per-field comments; the
+// over-frequency curtailment start is surfaced under CA (the writable code the
+// editor shows) rather than its read-only DC alias.
+func currentValues(p *wire.Protection) map[string]float64 {
+	m := map[string]float64{}
+	if p == nil {
+		return m
+	}
+	put := func(code string, v *float64) {
+		if v != nil {
+			m[code] = *v
+		}
+	}
+	put("AC", p.UvStg2)
+	put("AD", p.OvStg2)
+	put("AQ", p.UvFast)
+	put("AY", p.OvStg3)
+	put("AB", p.AvgOv)
+	put("AH", p.VwinLow)
+	put("AI", p.VwinHi)
+	put("AE", p.UfSlow)
+	put("AF", p.OfSlow)
+	put("AJ", p.UfFast)
+	put("AK", p.OfFast)
+	put("AG", p.ReconnectS)
+	put("AS", p.StartS)
+	put("BN", p.ReconnVLow)
+	put("BO", p.ReconnVHi)
+	put("BP", p.ReconnFLow)
+	put("BQ", p.ReconnFHi)
+	put("BB", p.Uv2ClrS)
+	put("BC", p.Ov2ClrS)
+	put("BD", p.Uv3ClrS)
+	put("BE", p.Ov3ClrS)
+	put("BH", p.Uf1ClrS)
+	put("BI", p.Of1ClrS)
+	put("BJ", p.Uf2ClrS)
+	put("BK", p.Of2ClrS)
+	put("CA", p.OfDroopStart) // curtailment start (DC read alias) under the writable code CA
+	put("CC", p.OfDroopEnd)
+	put("DD", p.OfDroopSlope)
+	put("CV", p.OfDroopMode)
+	put("DH", p.OfCurveUfLow)
+	put("DI", p.OfCurveUfHi)
+	put("CB", p.OfCurveOfLow)
+	return m
 }
 
 // handleGetProfiles aggregates everything the Profiles screen needs. The
@@ -182,7 +232,8 @@ func (s *Server) fleetTargets() []profileInvDTO {
 			}
 		}
 		out = append(out, profileInvDTO{
-			UID: inv.UID, Model: inv.Model, ModelCode: inv.ModelCode, WritableCodes: writable})
+			UID: inv.UID, Model: inv.Model, ModelCode: inv.ModelCode, WritableCodes: writable,
+			Current: currentValues(s.cfg.Snap.Protection(inv.UID))})
 	}
 	return out
 }

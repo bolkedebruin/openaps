@@ -284,6 +284,26 @@ func TestGetOverlaysDegradesToEmpty(t *testing.T) {
 	}
 }
 
+func TestCurrentValues(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	m := currentValues(&wire.Protection{
+		OfDroopStart: f(50.2), // -> CA (curtailment start)
+		OfDroopSlope: f(16.57), // -> DD
+		OfSlow:       f(52.0), // -> AF
+		AvgOv:        f(253.0), // -> AB
+		// UvStg2 left nil -> AC absent
+	})
+	if m["CA"] != 50.2 {
+		t.Errorf("CA (of_droop_start) = %v, want 50.2", m["CA"])
+	}
+	if m["DD"] != 16.57 || m["AF"] != 52.0 || m["AB"] != 253.0 {
+		t.Errorf("mapping wrong: %+v", m)
+	}
+	if _, ok := m["AC"]; ok {
+		t.Errorf("absent field should not appear: %+v", m["AC"])
+	}
+}
+
 func TestProfilesRequireAuth(t *testing.T) {
 	_, h := newTestServer(t)
 	for _, ep := range []struct{ m, p string }{
