@@ -32,10 +32,20 @@ const (
 	tokenLen    = 32
 	sessionTTL  = 12 * time.Hour
 	minPassword = 8
+	maxSessions = 64 // cap the in-memory session map (single operator)
+	// Login backoff: consecutive failures beyond this add a growing delay,
+	// throttling brute force without a lockout (which an attacker could weaponise
+	// to deny the operator). PBKDF2 already costs ~0.7s/attempt.
+	failGrace   = 3
+	failStep    = 500 * time.Millisecond
+	failMaxWait = 5 * time.Second
 )
 
 // ErrNotConfigured is returned by Login when no password has been set.
 var ErrNotConfigured = errors.New("auth: no password configured")
+
+// ErrAlreadyConfigured is returned by Setup when a password already exists.
+var ErrAlreadyConfigured = errors.New("auth: already configured")
 
 // creds is the on-disk credential record.
 type creds struct {
@@ -48,9 +58,10 @@ type creds struct {
 type Manager struct {
 	path string // credentials file path
 
-	mu       sync.RWMutex
-	c        *creds // nil => not configured
-	sessions map[string]time.Time
+	mu        sync.RWMutex
+	c         *creds // nil => not configured
+	sessions  map[string]time.Time
+	failCount int // consecutive failed logins (for backoff)
 }
 
 // NewManager loads credentials from path (if present) and returns a
@@ -79,26 +90,29 @@ func (m *Manager) Configured() bool {
 	return m.c != nil
 }
 
-// SetPassword installs (or replaces) the operator password, persisting
-// the hash to disk. Replacing an existing password is allowed only when
-// the caller is already authenticated; the HTTP layer enforces that.
-func (m *Manager) SetPassword(pw string) error {
+// makeCreds derives a credential record from a password (slow PBKDF2; call
+// outside any lock).
+func (m *Manager) makeCreds(pw string) (*creds, error) {
 	if len(pw) < minPassword {
-		return fmt.Errorf("auth: password must be at least %d characters", minPassword)
+		return nil, fmt.Errorf("auth: password must be at least %d characters", minPassword)
 	}
 	salt := make([]byte, saltLen)
 	if _, err := rand.Read(salt); err != nil {
-		return err
+		return nil, err
 	}
 	hash, err := pbkdf2.Key(sha256.New, pw, salt, pbkdf2Iter, pbkdf2KeyLn)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	c := &creds{
+	return &creds{
 		Salt: base64.StdEncoding.EncodeToString(salt),
 		Hash: base64.StdEncoding.EncodeToString(hash),
 		Iter: pbkdf2Iter,
-	}
+	}, nil
+}
+
+// persistCreds writes the credential record to disk (0600 in a 0700 dir).
+func (m *Manager) persistCreds(c *creds) error {
 	b, err := json.Marshal(c)
 	if err != nil {
 		return err
@@ -111,9 +125,44 @@ func (m *Manager) SetPassword(pw string) error {
 	if err := os.WriteFile(m.path, b, 0o600); err != nil {
 		return fmt.Errorf("auth: write %s: %w", m.path, err)
 	}
+	return nil
+}
+
+// SetPassword installs (or replaces) the operator password, persisting the
+// hash to disk. Replacing an existing password is allowed only when the caller
+// is already authenticated; the HTTP layer enforces that.
+func (m *Manager) SetPassword(pw string) error {
+	c, err := m.makeCreds(pw)
+	if err != nil {
+		return err
+	}
+	if err := m.persistCreds(c); err != nil {
+		return err
+	}
 	m.mu.Lock()
 	m.c = c
 	m.mu.Unlock()
+	return nil
+}
+
+// Setup installs the FIRST operator password, atomically: if a password is
+// already configured it returns ErrAlreadyConfigured. This closes the
+// check-then-act race on the public first-run endpoint (two concurrent setups,
+// or a second setup after one already won).
+func (m *Manager) Setup(pw string) error {
+	c, err := m.makeCreds(pw) // derive before taking the lock
+	if err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.c != nil {
+		return ErrAlreadyConfigured
+	}
+	if err := m.persistCreds(c); err != nil {
+		return err
+	}
+	m.c = c
 	return nil
 }
 
@@ -152,9 +201,33 @@ func (m *Manager) Login(pw string) (string, error) {
 		return "", err
 	}
 	if !ok {
+		// Throttle brute force: grow a delay with consecutive failures (no
+		// lockout, which an attacker could use to deny the operator).
+		m.mu.Lock()
+		m.failCount++
+		n := m.failCount
+		m.mu.Unlock()
+		if d := loginBackoff(n); d > 0 {
+			time.Sleep(d)
+		}
 		return "", errors.New("auth: invalid password")
 	}
+	m.mu.Lock()
+	m.failCount = 0
+	m.mu.Unlock()
 	return m.newSession()
+}
+
+// loginBackoff returns the delay to apply after the nth consecutive failure.
+func loginBackoff(n int) time.Duration {
+	if n <= failGrace {
+		return 0
+	}
+	d := time.Duration(n-failGrace) * failStep
+	if d > failMaxWait {
+		d = failMaxWait
+	}
+	return d
 }
 
 // NewSession mints a session token without deriving the password. Used
@@ -167,8 +240,26 @@ func (m *Manager) newSession() (string, error) {
 		return "", err
 	}
 	tok := base64.RawURLEncoding.EncodeToString(raw)
+	now := time.Now()
 	m.mu.Lock()
-	m.sessions[tok] = time.Now().Add(sessionTTL)
+	// Drop expired sessions, then bound the map so it can't grow without limit.
+	for t, exp := range m.sessions {
+		if now.After(exp) {
+			delete(m.sessions, t)
+		}
+	}
+	if len(m.sessions) >= maxSessions {
+		// Evict the soonest-to-expire session to make room.
+		var oldest string
+		var oldestExp time.Time
+		for t, exp := range m.sessions {
+			if oldest == "" || exp.Before(oldestExp) {
+				oldest, oldestExp = t, exp
+			}
+		}
+		delete(m.sessions, oldest)
+	}
+	m.sessions[tok] = now.Add(sessionTTL)
 	m.mu.Unlock()
 	return tok, nil
 }

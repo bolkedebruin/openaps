@@ -306,12 +306,10 @@ func (s *Server) handlePutOverlay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results := make([]applyResult, 0, len(body.UIDs))
-	for _, uid := range body.UIDs {
-		resp, err := s.cfg.GridProfileFn(r.Context(), &wire.GridProfileRequest{
+	results := s.applyPerUID(body.UIDs, func(uid string) (*wire.GridProfileResponse, error) {
+		return s.cfg.GridProfileFn(r.Context(), &wire.GridProfileRequest{
 			Op: &wire.GridProfileRequest_SetOverlay{SetOverlay: &wire.OverlaySet{Uid: uid, OverlayJson: raw}}})
-		results = append(results, toApplyResult(uid, resp, err))
-	}
+	})
 	writeJSON(w, http.StatusOK, map[string]any{"id": body.ID, "results": results})
 }
 
@@ -333,13 +331,21 @@ func (s *Server) handleDeleteOverlay(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "uids are required", http.StatusBadRequest)
 		return
 	}
-	results := make([]applyResult, 0, len(body.UIDs))
-	for _, uid := range body.UIDs {
-		resp, err := s.cfg.GridProfileFn(r.Context(), &wire.GridProfileRequest{
+	results := s.applyPerUID(body.UIDs, func(uid string) (*wire.GridProfileResponse, error) {
+		return s.cfg.GridProfileFn(r.Context(), &wire.GridProfileRequest{
 			Op: &wire.GridProfileRequest_ClearOverlay{ClearOverlay: &wire.ClearOverlay{Uid: uid}}})
+	})
+	writeJSON(w, http.StatusOK, map[string]any{"id": body.ID, "results": results})
+}
+
+// applyPerUID runs op for each uid and collects a per-inverter result.
+func (s *Server) applyPerUID(uids []string, op func(uid string) (*wire.GridProfileResponse, error)) []applyResult {
+	results := make([]applyResult, 0, len(uids))
+	for _, uid := range uids {
+		resp, err := op(uid)
 		results = append(results, toApplyResult(uid, resp, err))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": body.ID, "results": results})
+	return results
 }
 
 func toApplyResult(uid string, resp *wire.GridProfileResponse, err error) applyResult {

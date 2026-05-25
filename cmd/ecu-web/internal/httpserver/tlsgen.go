@@ -51,7 +51,7 @@ func loadOrCreateCert(dir string) (tls.Certificate, error) {
 		DNSNames:              []string{"localhost", "ecu", "ecu.local"},
 		IPAddresses:           localIPs(),
 		BasicConstraintsValid: true,
-		IsCA:                  true,
+		IsCA:                  false, // a TLS server leaf, not a CA
 	}
 	der, err := x509.CreateCertificate(rand.Reader, &tmpl, &tmpl, &key.PublicKey, key)
 	if err != nil {

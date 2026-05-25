@@ -189,15 +189,17 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAuthSetup(w http.ResponseWriter, r *http.Request) {
-	if s.cfg.Auth.Configured() {
-		http.Error(w, "already configured", http.StatusConflict)
-		return
-	}
 	pw, ok := readPassword(w, r)
 	if !ok {
 		return
 	}
-	if err := s.cfg.Auth.SetPassword(pw); err != nil {
+	// Setup is atomic: it returns ErrAlreadyConfigured rather than relying on a
+	// separate Configured() check (which races on this public endpoint).
+	if err := s.cfg.Auth.Setup(pw); err != nil {
+		if errors.Is(err, auth.ErrAlreadyConfigured) {
+			http.Error(w, "already configured", http.StatusConflict)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

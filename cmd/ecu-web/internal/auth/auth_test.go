@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -105,5 +106,51 @@ func TestRequireMiddleware(t *testing.T) {
 	guarded.ServeHTTP(rec, r)
 	if rec.Code != http.StatusTeapot {
 		t.Errorf("valid cookie => %d, want 418", rec.Code)
+	}
+}
+
+func TestSetup_AtomicRejectsSecond(t *testing.T) {
+	m, err := NewManager(filepath.Join(t.TempDir(), "auth.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Setup("password123"); err != nil {
+		t.Fatalf("first Setup: %v", err)
+	}
+	if err := m.Setup("different456"); !errors.Is(err, ErrAlreadyConfigured) {
+		t.Fatalf("second Setup = %v, want ErrAlreadyConfigured", err)
+	}
+	if _, err := m.Login("password123"); err != nil {
+		t.Errorf("original password should still work after a rejected re-setup: %v", err)
+	}
+}
+
+func TestLoginBackoff(t *testing.T) {
+	if loginBackoff(failGrace) != 0 {
+		t.Error("no delay within the grace count")
+	}
+	if loginBackoff(failGrace+1) != failStep {
+		t.Errorf("first delay after grace = %v, want %v", loginBackoff(failGrace+1), failStep)
+	}
+	if loginBackoff(1_000_000) != failMaxWait {
+		t.Errorf("delay not capped at %v", failMaxWait)
+	}
+}
+
+func TestSessionCapBounded(t *testing.T) {
+	m, err := NewManager(filepath.Join(t.TempDir(), "auth.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < maxSessions+25; i++ {
+		if _, err := m.NewSession(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m.mu.RLock()
+	n := len(m.sessions)
+	m.mu.RUnlock()
+	if n > maxSessions {
+		t.Errorf("session map has %d entries, exceeds cap %d", n, maxSessions)
 	}
 }
