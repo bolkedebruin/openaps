@@ -38,6 +38,7 @@ export class EcuApp extends LitElement {
     system: { state: true },
     names: { state: true },
     customProfiles: { state: true },
+    navOpen: { state: true },
   };
 
   declare ready: boolean;
@@ -48,6 +49,7 @@ export class EcuApp extends LitElement {
   declare system: SystemStatus | null;
   declare names: Record<string, string>;
   declare customProfiles: Record<string, string>; // inverter uid -> active Local Site profile name
+  declare navOpen: boolean; // mobile drawer open state
 
   private closeSSE: (() => void) | null = null;
   private sysTimer: ReturnType<typeof setInterval> | null = null;
@@ -63,6 +65,7 @@ export class EcuApp extends LitElement {
     this.system = null;
     this.names = {};
     this.customProfiles = {};
+    this.navOpen = false;
   }
 
   static styles = css`
@@ -117,7 +120,38 @@ export class EcuApp extends LitElement {
       cursor: pointer;
     }
     button.logout:hover { color: var(--text); border-color: var(--muted); }
-    @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } nav { display: none; } }
+    .titlewrap { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    button.hamburger {
+      display: none;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 5px 10px;
+      font-size: 17px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .scrim { display: none; }
+    @media (max-width: 720px) {
+      .layout { grid-template-columns: 1fr; }
+      button.hamburger { display: inline-flex; }
+      main { padding: 18px 16px; }
+      nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 240px;
+        z-index: 30;
+        transform: translateX(-100%);
+        transition: transform 0.2s ease;
+        overflow-y: auto;
+      }
+      nav.open { transform: translateX(0); box-shadow: 4px 0 32px rgba(0, 0, 0, 0.5); }
+      .scrim { display: block; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); z-index: 20; }
+    }
   `;
 
   connectedCallback(): void {
@@ -136,6 +170,7 @@ export class EcuApp extends LitElement {
   private onHash = () => {
     const id = (location.hash.replace(/^#\/?/, "") || "dashboard").split("/")[0];
     this.route = NAV.some((n) => n.id === id) ? id : "dashboard";
+    this.navOpen = false; // close the mobile drawer after navigating
     // Refresh the custom-profile flags when returning to the dashboard, so an
     // overlay just created/cleared on the Profiles screen is reflected.
     if (this.route === "dashboard" && this.authed) void this.fetchOverlays();
@@ -269,18 +304,23 @@ export class EcuApp extends LitElement {
     const connected = this.system?.invdriver_connected ?? false;
     return html`
       <div class="layout">
-        <nav>
+        <nav class=${this.navOpen ? "open" : ""}>
           <div class="brand">ECU CONSOLE</div>
           ${NAV.map(
             (n) => html`<a
               class="item ${this.route === n.id ? "active" : ""}"
               href="#/${n.id}"
+              @click=${() => (this.navOpen = false)}
             ><span class="ic">${n.icon}</span>${n.label}</a>`,
           )}
         </nav>
+        ${this.navOpen ? html`<div class="scrim" @click=${() => (this.navOpen = false)}></div>` : nothing}
         <main>
           <div class="topbar">
-            <h1>${title}</h1>
+            <div class="titlewrap">
+              <button class="hamburger" aria-label="Menu" aria-expanded=${this.navOpen} @click=${() => (this.navOpen = !this.navOpen)}>☰</button>
+              <h1>${title}</h1>
+            </div>
             <div class="right">
               <span class="conn">
                 <span class="dot ${connected ? "on" : "off"}"></span>

@@ -912,7 +912,7 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
               @save=${this.onSave}
             ></settings-form>`}
       </div>
-    `}}customElements.define("settings-view",WZ);var NX=[{id:"dashboard",label:"Dashboard",icon:"▮▮"},{id:"inverters",label:"Inverters",icon:"⌁"},{id:"alarms",label:"Alarms",icon:"!"},{id:"events",label:"Events",icon:"≣"},{id:"profiles",label:"Profiles",icon:"⛭"},{id:"settings",label:"Settings",icon:"⚙"}];class _Z extends z{static properties={ready:{state:!0},authed:{state:!0},configured:{state:!0},route:{state:!0},fleet:{state:!0},system:{state:!0},names:{state:!0},customProfiles:{state:!0}};closeSSE=null;sysTimer=null;settingsCache=null;constructor(){super();this.ready=!1,this.authed=!1,this.configured=!0,this.route="dashboard",this.fleet=null,this.system=null,this.names={},this.customProfiles={}}static styles=U`
+    `}}customElements.define("settings-view",WZ);var NX=[{id:"dashboard",label:"Dashboard",icon:"▮▮"},{id:"inverters",label:"Inverters",icon:"⌁"},{id:"alarms",label:"Alarms",icon:"!"},{id:"events",label:"Events",icon:"≣"},{id:"profiles",label:"Profiles",icon:"⛭"},{id:"settings",label:"Settings",icon:"⚙"}];class _Z extends z{static properties={ready:{state:!0},authed:{state:!0},configured:{state:!0},route:{state:!0},fleet:{state:!0},system:{state:!0},names:{state:!0},customProfiles:{state:!0},navOpen:{state:!0}};closeSSE=null;sysTimer=null;settingsCache=null;constructor(){super();this.ready=!1,this.authed=!1,this.configured=!0,this.route="dashboard",this.fleet=null,this.system=null,this.names={},this.customProfiles={},this.navOpen=!1}static styles=U`
     :host { display: block; }
     .layout { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
     nav {
@@ -964,8 +964,39 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
       cursor: pointer;
     }
     button.logout:hover { color: var(--text); border-color: var(--muted); }
-    @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } nav { display: none; } }
-  `;connectedCallback(){super.connectedCallback(),window.addEventListener("hashchange",this.onHash),this.onHash(),this.init()}disconnectedCallback(){super.disconnectedCallback(),window.removeEventListener("hashchange",this.onHash),this.stopStreams()}onHash=()=>{let X=(location.hash.replace(/^#\/?/,"")||"dashboard").split("/")[0];if(this.route=NX.some((Z)=>Z.id===X)?X:"dashboard",this.route==="dashboard"&&this.authed)this.fetchOverlays()};async init(){try{let X=await M.authStatus();if(this.configured=X.configured,this.authed=X.authenticated,this.authed)this.startStreams()}catch{}finally{this.ready=!0}}onAuthed=async()=>{this.authed=!0,this.startStreams()};logout=async()=>{try{await M.logout()}catch{}this.authed=!1,this.stopStreams(),this.fleet=null,this.system=null};startStreams(){this.stopStreams(),this.closeSSE=tX((Z)=>{this.fleet=Z});let X=()=>M.system().then((Z)=>this.system=Z).catch(()=>{});X(),this.sysTimer=setInterval(X,5000),this.fetchSettings(),this.fetchOverlays()}async fetchSettings(){try{let X=await M.getSettings();if(X.settings)this.settingsCache=X.settings,this.names=X.settings.inverter_names??{}}catch{}}async fetchOverlays(){try{let X=await M.overlays(),Z={};for(let K of X)for(let Y of K.uids)Z[Y]=K.id;this.customProfiles=Z}catch{}}onRename=async(X)=>{let{uid:Z,name:K}=X.detail,Y=this.settingsCache??{ecu_id:"",mac:"",pan_override:"",zigbee_type:""},Q={...Y.inverter_names??{}};if(K.trim())Q[Z]=K.trim();else delete Q[Z];let $={...Y,inverter_names:Q};try{await M.saveSettings($),this.settingsCache=$,this.names=Q}catch{}};stopStreams(){if(this.closeSSE?.(),this.closeSSE=null,this.sysTimer)clearInterval(this.sysTimer);this.sysTimer=null}activeView(){switch(this.route){case"inverters":return B`<inverters-view
+    .titlewrap { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    button.hamburger {
+      display: none;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 5px 10px;
+      font-size: 17px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .scrim { display: none; }
+    @media (max-width: 720px) {
+      .layout { grid-template-columns: 1fr; }
+      button.hamburger { display: inline-flex; }
+      main { padding: 18px 16px; }
+      nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 240px;
+        z-index: 30;
+        transform: translateX(-100%);
+        transition: transform 0.2s ease;
+        overflow-y: auto;
+      }
+      nav.open { transform: translateX(0); box-shadow: 4px 0 32px rgba(0, 0, 0, 0.5); }
+      .scrim { display: block; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); z-index: 20; }
+    }
+  `;connectedCallback(){super.connectedCallback(),window.addEventListener("hashchange",this.onHash),this.onHash(),this.init()}disconnectedCallback(){super.disconnectedCallback(),window.removeEventListener("hashchange",this.onHash),this.stopStreams()}onHash=()=>{let X=(location.hash.replace(/^#\/?/,"")||"dashboard").split("/")[0];if(this.route=NX.some((Z)=>Z.id===X)?X:"dashboard",this.navOpen=!1,this.route==="dashboard"&&this.authed)this.fetchOverlays()};async init(){try{let X=await M.authStatus();if(this.configured=X.configured,this.authed=X.authenticated,this.authed)this.startStreams()}catch{}finally{this.ready=!0}}onAuthed=async()=>{this.authed=!0,this.startStreams()};logout=async()=>{try{await M.logout()}catch{}this.authed=!1,this.stopStreams(),this.fleet=null,this.system=null};startStreams(){this.stopStreams(),this.closeSSE=tX((Z)=>{this.fleet=Z});let X=()=>M.system().then((Z)=>this.system=Z).catch(()=>{});X(),this.sysTimer=setInterval(X,5000),this.fetchSettings(),this.fetchOverlays()}async fetchSettings(){try{let X=await M.getSettings();if(X.settings)this.settingsCache=X.settings,this.names=X.settings.inverter_names??{}}catch{}}async fetchOverlays(){try{let X=await M.overlays(),Z={};for(let K of X)for(let Y of K.uids)Z[Y]=K.id;this.customProfiles=Z}catch{}}onRename=async(X)=>{let{uid:Z,name:K}=X.detail,Y=this.settingsCache??{ecu_id:"",mac:"",pan_override:"",zigbee_type:""},Q={...Y.inverter_names??{}};if(K.trim())Q[Z]=K.trim();else delete Q[Z];let $={...Y,inverter_names:Q};try{await M.saveSettings($),this.settingsCache=$,this.names=Q}catch{}};stopStreams(){if(this.closeSSE?.(),this.closeSSE=null,this.sysTimer)clearInterval(this.sysTimer);this.sysTimer=null}activeView(){switch(this.route){case"inverters":return B`<inverters-view
           .fleet=${this.fleet}
           .names=${this.names}
           @rename=${this.onRename}
@@ -976,16 +1007,21 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
           .profiles=${this.customProfiles}
         ></dashboard-view>`}}render(){if(!this.ready)return G;if(!this.authed)return B`<login-view .configured=${this.configured} @authed=${this.onAuthed}></login-view>`;let X=NX.find((K)=>K.id===this.route)?.label??"Dashboard",Z=this.system?.invdriver_connected??!1;return B`
       <div class="layout">
-        <nav>
+        <nav class=${this.navOpen?"open":""}>
           <div class="brand">ECU CONSOLE</div>
           ${NX.map((K)=>B`<a
               class="item ${this.route===K.id?"active":""}"
               href="#/${K.id}"
+              @click=${()=>this.navOpen=!1}
             ><span class="ic">${K.icon}</span>${K.label}</a>`)}
         </nav>
+        ${this.navOpen?B`<div class="scrim" @click=${()=>this.navOpen=!1}></div>`:G}
         <main>
           <div class="topbar">
-            <h1>${X}</h1>
+            <div class="titlewrap">
+              <button class="hamburger" aria-label="Menu" aria-expanded=${this.navOpen} @click=${()=>this.navOpen=!this.navOpen}>☰</button>
+              <h1>${X}</h1>
+            </div>
             <div class="right">
               <span class="conn">
                 <span class="dot ${Z?"on":"off"}"></span>
