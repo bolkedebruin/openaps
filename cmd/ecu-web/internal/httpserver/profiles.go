@@ -22,10 +22,13 @@ type profilesDTO struct {
 	Error        string                  `json:"error,omitempty"`
 }
 
-// defaultDTO is the active base profile's value for one parameter.
+// defaultDTO is the active base profile's value (and allowed range, if any)
+// for one parameter.
 type defaultDTO struct {
-	Value float64 `json:"value"`
-	Unit  string  `json:"unit"`
+	Value float64  `json:"value"`
+	Unit  string   `json:"unit"`
+	Min   *float64 `json:"min,omitempty"`
+	Max   *float64 `json:"max,omitempty"`
 }
 
 type profileBaseDTO struct {

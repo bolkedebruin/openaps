@@ -182,6 +182,8 @@ export interface ProfileInverter {
 export interface BaseDefault {
   value: number;
   unit: string;
+  min?: number;
+  max?: number;
 }
 
 export interface ProfilesState {

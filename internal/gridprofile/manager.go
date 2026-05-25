@@ -354,14 +354,18 @@ func (m *Manager) listOverlays(ctx context.Context) *wire.GridProfileResponse {
 	return okResp(raw)
 }
 
-// baseDefault is one parameter's value in the active base profile.
+// baseDefault is one parameter's value (and allowed range, if the base
+// profile declares one) in the active base profile.
 type baseDefault struct {
-	Value float64 `json:"value"`
-	Unit  string  `json:"unit"`
+	Value float64  `json:"value"`
+	Unit  string   `json:"unit"`
+	Min   *float64 `json:"min,omitempty"`
+	Max   *float64 `json:"max,omitempty"`
 }
 
-// getBase returns the active base profile's per-aps-code values as a JSON
-// object {aps_code: {value, unit}} — the defaults an overlay overrides. An
+// getBase returns the active base profile's per-aps-code values and ranges as
+// a JSON object {aps_code: {value, unit, min?, max?}} — the defaults an overlay
+// overrides, plus the certified envelope to flag out-of-range overrides. An
 // empty object means no base is selected.
 func (m *Manager) getBase(ctx context.Context) *wire.GridProfileResponse {
 	id, _ := m.Store.ActiveBase(ctx)
@@ -372,7 +376,12 @@ func (m *Manager) getBase(ctx context.Context) *wire.GridProfileResponse {
 			return errResp(fmt.Sprintf("GetBase: %v", err))
 		}
 		for _, pt := range p.Points {
-			defaults[pt.Apply.ApsCode] = baseDefault{Value: pt.Native.Value, Unit: pt.Native.Unit}
+			bd := baseDefault{Value: pt.Native.Value, Unit: pt.Native.Unit}
+			if pt.Range != nil {
+				lo, hi := pt.Range.Min, pt.Range.Max
+				bd.Min, bd.Max = &lo, &hi
+			}
+			defaults[pt.Apply.ApsCode] = bd
 		}
 	}
 	raw, err := json.Marshal(defaults)

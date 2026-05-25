@@ -32,7 +32,7 @@ func fakeProfiles(_ context.Context, req *wire.GridProfileRequest) (*wire.GridPr
 				`"points":[{"model":134,"group":"CrvSet","point":"Hz3","native":{"value":50.3,"unit":"Hz"},"apply":{"aps_code":"CB"}}]}]`)}, nil
 	case req.GetGetBase() != nil:
 		return &wire.GridProfileResponse{Ok: true, Json: []byte(
-			`{"CB":{"value":50.2,"unit":"Hz"},"AF":{"value":52.0,"unit":"Hz"}}`)}, nil
+			`{"CB":{"value":50.2,"unit":"Hz","min":50.1,"max":52.0},"AF":{"value":52.0,"unit":"Hz"}}`)}, nil
 	}
 	return &wire.GridProfileResponse{Ok: false, Error: "unexpected op"}, errors.New("unexpected op")
 }
@@ -80,6 +80,9 @@ func TestGetProfilesEndpoint(t *testing.T) {
 	}
 	if out.BaseDefaults["CB"].Value != 50.2 || out.BaseDefaults["CB"].Unit != "Hz" {
 		t.Errorf("base default for CB wrong: %+v", out.BaseDefaults["CB"])
+	}
+	if out.BaseDefaults["CB"].Min == nil || *out.BaseDefaults["CB"].Min != 50.1 {
+		t.Errorf("base range for CB missing: %+v", out.BaseDefaults["CB"])
 	}
 	if len(out.Inverters) != 2 {
 		t.Fatalf("want 2 inverters, got %d", len(out.Inverters))

@@ -44,13 +44,21 @@ export class ProfilesView extends LitElement {
 
   static styles = css`
     :host { display: block; }
+    .cols {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 20px;
+      align-items: start;
+      max-width: 1200px;
+    }
+    @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
     .panel {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 24px;
       margin-bottom: 20px;
-      max-width: 860px;
+      min-width: 0;
     }
     h2 { font-size: 15px; margin: 0 0 16px; color: var(--text); }
     .row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
@@ -250,7 +258,10 @@ export class ProfilesView extends LitElement {
       ${this.error ? html`<div class="banner err">⚠ ${this.error}</div>` : nothing}
       ${this.data === null
         ? html`<div class="panel"><div class="loading">Loading…</div></div>`
-        : html`${this.renderBase()}${this.renderLocalSite()}`}
+        : html`<div class="cols">
+            <div>${this.renderLocalSite()}</div>
+            <div>${this.renderBase()}</div>
+          </div>`}
     `;
   }
 }

@@ -86,7 +86,8 @@ func TestManager_GetBase(t *testing.T) {
 		Schema: SchemaVersion, ID: "EN50549-1", VNomV: 230,
 		Source: Source{System: "test", Ref: "TY=36"},
 		Points: []PointEntry{
-			{Model: 134, Group: "CrvSet", Point: "Hz3", Native: NativeValue{Value: 50.2, Unit: "Hz"}, Apply: Apply{ApsCode: "CB"}},
+			{Model: 134, Group: "CrvSet", Point: "Hz3", Native: NativeValue{Value: 50.2, Unit: "Hz"},
+				Range: &Range{Min: 50.1, Max: 52.0}, Apply: Apply{ApsCode: "CB"}},
 			{Model: 710, Group: "MustTrip", Point: "Hz", Native: NativeValue{Value: 52.0, Unit: "Hz"}, Apply: Apply{ApsCode: "AF"}},
 		},
 	}
@@ -107,8 +108,11 @@ func TestManager_GetBase(t *testing.T) {
 	if defs["CB"].Value != 50.2 || defs["CB"].Unit != "Hz" {
 		t.Errorf("CB default wrong: %+v", defs["CB"])
 	}
-	if defs["AF"].Value != 52.0 {
-		t.Errorf("AF default wrong: %+v", defs["AF"])
+	if defs["CB"].Min == nil || *defs["CB"].Min != 50.1 || defs["CB"].Max == nil || *defs["CB"].Max != 52.0 {
+		t.Errorf("CB range wrong: %+v", defs["CB"])
+	}
+	if defs["AF"].Value != 52.0 || defs["AF"].Min != nil {
+		t.Errorf("AF default wrong (no range expected): %+v", defs["AF"])
 	}
 }
 

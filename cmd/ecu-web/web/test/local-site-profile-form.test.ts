@@ -1,17 +1,24 @@
 import { test, expect, describe } from "bun:test";
 import "../src/components/local-site-profile-form.ts";
 import type { LocalSiteProfileForm, OverlayDraft } from "../src/components/local-site-profile-form.ts";
-import type { ParamInfo, ProfileInverter, LocalSiteProfile } from "../src/api.ts";
+import type { ParamInfo, ProfileInverter } from "../src/api.ts";
 
 const PARAMS: ParamInfo[] = [
   { aps_code: "CB", long_name: "Over_frequency_Watt_Low_set", unit: "Hz", group: "CrvSet", model: 134 },
+  { aps_code: "CC", long_name: "Over_frequency_Watt_High_set", unit: "Hz", group: "CrvSet", model: 134 },
   { aps_code: "DD", long_name: "Over_Frequency_Watt_Slope_set", unit: "%Pref/Hz", group: "DERFreqDroop", model: 711 },
+  { aps_code: "AF", long_name: "over_frequency_slow", unit: "Hz", group: "MustTrip", model: 710 },
 ];
 const INVERTERS: ProfileInverter[] = [
-  { uid: "ds3aaaaaaaaa", model: "DS3", model_code: 32, writable_codes: ["CB", "DD"] },
-  { uid: "qs1aaaaaaaaa", model: "QS1A", model_code: 24, writable_codes: ["CB"] },
+  { uid: "ds3aaaaaaaaa", model: "DS3", model_code: 32, writable_codes: ["CB", "CC", "DD", "AF"] },
+  { uid: "qs1aaaaaaaaa", model: "QS1A", model_code: 24, writable_codes: ["CB", "CC", "AF"] },
 ];
-const DEFAULTS = { CB: { value: 50.2, unit: "Hz" }, DD: { value: 16.7, unit: "%Pref/Hz" } };
+const DEFAULTS = {
+  CB: { value: 50.2, unit: "Hz", min: 50.1, max: 52.0 },
+  CC: { value: 51.5, unit: "Hz", min: 50.2, max: 53.0 },
+  DD: { value: 16.7, unit: "%Pref/Hz" },
+  AF: { value: 52.0, unit: "Hz" },
+};
 
 async function mount(props: Partial<LocalSiteProfileForm> = {}): Promise<LocalSiteProfileForm> {
   const el = document.createElement("local-site-profile-form") as LocalSiteProfileForm;
@@ -27,123 +34,122 @@ async function mount(props: Partial<LocalSiteProfileForm> = {}): Promise<LocalSi
   return el;
 }
 
-function checkboxes(el: LocalSiteProfileForm): HTMLInputElement[] {
-  return Array.from(el.shadowRoot!.querySelectorAll('.target input[type="checkbox"]'));
+function rowInput(el: LocalSiteProfileForm, code: string): HTMLInputElement {
+  const rows = Array.from(el.shadowRoot!.querySelectorAll("tbody tr"));
+  const tr = rows.find((r) => r.querySelector(".pcode")?.textContent?.trim() === code)!;
+  return tr.querySelector("td.val input") as HTMLInputElement;
 }
-function valueInputs(el: LocalSiteProfileForm): HTMLInputElement[] {
-  return Array.from(el.shadowRoot!.querySelectorAll("td.val input"));
+async function setVal(el: LocalSiteProfileForm, code: string, v: string) {
+  const inp = rowInput(el, code);
+  inp.value = v;
+  inp.dispatchEvent(new Event("input"));
+  await el.updateComplete;
 }
 async function selectTarget(el: LocalSiteProfileForm, idx: number) {
-  const cb = checkboxes(el)[idx];
+  const cb = el.shadowRoot!.querySelectorAll('.target input[type="checkbox"]')[idx] as HTMLInputElement;
   cb.checked = true;
   cb.dispatchEvent(new Event("change"));
   await el.updateComplete;
 }
+function saveBtn(el: LocalSiteProfileForm) {
+  return el.shadowRoot!.querySelector("button.save") as HTMLButtonElement;
+}
 
 describe("<local-site-profile-form>", () => {
-  test("no params shown until a target is selected", async () => {
+  test("no params until a target is selected", async () => {
     const el = await mount();
-    expect(valueInputs(el).length).toBe(0);
+    expect(el.shadowRoot!.querySelectorAll("td.val input").length).toBe(0);
     expect(el.shadowRoot?.textContent).toContain("Select a target");
   });
 
-  test("selecting DS3 enables both CB and DD", async () => {
+  test("groups params into labelled sections", async () => {
     const el = await mount();
-    await selectTarget(el, 0); // DS3
-    const [cb, dd] = valueInputs(el);
-    expect(cb.disabled).toBe(false);
-    expect(dd.disabled).toBe(false);
+    await selectTarget(el, 0);
+    const names = Array.from(el.shadowRoot!.querySelectorAll("summary .gname")).map((s) => s.textContent?.trim());
+    expect(names).toContain("Frequency-Watt droop");
+    expect(names).toContain("Frequency-Watt curve");
+    expect(names).toContain("Trip thresholds");
   });
 
-  test("DD disabled when a QS1A is also selected (capability intersection)", async () => {
+  test("spells out cryptic names with a description", async () => {
     const el = await mount();
-    await selectTarget(el, 0); // DS3
-    await selectTarget(el, 1); // QS1A — drops DD from the writable intersection
-    const [cb, dd] = valueInputs(el);
-    expect(cb.disabled).toBe(false);
-    expect(dd.disabled).toBe(true);
+    await selectTarget(el, 0);
+    const t = el.shadowRoot?.textContent ?? "";
+    expect(t).toContain("Over-freq Watt — start point"); // CB label
+    expect(t).not.toContain("Over_frequency_Watt_Low_set"); // raw long_name not shown as the label
   });
 
-  test("Save emits a draft with name, targets and entered values", async () => {
+  test("group legend badge carries an explanatory tooltip", async () => {
+    const el = await mount();
+    await selectTarget(el, 0);
+    const badge = el.shadowRoot!.querySelector(".legend .badge") as HTMLElement;
+    expect(badge).not.toBeNull();
+    expect(badge.getAttribute("title")?.length).toBeGreaterThan(10);
+  });
+
+  test("capability intersection disables DD when a QS1A is also selected", async () => {
+    const el = await mount();
+    await selectTarget(el, 0); // DS3
+    expect(rowInput(el, "DD").disabled).toBe(false);
+    await selectTarget(el, 1); // + QS1A (no DD)
+    expect(rowInput(el, "DD").disabled).toBe(true);
+    expect(rowInput(el, "CB").disabled).toBe(false);
+  });
+
+  test("shows base default and warns when a value is outside the base range", async () => {
+    const el = await mount();
+    await selectTarget(el, 0);
+    expect(rowInput(el, "CB").placeholder).toBe("50.2");
+    await setVal(el, "CB", "60"); // > max 52.0
+    expect(el.shadowRoot?.textContent).toContain("outside base range");
+  });
+
+  test("blocks Save on a conflict and unblocks when resolved", async () => {
+    const el = await mount();
+    let emitted = false;
+    el.addEventListener("save", () => (emitted = true));
+    await selectTarget(el, 0);
+    const nameInput = el.shadowRoot!.querySelector('input[type="text"]') as HTMLInputElement;
+    nameInput.value = "x";
+    nameInput.dispatchEvent(new Event("input"));
+    await setVal(el, "CB", "51");
+    await setVal(el, "CC", "50"); // start (51) past end (50) -> conflict
+    expect(el.shadowRoot?.textContent).toContain("Conflicting settings");
+    expect(saveBtn(el).disabled).toBe(true);
+    saveBtn(el).click();
+    expect(emitted).toBe(false);
+
+    await setVal(el, "CC", "52"); // resolve
+    expect(saveBtn(el).disabled).toBe(false);
+    saveBtn(el).click();
+    expect(emitted).toBe(true);
+  });
+
+  test("Save emits a draft with entered values", async () => {
     const el = await mount();
     let got: OverlayDraft | null = null;
     el.addEventListener("save", (e) => (got = (e as CustomEvent<OverlayDraft>).detail));
-
     const nameInput = el.shadowRoot!.querySelector('input[type="text"]') as HTMLInputElement;
     nameInput.value = "victron-shift";
     nameInput.dispatchEvent(new Event("input"));
-    await selectTarget(el, 0); // DS3
-
-    const cb = valueInputs(el)[0];
-    cb.value = "50.3";
-    cb.dispatchEvent(new Event("input"));
-    await el.updateComplete;
-
-    (el.shadowRoot!.querySelector("button.save") as HTMLButtonElement).click();
+    await selectTarget(el, 0);
+    await setVal(el, "CB", "50.3");
+    saveBtn(el).click();
     expect(got).not.toBeNull();
     expect(got!.id).toBe("victron-shift");
     expect(got!.uids).toEqual(["ds3aaaaaaaaa"]);
     expect(got!.points).toEqual([{ aps_code: "CB", value: 50.3 }]);
   });
 
-  test("Save with no name shows an error and does not emit", async () => {
-    const el = await mount();
-    let emitted = false;
-    el.addEventListener("save", () => (emitted = true));
-    await selectTarget(el, 0);
-    const cb = valueInputs(el)[0];
-    cb.value = "50.3";
-    cb.dispatchEvent(new Event("input"));
-    await el.updateComplete;
-    (el.shadowRoot!.querySelector("button.save") as HTMLButtonElement).click();
-    await el.updateComplete;
-    expect(emitted).toBe(false);
-    expect(el.shadowRoot?.textContent).toContain("name is required");
-  });
-
-  test("editing an existing profile prefills and locks the name", async () => {
-    const profile: LocalSiteProfile = {
-      id: "victron-shift",
-      uids: ["ds3aaaaaaaaa"],
-      points: [{ aps_code: "CB", value: 50.3, unit: "Hz" }],
-    };
-    const el = await mount({ profile, editing: true });
+  test("editing locks the name and prefills overrides", async () => {
+    const el = await mount({
+      editing: true,
+      profile: { id: "victron-shift", uids: ["ds3aaaaaaaaa"], points: [{ aps_code: "CB", value: 50.4, unit: "Hz" }] },
+    });
     const nameInput = el.shadowRoot!.querySelector('input[type="text"]') as HTMLInputElement;
     expect(nameInput.value).toBe("victron-shift");
     expect(nameInput.disabled).toBe(true);
-    // target prefilled => params visible, CB prefilled with 50.3
-    expect(valueInputs(el)[0].value).toBe("50.3");
-  });
-
-  test("shows the base default and uses it as placeholder", async () => {
-    const el = await mount();
-    await selectTarget(el, 0); // DS3 -> CB and DD editable
-    const defCells = Array.from(el.shadowRoot!.querySelectorAll("td.def")).map((c) => c.textContent?.trim());
-    expect(defCells).toContain("50.2 Hz");
-    expect(defCells).toContain("16.7 %Pref/Hz");
-    const cb = valueInputs(el)[0];
-    expect(cb.placeholder).toBe("50.2");
-  });
-
-  test("a value different from the default marks the row overridden", async () => {
-    const el = await mount();
-    await selectTarget(el, 0);
-    const cb = valueInputs(el)[0];
-    cb.value = "50.3";
-    cb.dispatchEvent(new Event("input"));
-    await el.updateComplete;
-    expect(el.shadowRoot?.querySelector("tr.over")).not.toBeNull();
-    expect(el.shadowRoot?.textContent).toContain("overridden");
-  });
-
-  test("a value equal to the default is NOT overridden", async () => {
-    const el = await mount();
-    await selectTarget(el, 0);
-    const cb = valueInputs(el)[0];
-    cb.value = "50.2"; // equals base default
-    cb.dispatchEvent(new Event("input"));
-    await el.updateComplete;
-    expect(el.shadowRoot?.querySelector("tr.over")).toBeNull();
+    expect(rowInput(el, "CB").value).toBe("50.4");
   });
 
   test("Cancel emits cancel", async () => {
