@@ -66,8 +66,11 @@ export class ProfilesView extends LitElement {
     .banner.ok { color: var(--ok); border: 1px solid var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
     .banner.err { color: var(--err); border: 1px solid var(--err); background: color-mix(in srgb, var(--err) 12%, transparent); }
     .loading { color: var(--muted); font-size: 13px; }
+    .hdr-actions { display: flex; gap: 10px; }
     button.primary { background: var(--accent); border: none; color: #04121a; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
     button.primary:hover { filter: brightness(1.08); }
+    button.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    button.ghost:hover { border-color: var(--muted); }
     .cards { display: grid; gap: 12px; }
     .card { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
     .card .title { font-size: 14px; font-weight: 600; color: var(--text); }
@@ -135,6 +138,47 @@ export class ProfilesView extends LitElement {
 
   private onCancelEdit = () => {
     this.editing = null;
+  };
+
+  // exportProfile downloads a Local Site profile as a .json file (overlay only:
+  // id, target uids, and {aps_code, value} points).
+  private exportProfile(p: LocalSiteProfile) {
+    const data = { id: p.id, uids: p.uids, points: p.points.map((pt) => ({ aps_code: pt.aps_code, value: pt.value })) };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${p.id || "profile"}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  private triggerImport = () => {
+    (this.shadowRoot?.querySelector("#importfile") as HTMLInputElement | null)?.click();
+  };
+
+  private onImportFile = async (e: Event) => {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = ""; // allow re-importing the same file
+    if (!file) return;
+    try {
+      const obj = JSON.parse(await file.text());
+      if (!obj || !Array.isArray(obj.points)) throw new Error("not a profile (no points)");
+      const prof: LocalSiteProfile = {
+        id: typeof obj.id === "string" ? obj.id : "",
+        uids: Array.isArray(obj.uids) ? obj.uids.filter((u: unknown) => typeof u === "string") : [],
+        points: obj.points
+          .filter((p: { aps_code?: unknown; value?: unknown }) => typeof p?.aps_code === "string" && typeof p?.value === "number")
+          .map((p: { aps_code: string; value: number }) => ({ aps_code: p.aps_code, value: p.value })),
+      };
+      this.editing = prof;
+      this.editingExisting = false;
+      this.error = "";
+      this.notice = `Imported "${prof.id || "profile"}" — review the targets and values, then Save.`;
+    } catch (err) {
+      this.error = "Import failed: " + (err as Error).message;
+    }
   };
 
   private onSaveOverlay = async (e: CustomEvent<OverlayDraft>) => {
@@ -209,9 +253,13 @@ export class ProfilesView extends LitElement {
         <div class="row">
           <h2 style="margin:0">Local Site profiles</h2>
           ${this.editing === null
-            ? html`<button class="primary" @click=${() => this.newProfile()}>+ New profile</button>`
+            ? html`<div class="hdr-actions">
+                <button class="ghost" @click=${this.triggerImport}>Import</button>
+                <button class="primary" @click=${() => this.newProfile()}>+ New profile</button>
+              </div>`
             : nothing}
         </div>
+        <input id="importfile" type="file" accept=".json,application/json" hidden @change=${this.onImportFile} />
 
         ${this.editing !== null
           ? html`<local-site-profile-form
@@ -245,6 +293,7 @@ export class ProfilesView extends LitElement {
           </div>
           <div class="cardactions">
             <button @click=${() => this.editProfile(p)}>Edit</button>
+            <button @click=${() => this.exportProfile(p)}>Export</button>
             <button class="del" @click=${() => this.deleteProfile(p)}>Delete</button>
           </div>
         </div>`,

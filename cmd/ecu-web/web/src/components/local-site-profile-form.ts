@@ -8,6 +8,9 @@ import {
   paramDesc,
   conflicts,
 } from "../param-docs.ts";
+import "./freq-watt-chart.ts";
+import "./trip-line.ts";
+import type { TripMarker } from "./trip-line.ts";
 
 export interface OverlayDraft {
   id: string;
@@ -93,6 +96,8 @@ export class LocalSiteProfileForm extends LitElement {
     summary .gname { font-size: 14px; font-weight: 600; color: var(--text); }
     summary .gcount { font-size: 12px; color: var(--muted); margin-left: auto; }
     summary .badge { cursor: help; }
+    .viz { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+    .viz:empty { display: none; }
 
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px 14px; border-bottom: 1px solid var(--border); }
@@ -203,6 +208,42 @@ export class LocalSiteProfileForm extends LitElement {
 
   private cancel = () => this.dispatchEvent(new CustomEvent("cancel", { bubbles: true, composed: true }));
 
+  // trips builds markers from effective values for the given (code, kind) specs.
+  private trips(specs: [string, "under" | "over" | "curve"][]): TripMarker[] {
+    const out: TripMarker[] = [];
+    for (const [code, kind] of specs) {
+      const v = this.effectiveValue(code);
+      if (v !== undefined) out.push({ value: v, label: code, kind });
+    }
+    return out;
+  }
+
+  // vizFor renders the curve/number-line visualization for a group, driven by
+  // the effective values (override if set, else base default).
+  private vizFor(group: string) {
+    if (group === "DERFreqDroop") {
+      return html`<freq-watt-chart
+        .deadband=${this.effectiveValue("CA")}
+        .slope=${this.effectiveValue("DD")}
+        .trip=${this.effectiveValue("AF")}
+        .nominal=${50}
+      ></freq-watt-chart>`;
+    }
+    if (group === "CrvSet") {
+      const ms = this.trips([["DH", "under"], ["DI", "under"], ["CB", "over"], ["CC", "over"]]);
+      return ms.length ? html`<trip-line unit="Hz" .nominal=${50} .markers=${ms}></trip-line>` : nothing;
+    }
+    if (group === "MustTrip") {
+      const v = this.trips([["AC", "under"], ["AQ", "under"], ["AH", "under"], ["AD", "over"], ["AY", "over"], ["AB", "over"], ["AI", "over"]]);
+      const f = this.trips([["AE", "under"], ["AJ", "under"], ["AF", "over"], ["AK", "over"]]);
+      return html`
+        ${v.length ? html`<trip-line unit="V" .nominal=${230} .markers=${v}></trip-line>` : nothing}
+        ${f.length ? html`<trip-line unit="Hz" .nominal=${50} .markers=${f}></trip-line>` : nothing}
+      `;
+    }
+    return nothing;
+  }
+
   private renderRow(p: ParamInfo, writable: Set<string>) {
     const on = writable.has(p.aps_code);
     const def = this.defaults[p.aps_code];
@@ -282,6 +323,7 @@ export class LocalSiteProfileForm extends LitElement {
                     <span class="badge" title=${d?.tip ?? g}>${g}</span>
                     <span class="gcount">${ps.length} setting${ps.length === 1 ? "" : "s"}</span>
                   </summary>
+                  <div class="viz">${this.vizFor(g)}</div>
                   <table>
                     <thead><tr><th>Setting</th><th>Base default</th><th>Override</th></tr></thead>
                     <tbody>${ps.map((p) => this.renderRow(p, writable))}</tbody>
