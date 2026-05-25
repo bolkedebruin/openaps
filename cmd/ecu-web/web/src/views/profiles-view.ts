@@ -1,5 +1,6 @@
 import { LitElement, html, css, nothing } from "lit";
 import { api, type ProfilesState, type LocalSiteProfile, type ApplyResult } from "../api.ts";
+import { fmtNum } from "../format.ts";
 import "../components/grid-profile-form.ts";
 import "../components/local-site-profile-form.ts";
 import type { OverlayDraft } from "../components/local-site-profile-form.ts";
@@ -289,7 +290,7 @@ export class ProfilesView extends LitElement {
           <div class="title">${p.id}</div>
           <div class="meta">Targets: ${p.uids.map((u) => this.invName(u)).join(", ") || "none"}</div>
           <div class="chips">
-            ${p.points.map((pt) => html`<span class="chip">${pt.aps_code} = ${pt.value}${pt.unit ? ` ${pt.unit}` : ""}</span>`)}
+            ${p.points.map((pt) => html`<span class="chip">${pt.aps_code} = ${fmtNum(pt.value)}${pt.unit ? ` ${pt.unit}` : ""}</span>`)}
           </div>
           <div class="cardactions">
             <button @click=${() => this.editProfile(p)}>Edit</button>

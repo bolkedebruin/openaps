@@ -1,6 +1,15 @@
 // Pure presentation helpers. Kept free of DOM/Lit so they unit-test
 // directly and the components stay thin.
 
+/**
+ * Round a value to at most 3 decimals and drop trailing zeros, so raw device
+ * floats (e.g. 16.569348154600167, 52.00002496) read cleanly (16.569, 52).
+ */
+export function fmtNum(v: number): string {
+  if (!Number.isFinite(v)) return "";
+  return String(Number(v.toFixed(3)));
+}
+
 /** Format watts, switching to kW at 1000. */
 export function fmtW(w: number): string {
   if (!Number.isFinite(w)) return "—";

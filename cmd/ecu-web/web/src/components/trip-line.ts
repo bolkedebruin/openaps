@@ -1,4 +1,5 @@
 import { LitElement, html, css, svg, nothing } from "lit";
+import { fmtNum } from "../format.ts";
 
 export interface TripMarker {
   value: number;
@@ -63,14 +64,14 @@ export class TripLine extends LitElement {
         <line class="axis" x1=${pl} y1=${axisY} x2=${W - pr} y2=${axisY} />
         ${this.nominal !== undefined
           ? svg`<line class="nom" x1=${X(this.nominal)} y1=${axisY - 9} x2=${X(this.nominal)} y2=${axisY + 9} />
-              <text x=${X(this.nominal)} y=${axisY + 20} text-anchor="middle" fill="var(--ok)">${this.nominal} ${this.unit}</text>`
+              <text x=${X(this.nominal)} y=${axisY + 20} text-anchor="middle" fill="var(--ok)">${fmtNum(this.nominal)} ${this.unit}</text>`
           : nothing}
         ${ms.map((m, i) => {
           const cls = m.kind;
           const up = i % 2 === 0;
           const ty = up ? axisY - 12 : axisY + 22;
           return svg`<line class=${cls} x1=${X(m.value)} y1=${axisY - 7} x2=${X(m.value)} y2=${axisY + 7} />
-            <text x=${X(m.value)} y=${ty} text-anchor="middle">${m.label} ${m.value}</text>`;
+            <text x=${X(m.value)} y=${ty} text-anchor="middle">${m.label} ${fmtNum(m.value)}</text>`;
         })}
       </svg>
     `;

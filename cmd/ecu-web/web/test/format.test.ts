@@ -10,7 +10,21 @@ import {
   ageLabel,
   humanizeFault,
   faultLabels,
+  fmtNum,
 } from "../src/format.ts";
+
+describe("fmtNum", () => {
+  test("rounds device floats and drops trailing zeros", () => {
+    expect(fmtNum(16.569348154600167)).toBe("16.569");
+    expect(fmtNum(52.00002496001198)).toBe("52");
+    expect(fmtNum(50.2)).toBe("50.2");
+    expect(fmtNum(49.75000621875078)).toBe("49.75");
+    expect(fmtNum(0)).toBe("0");
+  });
+  test("non-finite -> empty", () => {
+    expect(fmtNum(NaN)).toBe("");
+  });
+});
 
 describe("fmtW", () => {
   test("watts below 1k", () => expect(fmtW(750)).toBe("750 W"));

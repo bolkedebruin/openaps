@@ -20,12 +20,19 @@ describe("<freq-watt-chart>", () => {
     expect(el.shadowRoot?.textContent).toContain("start frequency and slope");
   });
 
-  test("draws the droop curve and start marker when configured", async () => {
+  test("draws the droop curve with start and end markers when configured", async () => {
     const el = await mount({ deadband: 50.2, slope: 40 });
     expect(el.shadowRoot?.querySelector("svg")).not.toBeNull();
     expect(el.shadowRoot?.querySelector("polyline.curve")).not.toBeNull();
     expect(el.shadowRoot?.textContent).toContain("start 50.2");
+    expect(el.shadowRoot?.textContent).toContain("0% at 52.7"); // end: 50.2 + 100/40
     expect(el.shadowRoot?.textContent).toContain("40 %Pref/Hz");
+  });
+
+  test("rounds a noisy slope value", async () => {
+    const el = await mount({ deadband: 50.2, slope: 16.569348154600167 });
+    expect(el.shadowRoot?.textContent).toContain("16.569 %Pref/Hz");
+    expect(el.shadowRoot?.textContent).not.toContain("16.569348");
   });
 
   test("marks the over-frequency trip", async () => {

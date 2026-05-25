@@ -8,6 +8,7 @@ import {
   paramDesc,
   conflicts,
 } from "../param-docs.ts";
+import { fmtNum } from "../format.ts";
 import "./freq-watt-chart.ts";
 import "./trip-line.ts";
 import type { TripMarker } from "./trip-line.ts";
@@ -83,19 +84,13 @@ export class LocalSiteProfileForm extends LitElement {
     .targets { display: flex; flex-wrap: wrap; gap: 14px; }
     .target { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text); }
 
-    .legend { display: flex; flex-wrap: wrap; gap: 8px; }
-    .badge {
-      font-size: 11px; font-weight: 600; border-radius: 999px; padding: 2px 9px;
-      background: var(--bar-bg); border: 1px solid var(--border); color: var(--muted); cursor: help;
-    }
-
     details.group { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
     details.group + details.group { margin-top: 10px; }
     summary { list-style: none; cursor: pointer; padding: 10px 14px; display: flex; align-items: center; gap: 10px; background: var(--bar-bg); }
     summary::-webkit-details-marker { display: none; }
     summary .gname { font-size: 14px; font-weight: 600; color: var(--text); }
     summary .gcount { font-size: 12px; color: var(--muted); margin-left: auto; }
-    summary .badge { cursor: help; }
+    .gdesc { padding: 8px 14px 0; font-size: 12px; color: var(--muted); }
     .viz { padding: 10px 14px; border-bottom: 1px solid var(--border); }
     .viz:empty { display: none; }
 
@@ -201,7 +196,7 @@ export class LocalSiteProfileForm extends LitElement {
   private prefill(code: string) {
     if ((this.values[code] ?? "").trim() !== "") return;
     const td = this.targetDefault(code);
-    if (td) this.setValue(code, String(td.value));
+    if (td) this.setValue(code, fmtNum(td.value));
   }
 
   private outOfRange(code: string): boolean {
@@ -294,7 +289,7 @@ export class LocalSiteProfileForm extends LitElement {
     const raw = (this.values[p.aps_code] ?? "").trim();
     const overridden = this.isOverride(p.aps_code);
     const oor = on && this.outOfRange(p.aps_code);
-    const inputVal = on ? (this.values[p.aps_code] ?? "") : td ? String(td.value) : "";
+    const inputVal = on ? (this.values[p.aps_code] ?? "") : td ? fmtNum(td.value) : "";
     return html`<tr class="${on ? "" : "off"} ${overridden ? "over" : ""}">
       <td>
         <div class="plabel">
@@ -306,20 +301,20 @@ export class LocalSiteProfileForm extends LitElement {
       </td>
       <td class="pcode">${p.aps_code}</td>
       <td class="def">
-        ${td ? html`${td.value} ${p.unit}${td.source === "inverter" ? html` <span class="src" title="from the inverter's current value">inv</span>` : nothing}` : "—"}
+        ${td ? html`${fmtNum(td.value)} ${p.unit}${td.source === "inverter" ? html` <span class="src" title="from the inverter's current value">inv</span>` : nothing}` : "—"}
       </td>
       <td class="val">
         <input
           type="number" step="any" ?disabled=${!on}
           .value=${inputVal}
-          placeholder=${td ? String(td.value) : on ? "—" : "n/a"}
+          placeholder=${td ? fmtNum(td.value) : on ? "—" : "n/a"}
           @focus=${() => this.prefill(p.aps_code)}
           @input=${(e: Event) => this.setValue(p.aps_code, (e.target as HTMLInputElement).value)}
         />
         <span class="unit">${p.unit}</span>
         ${on && raw !== "" ? html`<button class="clear" title="Clear override" @click=${() => this.setValue(p.aps_code, "")}>↺</button>` : nothing}
         ${oor
-          ? html`<span class="warn">⚠ outside base range${def?.min !== undefined ? ` (${def.min}–${def.max} ${p.unit})` : ""}</span>`
+          ? html`<span class="warn">⚠ outside base range${def?.min !== undefined ? ` (${fmtNum(def.min)}–${fmtNum(def.max!)} ${p.unit})` : ""}</span>`
           : nothing}
       </td>
     </tr>`;
@@ -362,21 +357,14 @@ export class LocalSiteProfileForm extends LitElement {
                   </div>`
                 : nothing}
 
-              <div class="legend">
-                ${this.groups().map(([g]) => {
-                  const d = GROUP_DOCS[g];
-                  return html`<span class="badge" title=${d?.tip ?? g}>${d?.label ?? g}</span>`;
-                })}
-              </div>
-
               ${this.groups().map(([g, ps]) => {
                 const d = GROUP_DOCS[g];
                 return html`<details class="group" ?open=${!GROUP_COLLAPSED_BY_DEFAULT.has(g)}>
                   <summary>
                     <span class="gname">${d?.label ?? g}</span>
-                    <span class="badge" title=${d?.tip ?? g}>${g}</span>
                     <span class="gcount">${ps.length} setting${ps.length === 1 ? "" : "s"}</span>
                   </summary>
+                  ${d?.tip ? html`<div class="gdesc">${d.tip}</div>` : nothing}
                   <div class="viz">${this.vizFor(g)}</div>
                   <table>
                     <thead><tr><th>Setting</th><th>Code</th><th>Default</th><th>Override</th></tr></thead>

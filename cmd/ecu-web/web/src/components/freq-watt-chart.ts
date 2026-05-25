@@ -1,4 +1,5 @@
 import { LitElement, html, css, svg, nothing } from "lit";
+import { fmtNum } from "../format.ts";
 
 /**
  * <freq-watt-chart> plots the over-frequency power-reduction (droop) curve:
@@ -72,13 +73,17 @@ export class FreqWattChart extends LitElement {
         <line class="frame" x1=${pl} y1=${pt} x2=${pl} y2=${H - pb} />
         <line class="frame" x1=${pl} y1=${H - pb} x2=${W - pr} y2=${H - pb} />
         <line class="dead" x1=${X(db)} y1=${pt} x2=${X(db)} y2=${H - pb} />
-        <text class="lbl" x=${X(db)} y=${pt + 8} text-anchor="middle">start ${db} Hz</text>
+        <text class="lbl" x=${X(db)} y=${pt + 8} text-anchor="middle">start ${fmtNum(db)} Hz</text>
+        ${zeroF <= xmax
+          ? svg`<line class="dead" x1=${X(zeroF)} y1=${pt} x2=${X(zeroF)} y2=${H - pb} />
+              <text class="lbl" x=${X(zeroF)} y=${pt + 8} text-anchor="middle">0% at ${fmtNum(zeroF)} Hz</text>`
+          : nothing}
         ${trip !== undefined && trip >= xmin && trip <= xmax
           ? svg`<line class="trip" x1=${X(trip)} y1=${pt} x2=${X(trip)} y2=${H - pb} />
-              <text x=${X(trip)} y=${H - pb - 4} text-anchor="middle" fill="var(--err)">trip ${trip} Hz</text>`
+              <text x=${X(trip)} y=${H - pb - 4} text-anchor="middle" fill="var(--err)">trip ${fmtNum(trip)} Hz</text>`
           : nothing}
         <polyline class="curve" points=${poly} />
-        <text x=${(W) / 2} y=${H - 2} text-anchor="middle">Power vs frequency · slope ${sl} %Pref/Hz</text>
+        <text x=${(W) / 2} y=${H - 2} text-anchor="middle">Power vs frequency · slope ${fmtNum(sl)} %Pref/Hz</text>
       </svg>
     `;
   }

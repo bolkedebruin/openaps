@@ -81,12 +81,13 @@ describe("<local-site-profile-form>", () => {
     expect(t).not.toContain("Over_frequency_Watt_Low_set"); // raw long_name not shown as the label
   });
 
-  test("group legend badge carries an explanatory tooltip", async () => {
+  test("each section shows an inline description and there is no legend row", async () => {
     const el = await mount();
     await selectTarget(el, 0);
-    const badge = el.shadowRoot!.querySelector(".legend .badge") as HTMLElement;
-    expect(badge).not.toBeNull();
-    expect(badge.getAttribute("title")?.length).toBeGreaterThan(10);
+    expect(el.shadowRoot!.querySelector(".legend")).toBeNull(); // legend badges dropped
+    const descs = Array.from(el.shadowRoot!.querySelectorAll(".gdesc")).map((d) => d.textContent?.trim() ?? "");
+    expect(descs.length).toBeGreaterThan(0);
+    expect(descs.some((d) => d.length > 20)).toBe(true); // group description is inline
   });
 
   test("capability intersection disables DD when a QS1A is also selected", async () => {
