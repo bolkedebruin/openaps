@@ -7,31 +7,35 @@ import (
 	"github.com/bolke/inv-driver/codec"
 )
 
-// familyDS3 groups the DS3 model codes (all accept the same protection param
-// set, differing only in power rating).
-func isDS3Family(modelCode uint8) bool {
-	switch modelCode {
-	case codec.ModelDS3, codec.ModelDS3H, codec.ModelDS3L, codec.ModelExt36:
-		return true
-	}
-	return false
+// modelFamilies maps each inverter model code to its protection family. Adding
+// a new inverter family is a data edit here (plus its codec encoder), not new
+// branching scattered through the package.
+var modelFamilies = map[uint8]string{
+	codec.ModelDS3:  "DS3",
+	codec.ModelDS3H: "DS3",
+	codec.ModelDS3L: "DS3",
+	codec.ModelExt36: "DS3",
+	codec.ModelQS1:  "QS1",
+	codec.ModelQS1A: "QS1",
 }
 
-// isQS1Family returns true for QS1 and QS1A model codes.
-func isQS1Family(modelCode uint8) bool {
-	return modelCode == codec.ModelQS1 || modelCode == codec.ModelQS1A
+// familyHardRejects lists, per family, the codes the firmware silently no-ops on
+// every write path even though the codec can encode them (confirmed by live
+// probe; rejected at the device level, not the protocol level).
+var familyHardRejects = map[string]map[string]bool{
+	"QS1": {
+		"CA": true, // Over_frequency_Watt_Start_set (canonical DbOf write)
+		"DC": true, // decode-only DbOf alias (same physical param as CA)
+		"CG": true, // Over_frequency_Watt_Delay_Time_set
+		"CF": true, // not in the QS1 encoder set
+	},
 }
 
-// qs1aHardRejects lists APsystems codes that the QS1A firmware silently
-// no-ops on every write path (per-inverter unicast AND gridProfile broadcast).
-// Confirmed by live probe on 806000042582; the firmware rejects at the device
-// level, not at the protocol level.
-var qs1aHardRejects = map[string]bool{
-	"CA": true, // Over_frequency_Watt_Start_set (canonical DbOf write) — reject on QS1A
-	"DC": true, // decode-only DbOf alias — reject on QS1A (same physical param as CA)
-	"CG": true, // Over_frequency_Watt_Delay_Time_set — reject on QS1A
-	"CF": true, // not in QS1 encoder set; reject on QS1A
-}
+// family returns the protection family for a model code, or "" if unknown.
+func family(modelCode uint8) string { return modelFamilies[modelCode] }
+
+func isDS3Family(modelCode uint8) bool { return family(modelCode) == "DS3" }
+func isQS1Family(modelCode uint8) bool { return family(modelCode) == "QS1" }
 
 // unsupportedReason returns a human-readable explanation for why a code is
 // not writable for the given model, or "" if it is writable.
@@ -45,14 +49,15 @@ func unsupportedReason(modelCode uint8, apsCode string) string {
 		return fmt.Sprintf("aps_code %q has no firmware encoder (LongName empty)", apsCode)
 	}
 
-	// 2. EncodeSetProtection only handles DS3 and QS1 families.
-	if !isDS3Family(modelCode) && !isQS1Family(modelCode) {
+	// 2. Only known families have a protection encoder.
+	fam := family(modelCode)
+	if fam == "" {
 		return fmt.Sprintf("model 0x%02X has no protection encoder", modelCode)
 	}
 
-	// 3. QS1A hard-rejects for DC/CG/CF at firmware level.
-	if isQS1Family(modelCode) && qs1aHardRejects[apsCode] {
-		return fmt.Sprintf("aps_code %q rejected by QS1A firmware on all write paths", apsCode)
+	// 3. Family firmware hard-rejects (device-level no-op the codec can't detect).
+	if familyHardRejects[fam][apsCode] {
+		return fmt.Sprintf("aps_code %q rejected by %s firmware on all write paths", apsCode, fam)
 	}
 
 	// 4. CA is rejected on QS1A via qs1aHardRejects (above); for DS3 the

@@ -158,6 +158,7 @@ export interface ParamInfo {
   unit: string;
   group: string;
   model: number;
+  polarity?: "under" | "over" | "";
 }
 
 export interface OverlayPoint {

@@ -210,6 +210,41 @@ func TestManager_GetBase_NoActive(t *testing.T) {
 	}
 }
 
+func TestParamCatalog_Polarity(t *testing.T) {
+	pol := map[string]string{}
+	for _, p := range ParamCatalog() {
+		pol[p.ApsCode] = p.Polarity
+	}
+	cases := map[string]string{
+		"AC": "under", // under_voltage_stage_2_90
+		"AD": "over",  // over_voltage_slow
+		"DH": "under", // Under_Frequency_Watt_Low_set
+		"CB": "over",  // Over_frequency_Watt_Low_set
+		"AG": "",      // grid_recovery_time — neither
+	}
+	for code, want := range cases {
+		if pol[code] != want {
+			t.Errorf("polarity[%s] = %q, want %q", code, pol[code], want)
+		}
+	}
+}
+
+func TestFamilyTable(t *testing.T) {
+	if family(codec.ModelDS3) != "DS3" || family(codec.ModelDS3H) != "DS3" {
+		t.Error("DS3 codes should map to family DS3")
+	}
+	if family(codec.ModelQS1A) != "QS1" || family(codec.ModelQS1) != "QS1" {
+		t.Error("QS1 codes should map to family QS1")
+	}
+	if family(0x00) != "" {
+		t.Error("unknown model code should map to empty family")
+	}
+	// Hard-reject is data-driven per family: CA is a QS1 firmware reject.
+	if Writeable(codec.ModelQS1A, "CA") {
+		t.Error("CA must be a QS1A hard-reject (not writable)")
+	}
+}
+
 func TestParamCatalog(t *testing.T) {
 	cat := ParamCatalog()
 	if len(cat) == 0 {

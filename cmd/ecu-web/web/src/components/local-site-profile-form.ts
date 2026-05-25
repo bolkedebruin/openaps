@@ -249,18 +249,22 @@ export class LocalSiteProfileForm extends LitElement {
 
   private cancel = () => this.dispatchEvent(new CustomEvent("cancel", { bubbles: true, composed: true }));
 
-  // trips builds markers from effective values for the given (code, kind) specs.
-  private trips(specs: [string, "under" | "over" | "curve"][]): TripMarker[] {
+  // markers builds trip-line markers from the catalog: every param in `group`
+  // with the given unit and an under/over polarity that has an effective value.
+  // Data-driven — a new trip code charts automatically, no hardcoded list.
+  private markers(group: string, unit: string): TripMarker[] {
     const out: TripMarker[] = [];
-    for (const [code, kind] of specs) {
-      const v = this.effectiveValue(code);
-      if (v !== undefined) out.push({ value: v, label: code, kind });
+    for (const p of this.params) {
+      if (p.group !== group || p.unit !== unit) continue;
+      if (p.polarity !== "under" && p.polarity !== "over") continue;
+      const v = this.effectiveValue(p.aps_code);
+      if (v !== undefined) out.push({ value: v, label: p.aps_code, kind: p.polarity });
     }
     return out;
   }
 
   // vizFor renders the curve/number-line visualization for a group, driven by
-  // the effective values (override if set, else base default).
+  // the effective values (override if set, else default).
   private vizFor(group: string) {
     if (group === "DERFreqDroop") {
       return html`<freq-watt-chart
@@ -271,12 +275,12 @@ export class LocalSiteProfileForm extends LitElement {
       ></freq-watt-chart>`;
     }
     if (group === "CrvSet") {
-      const ms = this.trips([["DH", "under"], ["DI", "under"], ["CB", "over"], ["CC", "over"]]);
+      const ms = this.markers(group, "Hz");
       return ms.length ? html`<trip-line unit="Hz" .nominal=${50} .markers=${ms}></trip-line>` : nothing;
     }
     if (group === "MustTrip") {
-      const v = this.trips([["AC", "under"], ["AQ", "under"], ["AH", "under"], ["AD", "over"], ["AY", "over"], ["AB", "over"], ["AI", "over"]]);
-      const f = this.trips([["AE", "under"], ["AJ", "under"], ["AF", "over"], ["AK", "over"]]);
+      const v = this.markers(group, "V");
+      const f = this.markers(group, "Hz");
       return html`
         ${v.length ? html`<trip-line unit="V" .nominal=${230} .markers=${v}></trip-line>` : nothing}
         ${f.length ? html`<trip-line unit="Hz" .nominal=${50} .markers=${f}></trip-line>` : nothing}

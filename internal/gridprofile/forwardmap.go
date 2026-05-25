@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 )
 
 // nativeUnit returns the unit a point's native value is expressed in. Voltage
@@ -25,6 +26,26 @@ type ParamInfo struct {
 	Unit     string `json:"unit"`
 	Group    string `json:"group"`
 	Model    int    `json:"model"`
+	// Polarity is "under" / "over" / "" derived from the firmware name, so
+	// clients (e.g. the trip-line viz) can place a code on the right side of
+	// nominal without a hardcoded per-code list.
+	Polarity string `json:"polarity,omitempty"`
+}
+
+// polarity classifies a parameter as an under- or over-limit from its firmware
+// name (under_voltage_*, Over_frequency_Watt_*, …); "" when neither applies.
+// Matches "under"/"over" as a whole underscore-delimited token so embedded
+// matches like "rec[over]y" (grid_recovery_time) don't false-positive.
+func polarity(longName string) string {
+	for _, tok := range strings.Split(strings.ToLower(longName), "_") {
+		switch tok {
+		case "under":
+			return "under"
+		case "over":
+			return "over"
+		}
+	}
+	return ""
 }
 
 // ParamCatalog returns every encodable parameter in the forward map (those
@@ -43,6 +64,7 @@ func ParamCatalog() []ParamInfo {
 			Unit:     e.nativeUnit(),
 			Group:    e.Group,
 			Model:    e.Model,
+			Polarity: polarity(e.LongName),
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ApsCode < out[j].ApsCode })
