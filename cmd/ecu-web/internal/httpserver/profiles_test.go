@@ -285,22 +285,20 @@ func TestGetOverlaysDegradesToEmpty(t *testing.T) {
 }
 
 func TestCurrentValues(t *testing.T) {
-	f := func(v float64) *float64 { return &v }
-	m := currentValues(&wire.Protection{
-		OfDroopStart: f(50.2), // -> CA (curtailment start)
-		OfDroopSlope: f(16.57), // -> DD
-		OfSlow:       f(52.0), // -> AF
-		AvgOv:        f(253.0), // -> AB
-		// UvStg2 left nil -> AC absent
-	})
+	m := currentValues(&wire.Protection{Values: map[string]float64{
+		"DC": 50.2,  // read alias of the curtailment start -> aliased to CA
+		"DD": 16.57, // slope
+		"AF": 52.0,  // over-freq trip
+		"AB": 253.0, // 10-min avg overvoltage
+	}})
 	if m["CA"] != 50.2 {
-		t.Errorf("CA (of_droop_start) = %v, want 50.2", m["CA"])
+		t.Errorf("CA (DC alias) = %v, want 50.2", m["CA"])
 	}
 	if m["DD"] != 16.57 || m["AF"] != 52.0 || m["AB"] != 253.0 {
-		t.Errorf("mapping wrong: %+v", m)
+		t.Errorf("values not passed through: %+v", m)
 	}
 	if _, ok := m["AC"]; ok {
-		t.Errorf("absent field should not appear: %+v", m["AC"])
+		t.Errorf("absent code should not appear: %+v", m["AC"])
 	}
 }
 

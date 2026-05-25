@@ -59,52 +59,21 @@ type profileInvDTO struct {
 	Current       map[string]float64 `json:"current"` // aps_code -> the inverter's current value
 }
 
-// currentValues maps an inverter's protection readback to aps-code -> value.
-// The mapping follows the Protection proto's per-field comments; the
-// over-frequency curtailment start is surfaced under CA (the writable code the
-// editor shows) rather than its read-only DC alias.
+// currentValues returns the inverter's protection readback as aps-code -> value
+// (the Protection.values map verbatim — single source of truth). The one editor
+// nicety: the over-frequency curtailment start is read back as DC (the read
+// alias) but the editor shows it under the writable code CA, so alias DC -> CA.
 func currentValues(p *wire.Protection) map[string]float64 {
 	m := map[string]float64{}
 	if p == nil {
 		return m
 	}
-	put := func(code string, v *float64) {
-		if v != nil {
-			m[code] = *v
-		}
+	for k, v := range p.GetValues() {
+		m[k] = v
 	}
-	put("AC", p.UvStg2)
-	put("AD", p.OvStg2)
-	put("AQ", p.UvFast)
-	put("AY", p.OvStg3)
-	put("AB", p.AvgOv)
-	put("AH", p.VwinLow)
-	put("AI", p.VwinHi)
-	put("AE", p.UfSlow)
-	put("AF", p.OfSlow)
-	put("AJ", p.UfFast)
-	put("AK", p.OfFast)
-	put("AG", p.ReconnectS)
-	put("AS", p.StartS)
-	put("BN", p.ReconnVLow)
-	put("BO", p.ReconnVHi)
-	put("BP", p.ReconnFLow)
-	put("BQ", p.ReconnFHi)
-	put("BB", p.Uv2ClrS)
-	put("BC", p.Ov2ClrS)
-	put("BD", p.Uv3ClrS)
-	put("BE", p.Ov3ClrS)
-	put("BH", p.Uf1ClrS)
-	put("BI", p.Of1ClrS)
-	put("BJ", p.Uf2ClrS)
-	put("BK", p.Of2ClrS)
-	put("CA", p.OfDroopStart) // curtailment start (DC read alias) under the writable code CA
-	put("CC", p.OfDroopEnd)
-	put("DD", p.OfDroopSlope)
-	put("CV", p.OfDroopMode)
-	put("DH", p.OfCurveUfLow)
-	put("DI", p.OfCurveUfHi)
-	put("CB", p.OfCurveOfLow)
+	if v, ok := m["DC"]; ok {
+		m["CA"] = v
+	}
 	return m
 }
 

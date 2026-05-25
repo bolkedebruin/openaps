@@ -367,7 +367,8 @@ func (st *invState) toDTO(nowMs int64) InverterDTO {
 		}
 	}
 	if st.protection != nil {
-		if b, err := protoJSON.Marshal(st.protection); err == nil {
+		// Emit the flat aps_code -> value map (Protection.values).
+		if b, err := json.Marshal(st.protection.GetValues()); err == nil && string(b) != "null" {
 			d.Protection = b
 		}
 	}

@@ -1847,42 +1847,10 @@ func (x *InverterInfo) GetTurnedOffRpt() bool {
 // read of main.exe's protection_parameters60code.
 type Protection struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	PeerUid       string                 `protobuf:"bytes,1,opt,name=peer_uid,json=peerUid,proto3" json:"peer_uid,omitempty"`                             // 12-char hex
-	TsMs          int64                  `protobuf:"varint,2,opt,name=ts_ms,json=tsMs,proto3" json:"ts_ms,omitempty"`                                     // wall-clock at decode time
-	Model         string                 `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`                                                // "DS3" / "QS1A"
-	UvStg2        *float64               `protobuf:"fixed64,4,opt,name=uv_stg2,json=uvStg2,proto3,oneof" json:"uv_stg2,omitempty"`                        // AC
-	OvStg2        *float64               `protobuf:"fixed64,5,opt,name=ov_stg2,json=ovStg2,proto3,oneof" json:"ov_stg2,omitempty"`                        // AD
-	UvFast        *float64               `protobuf:"fixed64,6,opt,name=uv_fast,json=uvFast,proto3,oneof" json:"uv_fast,omitempty"`                        // AQ
-	OvStg3        *float64               `protobuf:"fixed64,7,opt,name=ov_stg3,json=ovStg3,proto3,oneof" json:"ov_stg3,omitempty"`                        // AY
-	AvgOv         *float64               `protobuf:"fixed64,8,opt,name=avg_ov,json=avgOv,proto3,oneof" json:"avg_ov,omitempty"`                           // AB
-	VwinLow       *float64               `protobuf:"fixed64,9,opt,name=vwin_low,json=vwinLow,proto3,oneof" json:"vwin_low,omitempty"`                     // AH
-	VwinHi        *float64               `protobuf:"fixed64,10,opt,name=vwin_hi,json=vwinHi,proto3,oneof" json:"vwin_hi,omitempty"`                       // AI
-	UfSlow        *float64               `protobuf:"fixed64,11,opt,name=uf_slow,json=ufSlow,proto3,oneof" json:"uf_slow,omitempty"`                       // AE
-	OfSlow        *float64               `protobuf:"fixed64,12,opt,name=of_slow,json=ofSlow,proto3,oneof" json:"of_slow,omitempty"`                       // AF
-	UfFast        *float64               `protobuf:"fixed64,13,opt,name=uf_fast,json=ufFast,proto3,oneof" json:"uf_fast,omitempty"`                       // AJ
-	OfFast        *float64               `protobuf:"fixed64,14,opt,name=of_fast,json=ofFast,proto3,oneof" json:"of_fast,omitempty"`                       // AK
-	ReconnectS    *float64               `protobuf:"fixed64,15,opt,name=reconnect_s,json=reconnectS,proto3,oneof" json:"reconnect_s,omitempty"`           // AG
-	StartS        *float64               `protobuf:"fixed64,16,opt,name=start_s,json=startS,proto3,oneof" json:"start_s,omitempty"`                       // AS
-	ReconnVLow    *float64               `protobuf:"fixed64,17,opt,name=reconn_v_low,json=reconnVLow,proto3,oneof" json:"reconn_v_low,omitempty"`         // BN
-	ReconnVHi     *float64               `protobuf:"fixed64,18,opt,name=reconn_v_hi,json=reconnVHi,proto3,oneof" json:"reconn_v_hi,omitempty"`            // BO
-	ReconnFLow    *float64               `protobuf:"fixed64,19,opt,name=reconn_f_low,json=reconnFLow,proto3,oneof" json:"reconn_f_low,omitempty"`         // BP
-	ReconnFHi     *float64               `protobuf:"fixed64,20,opt,name=reconn_f_hi,json=reconnFHi,proto3,oneof" json:"reconn_f_hi,omitempty"`            // BQ
-	Uv2ClrS       *float64               `protobuf:"fixed64,21,opt,name=uv2_clr_s,json=uv2ClrS,proto3,oneof" json:"uv2_clr_s,omitempty"`                  // BB
-	Ov2ClrS       *float64               `protobuf:"fixed64,22,opt,name=ov2_clr_s,json=ov2ClrS,proto3,oneof" json:"ov2_clr_s,omitempty"`                  // BC
-	Uv3ClrS       *float64               `protobuf:"fixed64,23,opt,name=uv3_clr_s,json=uv3ClrS,proto3,oneof" json:"uv3_clr_s,omitempty"`                  // BD
-	Ov3ClrS       *float64               `protobuf:"fixed64,24,opt,name=ov3_clr_s,json=ov3ClrS,proto3,oneof" json:"ov3_clr_s,omitempty"`                  // BE
-	Uf1ClrS       *float64               `protobuf:"fixed64,25,opt,name=uf1_clr_s,json=uf1ClrS,proto3,oneof" json:"uf1_clr_s,omitempty"`                  // BH
-	Of1ClrS       *float64               `protobuf:"fixed64,26,opt,name=of1_clr_s,json=of1ClrS,proto3,oneof" json:"of1_clr_s,omitempty"`                  // BI
-	Uf2ClrS       *float64               `protobuf:"fixed64,27,opt,name=uf2_clr_s,json=uf2ClrS,proto3,oneof" json:"uf2_clr_s,omitempty"`                  // BJ
-	Of2ClrS       *float64               `protobuf:"fixed64,28,opt,name=of2_clr_s,json=of2ClrS,proto3,oneof" json:"of2_clr_s,omitempty"`                  // BK
-	PfMode        *float64               `protobuf:"fixed64,29,opt,name=pf_mode,json=pfMode,proto3,oneof" json:"pf_mode,omitempty"`                       // CH
-	OfDroopStart  *float64               `protobuf:"fixed64,30,opt,name=of_droop_start,json=ofDroopStart,proto3,oneof" json:"of_droop_start,omitempty"`   // DC
-	OfDroopEnd    *float64               `protobuf:"fixed64,31,opt,name=of_droop_end,json=ofDroopEnd,proto3,oneof" json:"of_droop_end,omitempty"`         // CC
-	OfDroopSlope  *float64               `protobuf:"fixed64,32,opt,name=of_droop_slope,json=ofDroopSlope,proto3,oneof" json:"of_droop_slope,omitempty"`   // DD
-	OfDroopMode   *float64               `protobuf:"fixed64,33,opt,name=of_droop_mode,json=ofDroopMode,proto3,oneof" json:"of_droop_mode,omitempty"`      // CV
-	OfCurveUfLow  *float64               `protobuf:"fixed64,34,opt,name=of_curve_uf_low,json=ofCurveUfLow,proto3,oneof" json:"of_curve_uf_low,omitempty"` // DH
-	OfCurveUfHi   *float64               `protobuf:"fixed64,35,opt,name=of_curve_uf_hi,json=ofCurveUfHi,proto3,oneof" json:"of_curve_uf_hi,omitempty"`    // DI
-	OfCurveOfLow  *float64               `protobuf:"fixed64,36,opt,name=of_curve_of_low,json=ofCurveOfLow,proto3,oneof" json:"of_curve_of_low,omitempty"` // CB
+	PeerUid       string                 `protobuf:"bytes,1,opt,name=peer_uid,json=peerUid,proto3" json:"peer_uid,omitempty"` // 12-char hex
+	TsMs          int64                  `protobuf:"varint,2,opt,name=ts_ms,json=tsMs,proto3" json:"ts_ms,omitempty"`         // wall-clock at decode time
+	Model         string                 `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`                    // "DS3" / "QS1A"
+	Values        map[string]float64     `protobuf:"bytes,37,rep,name=values,proto3" json:"values,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1938,235 +1906,11 @@ func (x *Protection) GetModel() string {
 	return ""
 }
 
-func (x *Protection) GetUvStg2() float64 {
-	if x != nil && x.UvStg2 != nil {
-		return *x.UvStg2
+func (x *Protection) GetValues() map[string]float64 {
+	if x != nil {
+		return x.Values
 	}
-	return 0
-}
-
-func (x *Protection) GetOvStg2() float64 {
-	if x != nil && x.OvStg2 != nil {
-		return *x.OvStg2
-	}
-	return 0
-}
-
-func (x *Protection) GetUvFast() float64 {
-	if x != nil && x.UvFast != nil {
-		return *x.UvFast
-	}
-	return 0
-}
-
-func (x *Protection) GetOvStg3() float64 {
-	if x != nil && x.OvStg3 != nil {
-		return *x.OvStg3
-	}
-	return 0
-}
-
-func (x *Protection) GetAvgOv() float64 {
-	if x != nil && x.AvgOv != nil {
-		return *x.AvgOv
-	}
-	return 0
-}
-
-func (x *Protection) GetVwinLow() float64 {
-	if x != nil && x.VwinLow != nil {
-		return *x.VwinLow
-	}
-	return 0
-}
-
-func (x *Protection) GetVwinHi() float64 {
-	if x != nil && x.VwinHi != nil {
-		return *x.VwinHi
-	}
-	return 0
-}
-
-func (x *Protection) GetUfSlow() float64 {
-	if x != nil && x.UfSlow != nil {
-		return *x.UfSlow
-	}
-	return 0
-}
-
-func (x *Protection) GetOfSlow() float64 {
-	if x != nil && x.OfSlow != nil {
-		return *x.OfSlow
-	}
-	return 0
-}
-
-func (x *Protection) GetUfFast() float64 {
-	if x != nil && x.UfFast != nil {
-		return *x.UfFast
-	}
-	return 0
-}
-
-func (x *Protection) GetOfFast() float64 {
-	if x != nil && x.OfFast != nil {
-		return *x.OfFast
-	}
-	return 0
-}
-
-func (x *Protection) GetReconnectS() float64 {
-	if x != nil && x.ReconnectS != nil {
-		return *x.ReconnectS
-	}
-	return 0
-}
-
-func (x *Protection) GetStartS() float64 {
-	if x != nil && x.StartS != nil {
-		return *x.StartS
-	}
-	return 0
-}
-
-func (x *Protection) GetReconnVLow() float64 {
-	if x != nil && x.ReconnVLow != nil {
-		return *x.ReconnVLow
-	}
-	return 0
-}
-
-func (x *Protection) GetReconnVHi() float64 {
-	if x != nil && x.ReconnVHi != nil {
-		return *x.ReconnVHi
-	}
-	return 0
-}
-
-func (x *Protection) GetReconnFLow() float64 {
-	if x != nil && x.ReconnFLow != nil {
-		return *x.ReconnFLow
-	}
-	return 0
-}
-
-func (x *Protection) GetReconnFHi() float64 {
-	if x != nil && x.ReconnFHi != nil {
-		return *x.ReconnFHi
-	}
-	return 0
-}
-
-func (x *Protection) GetUv2ClrS() float64 {
-	if x != nil && x.Uv2ClrS != nil {
-		return *x.Uv2ClrS
-	}
-	return 0
-}
-
-func (x *Protection) GetOv2ClrS() float64 {
-	if x != nil && x.Ov2ClrS != nil {
-		return *x.Ov2ClrS
-	}
-	return 0
-}
-
-func (x *Protection) GetUv3ClrS() float64 {
-	if x != nil && x.Uv3ClrS != nil {
-		return *x.Uv3ClrS
-	}
-	return 0
-}
-
-func (x *Protection) GetOv3ClrS() float64 {
-	if x != nil && x.Ov3ClrS != nil {
-		return *x.Ov3ClrS
-	}
-	return 0
-}
-
-func (x *Protection) GetUf1ClrS() float64 {
-	if x != nil && x.Uf1ClrS != nil {
-		return *x.Uf1ClrS
-	}
-	return 0
-}
-
-func (x *Protection) GetOf1ClrS() float64 {
-	if x != nil && x.Of1ClrS != nil {
-		return *x.Of1ClrS
-	}
-	return 0
-}
-
-func (x *Protection) GetUf2ClrS() float64 {
-	if x != nil && x.Uf2ClrS != nil {
-		return *x.Uf2ClrS
-	}
-	return 0
-}
-
-func (x *Protection) GetOf2ClrS() float64 {
-	if x != nil && x.Of2ClrS != nil {
-		return *x.Of2ClrS
-	}
-	return 0
-}
-
-func (x *Protection) GetPfMode() float64 {
-	if x != nil && x.PfMode != nil {
-		return *x.PfMode
-	}
-	return 0
-}
-
-func (x *Protection) GetOfDroopStart() float64 {
-	if x != nil && x.OfDroopStart != nil {
-		return *x.OfDroopStart
-	}
-	return 0
-}
-
-func (x *Protection) GetOfDroopEnd() float64 {
-	if x != nil && x.OfDroopEnd != nil {
-		return *x.OfDroopEnd
-	}
-	return 0
-}
-
-func (x *Protection) GetOfDroopSlope() float64 {
-	if x != nil && x.OfDroopSlope != nil {
-		return *x.OfDroopSlope
-	}
-	return 0
-}
-
-func (x *Protection) GetOfDroopMode() float64 {
-	if x != nil && x.OfDroopMode != nil {
-		return *x.OfDroopMode
-	}
-	return 0
-}
-
-func (x *Protection) GetOfCurveUfLow() float64 {
-	if x != nil && x.OfCurveUfLow != nil {
-		return *x.OfCurveUfLow
-	}
-	return 0
-}
-
-func (x *Protection) GetOfCurveUfHi() float64 {
-	if x != nil && x.OfCurveUfHi != nil {
-		return *x.OfCurveUfHi
-	}
-	return 0
-}
-
-func (x *Protection) GetOfCurveOfLow() float64 {
-	if x != nil && x.OfCurveOfLow != nil {
-		return *x.OfCurveOfLow
-	}
-	return 0
+	return nil
 }
 
 // GridProfileRequest carries one grid-profile management operation. The
@@ -3553,103 +3297,16 @@ const file_busmgr_proto_rawDesc = "" +
 	"\x11_software_versionB\b\n" +
 	"\x06_phaseB\x0f\n" +
 	"\r_zigbee_boundB\x11\n" +
-	"\x0f_turned_off_rpt\"\xa8\r\n" +
+	"\x0f_turned_off_rpt\"\xce\x01\n" +
 	"\n" +
 	"Protection\x12\x19\n" +
 	"\bpeer_uid\x18\x01 \x01(\tR\apeerUid\x12\x13\n" +
 	"\x05ts_ms\x18\x02 \x01(\x03R\x04tsMs\x12\x14\n" +
-	"\x05model\x18\x03 \x01(\tR\x05model\x12\x1c\n" +
-	"\auv_stg2\x18\x04 \x01(\x01H\x00R\x06uvStg2\x88\x01\x01\x12\x1c\n" +
-	"\aov_stg2\x18\x05 \x01(\x01H\x01R\x06ovStg2\x88\x01\x01\x12\x1c\n" +
-	"\auv_fast\x18\x06 \x01(\x01H\x02R\x06uvFast\x88\x01\x01\x12\x1c\n" +
-	"\aov_stg3\x18\a \x01(\x01H\x03R\x06ovStg3\x88\x01\x01\x12\x1a\n" +
-	"\x06avg_ov\x18\b \x01(\x01H\x04R\x05avgOv\x88\x01\x01\x12\x1e\n" +
-	"\bvwin_low\x18\t \x01(\x01H\x05R\avwinLow\x88\x01\x01\x12\x1c\n" +
-	"\avwin_hi\x18\n" +
-	" \x01(\x01H\x06R\x06vwinHi\x88\x01\x01\x12\x1c\n" +
-	"\auf_slow\x18\v \x01(\x01H\aR\x06ufSlow\x88\x01\x01\x12\x1c\n" +
-	"\aof_slow\x18\f \x01(\x01H\bR\x06ofSlow\x88\x01\x01\x12\x1c\n" +
-	"\auf_fast\x18\r \x01(\x01H\tR\x06ufFast\x88\x01\x01\x12\x1c\n" +
-	"\aof_fast\x18\x0e \x01(\x01H\n" +
-	"R\x06ofFast\x88\x01\x01\x12$\n" +
-	"\vreconnect_s\x18\x0f \x01(\x01H\vR\n" +
-	"reconnectS\x88\x01\x01\x12\x1c\n" +
-	"\astart_s\x18\x10 \x01(\x01H\fR\x06startS\x88\x01\x01\x12%\n" +
-	"\freconn_v_low\x18\x11 \x01(\x01H\rR\n" +
-	"reconnVLow\x88\x01\x01\x12#\n" +
-	"\vreconn_v_hi\x18\x12 \x01(\x01H\x0eR\treconnVHi\x88\x01\x01\x12%\n" +
-	"\freconn_f_low\x18\x13 \x01(\x01H\x0fR\n" +
-	"reconnFLow\x88\x01\x01\x12#\n" +
-	"\vreconn_f_hi\x18\x14 \x01(\x01H\x10R\treconnFHi\x88\x01\x01\x12\x1f\n" +
-	"\tuv2_clr_s\x18\x15 \x01(\x01H\x11R\auv2ClrS\x88\x01\x01\x12\x1f\n" +
-	"\tov2_clr_s\x18\x16 \x01(\x01H\x12R\aov2ClrS\x88\x01\x01\x12\x1f\n" +
-	"\tuv3_clr_s\x18\x17 \x01(\x01H\x13R\auv3ClrS\x88\x01\x01\x12\x1f\n" +
-	"\tov3_clr_s\x18\x18 \x01(\x01H\x14R\aov3ClrS\x88\x01\x01\x12\x1f\n" +
-	"\tuf1_clr_s\x18\x19 \x01(\x01H\x15R\auf1ClrS\x88\x01\x01\x12\x1f\n" +
-	"\tof1_clr_s\x18\x1a \x01(\x01H\x16R\aof1ClrS\x88\x01\x01\x12\x1f\n" +
-	"\tuf2_clr_s\x18\x1b \x01(\x01H\x17R\auf2ClrS\x88\x01\x01\x12\x1f\n" +
-	"\tof2_clr_s\x18\x1c \x01(\x01H\x18R\aof2ClrS\x88\x01\x01\x12\x1c\n" +
-	"\apf_mode\x18\x1d \x01(\x01H\x19R\x06pfMode\x88\x01\x01\x12)\n" +
-	"\x0eof_droop_start\x18\x1e \x01(\x01H\x1aR\fofDroopStart\x88\x01\x01\x12%\n" +
-	"\fof_droop_end\x18\x1f \x01(\x01H\x1bR\n" +
-	"ofDroopEnd\x88\x01\x01\x12)\n" +
-	"\x0eof_droop_slope\x18  \x01(\x01H\x1cR\fofDroopSlope\x88\x01\x01\x12'\n" +
-	"\rof_droop_mode\x18! \x01(\x01H\x1dR\vofDroopMode\x88\x01\x01\x12*\n" +
-	"\x0fof_curve_uf_low\x18\" \x01(\x01H\x1eR\fofCurveUfLow\x88\x01\x01\x12(\n" +
-	"\x0eof_curve_uf_hi\x18# \x01(\x01H\x1fR\vofCurveUfHi\x88\x01\x01\x12*\n" +
-	"\x0fof_curve_of_low\x18$ \x01(\x01H R\fofCurveOfLow\x88\x01\x01B\n" +
-	"\n" +
-	"\b_uv_stg2B\n" +
-	"\n" +
-	"\b_ov_stg2B\n" +
-	"\n" +
-	"\b_uv_fastB\n" +
-	"\n" +
-	"\b_ov_stg3B\t\n" +
-	"\a_avg_ovB\v\n" +
-	"\t_vwin_lowB\n" +
-	"\n" +
-	"\b_vwin_hiB\n" +
-	"\n" +
-	"\b_uf_slowB\n" +
-	"\n" +
-	"\b_of_slowB\n" +
-	"\n" +
-	"\b_uf_fastB\n" +
-	"\n" +
-	"\b_of_fastB\x0e\n" +
-	"\f_reconnect_sB\n" +
-	"\n" +
-	"\b_start_sB\x0f\n" +
-	"\r_reconn_v_lowB\x0e\n" +
-	"\f_reconn_v_hiB\x0f\n" +
-	"\r_reconn_f_lowB\x0e\n" +
-	"\f_reconn_f_hiB\f\n" +
-	"\n" +
-	"_uv2_clr_sB\f\n" +
-	"\n" +
-	"_ov2_clr_sB\f\n" +
-	"\n" +
-	"_uv3_clr_sB\f\n" +
-	"\n" +
-	"_ov3_clr_sB\f\n" +
-	"\n" +
-	"_uf1_clr_sB\f\n" +
-	"\n" +
-	"_of1_clr_sB\f\n" +
-	"\n" +
-	"_uf2_clr_sB\f\n" +
-	"\n" +
-	"_of2_clr_sB\n" +
-	"\n" +
-	"\b_pf_modeB\x11\n" +
-	"\x0f_of_droop_startB\x0f\n" +
-	"\r_of_droop_endB\x11\n" +
-	"\x0f_of_droop_slopeB\x10\n" +
-	"\x0e_of_droop_modeB\x12\n" +
-	"\x10_of_curve_uf_lowB\x11\n" +
-	"\x0f_of_curve_uf_hiB\x12\n" +
-	"\x10_of_curve_of_low\"\xa1\x04\n" +
+	"\x05model\x18\x03 \x01(\tR\x05model\x129\n" +
+	"\x06values\x18% \x03(\v2!.busmgr.v1.Protection.ValuesEntryR\x06values\x1a9\n" +
+	"\vValuesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01J\x04\b\x04\x10%\"\xa1\x04\n" +
 	"\x12GridProfileRequest\x127\n" +
 	"\rlist_profiles\x18\x01 \x01(\v2\x10.busmgr.v1.EmptyH\x00R\flistProfiles\x12=\n" +
 	"\x10refresh_profiles\x18\x02 \x01(\v2\x10.busmgr.v1.EmptyH\x00R\x0frefreshProfiles\x128\n" +
@@ -3758,7 +3415,7 @@ func file_busmgr_proto_rawDescGZIP() []byte {
 }
 
 var file_busmgr_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_busmgr_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
+var file_busmgr_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
 var file_busmgr_proto_goTypes = []any{
 	(Role)(0),                    // 0: busmgr.v1.Role
 	(*Envelope)(nil),             // 1: busmgr.v1.Envelope
@@ -3794,7 +3451,8 @@ var file_busmgr_proto_goTypes = []any{
 	(*Settings)(nil),             // 31: busmgr.v1.Settings
 	(*SettingsRequest)(nil),      // 32: busmgr.v1.SettingsRequest
 	(*SettingsResponse)(nil),     // 33: busmgr.v1.SettingsResponse
-	nil,                          // 34: busmgr.v1.Settings.InverterNamesEntry
+	nil,                          // 34: busmgr.v1.Protection.ValuesEntry
+	nil,                          // 35: busmgr.v1.Settings.InverterNamesEntry
 }
 var file_busmgr_proto_depIdxs = []int32{
 	2,  // 0: busmgr.v1.Envelope.hello:type_name -> busmgr.v1.Hello
@@ -3821,27 +3479,28 @@ var file_busmgr_proto_depIdxs = []int32{
 	5,  // 21: busmgr.v1.Telemetry.faults:type_name -> busmgr.v1.InverterFaults
 	6,  // 22: busmgr.v1.InverterFaults.ds3:type_name -> busmgr.v1.DS3Faults
 	7,  // 23: busmgr.v1.InverterFaults.qs1a:type_name -> busmgr.v1.QS1AFaults
-	18, // 24: busmgr.v1.GridProfileRequest.list_profiles:type_name -> busmgr.v1.Empty
-	18, // 25: busmgr.v1.GridProfileRequest.refresh_profiles:type_name -> busmgr.v1.Empty
-	19, // 26: busmgr.v1.GridProfileRequest.select_base:type_name -> busmgr.v1.SelectBase
-	20, // 27: busmgr.v1.GridProfileRequest.set_overlay:type_name -> busmgr.v1.OverlaySet
-	21, // 28: busmgr.v1.GridProfileRequest.clear_overlay:type_name -> busmgr.v1.ClearOverlay
-	22, // 29: busmgr.v1.GridProfileRequest.get_effective:type_name -> busmgr.v1.GetEffective
-	18, // 30: busmgr.v1.GridProfileRequest.get_status:type_name -> busmgr.v1.Empty
-	18, // 31: busmgr.v1.GridProfileRequest.list_overlays:type_name -> busmgr.v1.Empty
-	18, // 32: busmgr.v1.GridProfileRequest.get_base:type_name -> busmgr.v1.Empty
-	26, // 33: busmgr.v1.SystemStatusResponse.ecu:type_name -> busmgr.v1.EcuIdentity
-	27, // 34: busmgr.v1.SystemStatusResponse.peers:type_name -> busmgr.v1.PeerStatus
-	30, // 35: busmgr.v1.EventsResponse.events:type_name -> busmgr.v1.Event
-	34, // 36: busmgr.v1.Settings.inverter_names:type_name -> busmgr.v1.Settings.InverterNamesEntry
-	18, // 37: busmgr.v1.SettingsRequest.get:type_name -> busmgr.v1.Empty
-	31, // 38: busmgr.v1.SettingsRequest.set:type_name -> busmgr.v1.Settings
-	31, // 39: busmgr.v1.SettingsResponse.settings:type_name -> busmgr.v1.Settings
-	40, // [40:40] is the sub-list for method output_type
-	40, // [40:40] is the sub-list for method input_type
-	40, // [40:40] is the sub-list for extension type_name
-	40, // [40:40] is the sub-list for extension extendee
-	0,  // [0:40] is the sub-list for field type_name
+	34, // 24: busmgr.v1.Protection.values:type_name -> busmgr.v1.Protection.ValuesEntry
+	18, // 25: busmgr.v1.GridProfileRequest.list_profiles:type_name -> busmgr.v1.Empty
+	18, // 26: busmgr.v1.GridProfileRequest.refresh_profiles:type_name -> busmgr.v1.Empty
+	19, // 27: busmgr.v1.GridProfileRequest.select_base:type_name -> busmgr.v1.SelectBase
+	20, // 28: busmgr.v1.GridProfileRequest.set_overlay:type_name -> busmgr.v1.OverlaySet
+	21, // 29: busmgr.v1.GridProfileRequest.clear_overlay:type_name -> busmgr.v1.ClearOverlay
+	22, // 30: busmgr.v1.GridProfileRequest.get_effective:type_name -> busmgr.v1.GetEffective
+	18, // 31: busmgr.v1.GridProfileRequest.get_status:type_name -> busmgr.v1.Empty
+	18, // 32: busmgr.v1.GridProfileRequest.list_overlays:type_name -> busmgr.v1.Empty
+	18, // 33: busmgr.v1.GridProfileRequest.get_base:type_name -> busmgr.v1.Empty
+	26, // 34: busmgr.v1.SystemStatusResponse.ecu:type_name -> busmgr.v1.EcuIdentity
+	27, // 35: busmgr.v1.SystemStatusResponse.peers:type_name -> busmgr.v1.PeerStatus
+	30, // 36: busmgr.v1.EventsResponse.events:type_name -> busmgr.v1.Event
+	35, // 37: busmgr.v1.Settings.inverter_names:type_name -> busmgr.v1.Settings.InverterNamesEntry
+	18, // 38: busmgr.v1.SettingsRequest.get:type_name -> busmgr.v1.Empty
+	31, // 39: busmgr.v1.SettingsRequest.set:type_name -> busmgr.v1.Settings
+	31, // 40: busmgr.v1.SettingsResponse.settings:type_name -> busmgr.v1.Settings
+	41, // [41:41] is the sub-list for method output_type
+	41, // [41:41] is the sub-list for method input_type
+	41, // [41:41] is the sub-list for extension type_name
+	41, // [41:41] is the sub-list for extension extendee
+	0,  // [0:41] is the sub-list for field type_name
 }
 
 func init() { file_busmgr_proto_init() }
@@ -3875,7 +3534,6 @@ func file_busmgr_proto_init() {
 		(*InverterFaults_Qs1A)(nil),
 	}
 	file_busmgr_proto_msgTypes[14].OneofWrappers = []any{}
-	file_busmgr_proto_msgTypes[15].OneofWrappers = []any{}
 	file_busmgr_proto_msgTypes[16].OneofWrappers = []any{
 		(*GridProfileRequest_ListProfiles)(nil),
 		(*GridProfileRequest_RefreshProfiles)(nil),
@@ -3897,7 +3555,7 @@ func file_busmgr_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_busmgr_proto_rawDesc), len(file_busmgr_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   34,
+			NumMessages:   35,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
