@@ -41,15 +41,15 @@ export const PARAM_DOCS: Record<string, ParamDoc> = {
   AG: { label: "Grid-recovery delay", desc: "Wait time after the grid is healthy before reconnecting." },
   AS: { label: "Power ramp time", desc: "Time taken to ramp output back up after reconnecting." },
   // --- Frequency-Watt droop (DERFreqDroop) ---
-  CV: { label: "Over-freq curtailment — enable", desc: "Enables over-frequency power reduction (0 = off, 1 = on)." },
-  CA: { label: "Over-freq curtailment — start", desc: "Frequency at which power reduction begins (deadband end)." },
-  DD: { label: "Over-freq curtailment — slope", desc: "Power reduced per Hz above the start frequency (droop gradient)." },
-  CG: { label: "Over-freq curtailment — response time", desc: "Filter/response time of the curtailment control loop." },
+  CV: { label: "Curtailment enable (droop)", desc: "Enables the over-frequency droop power reduction (0 = off, 1 = on)." },
+  CA: { label: "Curtailment start (droop deadband)", desc: "Over-frequency droop: power reduction begins at this frequency (deadband end)." },
+  DD: { label: "Curtailment slope (droop)", desc: "Over-frequency droop gradient: % of rated power reduced per Hz above the start." },
+  CG: { label: "Curtailment response time (droop)", desc: "Filter/response time of the droop control loop." },
   // --- Legacy Frequency-Watt curve (CrvSet) ---
-  DH: { label: "Under-freq Watt — low point", desc: "Lower frequency point of the under-frequency power curve." },
-  DI: { label: "Under-freq Watt — high point", desc: "Upper frequency point of the under-frequency power curve." },
-  CB: { label: "Over-freq Watt — start point", desc: "Frequency where over-frequency power reduction begins." },
-  CC: { label: "Over-freq Watt — end point", desc: "Frequency where over-frequency power reduction reaches its limit." },
+  DH: { label: "Under-freq curve — low", desc: "Legacy frequency-Watt curve: lower frequency point of the under-frequency response." },
+  DI: { label: "Under-freq curve — high", desc: "Legacy frequency-Watt curve: upper frequency point of the under-frequency response." },
+  CB: { label: "Over-freq curve — start", desc: "Legacy frequency-Watt curve: over-frequency power reduction begins at this frequency." },
+  CC: { label: "Over-freq curve — end", desc: "Legacy frequency-Watt curve: over-frequency reduction reaches its limit at this frequency." },
 };
 
 export interface GroupDoc {

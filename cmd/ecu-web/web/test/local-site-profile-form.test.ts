@@ -77,7 +77,7 @@ describe("<local-site-profile-form>", () => {
     const el = await mount();
     await selectTarget(el, 0);
     const t = el.shadowRoot?.textContent ?? "";
-    expect(t).toContain("Over-freq Watt — start point"); // CB label
+    expect(t).toContain("Over-freq curve — start"); // CB label
     expect(t).not.toContain("Over_frequency_Watt_Low_set"); // raw long_name not shown as the label
   });
 
