@@ -6,3 +6,6 @@ build/
 /ecu-web
 /legacy-bridge
 /protbcast
+
+# host-built smoke-test binary (see _smoke/fakedriver)
+/fakedriver
