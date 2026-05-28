@@ -137,6 +137,309 @@ func jsonReq(method, target, body string) *http.Request {
 	return r
 }
 
+func u32(v uint32) *uint32 { return &v }
+
+func TestSetPowerEndpoint(t *testing.T) {
+	authMgr, err := auth.NewManager(filepath.Join(t.TempDir(), "auth.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	snap := snapshot.New(nil)
+	// QS1A (model 0x18), 2 panels, online with live output.
+	snap.ApplyInfo(&wire.InverterInfo{PeerUid: "aabbccddeeff", ModelCode: u32(0x18)})
+	snap.ApplyTelemetry(&wire.Telemetry{
+		PeerUid: "aabbccddeeff", TsMs: time.Now().UnixMilli(), ActivePowerW: 300,
+		Panels: []*wire.Panel{{Index: 0}, {Index: 1}},
+	})
+
+	type sentFrame struct {
+		uid   string
+		frame []byte
+	}
+	var sent []sentFrame
+	srv := New(Config{
+		StateDir: t.TempDir(),
+		Assets:   fstest.MapFS{"index.html": {Data: []byte("x")}},
+		Snap:     snap,
+		Auth:     authMgr,
+		Conn:     func() bool { return true },
+		SendFrame: func(_ context.Context, uid string, frame []byte) error {
+			sent = append(sent, sentFrame{uid, frame})
+			return nil
+		},
+	})
+	h := srv.Handler()
+	cookies, _ := setupServer(t, h, "password123")
+	authed := func(body string) *http.Request {
+		r := jsonReq("POST", "/api/power", body)
+		for _, c := range cookies {
+			r.AddCookie(c)
+		}
+		return r
+	}
+	decode := func(rec *httptest.ResponseRecorder) []powerResultDTO {
+		var resp powerRespDTO
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode: %v (%s)", err, rec.Body)
+		}
+		return resp.Results
+	}
+
+	// Unauthenticated -> 401.
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, jsonReq("POST", "/api/power", `{"uid":"aabbccddeeff","watts":300}`))
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated => %d, want 401", rec.Code)
+	}
+
+	// Per-inverter cap: 320 W of 1600 nameplate = 20% → per-panel 100 (in
+	// [20,500]) → applied 320, one frame.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(`{"uid":"aabbccddeeff","watts":320}`))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("per-inverter => %d (%s)", rec.Code, rec.Body)
+	}
+	res := decode(rec)
+	if len(res) != 1 || !res[0].OK || res[0].AppliedWatts != 320 {
+		t.Fatalf("per-inverter results = %+v", res)
+	}
+	if len(sent) != 1 || sent[0].uid != "aabbccddeeff" || len(sent[0].frame) == 0 {
+		t.Fatalf("frame not sent: %+v", sent)
+	}
+
+	// Full nameplate reaches per-panel 500 (uncapped) → applied == nameplate.
+	sent = nil
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(`{"uid":"aabbccddeeff","watts":1600}`))
+	res = decode(rec)
+	if len(res) != 1 || res[0].AppliedWatts != 1600 {
+		t.Errorf("nameplate cap applied = %+v, want 1600", res)
+	}
+
+	// Tiny watts clamps UP to the per-panel floor: 20/500 × 1600 = 64.
+	sent = nil
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(`{"uid":"aabbccddeeff","watts":1}`))
+	res = decode(rec)
+	if len(res) != 1 || res[0].AppliedWatts != 64 {
+		t.Errorf("floor clamp applied = %+v, want 64", res)
+	}
+
+	// Unknown uid -> 400.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(`{"uid":"ffffffffffff","watts":300}`))
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("unknown uid => %d, want 400", rec.Code)
+	}
+
+	// Array cap distributes to online inverters (one unicast here).
+	sent = nil
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(`{"array":true,"watts":400}`))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("array => %d (%s)", rec.Code, rec.Body)
+	}
+	if len(sent) != 1 {
+		t.Errorf("array sent %d frames, want 1", len(sent))
+	}
+
+	// Non-positive watts -> 400.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(`{"uid":"aabbccddeeff","watts":0}`))
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("zero watts => %d, want 400", rec.Code)
+	}
+}
+
+func TestSetPowerUnavailable(t *testing.T) {
+	_, h := newTestServer(t) // no SendFrame configured
+	cookies, _ := setupServer(t, h, "password123")
+	r := jsonReq("POST", "/api/power", `{"uid":"u","watts":100}`)
+	for _, c := range cookies {
+		r.AddCookie(c)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, r)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("no SendFrame => %d, want 503", rec.Code)
+	}
+}
+
+// setupServer runs first-run setup and returns the session cookies plus the
+// one-time recovery code from the response body.
+func setupServer(t *testing.T, h http.Handler, pw string) ([]*http.Cookie, string) {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, jsonReq("POST", "/api/auth/setup", `{"password":"`+pw+`"}`))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("setup => %d (%s)", rec.Code, rec.Body)
+	}
+	var body struct {
+		RecoveryCode string `json:"recovery_code"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("setup body: %v", err)
+	}
+	if body.RecoveryCode == "" {
+		t.Fatal("setup did not return a recovery code")
+	}
+	return rec.Result().Cookies(), body.RecoveryCode
+}
+
+func TestChangePasswordEndpoint(t *testing.T) {
+	_, h := newTestServer(t)
+	cookies, _ := setupServer(t, h, "password123")
+
+	authed := func(body string) *http.Request {
+		r := jsonReq("POST", "/api/auth/change-password", body)
+		for _, c := range cookies {
+			r.AddCookie(c)
+		}
+		return r
+	}
+
+	// No session -> 401.
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, jsonReq("POST", "/api/auth/change-password",
+		`{"current_password":"password123","new_password":"newpassword"}`))
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("unauthenticated change => %d, want 401", rec.Code)
+	}
+
+	// Wrong current password -> 401.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(`{"current_password":"nope","new_password":"newpassword"}`))
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("wrong current => %d, want 401", rec.Code)
+	}
+
+	// Correct -> 200, and the new password logs in.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(`{"current_password":"password123","new_password":"newpassword"}`))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("change => %d (%s)", rec.Code, rec.Body)
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, jsonReq("POST", "/api/auth/login", `{"password":"newpassword"}`))
+	if rec.Code != http.StatusOK {
+		t.Errorf("login with new password => %d", rec.Code)
+	}
+}
+
+func TestAuthVerifyEndpoint(t *testing.T) {
+	_, h := newTestServer(t)
+	cookies, _ := setupServer(t, h, "password123")
+
+	authed := func(body string) *http.Request {
+		r := jsonReq("POST", "/api/auth/verify", body)
+		for _, c := range cookies {
+			r.AddCookie(c)
+		}
+		return r
+	}
+
+	// No session -> 401.
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, jsonReq("POST", "/api/auth/verify", `{"password":"password123"}`))
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("unauthenticated verify => %d, want 401", rec.Code)
+	}
+
+	// Wrong password -> 401.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(`{"password":"nope"}`))
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("wrong password => %d, want 401", rec.Code)
+	}
+
+	// Correct password -> 200.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(`{"password":"password123"}`))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("correct password => %d (%s)", rec.Code, rec.Body)
+	}
+
+	// Missing password -> 400.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, authed(`{}`))
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("missing password => %d, want 400", rec.Code)
+	}
+}
+
+func TestRecoverEndpoint(t *testing.T) {
+	_, h := newTestServer(t)
+	_, code := setupServer(t, h, "password123")
+
+	// Wrong code -> 401.
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, jsonReq("POST", "/api/auth/recover",
+		`{"recovery_code":"WRONG-CODE-HERE","password":"newpassword"}`))
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("wrong recovery code => %d, want 401", rec.Code)
+	}
+
+	// Correct code -> 200, rotated code in body, session cookie set.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, jsonReq("POST", "/api/auth/recover",
+		`{"recovery_code":"`+code+`","password":"newpassword"}`))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("recover => %d (%s)", rec.Code, rec.Body)
+	}
+	var body struct {
+		RecoveryCode string `json:"recovery_code"`
+	}
+	json.Unmarshal(rec.Body.Bytes(), &body)
+	if body.RecoveryCode == "" || body.RecoveryCode == code {
+		t.Errorf("recover should return a rotated code: old=%q new=%q", code, body.RecoveryCode)
+	}
+	if len(rec.Result().Cookies()) == 0 {
+		t.Error("recover did not set a session cookie")
+	}
+	// New password works.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, jsonReq("POST", "/api/auth/login", `{"password":"newpassword"}`))
+	if rec.Code != http.StatusOK {
+		t.Errorf("login with recovered password => %d", rec.Code)
+	}
+}
+
+func TestRegenerateRecoveryEndpoint(t *testing.T) {
+	_, h := newTestServer(t)
+	cookies, code := setupServer(t, h, "password123")
+
+	// Unauthenticated -> 401.
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, jsonReq("POST", "/api/auth/recovery", `{}`))
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("unauthenticated regenerate => %d, want 401", rec.Code)
+	}
+
+	// Authed -> 200 with a fresh code, and the old code stops working.
+	rec = httptest.NewRecorder()
+	r := jsonReq("POST", "/api/auth/recovery", `{}`)
+	for _, c := range cookies {
+		r.AddCookie(c)
+	}
+	h.ServeHTTP(rec, r)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("regenerate => %d (%s)", rec.Code, rec.Body)
+	}
+	var body struct {
+		RecoveryCode string `json:"recovery_code"`
+	}
+	json.Unmarshal(rec.Body.Bytes(), &body)
+	if body.RecoveryCode == "" || body.RecoveryCode == code {
+		t.Errorf("regenerate should return a new code: old=%q new=%q", code, body.RecoveryCode)
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, jsonReq("POST", "/api/auth/recover",
+		`{"recovery_code":"`+code+`","password":"newpassword"}`))
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("old recovery code after regenerate => %d, want 401", rec.Code)
+	}
+}
+
 // newSysServer builds a server whose SysStatus fetcher returns sys (or
 // err) and counts invocations. Returns the authed cookie too.
 func newSysServer(t *testing.T, sys *wire.SystemStatusResponse, err error) (http.Handler, *int, []*http.Cookie) {
@@ -315,9 +618,12 @@ func newSettingsServer(t *testing.T, cfg Config) (http.Handler, []*http.Cookie) 
 func TestGetSettingsEndpoint(t *testing.T) {
 	h, cookies := newSettingsServer(t, Config{
 		SettingsGet: func(context.Context) (*wire.SettingsResponse, error) {
-			return &wire.SettingsResponse{Ok: true, Settings: &wire.Settings{
-				EcuId: "216200001234", Mac: "80971b000000", PanOverride: "0DCE", ZigbeeType: "apsystems",
-			}}, nil
+			return &wire.SettingsResponse{Ok: true,
+				Settings: &wire.Settings{
+					EcuId: "216200001234", Mac: "80971b000000", PanOverride: "0DCE", ZigbeeType: "apsystems", Channel: 20,
+				},
+				Effective: &wire.EffectiveSettings{Mac: "80:97:1b:00:00:00", Pan: "0DCE", ZigbeeType: "apsystems", Channel: 20},
+			}, nil
 		},
 	})
 	r := httptest.NewRequest("GET", "/api/settings", nil)
@@ -333,8 +639,11 @@ func TestGetSettingsEndpoint(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
 		t.Fatal(err)
 	}
-	if out.EcuID != "216200001234" || out.PanOverride != "0DCE" || out.ZigbeeType != "apsystems" {
+	if out.EcuID != "216200001234" || out.PanOverride != "0DCE" || out.ZigbeeType != "apsystems" || out.Channel != 20 {
 		t.Errorf("settings DTO wrong: %+v", out)
+	}
+	if out.Effective == nil || out.Effective.Channel != 20 {
+		t.Errorf("effective channel not mapped: %+v", out.Effective)
 	}
 }
 
@@ -406,17 +715,29 @@ func TestSetSettingsEndpoint(t *testing.T) {
 			return &wire.SettingsResponse{Ok: true, Settings: s}, nil
 		},
 	})
+	// This change touches mac + pan_override, both step-up-gated, so the
+	// caller must POST /api/auth/verify first. (No SettingsGet is wired,
+	// so the server fail-closes any change to a sensitive field.)
+	rec := httptest.NewRecorder()
+	rv := jsonReq("POST", "/api/auth/verify", `{"password":"password123"}`)
+	for _, c := range cookies {
+		rv.AddCookie(c)
+	}
+	h.ServeHTTP(rec, rv)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("step-up verify => %d", rec.Code)
+	}
 	r := jsonReq("PUT", "/api/settings",
-		`{"ecu_id":"new-id","mac":"aabbccddeeff","pan_override":"1A2B","zigbee_type":"general"}`)
+		`{"ecu_id":"new-id","mac":"aabbccddeeff","pan_override":"1A2B","zigbee_type":"general","channel":21}`)
 	for _, c := range cookies {
 		r.AddCookie(c)
 	}
-	rec := httptest.NewRecorder()
+	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, r)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("set settings => %d (%s)", rec.Code, rec.Body)
 	}
-	if got.GetEcuId() != "new-id" || got.GetZigbeeType() != "general" || got.GetPanOverride() != "1A2B" {
+	if got.GetEcuId() != "new-id" || got.GetZigbeeType() != "general" || got.GetPanOverride() != "1A2B" || got.GetChannel() != 21 {
 		t.Errorf("decoded settings wrong: %+v", got)
 	}
 	var out settingsDTO
@@ -432,17 +753,249 @@ func TestSetSettingsRejected(t *testing.T) {
 			return &wire.SettingsResponse{Ok: false, Error: "invalid pan override"}, errors.New("inv-driver: invalid pan override")
 		},
 	})
+	// pan_override change is step-up-gated; verify first so the write
+	// reaches SettingsSet and gets rejected for the right reason.
+	rec := httptest.NewRecorder()
+	rv := jsonReq("POST", "/api/auth/verify", `{"password":"password123"}`)
+	for _, c := range cookies {
+		rv.AddCookie(c)
+	}
+	h.ServeHTTP(rec, rv)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("step-up verify => %d", rec.Code)
+	}
 	r := jsonReq("PUT", "/api/settings", `{"pan_override":"ZZZZ"}`)
 	for _, c := range cookies {
 		r.AddCookie(c)
 	}
-	rec := httptest.NewRecorder()
+	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, r)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("rejected write => %d, want 400", rec.Code)
 	}
 	if !strings.Contains(rec.Body.String(), "invalid pan override") {
 		t.Errorf("expected error text in body, got %q", rec.Body.String())
+	}
+}
+
+// TestSetSettingsStepUpRequired verifies the server-side step-up gate on
+// PUT /api/settings: a change to a sensitive field (mac or pan_override)
+// is rejected with 403 unless POST /api/auth/verify just succeeded on the
+// same session. Non-sensitive changes (e.g. ecu_id only) pass without.
+func TestSetSettingsStepUpRequired(t *testing.T) {
+	current := &wire.SettingsResponse{Ok: true, Settings: &wire.Settings{
+		EcuId: "current-id", Mac: "80971b000000", PanOverride: "0DCE", ZigbeeType: "apsystems",
+	}}
+	var lastSet *wire.Settings
+	h, cookies := newSettingsServer(t, Config{
+		SettingsGet: func(context.Context) (*wire.SettingsResponse, error) {
+			return current, nil
+		},
+		SettingsSet: func(_ context.Context, s *wire.Settings) (*wire.SettingsResponse, error) {
+			lastSet = s
+			return &wire.SettingsResponse{Ok: true, Settings: s}, nil
+		},
+	})
+	withCookies := func(r *http.Request) *http.Request {
+		for _, c := range cookies {
+			r.AddCookie(c)
+		}
+		return r
+	}
+	put := func(body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, withCookies(jsonReq("PUT", "/api/settings", body)))
+		return rec
+	}
+	verify := func(body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, withCookies(jsonReq("POST", "/api/auth/verify", body)))
+		return rec
+	}
+
+	// Sensitive change (mac) WITHOUT prior Verify -> 403.
+	lastSet = nil
+	rec := put(`{"ecu_id":"current-id","mac":"aabbccddeeff","pan_override":"0DCE","zigbee_type":"apsystems"}`)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("mac change without step-up => %d, want 403; body=%s", rec.Code, rec.Body)
+	}
+	if lastSet != nil {
+		t.Error("SettingsSet should not have been called when step-up was missing")
+	}
+
+	// WRONG password Verify -> 401, NO step-up marked -> subsequent PUT
+	// still 403.
+	rec = verify(`{"password":"nope"}`)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("wrong-pw verify => %d, want 401", rec.Code)
+	}
+	lastSet = nil
+	rec = put(`{"ecu_id":"current-id","mac":"aabbccddeeff","pan_override":"0DCE","zigbee_type":"apsystems"}`)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("mac change after wrong-pw verify => %d, want 403", rec.Code)
+	}
+	if lastSet != nil {
+		t.Error("SettingsSet should still not have been called")
+	}
+
+	// CORRECT password Verify, then PUT with mac change -> 200.
+	rec = verify(`{"password":"password123"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("correct-pw verify => %d (%s)", rec.Code, rec.Body)
+	}
+	lastSet = nil
+	rec = put(`{"ecu_id":"current-id","mac":"aabbccddeeff","pan_override":"0DCE","zigbee_type":"apsystems"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("mac change after verify => %d (%s)", rec.Code, rec.Body)
+	}
+	if lastSet == nil || lastSet.GetMac() != "aabbccddeeff" {
+		t.Errorf("SettingsSet did not receive the new mac: %+v", lastSet)
+	}
+
+	// Non-sensitive change (ecu_id only) -> 200 even without a fresh
+	// step-up. Build a fresh server so the previous step-up doesn't mask
+	// the test.
+	current2 := &wire.SettingsResponse{Ok: true, Settings: &wire.Settings{
+		EcuId: "old", Mac: "80971b000000", PanOverride: "0DCE", ZigbeeType: "apsystems",
+	}}
+	h2, ck2 := newSettingsServer(t, Config{
+		SettingsGet: func(context.Context) (*wire.SettingsResponse, error) { return current2, nil },
+		SettingsSet: func(_ context.Context, s *wire.Settings) (*wire.SettingsResponse, error) {
+			return &wire.SettingsResponse{Ok: true, Settings: s}, nil
+		},
+	})
+	r2 := jsonReq("PUT", "/api/settings",
+		`{"ecu_id":"new-name","mac":"80971b000000","pan_override":"0DCE","zigbee_type":"apsystems"}`)
+	for _, c := range ck2 {
+		r2.AddCookie(c)
+	}
+	rec = httptest.NewRecorder()
+	h2.ServeHTTP(rec, r2)
+	if rec.Code != http.StatusOK {
+		t.Errorf("ecu_id-only change without step-up => %d, want 200", rec.Code)
+	}
+}
+
+// TestSetSettingsStepUpConsumedOnSensitiveWrite verifies that a successful
+// sensitive PUT consumes the step-up flag, so a second sensitive PUT inside
+// the TTL window is refused — single-use, not 60-second-window-reusable.
+// A non-sensitive (ecu_id only) write must NOT consume the flag.
+func TestSetSettingsStepUpConsumedOnSensitiveWrite(t *testing.T) {
+	current := &wire.SettingsResponse{Ok: true, Settings: &wire.Settings{
+		EcuId: "site-a", Mac: "80971b000000", PanOverride: "0DCE", ZigbeeType: "apsystems",
+	}}
+	h, cookies := newSettingsServer(t, Config{
+		SettingsGet: func(context.Context) (*wire.SettingsResponse, error) { return current, nil },
+		SettingsSet: func(_ context.Context, s *wire.Settings) (*wire.SettingsResponse, error) {
+			return &wire.SettingsResponse{Ok: true, Settings: s}, nil
+		},
+	})
+	withCookies := func(r *http.Request) *http.Request {
+		for _, c := range cookies {
+			r.AddCookie(c)
+		}
+		return r
+	}
+	put := func(body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, withCookies(jsonReq("PUT", "/api/settings", body)))
+		return rec
+	}
+	verify := func(body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, withCookies(jsonReq("POST", "/api/auth/verify", body)))
+		return rec
+	}
+
+	// Verify -> mac change PUT (succeeds, consumes step-up).
+	if rec := verify(`{"password":"password123"}`); rec.Code != http.StatusOK {
+		t.Fatalf("verify: %d (%s)", rec.Code, rec.Body)
+	}
+	if rec := put(`{"ecu_id":"site-a","mac":"aabbccddeeff","pan_override":"0DCE","zigbee_type":"apsystems"}`); rec.Code != http.StatusOK {
+		t.Fatalf("first sensitive PUT: %d (%s)", rec.Code, rec.Body)
+	}
+	// Second sensitive PUT inside TTL must now be refused: step-up was consumed.
+	rec := put(`{"ecu_id":"site-a","mac":"aabbccddee00","pan_override":"0DCE","zigbee_type":"apsystems"}`)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("second sensitive PUT inside TTL => %d, want 403 (step-up should be consumed)", rec.Code)
+	}
+
+	// Fresh verify, then a NON-sensitive write (ecu_id only). The non-sensitive
+	// write must NOT consume step-up; a follow-up sensitive PUT inside TTL
+	// must still succeed.
+	if rec := verify(`{"password":"password123"}`); rec.Code != http.StatusOK {
+		t.Fatalf("re-verify: %d (%s)", rec.Code, rec.Body)
+	}
+	if rec := put(`{"ecu_id":"renamed","mac":"80971b000000","pan_override":"0DCE","zigbee_type":"apsystems"}`); rec.Code != http.StatusOK {
+		t.Fatalf("non-sensitive PUT: %d (%s)", rec.Code, rec.Body)
+	}
+	if rec := put(`{"ecu_id":"renamed","mac":"aabbccddeeff","pan_override":"0DCE","zigbee_type":"apsystems"}`); rec.Code != http.StatusOK {
+		t.Errorf("sensitive PUT after a non-sensitive PUT => %d, want 200 (non-sensitive must not consume step-up)", rec.Code)
+	}
+}
+
+// TestSetSettingsStepUpExpires drives an injected clock past stepUpTTL and
+// confirms the next sensitive PUT is refused.
+func TestSetSettingsStepUpExpires(t *testing.T) {
+	authMgr, err := auth.NewManager(filepath.Join(t.TempDir(), "auth.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Inject a controllable clock so step-up TTL can be exceeded without
+	// real-time waits.
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	clock := t0
+	authMgr.SetClock(func() time.Time { return clock })
+
+	current := &wire.SettingsResponse{Ok: true, Settings: &wire.Settings{
+		EcuId: "x", Mac: "80971b000000", PanOverride: "0DCE", ZigbeeType: "apsystems",
+	}}
+	srv := New(Config{
+		StateDir: t.TempDir(),
+		Assets:   fstest.MapFS{"index.html": {Data: []byte("x")}},
+		Snap:     snapshot.New(nil),
+		Auth:     authMgr,
+		SettingsGet: func(context.Context) (*wire.SettingsResponse, error) { return current, nil },
+		SettingsSet: func(_ context.Context, s *wire.Settings) (*wire.SettingsResponse, error) {
+			return &wire.SettingsResponse{Ok: true, Settings: s}, nil
+		},
+	})
+	h := srv.Handler()
+
+	// Setup -> cookie.
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, jsonReq("POST", "/api/auth/setup", `{"password":"password123"}`))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("setup => %d", rec.Code)
+	}
+	cookies := rec.Result().Cookies()
+	withCookies := func(req *http.Request) *http.Request {
+		for _, c := range cookies {
+			req.AddCookie(c)
+		}
+		return req
+	}
+
+	// Verify, then PUT a mac change -> 200.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, withCookies(jsonReq("POST", "/api/auth/verify", `{"password":"password123"}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("verify => %d", rec.Code)
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, withCookies(jsonReq("PUT", "/api/settings",
+		`{"ecu_id":"x","mac":"aabbccddeeff","pan_override":"0DCE","zigbee_type":"apsystems"}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("mac change immediately after verify => %d", rec.Code)
+	}
+
+	// Advance the clock past stepUpTTL: the next sensitive PUT is refused.
+	clock = t0.Add(2 * time.Minute)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, withCookies(jsonReq("PUT", "/api/settings",
+		`{"ecu_id":"x","mac":"112233445566","pan_override":"0DCE","zigbee_type":"apsystems"}`)))
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("mac change after TTL => %d, want 403", rec.Code)
 	}
 }
 

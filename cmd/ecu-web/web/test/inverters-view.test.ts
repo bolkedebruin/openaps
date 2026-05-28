@@ -50,4 +50,57 @@ describe("<inverters-view>", () => {
     const el = await mount(fleet([inv({ sw_version: 0 })]));
     expect(el.shadowRoot?.querySelector(".fw")?.textContent?.trim()).toBe("—");
   });
+
+  test("has an Encryption column for the link-encryption badge", async () => {
+    const el = await mount(fleet([inv()]));
+    const headers = Array.from(el.shadowRoot!.querySelectorAll("th")).map((h) => h.textContent?.trim());
+    expect(headers).toContain("Encryption");
+    expect(headers).not.toContain("Link");
+  });
+
+  test("badge shows plaintext for encrypted=false and AES for true in the normal list", async () => {
+    const elPlain = await mount(fleet([inv({ encrypted: false })]));
+    const plainBadge = elPlain.shadowRoot?.querySelector("tbody .enc");
+    expect(plainBadge?.classList.contains("enc-warn")).toBe(true);
+    expect(plainBadge?.textContent?.toLowerCase()).toContain("plaintext");
+
+    const elAes = await mount(fleet([inv({ encrypted: true })]));
+    const aesBadge = elAes.shadowRoot?.querySelector("tbody .enc");
+    expect(aesBadge?.classList.contains("enc-ok")).toBe(true);
+    expect(aesBadge?.textContent).toContain("AES");
+  });
+
+  test("encrypted=true renders an AES lock badge", async () => {
+    const el = await mount(fleet([inv({ encrypted: true })]));
+    const badge = el.shadowRoot?.querySelector(".enc");
+    expect(badge?.classList.contains("enc-ok")).toBe(true);
+    expect(badge?.textContent).toContain("AES");
+  });
+
+  test("encrypted=false renders a plaintext warning badge", async () => {
+    const el = await mount(fleet([inv({ encrypted: false })]));
+    const badge = el.shadowRoot?.querySelector(".enc");
+    expect(badge?.classList.contains("enc-warn")).toBe(true);
+    expect(badge?.textContent?.toLowerCase()).toContain("plaintext");
+  });
+
+  test("missing encrypted renders the neutral unknown badge", async () => {
+    const el = await mount(fleet([inv()])); // encrypted undefined
+    const badge = el.shadowRoot?.querySelector(".enc");
+    expect(badge?.classList.contains("enc-unknown")).toBe(true);
+  });
+
+  test("each row has a Replace button", async () => {
+    const el = await mount(fleet([inv()]));
+    const btn = el.shadowRoot?.querySelector("button.replace") as HTMLButtonElement;
+    expect(btn).not.toBeNull();
+    expect(btn.textContent?.trim()).toBe("Replace");
+  });
+
+  test("renders the scan panel and fleet re-key control", async () => {
+    const el = await mount(fleet([inv()]));
+    expect(el.shadowRoot?.querySelector("pairing-scan-panel")).not.toBeNull();
+    expect(el.shadowRoot?.querySelector("button.rekey-btn")).not.toBeNull();
+    expect(el.shadowRoot?.querySelector("pairing-progress-drawer")).not.toBeNull();
+  });
 });

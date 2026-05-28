@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -36,5 +37,23 @@ func TestSaveThenReopen(t *testing.T) {
 	}
 	if got := st2.Get(); !reflect.DeepEqual(got, want) {
 		t.Errorf("reopened = %+v, want %+v", got, want)
+	}
+}
+
+func TestSave_FileMode0600(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	st, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Save(Settings{EcuID: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	if perm := fi.Mode().Perm(); perm != 0o600 {
+		t.Errorf("settings.json mode = %o, want 0600", perm)
 	}
 }

@@ -21,11 +21,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/bolke/inv-driver/internal/buslock"
 	"github.com/bolke/inv-driver/internal/eventlog"
 	"github.com/bolke/inv-driver/internal/events"
 	"github.com/bolke/inv-driver/internal/gridprofile"
 	"github.com/bolke/inv-driver/internal/ingest"
 	"github.com/bolke/inv-driver/internal/ipc"
+	"github.com/bolke/inv-driver/internal/pairing"
 	"github.com/bolke/inv-driver/internal/probe"
 	"github.com/bolke/inv-driver/internal/settings"
 	"github.com/bolke/inv-driver/internal/store"
@@ -191,6 +193,10 @@ func runServe(args []string) error {
 	}
 	srv.Ingestor = ingestor
 
+	// Per-inverter online/offline (offline debounced) + fleet sunrise/sundown
+	// audit events. Runs until ctx is cancelled.
+	go ingestor.StartOnlineSweep(ctx)
+
 	// Wire the gridprofile VerifyStartup hook (non-blocking; fires once per
 	// first-seen inverter after the protection read is enqueued).
 	// The hook is set after gpReconciler is constructed below; declare a
@@ -224,8 +230,18 @@ func runServe(args []string) error {
 		return out
 	}
 
+	// gpManagerPtr is captured by the OnFirstSeen hook so it can also
+	// reconcile any persisted overlay for the uid AFTER the protection
+	// cache is warm (VerifyStartup's read settle gives us that). Set
+	// below right after gpManager is constructed; the hook nil-checks it.
+	var gpManagerPtr *gridprofile.Manager
+
 	// Wire the OnFirstSeen hook: on first telemetry from an inverter, run
-	// VerifyStartup non-blocking after the protection read settles.
+	// VerifyStartup non-blocking after the protection read settles, and ALSO
+	// reconcile any persisted overlay for that uid (it would otherwise wait
+	// for an IPC SetOverlay to converge after a daemon restart). Per the
+	// ingest layer, OnFirstSeen re-arms on radio rejoin (protLastSeen gap),
+	// so a dark-then-back inverter re-triggers both paths automatically.
 	ingestor.OnFirstSeen = func(uid string) {
 		rec := gpReconcilerPtr
 		if rec == nil {
@@ -245,26 +261,80 @@ func runServe(args []string) error {
 			}
 			log.Printf("gridprofile VerifyStartup uid=%s identified=%q score=%.2f desiredState=%v reconciledOnStartup=%v",
 				uid, rpt.IdentifiedID, rpt.IdentifiedScore, rpt.HasDesiredState, rpt.ReconciledOnStartup)
+			// Now that the protection cache is warm for this uid, enqueue an
+			// overlay reconcile if one is persisted. This replaces the
+			// boot-time ReconcileAllOverlays sweep — running it before the
+			// startup protection read produced spurious "no_readback" failures
+			// for every overlay point on every restart.
+			if mp := gpManagerPtr; mp != nil {
+				if err := mp.ReconcileOverlaysForUID(ctx, uid); err != nil {
+					log.Printf("gridprofile ReconcileOverlaysForUID uid=%s: %v", uid, err)
+				}
+			}
 		}()
 	}
+	// Single process-wide bus guard: pairing ops and grid-profile broadcast
+	// are mutually exclusive (both disrupt the fleet bus).
+	busLock := buslock.New()
+
 	gpBroadcaster := &gridprofile.IPCBroadcaster{Router: srv, Backend: *probeBackend}
 	gpManager := &gridprofile.Manager{
 		Store:       gpStore,
 		Reconciler:  gpReconciler,
 		ProfilesDir: profilesDir,
 		OverlaysDir: overlaysDir,
+		BusLock:     busLock,
 		// Broadcast path defaults off; enable with -gridprofile-broadcast.
 		// Targets DS3 and QS1A families (the two families the codec handles).
 		BroadcastEnabled:    *gridProfileBroadcast,
 		BroadcastSender:     gpBroadcaster,
 		BroadcastModelCodes: []uint8{0x20, 0x18}, // ModelDS3=0x20, ModelQS1A=0x18
+		// Async overlay applier: events route to the audit log under
+		// by="inv-driver"; the apply parent context is the daemon lifecycle
+		// so applies survive the IPC request but stop at shutdown.
+		Events:      storeEventSink{S: st},
+		ApplyParent: ctx,
 	}
 	srv.GridProfile = gpManager
+	gpManagerPtr = gpManager
+
+	// NOTE: We intentionally do NOT call gpManager.ReconcileAllOverlays here
+	// at boot. The protection cache is empty until each inverter's first
+	// startup-protection-read completes, so a fleet-wide sweep at this point
+	// would treat every overlay param as no_readback and emit spurious
+	// overlay_param_failed events. Instead, per-uid overlay reconcile is
+	// hooked into ingest.OnFirstSeen above (after the read-settle wait), so
+	// each uid converges right after its protection cache warms — and the
+	// hook re-arms on radio rejoin too.
 
 	// inv-driver's settings file (ecu-id, mac, pan, zigbee-type).
 	settingsStore, err := settings.Open(*settingsPath)
 	if err != nil {
 		return fmt.Errorf("settings: %w", err)
+	}
+
+	// Boot-time MAC apply: macapp may have overwritten eth0 with the
+	// firmware-provisioned MAC. If the operator persisted an override,
+	// reassert it now (before the UDS is published, so consumers see
+	// the corrected value when they dial in).
+	if mac := settingsStore.Get().MAC; mac != "" {
+		live := settings.ReadEth0MAC()
+		if !strings.EqualFold(strings.TrimSpace(live), mac) {
+			log.Printf("settings: applying mac override %s (live=%s)", mac, live)
+			bootCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			applyErr := settings.ApplyMAC(bootCtx, mac)
+			cancel()
+			if applyErr != nil {
+				log.Printf("settings: mac apply at boot failed: %v (continuing with live MAC)", applyErr)
+			}
+			// Record the outcome to the events store so an operator can
+			// reconstruct the boot-time history later, even if they only
+			// reach the ECU via the recovery path.
+			kind, sev, detail := settings.ApplyEventFields(applyErr == nil, live, mac, applyErr)
+			if err := st.AppendEvent(ctx, time.Now().UnixMilli(), "", kind, sev, "inv-driver", "boot: "+detail); err != nil {
+				log.Printf("settings: append boot apply event: %v", err)
+			}
+		}
 	}
 
 	// SystemStatus: peer registry (fed by every Hello) + ECU identity
@@ -281,8 +351,42 @@ func runServe(args []string) error {
 	// Events read API over the append-only events store.
 	srv.Events = eventlog.NewHandler(st)
 
-	// Settings read/write API over inv-driver's settings file.
-	srv.Settings = settings.NewHandler(settingsStore)
+	// Settings read/write API over inv-driver's settings file. A SET that
+	// applies a new MAC also emits a mac_apply_ok / mac_apply_failed audit
+	// row attributed to the controller that drove the write (e.g.
+	// "ecu-web"). The "by" attribution is filled in by the IPC layer; the
+	// handler-level default here is "ecu-web" because all set-rpc traffic
+	// today comes from the operator console.
+	settingsHandler := settings.NewHandler(settingsStore)
+	settingsHandler.AppendEvent = st.AppendEvent
+	settingsHandler.AppendEventBy = "ecu-web"
+	srv.Settings = settingsHandler
+
+	// Pairing state machine: drives ecu-zb radio primitives via the
+	// correlation transport, persists results, and shares busLock with the
+	// grid-profile broadcast path. Controller-gated in the IPC layer.
+	pairingTransport := pairing.NewTransport(srv, *probeBackend)
+	ingestor.PairingResults = pairingTransport
+	pairingManager := &pairing.Manager{
+		Store:     st,
+		Transport: pairingTransport,
+		Lock:      busLock,
+		Events:    st,
+		Profiles:  gpManager,
+		Names:     pairingSettings{store: settingsStore},
+		Settings:  pairingSettings{store: settingsStore},
+		// Resolve the operating RF channel from settings, falling back to
+		// the built-in default when unset. A rekey request may override via
+		// FleetRekey.channel.
+		CurrentChannel: func() uint32 {
+			if ch := settingsStore.Get().Channel; ch != 0 {
+				return ch
+			}
+			return settings.DefaultChannel
+		},
+		Parent: ctx,
+	}
+	srv.Pairing = pairingManager
 
 	if *probeBackend != "" {
 		p := &probe.Probe{
@@ -691,4 +795,60 @@ func orNilU32(v uint32) any {
 		return nil
 	}
 	return v
+}
+
+// storeEventSink adapts *store.Store to gridprofile.EventSink so the async
+// overlay applier can emit audit rows under by="inv-driver". Errors are
+// logged but never propagated — event emission must not block or fail a
+// background apply.
+type storeEventSink struct {
+	S *store.Store
+}
+
+func (s storeEventSink) AppendEvent(ctx context.Context, tsMs int64, uid, kind, severity, detail string) {
+	if s.S == nil {
+		return
+	}
+	if err := s.S.AppendEvent(ctx, tsMs, uid, kind, severity, "inv-driver", detail); err != nil {
+		log.Printf("gridprofile: append %s event uid=%s: %v", kind, uid, err)
+	}
+}
+
+// pairingSettings adapts *settings.Store to the pairing.Settings interface so
+// FleetRekey can read/persist pan_override (never ecu_eth0_mac.conf — the
+// macapp race that bricked the fleet).
+type pairingSettings struct {
+	store *settings.Store
+}
+
+func (p pairingSettings) PANOverride() string {
+	return p.store.Get().PANOverride
+}
+
+func (p pairingSettings) SetPANOverride(_ context.Context, panHex string) error {
+	s := p.store.Get()
+	s.PANOverride = panHex
+	return p.store.Save(s)
+}
+
+// InheritName moves the operator label from oldUID to newUID in the settings
+// inverter_names map (the ECU's stand-in for an array slot). Best-effort: if
+// the dead unit had no label there is nothing to move.
+func (p pairingSettings) InheritName(_ context.Context, oldUID, newUID string) (bool, error) {
+	s := p.store.Get()
+	name, ok := s.InverterNames[oldUID]
+	if !ok || name == "" {
+		return false, nil
+	}
+	// Get() shares the underlying map; copy it before mutating so we never
+	// touch live state in place (avoids a race and a partial update on a
+	// failed Save).
+	names := make(map[string]string, len(s.InverterNames))
+	for k, v := range s.InverterNames {
+		names[k] = v
+	}
+	delete(names, oldUID)
+	names[newUID] = name
+	s.InverterNames = names
+	return true, p.store.Save(s)
 }

@@ -104,7 +104,15 @@ export class EcuApp extends LitElement {
       cursor: pointer;
     }
     @media (max-width: 720px) {
-      .layout { grid-template-columns: 1fr; }
+      .layout {
+        grid-template-columns: 1fr;
+        /* On mobile, app-nav is position:fixed → its grid row is empty.
+           Without this, the two implicit rows stretch (align-content: normal
+           ≈ stretch) and split min-height:100vh 50/50, pushing main into the
+           vertical middle. Pin row 1 to content (0) and row 2 to 1fr so main
+           top-aligns and fills the viewport. */
+        grid-template-rows: auto 1fr;
+      }
       button.hamburger { display: inline-flex; }
       main { padding: 18px 16px; }
     }
@@ -147,6 +155,7 @@ export class EcuApp extends LitElement {
 
   private onAuthed = async () => {
     this.authed = true;
+    this.configured = true; // setup/recovery may have just configured the password
     this.startStreams();
   };
 

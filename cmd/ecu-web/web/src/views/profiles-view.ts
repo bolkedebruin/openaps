@@ -1,6 +1,7 @@
 import { LitElement, html, css, nothing } from "lit";
 import { api, type ProfilesState, type LocalSiteProfile, type ApplyResult } from "../api.ts";
 import { fmtNum } from "../format.ts";
+import { validateOverlay } from "../schemas/overlay.ts";
 import "../components/grid-profile-form.ts";
 import "../components/local-site-profile-form.ts";
 import type { OverlayDraft } from "../components/local-site-profile-form.ts";
@@ -163,23 +164,26 @@ export class ProfilesView extends LitElement {
     const file = input.files?.[0];
     input.value = ""; // allow re-importing the same file
     if (!file) return;
+    let raw: unknown;
     try {
-      const obj = JSON.parse(await file.text());
-      if (!obj || !Array.isArray(obj.points)) throw new Error("not a profile (no points)");
-      const prof: LocalSiteProfile = {
-        id: typeof obj.id === "string" ? obj.id : "",
-        uids: Array.isArray(obj.uids) ? obj.uids.filter((u: unknown) => typeof u === "string") : [],
-        points: obj.points
-          .filter((p: { aps_code?: unknown; value?: unknown }) => typeof p?.aps_code === "string" && typeof p?.value === "number")
-          .map((p: { aps_code: string; value: number }) => ({ aps_code: p.aps_code, value: p.value })),
-      };
-      this.editing = prof;
-      this.editingExisting = false;
-      this.error = "";
-      this.notice = `Imported "${prof.id || "profile"}" — review the targets and values, then Save.`;
+      raw = JSON.parse(await file.text());
     } catch (err) {
       this.error = "Import failed: " + (err as Error).message;
+      return;
     }
+    const result = validateOverlay(raw);
+    if (!result.ok) {
+      const shown = result.errors.slice(0, 3).join("; ");
+      const extra = result.errors.length > 3 ? ` (+${result.errors.length - 3} more)` : "";
+      this.error = "Import failed: " + shown + extra;
+      return;
+    }
+    this.editing = result.profile;
+    this.editingExisting = false;
+    this.error = "";
+    const base = `Imported "${result.profile.id}" — review the targets and values, then Save.`;
+    const warn = result.warnings.length > 0 ? ` — Note: ${result.warnings.join("; ")}` : "";
+    this.notice = base + warn;
   };
 
   private onSaveOverlay = async (e: CustomEvent<OverlayDraft>) => {
@@ -192,7 +196,8 @@ export class ProfilesView extends LitElement {
       const resp = await api.saveOverlay(d);
       this.editing = null;
       await this.load(); // refresh before reporting so load() can't clobber the result
-      this.reportResults(d.id, resp.results);
+      const n = resp.uids.length;
+      this.notice = `Overlay "${resp.id}" queued for ${n} inverter${n === 1 ? "" : "s"} — see Events for application results.`;
     } catch (err) {
       this.error = (err as Error).message;
     } finally {

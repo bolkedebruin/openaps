@@ -1,6 +1,7 @@
 import { LitElement, html, css, nothing } from "lit";
 import { api, type Settings } from "../api.ts";
 import "../components/settings-form.ts";
+import "../components/account-security-form.ts";
 
 /**
  * <settings-view> fetches the current ECU settings, renders them in an
@@ -10,6 +11,7 @@ import "../components/settings-form.ts";
 export class SettingsView extends LitElement {
   static properties = {
     settings: { state: true },
+    hostname: { state: true },
     error: { state: true },
     notice: { state: true },
     loading: { state: true },
@@ -17,6 +19,7 @@ export class SettingsView extends LitElement {
   };
 
   declare settings: Settings | null;
+  declare hostname: string;
   declare error: string;
   declare notice: string;
   declare loading: boolean;
@@ -25,6 +28,7 @@ export class SettingsView extends LitElement {
   constructor() {
     super();
     this.settings = null;
+    this.hostname = "";
     this.error = "";
     this.notice = "";
     this.loading = false;
@@ -40,6 +44,7 @@ export class SettingsView extends LitElement {
       padding: 24px;
       max-width: 560px;
     }
+    .panel + .panel { margin-top: 22px; }
     h2 { font-size: 15px; margin: 0 0 16px; color: var(--text); }
     .banner { border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-bottom: 16px; }
     .banner.ok { color: var(--ok); border: 1px solid var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
@@ -50,6 +55,7 @@ export class SettingsView extends LitElement {
   connectedCallback(): void {
     super.connectedCallback();
     void this.load();
+    void this.loadHostname();
   }
 
   private async load() {
@@ -62,6 +68,16 @@ export class SettingsView extends LitElement {
       this.error = (e as Error).message;
     } finally {
       this.loading = false;
+    }
+  }
+
+  private async loadHostname() {
+    try {
+      const sys = await api.system();
+      this.hostname = sys?.ecu?.hostname ?? "";
+    } catch {
+      // best-effort; hostname is only a suggestion
+      this.hostname = "";
     }
   }
 
@@ -90,8 +106,13 @@ export class SettingsView extends LitElement {
           ? html`<div class="loading">Loading…</div>`
           : html`<settings-form
               .settings=${this.settings ?? { ecu_id: "", mac: "", pan_override: "", zigbee_type: "apsystems" }}
+              .hostname=${this.hostname}
               @save=${this.onSave}
             ></settings-form>`}
+      </div>
+      <div class="panel">
+        <h2>Account &amp; security</h2>
+        <account-security-form></account-security-form>
       </div>
     `;
   }

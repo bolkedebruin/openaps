@@ -64,6 +64,7 @@ func (h *Handler) Handle(ctx context.Context, req *wire.EventsRequest) *wire.Eve
 			ShortAddr:   e.ShortAddr,
 			Detail:      e.Detail,
 			RawHex:      e.RawHex,
+			By:          e.By,
 		})
 	}
 	return out

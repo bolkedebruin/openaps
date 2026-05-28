@@ -47,4 +47,16 @@ describe("<events-table>", () => {
     const el = await mount([{ id: 1, ts_ms: 1, kind: "x", severity: "error", detail: "boom" }]);
     expect(el.shadowRoot?.querySelector(".sev.err")).not.toBeNull();
   });
+
+  test("By column shows the originating backend (and a dash when absent)", async () => {
+    const el = await mount([
+      { id: 3, ts_ms: 3, kind: "power_cap_set", severity: "info", inverter_uid: "abc", by: "ecu-web" },
+      { id: 2, ts_ms: 2, kind: "power_cap_set", severity: "info", inverter_uid: "def", by: "ecu-sunspec" },
+      { id: 1, ts_ms: 1, kind: "decode_failed", severity: "warn" }, // legacy / no by
+    ]);
+    const headers = [...(el.shadowRoot?.querySelectorAll("th") ?? [])].map((h) => h.textContent?.trim());
+    expect(headers).toContain("By");
+    const byCells = [...(el.shadowRoot?.querySelectorAll("td.by") ?? [])].map((c) => c.textContent?.trim());
+    expect(byCells).toEqual(["ecu-web", "ecu-sunspec", "—"]);
+  });
 });

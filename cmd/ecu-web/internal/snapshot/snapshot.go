@@ -48,6 +48,7 @@ type invState struct {
 	swVersion   uint32
 	zigbeeBound *bool
 	turnedOff   *bool
+	encrypted   *bool // last-observed L1 frame type: true=AES, false=plaintext, nil=unknown
 
 	haveTelemetry bool
 	lastSeenMs    int64
@@ -128,6 +129,10 @@ func (s *Snapshot) ApplyTelemetry(t *wire.Telemetry) {
 	st.panels = t.GetPanels()
 	if f := t.GetFaults(); f != nil {
 		st.faults = f
+	}
+	if t.Encrypted != nil {
+		v := t.GetEncrypted()
+		st.encrypted = &v
 	}
 	s.mu.Unlock()
 	s.notify()
@@ -238,6 +243,7 @@ type InverterDTO struct {
 	SWVersion   uint32  `json:"sw_version"`
 	ZigbeeBound *bool   `json:"zigbee_bound,omitempty"`
 	TurnedOff   *bool   `json:"turned_off,omitempty"`
+	Encrypted   *bool   `json:"encrypted,omitempty"`
 	Online      bool    `json:"online"`
 	LastSeenMs  int64   `json:"last_seen_ms"`
 	AgeS        float64 `json:"age_s"`
@@ -335,6 +341,7 @@ func (st *invState) toDTO(nowMs int64) InverterDTO {
 		SWVersion:    st.swVersion,
 		ZigbeeBound:  st.zigbeeBound,
 		TurnedOff:    st.turnedOff,
+		Encrypted:    st.encrypted,
 		Online:       online,
 		LastSeenMs:   st.lastSeenMs,
 		AgeS:         float64(ageMs) / 1000.0,

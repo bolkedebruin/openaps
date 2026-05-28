@@ -1,8 +1,8 @@
-var ZZ=globalThis,kZ=ZZ.ShadowRoot&&(ZZ.ShadyCSS===void 0||ZZ.ShadyCSS.nativeShadow)&&"adoptedStyleSheets"in Document.prototype&&"replace"in CSSStyleSheet.prototype,FZ=Symbol(),bZ=new WeakMap;class WZ{constructor(Z,K,Q){if(this._$cssResult$=!0,Q!==FZ)throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");this.cssText=Z,this._strings=K}get styleSheet(){let Z=this._styleSheet,K=this._strings;if(kZ&&Z===void 0){let Q=K!==void 0&&K.length===1;if(Q)Z=bZ.get(K);if(Z===void 0){if((this._styleSheet=Z=new CSSStyleSheet).replaceSync(this.cssText),Q)bZ.set(K,Z)}}return Z}toString(){return this.cssText}}var f5=(Z)=>{if(Z._$cssResult$===!0)return Z.cssText;else if(typeof Z==="number")return Z;else throw Error(`Value passed to 'css' function must be a 'css' function result: ${Z}. Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.`)},h5=(Z)=>new WZ(typeof Z==="string"?Z:String(Z),void 0,FZ),H=(Z,...K)=>{let Q=Z.length===1?Z[0]:K.reduce(($,B,Y)=>$+f5(B)+Z[Y+1],Z[0]);return new WZ(Q,Z,FZ)},wZ=(Z,K)=>{if(kZ)Z.adoptedStyleSheets=K.map((Q)=>Q instanceof CSSStyleSheet?Q:Q.styleSheet);else for(let Q of K){let $=document.createElement("style"),B=ZZ.litNonce;if(B!==void 0)$.setAttribute("nonce",B);$.textContent=Q.cssText,Z.appendChild($)}},g5=(Z)=>{let K="";for(let Q of Z.cssRules)K+=Q.cssText;return h5(K)},_Z=kZ?(Z)=>Z:(Z)=>Z instanceof CSSStyleSheet?g5(Z):Z;var{is:c5,defineProperty:d5,getOwnPropertyDescriptor:fZ,getOwnPropertyNames:u5,getOwnPropertySymbols:v5,getPrototypeOf:hZ}=Object,m5=!1,V=globalThis;if(m5)V.customElements??=customElements;var D=!0,P,gZ=V.trustedTypes,p5=gZ?gZ.emptyScript:"",dZ=D?V.reactiveElementPolyfillSupportDevMode:V.reactiveElementPolyfillSupport;if(D)V.litIssuedWarnings??=new Set,P=(Z,K)=>{if(K+=` See https://lit.dev/msg/${Z} for more information.`,!V.litIssuedWarnings.has(K)&&!V.litIssuedWarnings.has(Z))console.warn(K),V.litIssuedWarnings.add(K)},queueMicrotask(()=>{if(P("dev-mode","Lit is in dev mode. Not recommended for production!"),V.ShadyDOM?.inUse&&dZ===void 0)P("polyfill-support-missing","Shadow DOM is being polyfilled via `ShadyDOM` but the `polyfill-support` module has not been loaded.")});var o5=D?(Z)=>{if(!V.emitLitDebugLogEvents)return;V.dispatchEvent(new CustomEvent("lit-debug",{detail:Z}))}:void 0,d=(Z,K)=>Z,AZ={toAttribute(Z,K){switch(K){case Boolean:Z=Z?p5:null;break;case Object:case Array:Z=Z==null?Z:JSON.stringify(Z);break}return Z},fromAttribute(Z,K){let Q=Z;switch(K){case Boolean:Q=Z!==null;break;case Number:Q=Z===null?null:Number(Z);break;case Object:case Array:try{Q=JSON.parse(Z)}catch($){Q=null}break}return Q}},uZ=(Z,K)=>!c5(Z,K),cZ={attribute:!0,type:String,converter:AZ,reflect:!1,useDefault:!1,hasChanged:uZ};Symbol.metadata??=Symbol("metadata");V.litPropertyMetadata??=new WeakMap;class R extends HTMLElement{static addInitializer(Z){this.__prepare(),(this._initializers??=[]).push(Z)}static get observedAttributes(){return this.finalize(),this.__attributeToPropertyMap&&[...this.__attributeToPropertyMap.keys()]}static createProperty(Z,K=cZ){if(K.state)K.attribute=!1;if(this.__prepare(),this.prototype.hasOwnProperty(Z))K=Object.create(K),K.wrapped=!0;if(this.elementProperties.set(Z,K),!K.noAccessor){let Q=D?Symbol.for(`${String(Z)} (@property() cache)`):Symbol(),$=this.getPropertyDescriptor(Z,Q,K);if($!==void 0)d5(this.prototype,Z,$)}}static getPropertyDescriptor(Z,K,Q){let{get:$,set:B}=fZ(this.prototype,Z)??{get(){return this[K]},set(Y){this[K]=Y}};if(D&&$==null){if("value"in(fZ(this.prototype,Z)??{}))throw Error(`Field ${JSON.stringify(String(Z))} on ${this.name} was declared as a reactive property but it's actually declared as a value on the prototype. Usually this is due to using @property or @state on a method.`);P("reactive-property-without-getter",`Field ${JSON.stringify(String(Z))} on ${this.name} was declared as a reactive property but it does not have a getter. This will be an error in a future version of Lit.`)}return{get:$,set(Y){let X=$?.call(this);B?.call(this,Y),this.requestUpdate(Z,X,Q)},configurable:!0,enumerable:!0}}static getPropertyOptions(Z){return this.elementProperties.get(Z)??cZ}static __prepare(){if(this.hasOwnProperty(d("elementProperties",this)))return;let Z=hZ(this);if(Z.finalize(),Z._initializers!==void 0)this._initializers=[...Z._initializers];this.elementProperties=new Map(Z.elementProperties)}static finalize(){if(this.hasOwnProperty(d("finalized",this)))return;if(this.finalized=!0,this.__prepare(),this.hasOwnProperty(d("properties",this))){let K=this.properties,Q=[...u5(K),...v5(K)];for(let $ of Q)this.createProperty($,K[$])}let Z=this[Symbol.metadata];if(Z!==null){let K=litPropertyMetadata.get(Z);if(K!==void 0)for(let[Q,$]of K)this.elementProperties.set(Q,$)}this.__attributeToPropertyMap=new Map;for(let[K,Q]of this.elementProperties){let $=this.__attributeNameForProperty(K,Q);if($!==void 0)this.__attributeToPropertyMap.set($,K)}if(this.elementStyles=this.finalizeStyles(this.styles),D){if(this.hasOwnProperty("createProperty"))P("no-override-create-property","Overriding ReactiveElement.createProperty() is deprecated. The override will not be called with standard decorators");if(this.hasOwnProperty("getPropertyDescriptor"))P("no-override-get-property-descriptor","Overriding ReactiveElement.getPropertyDescriptor() is deprecated. The override will not be called with standard decorators")}}static finalizeStyles(Z){let K=[];if(Array.isArray(Z)){let Q=new Set(Z.flat(1/0).reverse());for(let $ of Q)K.unshift(_Z($))}else if(Z!==void 0)K.push(_Z(Z));return K}static __attributeNameForProperty(Z,K){let Q=K.attribute;return Q===!1?void 0:typeof Q==="string"?Q:typeof Z==="string"?Z.toLowerCase():void 0}constructor(){super();this.__instanceProperties=void 0,this.isUpdatePending=!1,this.hasUpdated=!1,this.__reflectingProperty=null,this.__initialize()}__initialize(){this.__updatePromise=new Promise((Z)=>this.enableUpdating=Z),this._$changedProperties=new Map,this.__saveInstanceProperties(),this.requestUpdate(),this.constructor._initializers?.forEach((Z)=>Z(this))}addController(Z){if((this.__controllers??=new Set).add(Z),this.renderRoot!==void 0&&this.isConnected)Z.hostConnected?.()}removeController(Z){this.__controllers?.delete(Z)}__saveInstanceProperties(){let Z=new Map,K=this.constructor.elementProperties;for(let Q of K.keys())if(this.hasOwnProperty(Q))Z.set(Q,this[Q]),delete this[Q];if(Z.size>0)this.__instanceProperties=Z}createRenderRoot(){let Z=this.shadowRoot??this.attachShadow(this.constructor.shadowRootOptions);return wZ(Z,this.constructor.elementStyles),Z}connectedCallback(){this.renderRoot??=this.createRenderRoot(),this.enableUpdating(!0),this.__controllers?.forEach((Z)=>Z.hostConnected?.())}enableUpdating(Z){}disconnectedCallback(){this.__controllers?.forEach((Z)=>Z.hostDisconnected?.())}attributeChangedCallback(Z,K,Q){this._$attributeToProperty(Z,Q)}__propertyToAttribute(Z,K){let $=this.constructor.elementProperties.get(Z),B=this.constructor.__attributeNameForProperty(Z,$);if(B!==void 0&&$.reflect===!0){let X=($.converter?.toAttribute!==void 0?$.converter:AZ).toAttribute(K,$.type);if(D&&this.constructor.enabledWarnings.includes("migration")&&X===void 0)P("undefined-attribute-value",`The attribute value for the ${Z} property is undefined on element ${this.localName}. The attribute will be removed, but in the previous version of \`ReactiveElement\`, the attribute would not have changed.`);if(this.__reflectingProperty=Z,X==null)this.removeAttribute(B);else this.setAttribute(B,X);this.__reflectingProperty=null}}_$attributeToProperty(Z,K){let Q=this.constructor,$=Q.__attributeToPropertyMap.get(Z);if($!==void 0&&this.__reflectingProperty!==$){let B=Q.getPropertyOptions($),Y=typeof B.converter==="function"?{fromAttribute:B.converter}:B.converter?.fromAttribute!==void 0?B.converter:AZ;this.__reflectingProperty=$;let X=Y.fromAttribute(K,B.type);this[$]=X??this.__defaultValues?.get($)??X,this.__reflectingProperty=null}}requestUpdate(Z,K,Q,$=!1,B){if(Z!==void 0){if(D&&Z instanceof Event)P("","The requestUpdate() method was called with an Event as the property name. This is probably a mistake caused by binding this.requestUpdate as an event listener. Instead bind a function that will call it with no arguments: () => this.requestUpdate()");let Y=this.constructor;if($===!1)B=this[Z];if(Q??=Y.getPropertyOptions(Z),(Q.hasChanged??uZ)(B,K)||Q.useDefault&&Q.reflect&&B===this.__defaultValues?.get(Z)&&!this.hasAttribute(Y.__attributeNameForProperty(Z,Q)))this._$changeProperty(Z,K,Q);else return}if(this.isUpdatePending===!1)this.__updatePromise=this.__enqueueUpdate()}_$changeProperty(Z,K,{useDefault:Q,reflect:$,wrapped:B},Y){if(Q&&!(this.__defaultValues??=new Map).has(Z)){if(this.__defaultValues.set(Z,Y??K??this[Z]),B!==!0||Y!==void 0)return}if(!this._$changedProperties.has(Z)){if(!this.hasUpdated&&!Q)K=void 0;this._$changedProperties.set(Z,K)}if($===!0&&this.__reflectingProperty!==Z)(this.__reflectingProperties??=new Set).add(Z)}async __enqueueUpdate(){this.isUpdatePending=!0;try{await this.__updatePromise}catch(K){Promise.reject(K)}let Z=this.scheduleUpdate();if(Z!=null)await Z;return!this.isUpdatePending}scheduleUpdate(){let Z=this.performUpdate();if(D&&this.constructor.enabledWarnings.includes("async-perform-update")&&typeof Z?.then==="function")P("async-perform-update",`Element ${this.localName} returned a Promise from performUpdate(). This behavior is deprecated and will be removed in a future version of ReactiveElement.`);return Z}performUpdate(){if(!this.isUpdatePending)return;if(o5?.({kind:"update"}),!this.hasUpdated){if(this.renderRoot??=this.createRenderRoot(),D){let B=[...this.constructor.elementProperties.keys()].filter((Y)=>this.hasOwnProperty(Y)&&(Y in hZ(this)));if(B.length)throw Error(`The following properties on element ${this.localName} will not trigger updates as expected because they are set using class fields: ${B.join(", ")}. Native class fields and some compiled output will overwrite accessors used for detecting changes. See https://lit.dev/msg/class-field-shadowing for more information.`)}if(this.__instanceProperties){for(let[$,B]of this.__instanceProperties)this[$]=B;this.__instanceProperties=void 0}let Q=this.constructor.elementProperties;if(Q.size>0)for(let[$,B]of Q){let{wrapped:Y}=B,X=this[$];if(Y===!0&&!this._$changedProperties.has($)&&X!==void 0)this._$changeProperty($,void 0,B,X)}}let Z=!1,K=this._$changedProperties;try{if(Z=this.shouldUpdate(K),Z)this.willUpdate(K),this.__controllers?.forEach((Q)=>Q.hostUpdate?.()),this.update(K);else this.__markUpdated()}catch(Q){throw Z=!1,this.__markUpdated(),Q}if(Z)this._$didUpdate(K)}willUpdate(Z){}_$didUpdate(Z){if(this.__controllers?.forEach((K)=>K.hostUpdated?.()),!this.hasUpdated)this.hasUpdated=!0,this.firstUpdated(Z);if(this.updated(Z),D&&this.isUpdatePending&&this.constructor.enabledWarnings.includes("change-in-update"))P("change-in-update",`Element ${this.localName} scheduled an update (generally because a property was set) after an update completed, causing a new update to be scheduled. This is inefficient and should be avoided unless the next update can only be scheduled as a side effect of the previous update.`)}__markUpdated(){this._$changedProperties=new Map,this.isUpdatePending=!1}get updateComplete(){return this.getUpdateComplete()}getUpdateComplete(){return this.__updatePromise}shouldUpdate(Z){return!0}update(Z){this.__reflectingProperties&&=this.__reflectingProperties.forEach((K)=>this.__propertyToAttribute(K,this[K])),this.__markUpdated()}updated(Z){}firstUpdated(Z){}}R.elementStyles=[];R.shadowRootOptions={mode:"open"};R[d("elementProperties",R)]=new Map;R[d("finalized",R)]=new Map;dZ?.({ReactiveElement:R});if(D){R.enabledWarnings=["change-in-update","async-perform-update"];let Z=function(K){if(!K.hasOwnProperty(d("enabledWarnings",K)))K.enabledWarnings=K.enabledWarnings.slice()};R.enableWarning=function(K){if(Z(this),!this.enabledWarnings.includes(K))this.enabledWarnings.push(K)},R.disableWarning=function(K){Z(this);let Q=this.enabledWarnings.indexOf(K);if(Q>=0)this.enabledWarnings.splice(Q,1)}}(V.reactiveElementVersions??=[]).push("2.1.2");if(D&&V.reactiveElementVersions.length>1)queueMicrotask(()=>{P("multiple-versions","Multiple versions of Lit loaded. Loading multiple versions is not recommended.")});var N=globalThis,W=(Z)=>{if(!N.emitLitDebugLogEvents)return;N.dispatchEvent(new CustomEvent("lit-debug",{detail:Z}))},l5=0,o;N.litIssuedWarnings??=new Set,o=(Z,K)=>{if(K+=Z?` See https://lit.dev/msg/${Z} for more information.`:"",!N.litIssuedWarnings.has(K)&&!N.litIssuedWarnings.has(Z))console.warn(K),N.litIssuedWarnings.add(K)},queueMicrotask(()=>{o("dev-mode","Lit is in dev mode. Not recommended for production!")});var y=N.ShadyDOM?.inUse&&N.ShadyDOM?.noPatch===!0?N.ShadyDOM.wrap:(Z)=>Z,KZ=N.trustedTypes,vZ=KZ?KZ.createPolicy("lit-html",{createHTML:(Z)=>Z}):void 0,s5=(Z)=>Z,GZ=(Z,K,Q)=>s5,i5=(Z)=>{if(c!==GZ)throw Error("Attempted to overwrite existing lit-html security policy. setSanitizeDOMValueFactory should be called at most once.");c=Z},r5=()=>{c=GZ},VZ=(Z,K,Q)=>{return c(Z,K,Q)},rZ="$lit$",E=`lit$${Math.random().toFixed(9).slice(2)}$`,aZ="?"+E,a5=`<${aZ}>`,h=document,l=()=>h.createComment(""),s=(Z)=>Z===null||typeof Z!="object"&&typeof Z!="function",DZ=Array.isArray,n5=(Z)=>DZ(Z)||typeof Z?.[Symbol.iterator]==="function",OZ=`[ 	
-\f\r]`,t5=`[^ 	
-\f\r"'\`<>=]`,e5=`[^\\s"'>=/]`,m=/<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g,mZ=1,IZ=2,Z6=3,pZ=/-->/g,oZ=/>/g,b=new RegExp(`>|${OZ}(?:(${e5}+)(${OZ}*=${OZ}*(?:${t5}|("|')|))|$)`,"g"),K6=0,lZ=1,Q6=2,sZ=3,TZ=/'/g,CZ=/"/g,nZ=/^(?:script|style|textarea|title)$/i,$6=1,QZ=2,$Z=3,RZ=1,BZ=2,B6=3,G6=4,Y6=5,NZ=6,j6=7,LZ=(Z)=>(K,...Q)=>{if(K.some(($)=>$===void 0))console.warn(`Some template strings are undefined.
-This is probably caused by illegal octal escape sequences.`);if(Q.some(($)=>$?._$litStatic$))o("",`Static values 'literal' or 'unsafeStatic' cannot be used as values to non-static templates.
-Please use the static 'html' tag function. See https://lit.dev/docs/templates/expressions/#static-expressions`);return{["_$litType$"]:Z,strings:K,values:Q}},G=LZ($6),L=LZ(QZ),A6=LZ($Z),g=Symbol.for("lit-noChange"),j=Symbol.for("lit-nothing"),iZ=new WeakMap,f=h.createTreeWalker(h,129),c=GZ;function tZ(Z,K){if(!DZ(Z)||!Z.hasOwnProperty("raw")){let Q="invalid template strings array";throw Q=`
+var E4=globalThis,o4=E4.ShadowRoot&&(E4.ShadyCSS===void 0||E4.ShadyCSS.nativeShadow)&&"adoptedStyleSheets"in Document.prototype&&"replace"in CSSStyleSheet.prototype,r4=Symbol(),V3=new WeakMap;class p4{constructor(Q,Y,K){if(this._$cssResult$=!0,K!==r4)throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");this.cssText=Q,this._strings=Y}get styleSheet(){let Q=this._styleSheet,Y=this._strings;if(o4&&Q===void 0){let K=Y!==void 0&&Y.length===1;if(K)Q=V3.get(Y);if(Q===void 0){if((this._styleSheet=Q=new CSSStyleSheet).replaceSync(this.cssText),K)V3.set(Y,Q)}}return Q}toString(){return this.cssText}}var jQ=(Q)=>{if(Q._$cssResult$===!0)return Q.cssText;else if(typeof Q==="number")return Q;else throw Error(`Value passed to 'css' function must be a 'css' function result: ${Q}. Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.`)},$Q=(Q)=>new p4(typeof Q==="string"?Q:String(Q),void 0,r4),L=(Q,...Y)=>{let K=Q.length===1?Q[0]:Y.reduce((X,G,q)=>X+jQ(G)+Q[q+1],Q[0]);return new p4(K,Q,r4)},N3=(Q,Y)=>{if(o4)Q.adoptedStyleSheets=Y.map((K)=>K instanceof CSSStyleSheet?K:K.styleSheet);else for(let K of Y){let X=document.createElement("style"),G=E4.litNonce;if(G!==void 0)X.setAttribute("nonce",G);X.textContent=K.cssText,Q.appendChild(X)}},AQ=(Q)=>{let Y="";for(let K of Q.cssRules)Y+=K.cssText;return $Q(Y)},l4=o4?(Q)=>Q:(Q)=>Q instanceof CSSStyleSheet?AQ(Q):Q;var{is:LQ,defineProperty:DQ,getOwnPropertyDescriptor:O3,getOwnPropertyNames:FQ,getOwnPropertySymbols:IQ,getPrototypeOf:P3}=Object,VQ=!1,R=globalThis;if(VQ)R.customElements??=customElements;var w=!0,k,E3=R.trustedTypes,NQ=E3?E3.emptyScript:"",Z3=w?R.reactiveElementPolyfillSupportDevMode:R.reactiveElementPolyfillSupport;if(w)R.litIssuedWarnings??=new Set,k=(Q,Y)=>{if(Y+=` See https://lit.dev/msg/${Q} for more information.`,!R.litIssuedWarnings.has(Y)&&!R.litIssuedWarnings.has(Q))console.warn(Y),R.litIssuedWarnings.add(Y)},queueMicrotask(()=>{if(k("dev-mode","Lit is in dev mode. Not recommended for production!"),R.ShadyDOM?.inUse&&Z3===void 0)k("polyfill-support-missing","Shadow DOM is being polyfilled via `ShadyDOM` but the `polyfill-support` module has not been loaded.")});var OQ=w?(Q)=>{if(!R.emitLitDebugLogEvents)return;R.dispatchEvent(new CustomEvent("lit-debug",{detail:Q}))}:void 0,s=(Q,Y)=>Q,d4={toAttribute(Q,Y){switch(Y){case Boolean:Q=Q?NQ:null;break;case Object:case Array:Q=Q==null?Q:JSON.stringify(Q);break}return Q},fromAttribute(Q,Y){let K=Q;switch(Y){case Boolean:K=Q!==null;break;case Number:K=Q===null?null:Number(Q);break;case Object:case Array:try{K=JSON.parse(Q)}catch(X){K=null}break}return K}},R3=(Q,Y)=>!LQ(Q,Y),M3={attribute:!0,type:String,converter:d4,reflect:!1,useDefault:!1,hasChanged:R3};Symbol.metadata??=Symbol("metadata");R.litPropertyMetadata??=new WeakMap;class _ extends HTMLElement{static addInitializer(Q){this.__prepare(),(this._initializers??=[]).push(Q)}static get observedAttributes(){return this.finalize(),this.__attributeToPropertyMap&&[...this.__attributeToPropertyMap.keys()]}static createProperty(Q,Y=M3){if(Y.state)Y.attribute=!1;if(this.__prepare(),this.prototype.hasOwnProperty(Q))Y=Object.create(Y),Y.wrapped=!0;if(this.elementProperties.set(Q,Y),!Y.noAccessor){let K=w?Symbol.for(`${String(Q)} (@property() cache)`):Symbol(),X=this.getPropertyDescriptor(Q,K,Y);if(X!==void 0)DQ(this.prototype,Q,X)}}static getPropertyDescriptor(Q,Y,K){let{get:X,set:G}=O3(this.prototype,Q)??{get(){return this[Y]},set(q){this[Y]=q}};if(w&&X==null){if("value"in(O3(this.prototype,Q)??{}))throw Error(`Field ${JSON.stringify(String(Q))} on ${this.name} was declared as a reactive property but it's actually declared as a value on the prototype. Usually this is due to using @property or @state on a method.`);k("reactive-property-without-getter",`Field ${JSON.stringify(String(Q))} on ${this.name} was declared as a reactive property but it does not have a getter. This will be an error in a future version of Lit.`)}return{get:X,set(q){let J=X?.call(this);G?.call(this,q),this.requestUpdate(Q,J,K)},configurable:!0,enumerable:!0}}static getPropertyOptions(Q){return this.elementProperties.get(Q)??M3}static __prepare(){if(this.hasOwnProperty(s("elementProperties",this)))return;let Q=P3(this);if(Q.finalize(),Q._initializers!==void 0)this._initializers=[...Q._initializers];this.elementProperties=new Map(Q.elementProperties)}static finalize(){if(this.hasOwnProperty(s("finalized",this)))return;if(this.finalized=!0,this.__prepare(),this.hasOwnProperty(s("properties",this))){let Y=this.properties,K=[...FQ(Y),...IQ(Y)];for(let X of K)this.createProperty(X,Y[X])}let Q=this[Symbol.metadata];if(Q!==null){let Y=litPropertyMetadata.get(Q);if(Y!==void 0)for(let[K,X]of Y)this.elementProperties.set(K,X)}this.__attributeToPropertyMap=new Map;for(let[Y,K]of this.elementProperties){let X=this.__attributeNameForProperty(Y,K);if(X!==void 0)this.__attributeToPropertyMap.set(X,Y)}if(this.elementStyles=this.finalizeStyles(this.styles),w){if(this.hasOwnProperty("createProperty"))k("no-override-create-property","Overriding ReactiveElement.createProperty() is deprecated. The override will not be called with standard decorators");if(this.hasOwnProperty("getPropertyDescriptor"))k("no-override-get-property-descriptor","Overriding ReactiveElement.getPropertyDescriptor() is deprecated. The override will not be called with standard decorators")}}static finalizeStyles(Q){let Y=[];if(Array.isArray(Q)){let K=new Set(Q.flat(1/0).reverse());for(let X of K)Y.unshift(l4(X))}else if(Q!==void 0)Y.push(l4(Q));return Y}static __attributeNameForProperty(Q,Y){let K=Y.attribute;return K===!1?void 0:typeof K==="string"?K:typeof Q==="string"?Q.toLowerCase():void 0}constructor(){super();this.__instanceProperties=void 0,this.isUpdatePending=!1,this.hasUpdated=!1,this.__reflectingProperty=null,this.__initialize()}__initialize(){this.__updatePromise=new Promise((Q)=>this.enableUpdating=Q),this._$changedProperties=new Map,this.__saveInstanceProperties(),this.requestUpdate(),this.constructor._initializers?.forEach((Q)=>Q(this))}addController(Q){if((this.__controllers??=new Set).add(Q),this.renderRoot!==void 0&&this.isConnected)Q.hostConnected?.()}removeController(Q){this.__controllers?.delete(Q)}__saveInstanceProperties(){let Q=new Map,Y=this.constructor.elementProperties;for(let K of Y.keys())if(this.hasOwnProperty(K))Q.set(K,this[K]),delete this[K];if(Q.size>0)this.__instanceProperties=Q}createRenderRoot(){let Q=this.shadowRoot??this.attachShadow(this.constructor.shadowRootOptions);return N3(Q,this.constructor.elementStyles),Q}connectedCallback(){this.renderRoot??=this.createRenderRoot(),this.enableUpdating(!0),this.__controllers?.forEach((Q)=>Q.hostConnected?.())}enableUpdating(Q){}disconnectedCallback(){this.__controllers?.forEach((Q)=>Q.hostDisconnected?.())}attributeChangedCallback(Q,Y,K){this._$attributeToProperty(Q,K)}__propertyToAttribute(Q,Y){let X=this.constructor.elementProperties.get(Q),G=this.constructor.__attributeNameForProperty(Q,X);if(G!==void 0&&X.reflect===!0){let J=(X.converter?.toAttribute!==void 0?X.converter:d4).toAttribute(Y,X.type);if(w&&this.constructor.enabledWarnings.includes("migration")&&J===void 0)k("undefined-attribute-value",`The attribute value for the ${Q} property is undefined on element ${this.localName}. The attribute will be removed, but in the previous version of \`ReactiveElement\`, the attribute would not have changed.`);if(this.__reflectingProperty=Q,J==null)this.removeAttribute(G);else this.setAttribute(G,J);this.__reflectingProperty=null}}_$attributeToProperty(Q,Y){let K=this.constructor,X=K.__attributeToPropertyMap.get(Q);if(X!==void 0&&this.__reflectingProperty!==X){let G=K.getPropertyOptions(X),q=typeof G.converter==="function"?{fromAttribute:G.converter}:G.converter?.fromAttribute!==void 0?G.converter:d4;this.__reflectingProperty=X;let J=q.fromAttribute(Y,G.type);this[X]=J??this.__defaultValues?.get(X)??J,this.__reflectingProperty=null}}requestUpdate(Q,Y,K,X=!1,G){if(Q!==void 0){if(w&&Q instanceof Event)k("","The requestUpdate() method was called with an Event as the property name. This is probably a mistake caused by binding this.requestUpdate as an event listener. Instead bind a function that will call it with no arguments: () => this.requestUpdate()");let q=this.constructor;if(X===!1)G=this[Q];if(K??=q.getPropertyOptions(Q),(K.hasChanged??R3)(G,Y)||K.useDefault&&K.reflect&&G===this.__defaultValues?.get(Q)&&!this.hasAttribute(q.__attributeNameForProperty(Q,K)))this._$changeProperty(Q,Y,K);else return}if(this.isUpdatePending===!1)this.__updatePromise=this.__enqueueUpdate()}_$changeProperty(Q,Y,{useDefault:K,reflect:X,wrapped:G},q){if(K&&!(this.__defaultValues??=new Map).has(Q)){if(this.__defaultValues.set(Q,q??Y??this[Q]),G!==!0||q!==void 0)return}if(!this._$changedProperties.has(Q)){if(!this.hasUpdated&&!K)Y=void 0;this._$changedProperties.set(Q,Y)}if(X===!0&&this.__reflectingProperty!==Q)(this.__reflectingProperties??=new Set).add(Q)}async __enqueueUpdate(){this.isUpdatePending=!0;try{await this.__updatePromise}catch(Y){Promise.reject(Y)}let Q=this.scheduleUpdate();if(Q!=null)await Q;return!this.isUpdatePending}scheduleUpdate(){let Q=this.performUpdate();if(w&&this.constructor.enabledWarnings.includes("async-perform-update")&&typeof Q?.then==="function")k("async-perform-update",`Element ${this.localName} returned a Promise from performUpdate(). This behavior is deprecated and will be removed in a future version of ReactiveElement.`);return Q}performUpdate(){if(!this.isUpdatePending)return;if(OQ?.({kind:"update"}),!this.hasUpdated){if(this.renderRoot??=this.createRenderRoot(),w){let G=[...this.constructor.elementProperties.keys()].filter((q)=>this.hasOwnProperty(q)&&(q in P3(this)));if(G.length)throw Error(`The following properties on element ${this.localName} will not trigger updates as expected because they are set using class fields: ${G.join(", ")}. Native class fields and some compiled output will overwrite accessors used for detecting changes. See https://lit.dev/msg/class-field-shadowing for more information.`)}if(this.__instanceProperties){for(let[X,G]of this.__instanceProperties)this[X]=G;this.__instanceProperties=void 0}let K=this.constructor.elementProperties;if(K.size>0)for(let[X,G]of K){let{wrapped:q}=G,J=this[X];if(q===!0&&!this._$changedProperties.has(X)&&J!==void 0)this._$changeProperty(X,void 0,G,J)}}let Q=!1,Y=this._$changedProperties;try{if(Q=this.shouldUpdate(Y),Q)this.willUpdate(Y),this.__controllers?.forEach((K)=>K.hostUpdate?.()),this.update(Y);else this.__markUpdated()}catch(K){throw Q=!1,this.__markUpdated(),K}if(Q)this._$didUpdate(Y)}willUpdate(Q){}_$didUpdate(Q){if(this.__controllers?.forEach((Y)=>Y.hostUpdated?.()),!this.hasUpdated)this.hasUpdated=!0,this.firstUpdated(Q);if(this.updated(Q),w&&this.isUpdatePending&&this.constructor.enabledWarnings.includes("change-in-update"))k("change-in-update",`Element ${this.localName} scheduled an update (generally because a property was set) after an update completed, causing a new update to be scheduled. This is inefficient and should be avoided unless the next update can only be scheduled as a side effect of the previous update.`)}__markUpdated(){this._$changedProperties=new Map,this.isUpdatePending=!1}get updateComplete(){return this.getUpdateComplete()}getUpdateComplete(){return this.__updatePromise}shouldUpdate(Q){return!0}update(Q){this.__reflectingProperties&&=this.__reflectingProperties.forEach((Y)=>this.__propertyToAttribute(Y,this[Y])),this.__markUpdated()}updated(Q){}firstUpdated(Q){}}_.elementStyles=[];_.shadowRootOptions={mode:"open"};_[s("elementProperties",_)]=new Map;_[s("finalized",_)]=new Map;Z3?.({ReactiveElement:_});if(w){_.enabledWarnings=["change-in-update","async-perform-update"];let Q=function(Y){if(!Y.hasOwnProperty(s("enabledWarnings",Y)))Y.enabledWarnings=Y.enabledWarnings.slice()};_.enableWarning=function(Y){if(Q(this),!this.enabledWarnings.includes(Y))this.enabledWarnings.push(Y)},_.disableWarning=function(Y){Q(this);let K=this.enabledWarnings.indexOf(Y);if(K>=0)this.enabledWarnings.splice(K,1)}}(R.reactiveElementVersions??=[]).push("2.1.2");if(w&&R.reactiveElementVersions.length>1)queueMicrotask(()=>{k("multiple-versions","Multiple versions of Lit loaded. Loading multiple versions is not recommended.")});var T=globalThis,V=(Q)=>{if(!T.emitLitDebugLogEvents)return;T.dispatchEvent(new CustomEvent("lit-debug",{detail:Q}))},PQ=0,W4;T.litIssuedWarnings??=new Set,W4=(Q,Y)=>{if(Y+=Q?` See https://lit.dev/msg/${Q} for more information.`:"",!T.litIssuedWarnings.has(Y)&&!T.litIssuedWarnings.has(Q))console.warn(Y),T.litIssuedWarnings.add(Y)},queueMicrotask(()=>{W4("dev-mode","Lit is in dev mode. Not recommended for production!")});var C=T.ShadyDOM?.inUse&&T.ShadyDOM?.noPatch===!0?T.ShadyDOM.wrap:(Q)=>Q,M4=T.trustedTypes,w3=M4?M4.createPolicy("lit-html",{createHTML:(Q)=>Q}):void 0,EQ=(Q)=>Q,_4=(Q,Y,K)=>EQ,MQ=(Q)=>{if(d!==_4)throw Error("Attempted to overwrite existing lit-html security policy. setSanitizeDOMValueFactory should be called at most once.");d=Q},ZQ=()=>{d=_4},a4=(Q,Y,K)=>{return d(Q,Y,K)},x3="$lit$",g=`lit$${Math.random().toFixed(9).slice(2)}$`,g3="?"+g,RQ=`<${g3}>`,p=document,U4=()=>p.createComment(""),j4=(Q)=>Q===null||typeof Q!="object"&&typeof Q!="function",e4=Array.isArray,wQ=(Q)=>e4(Q)||typeof Q?.[Symbol.iterator]==="function",n4=`[ 	
+\f\r]`,_Q=`[^ 	
+\f\r"'\`<>=]`,TQ=`[^\\s"'>=/]`,B4=/<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g,_3=1,i4=2,SQ=3,T3=/-->/g,S3=/>/g,f=new RegExp(`>|${n4}(?:(${TQ}+)(${n4}*=${n4}*(?:${_Q}|("|')|))|$)`,"g"),kQ=0,k3=1,CQ=2,C3=3,s4=/'/g,t4=/"/g,v3=/^(?:script|style|textarea|title)$/i,bQ=1,Z4=2,R4=3,Q3=1,w4=2,xQ=3,gQ=4,vQ=5,Y3=6,hQ=7,K3=(Q)=>(Y,...K)=>{if(Y.some((X)=>X===void 0))console.warn(`Some template strings are undefined.
+This is probably caused by illegal octal escape sequences.`);if(K.some((X)=>X?._$litStatic$))W4("",`Static values 'literal' or 'unsafeStatic' cannot be used as values to non-static templates.
+Please use the static 'html' tag function. See https://lit.dev/docs/templates/expressions/#static-expressions`);return{["_$litType$"]:Q,strings:Y,values:K}},z=K3(bQ),S=K3(Z4),C8=K3(R4),l=Symbol.for("lit-noChange"),B=Symbol.for("lit-nothing"),b3=new WeakMap,r=p.createTreeWalker(p,129),d=_4;function h3(Q,Y){if(!e4(Q)||!Q.hasOwnProperty("raw")){let K="invalid template strings array";throw K=`
           Internal Error: expected template strings to be an array
           with a 'raw' field. Faking a template strings array by
           calling html or svg like an ordinary function is effectively
@@ -13,14 +13,14 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
           https://github.com/lit/lit/issues/new?template=bug_report.md
           and include information about your build tooling, if any.
         `.trim().replace(/\n */g,`
-`),Error(Q)}return vZ!==void 0?vZ.createHTML(K):K}var X6=(Z,K)=>{let Q=Z.length-1,$=[],B=K===QZ?"<svg>":K===$Z?"<math>":"",Y,X=m;for(let q=0;q<Q;q++){let M=Z[q],z=-1,k,_=0,F;while(_<M.length){if(X.lastIndex=_,F=X.exec(M),F===null)break;if(_=X.lastIndex,X===m){if(F[mZ]==="!--")X=pZ;else if(F[mZ]!==void 0)X=oZ;else if(F[IZ]!==void 0){if(nZ.test(F[IZ]))Y=new RegExp(`</${F[IZ]}`,"g");X=b}else if(F[Z6]!==void 0)throw Error("Bindings in tag names are not supported. Please use static templates instead. See https://lit.dev/docs/templates/expressions/#static-expressions")}else if(X===b)if(F[K6]===">")X=Y??m,z=-1;else if(F[lZ]===void 0)z=-2;else z=X.lastIndex-F[Q6].length,k=F[lZ],X=F[sZ]===void 0?b:F[sZ]==='"'?CZ:TZ;else if(X===CZ||X===TZ)X=b;else if(X===pZ||X===oZ)X=m;else X=b,Y=void 0}console.assert(z===-1||X===b||X===TZ||X===CZ,"unexpected parse state B");let C=X===b&&Z[q+1].startsWith("/>")?" ":"";B+=X===m?M+a5:z>=0?($.push(k),M.slice(0,z)+rZ+M.slice(z))+E+C:M+E+(z===-2?q:C)}let J=B+(Z[Q]||"<?>")+(K===QZ?"</svg>":K===$Z?"</math>":"");return[tZ(Z,J),$]};class i{constructor({strings:Z,["_$litType$"]:K},Q){this.parts=[];let $,B=0,Y=0,X=Z.length-1,J=this.parts,[q,M]=X6(Z,K);if(this.el=i.createElement(q,Q),f.currentNode=this.el.content,K===QZ||K===$Z){let z=this.el.content.firstChild;z.replaceWith(...z.childNodes)}while(($=f.nextNode())!==null&&J.length<X){if($.nodeType===1){{let z=$.localName;if(/^(?:textarea|template)$/i.test(z)&&$.innerHTML.includes(E)){let k=`Expressions are not supported inside \`${z}\` elements. See https://lit.dev/msg/expression-in-${z} for more information.`;if(z==="template")throw Error(k);else o("",k)}}if($.hasAttributes()){for(let z of $.getAttributeNames())if(z.endsWith(rZ)){let k=M[Y++],F=$.getAttribute(z).split(E),C=/([.?@])?(.*)/.exec(k);J.push({type:RZ,index:B,name:C[2],strings:F,ctor:C[1]==="."?Z5:C[1]==="?"?K5:C[1]==="@"?Q5:a}),$.removeAttribute(z)}else if(z.startsWith(E))J.push({type:NZ,index:B}),$.removeAttribute(z)}if(nZ.test($.tagName)){let z=$.textContent.split(E),k=z.length-1;if(k>0){$.textContent=KZ?KZ.emptyScript:"";for(let _=0;_<k;_++)$.append(z[_],l()),f.nextNode(),J.push({type:BZ,index:++B});$.append(z[k],l())}}}else if($.nodeType===8)if($.data===aZ)J.push({type:BZ,index:B});else{let k=-1;while((k=$.data.indexOf(E,k+1))!==-1)J.push({type:j6,index:B}),k+=E.length-1}B++}if(M.length!==Y)throw Error('Detected duplicate attribute bindings. This occurs if your template has duplicate attributes on an element tag. For example "<input ?disabled=${true} ?disabled=${false}>" contains a duplicate "disabled" attribute. The error was detected in the following template: \n`'+Z.join("${...}")+"`");W&&W({kind:"template prep",template:this,clonableTemplate:this.el,parts:this.parts,strings:Z})}static createElement(Z,K){let Q=h.createElement("template");return Q.innerHTML=Z,Q}}function u(Z,K,Q=Z,$){if(K===g)return K;let B=$!==void 0?Q.__directives?.[$]:Q.__directive,Y=s(K)?void 0:K._$litDirective$;if(B?.constructor!==Y){if(B?._$notifyDirectiveConnectionChanged?.(!1),Y===void 0)B=void 0;else B=new Y(Z),B._$initialize(Z,Q,$);if($!==void 0)(Q.__directives??=[])[$]=B;else Q.__directive=B}if(B!==void 0)K=u(Z,B._$resolve(Z,K.values),B,$);return K}class eZ{constructor(Z,K){this._$parts=[],this._$disconnectableChildren=void 0,this._$template=Z,this._$parent=K}get parentNode(){return this._$parent.parentNode}get _$isConnected(){return this._$parent._$isConnected}_clone(Z){let{el:{content:K},parts:Q}=this._$template,$=(Z?.creationScope??h).importNode(K,!0);f.currentNode=$;let B=f.nextNode(),Y=0,X=0,J=Q[0];while(J!==void 0){if(Y===J.index){let q;if(J.type===BZ)q=new r(B,B.nextSibling,this,Z);else if(J.type===RZ)q=new J.ctor(B,J.name,J.strings,this,Z);else if(J.type===NZ)q=new $5(B,this,Z);this._$parts.push(q),J=Q[++X]}if(Y!==J?.index)B=f.nextNode(),Y++}return f.currentNode=h,$}_update(Z){let K=0;for(let Q of this._$parts){if(Q!==void 0)if(W&&W({kind:"set part",part:Q,value:Z[K],valueIndex:K,values:Z,templateInstance:this}),Q.strings!==void 0)Q._$setValue(Z,Q,K),K+=Q.strings.length-2;else Q._$setValue(Z[K]);K++}}}class r{get _$isConnected(){return this._$parent?._$isConnected??this.__isConnected}constructor(Z,K,Q,$){this.type=BZ,this._$committedValue=j,this._$disconnectableChildren=void 0,this._$startNode=Z,this._$endNode=K,this._$parent=Q,this.options=$,this.__isConnected=$?.isConnected??!0,this._textSanitizer=void 0}get parentNode(){let Z=y(this._$startNode).parentNode,K=this._$parent;if(K!==void 0&&Z?.nodeType===11)Z=K.parentNode;return Z}get startNode(){return this._$startNode}get endNode(){return this._$endNode}_$setValue(Z,K=this){if(this.parentNode===null)throw Error("This `ChildPart` has no `parentNode` and therefore cannot accept a value. This likely means the element containing the part was manipulated in an unsupported way outside of Lit's control such that the part's marker nodes were ejected from DOM. For example, setting the element's `innerHTML` or `textContent` can do this.");if(Z=u(this,Z,K),s(Z)){if(Z===j||Z==null||Z===""){if(this._$committedValue!==j)W&&W({kind:"commit nothing to child",start:this._$startNode,end:this._$endNode,parent:this._$parent,options:this.options}),this._$clear();this._$committedValue=j}else if(Z!==this._$committedValue&&Z!==g)this._commitText(Z)}else if(Z._$litType$!==void 0)this._commitTemplateResult(Z);else if(Z.nodeType!==void 0){if(this.options?.host===Z){this._commitText("[probable mistake: rendered a template's host in itself (commonly caused by writing ${this} in a template]"),console.warn("Attempted to render the template host",Z,"inside itself. This is almost always a mistake, and in dev mode ","we render some warning text. In production however, we'll ","render it, which will usually result in an error, and sometimes ","in the element disappearing from the DOM.");return}this._commitNode(Z)}else if(n5(Z))this._commitIterable(Z);else this._commitText(Z)}_insert(Z){return y(y(this._$startNode).parentNode).insertBefore(Z,this._$endNode)}_commitNode(Z){if(this._$committedValue!==Z){if(this._$clear(),c!==GZ){let K=this._$startNode.parentNode?.nodeName;if(K==="STYLE"||K==="SCRIPT"){let Q="Forbidden";if(K==="STYLE")Q="Lit does not support binding inside style nodes. This is a security risk, as style injection attacks can exfiltrate data and spoof UIs. Consider instead using css`...` literals to compose styles, and do dynamic styling with css custom properties, ::parts, <slot>s, and by mutating the DOM rather than stylesheets.";else Q="Lit does not support binding inside script nodes. This is a security risk, as it could allow arbitrary code execution.";throw Error(Q)}}W&&W({kind:"commit node",start:this._$startNode,parent:this._$parent,value:Z,options:this.options}),this._$committedValue=this._insert(Z)}}_commitText(Z){if(this._$committedValue!==j&&s(this._$committedValue)){let K=y(this._$startNode).nextSibling;if(this._textSanitizer===void 0)this._textSanitizer=VZ(K,"data","property");Z=this._textSanitizer(Z),W&&W({kind:"commit text",node:K,value:Z,options:this.options}),K.data=Z}else{let K=h.createTextNode("");if(this._commitNode(K),this._textSanitizer===void 0)this._textSanitizer=VZ(K,"data","property");Z=this._textSanitizer(Z),W&&W({kind:"commit text",node:K,value:Z,options:this.options}),K.data=Z}this._$committedValue=Z}_commitTemplateResult(Z){let{values:K,["_$litType$"]:Q}=Z,$=typeof Q==="number"?this._$getTemplate(Z):(Q.el===void 0&&(Q.el=i.createElement(tZ(Q.h,Q.h[0]),this.options)),Q);if(this._$committedValue?._$template===$)W&&W({kind:"template updating",template:$,instance:this._$committedValue,parts:this._$committedValue._$parts,options:this.options,values:K}),this._$committedValue._update(K);else{let B=new eZ($,this),Y=B._clone(this.options);W&&W({kind:"template instantiated",template:$,instance:B,parts:B._$parts,options:this.options,fragment:Y,values:K}),B._update(K),W&&W({kind:"template instantiated and updated",template:$,instance:B,parts:B._$parts,options:this.options,fragment:Y,values:K}),this._commitNode(Y),this._$committedValue=B}}_$getTemplate(Z){let K=iZ.get(Z.strings);if(K===void 0)iZ.set(Z.strings,K=new i(Z));return K}_commitIterable(Z){if(!DZ(this._$committedValue))this._$committedValue=[],this._$clear();let K=this._$committedValue,Q=0,$;for(let B of Z){if(Q===K.length)K.push($=new r(this._insert(l()),this._insert(l()),this,this.options));else $=K[Q];$._$setValue(B),Q++}if(Q<K.length)this._$clear($&&y($._$endNode).nextSibling,Q),K.length=Q}_$clear(Z=y(this._$startNode).nextSibling,K){this._$notifyConnectionChanged?.(!1,!0,K);while(Z!==this._$endNode){let Q=y(Z).nextSibling;y(Z).remove(),Z=Q}}setConnected(Z){if(this._$parent===void 0)this.__isConnected=Z,this._$notifyConnectionChanged?.(Z);else throw Error("part.setConnected() may only be called on a RootPart returned from render().")}}class a{get tagName(){return this.element.tagName}get _$isConnected(){return this._$parent._$isConnected}constructor(Z,K,Q,$,B){if(this.type=RZ,this._$committedValue=j,this._$disconnectableChildren=void 0,this.element=Z,this.name=K,this._$parent=$,this.options=B,Q.length>2||Q[0]!==""||Q[1]!=="")this._$committedValue=Array(Q.length-1).fill(new String),this.strings=Q;else this._$committedValue=j;this._sanitizer=void 0}_$setValue(Z,K=this,Q,$){let B=this.strings,Y=!1;if(B===void 0){if(Z=u(this,Z,K,0),Y=!s(Z)||Z!==this._$committedValue&&Z!==g,Y)this._$committedValue=Z}else{let X=Z;Z=B[0];let J,q;for(J=0;J<B.length-1;J++){if(q=u(this,X[Q+J],K,J),q===g)q=this._$committedValue[J];if(Y||=!s(q)||q!==this._$committedValue[J],q===j)Z=j;else if(Z!==j)Z+=(q??"")+B[J+1];this._$committedValue[J]=q}}if(Y&&!$)this._commitValue(Z)}_commitValue(Z){if(Z===j)y(this.element).removeAttribute(this.name);else{if(this._sanitizer===void 0)this._sanitizer=c(this.element,this.name,"attribute");Z=this._sanitizer(Z??""),W&&W({kind:"commit attribute",element:this.element,name:this.name,value:Z,options:this.options}),y(this.element).setAttribute(this.name,Z??"")}}}class Z5 extends a{constructor(){super(...arguments);this.type=B6}_commitValue(Z){if(this._sanitizer===void 0)this._sanitizer=c(this.element,this.name,"property");Z=this._sanitizer(Z),W&&W({kind:"commit property",element:this.element,name:this.name,value:Z,options:this.options}),this.element[this.name]=Z===j?void 0:Z}}class K5 extends a{constructor(){super(...arguments);this.type=G6}_commitValue(Z){W&&W({kind:"commit boolean attribute",element:this.element,name:this.name,value:!!(Z&&Z!==j),options:this.options}),y(this.element).toggleAttribute(this.name,!!Z&&Z!==j)}}class Q5 extends a{constructor(Z,K,Q,$,B){super(Z,K,Q,$,B);if(this.type=Y6,this.strings!==void 0)throw Error(`A \`<${Z.localName}>\` has a \`@${K}=...\` listener with invalid content. Event listeners in templates must have exactly one expression and no surrounding text.`)}_$setValue(Z,K=this){if(Z=u(this,Z,K,0)??j,Z===g)return;let Q=this._$committedValue,$=Z===j&&Q!==j||Z.capture!==Q.capture||Z.once!==Q.once||Z.passive!==Q.passive,B=Z!==j&&(Q===j||$);if(W&&W({kind:"commit event listener",element:this.element,name:this.name,value:Z,options:this.options,removeListener:$,addListener:B,oldListener:Q}),$)this.element.removeEventListener(this.name,this,Q);if(B)this.element.addEventListener(this.name,this,Z);this._$committedValue=Z}handleEvent(Z){if(typeof this._$committedValue==="function")this._$committedValue.call(this.options?.host??this.element,Z);else this._$committedValue.handleEvent(Z)}}class $5{constructor(Z,K,Q){this.element=Z,this.type=NZ,this._$disconnectableChildren=void 0,this._$parent=K,this.options=Q}get _$isConnected(){return this._$parent._$isConnected}_$setValue(Z){W&&W({kind:"commit to element binding",element:this.element,value:Z,options:this.options}),u(this,Z)}}var J6=N.litHtmlPolyfillSupportDevMode;J6?.(i,r);(N.litHtmlVersions??=[]).push("3.3.3");if(N.litHtmlVersions.length>1)queueMicrotask(()=>{o("multiple-versions","Multiple versions of Lit loaded. Loading multiple versions is not recommended.")});var p=(Z,K,Q)=>{if(K==null)throw TypeError(`The container to render into may not be ${K}`);let $=l5++,B=Q?.renderBefore??K,Y=B._$litPart$;if(W&&W({kind:"begin render",id:$,value:Z,container:K,options:Q,part:Y}),Y===void 0){let X=Q?.renderBefore??null;B._$litPart$=Y=new r(K.insertBefore(l(),X),X,void 0,Q??{})}return Y._$setValue(Z),W&&W({kind:"end render",id:$,value:Z,container:K,options:Q,part:Y}),Y};p.setSanitizer=i5,p.createSanitizer=VZ,p._testOnlyClearSanitizerFactoryDoNotCallOrElse=r5;var z6=(Z,K)=>Z,SZ=!0,x=globalThis,B5;if(SZ)x.litIssuedWarnings??=new Set,B5=(Z,K)=>{if(K+=` See https://lit.dev/msg/${Z} for more information.`,!x.litIssuedWarnings.has(K)&&!x.litIssuedWarnings.has(Z))console.warn(K),x.litIssuedWarnings.add(K)};class U extends R{constructor(){super(...arguments);this.renderOptions={host:this},this.__childPart=void 0}createRenderRoot(){let Z=super.createRenderRoot();return this.renderOptions.renderBefore??=Z.firstChild,Z}update(Z){let K=this.render();if(!this.hasUpdated)this.renderOptions.isConnected=this.isConnected;super.update(Z),this.__childPart=p(K,this.renderRoot,this.renderOptions)}connectedCallback(){super.connectedCallback(),this.__childPart?.setConnected(!0)}disconnectedCallback(){super.disconnectedCallback(),this.__childPart?.setConnected(!1)}render(){return g}}U._$litElement$=!0;U[z6("finalized",U)]=!0;x.litElementHydrateSupport?.({LitElement:U});var U6=SZ?x.litElementPolyfillSupportDevMode:x.litElementPolyfillSupport;U6?.({LitElement:U});(x.litElementVersions??=[]).push("4.2.2");if(SZ&&x.litElementVersions.length>1)queueMicrotask(()=>{B5("multiple-versions","Multiple versions of Lit loaded. Loading multiple versions is not recommended.")});async function w(Z){let K=await fetch(Z,{credentials:"same-origin"});if(!K.ok)throw Error(`${Z}: ${K.status}`);return await K.json()}async function YZ(Z,K){let Q=await fetch(Z,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(K)});if(!Q.ok){let $=await Q.text();throw Error($.trim()||`${Z}: ${Q.status}`)}}async function G5(Z,K){let Q=await fetch(Z,{method:"PUT",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(K)});if(!Q.ok){let $=await Q.text();throw Error($.trim()||`${Z}: ${Q.status}`)}return await Q.json()}async function q6(Z,K){let Q=await fetch(Z,{method:"DELETE",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(K)});if(!Q.ok){let $=await Q.text();throw Error($.trim()||`${Z}: ${Q.status}`)}return await Q.json()}var O={authStatus:()=>w("/api/auth/status"),setup:(Z)=>YZ("/api/auth/setup",{password:Z}),login:(Z)=>YZ("/api/auth/login",{password:Z}),logout:()=>YZ("/api/auth/logout",{}),fleet:()=>w("/api/fleet"),system:()=>w("/api/system"),history:()=>w("/api/history"),events:(Z={})=>{let K=new URLSearchParams;if(Z.since_ms)K.set("since_ms",String(Z.since_ms));if(Z.kind)K.set("kind",Z.kind);if(Z.severity)K.set("severity",Z.severity);if(Z.inverter_uid)K.set("inverter_uid",Z.inverter_uid);if(Z.limit)K.set("limit",String(Z.limit));let Q=K.toString();return w("/api/events"+(Q?`?${Q}`:""))},getSettings:async()=>{let Z=await w("/api/settings");if(Z.error)return{error:Z.error};return{settings:{ecu_id:Z.ecu_id,mac:Z.mac,pan_override:Z.pan_override,zigbee_type:Z.zigbee_type,inverter_names:Z.inverter_names??{}}}},saveSettings:(Z)=>G5("/api/settings",Z),profiles:()=>w("/api/profiles"),overlays:()=>w("/api/overlays"),selectBase:(Z)=>YZ("/api/profiles/base",{id:Z}),saveOverlay:(Z)=>G5("/api/profiles/overlay",Z),deleteOverlay:(Z,K)=>q6("/api/profiles/overlay",{id:Z,uids:K})};function Y5(Z,K){let Q=new EventSource("/api/stream");return Q.addEventListener("fleet",($)=>{try{Z(JSON.parse($.data))}catch{}}),Q.onerror=()=>K?.(),()=>Q.close()}class j5 extends U{static properties={configured:{type:Boolean},error:{state:!0},busy:{state:!0}};constructor(){super();this.configured=!0,this.error="",this.busy=!1}static styles=H`
+`),Error(K)}return w3!==void 0?w3.createHTML(Y):Y}var cQ=(Q,Y)=>{let K=Q.length-1,X=[],G=Y===Z4?"<svg>":Y===R4?"<math>":"",q,J=B4;for(let W=0;W<K;W++){let U=Q[W],j=-1,$,F=0,D;while(F<U.length){if(J.lastIndex=F,D=J.exec(U),D===null)break;if(F=J.lastIndex,J===B4){if(D[_3]==="!--")J=T3;else if(D[_3]!==void 0)J=S3;else if(D[i4]!==void 0){if(v3.test(D[i4]))q=new RegExp(`</${D[i4]}`,"g");J=f}else if(D[SQ]!==void 0)throw Error("Bindings in tag names are not supported. Please use static templates instead. See https://lit.dev/docs/templates/expressions/#static-expressions")}else if(J===f)if(D[kQ]===">")J=q??B4,j=-1;else if(D[k3]===void 0)j=-2;else j=J.lastIndex-D[CQ].length,$=D[k3],J=D[C3]===void 0?f:D[C3]==='"'?t4:s4;else if(J===t4||J===s4)J=f;else if(J===T3||J===S3)J=B4;else J=f,q=void 0}console.assert(j===-1||J===f||J===s4||J===t4,"unexpected parse state B");let P=J===f&&Q[W+1].startsWith("/>")?" ":"";G+=J===B4?U+RQ:j>=0?(X.push($),U.slice(0,j)+x3+U.slice(j))+g+P:U+g+(j===-2?W:P)}let H=G+(Q[K]||"<?>")+(Y===Z4?"</svg>":Y===R4?"</math>":"");return[h3(Q,H),X]};class $4{constructor({strings:Q,["_$litType$"]:Y},K){this.parts=[];let X,G=0,q=0,J=Q.length-1,H=this.parts,[W,U]=cQ(Q,Y);if(this.el=$4.createElement(W,K),r.currentNode=this.el.content,Y===Z4||Y===R4){let j=this.el.content.firstChild;j.replaceWith(...j.childNodes)}while((X=r.nextNode())!==null&&H.length<J){if(X.nodeType===1){{let j=X.localName;if(/^(?:textarea|template)$/i.test(j)&&X.innerHTML.includes(g)){let $=`Expressions are not supported inside \`${j}\` elements. See https://lit.dev/msg/expression-in-${j} for more information.`;if(j==="template")throw Error($);else W4("",$)}}if(X.hasAttributes()){for(let j of X.getAttributeNames())if(j.endsWith(x3)){let $=U[q++],D=X.getAttribute(j).split(g),P=/([.?@])?(.*)/.exec($);H.push({type:Q3,index:G,name:P[2],strings:D,ctor:P[1]==="."?y3:P[1]==="?"?m3:P[1]==="@"?u3:L4}),X.removeAttribute(j)}else if(j.startsWith(g))H.push({type:Y3,index:G}),X.removeAttribute(j)}if(v3.test(X.tagName)){let j=X.textContent.split(g),$=j.length-1;if($>0){X.textContent=M4?M4.emptyScript:"";for(let F=0;F<$;F++)X.append(j[F],U4()),r.nextNode(),H.push({type:w4,index:++G});X.append(j[$],U4())}}}else if(X.nodeType===8)if(X.data===g3)H.push({type:w4,index:G});else{let $=-1;while(($=X.data.indexOf(g,$+1))!==-1)H.push({type:hQ,index:G}),$+=g.length-1}G++}if(U.length!==q)throw Error('Detected duplicate attribute bindings. This occurs if your template has duplicate attributes on an element tag. For example "<input ?disabled=${true} ?disabled=${false}>" contains a duplicate "disabled" attribute. The error was detected in the following template: \n`'+Q.join("${...}")+"`");V&&V({kind:"template prep",template:this,clonableTemplate:this.el,parts:this.parts,strings:Q})}static createElement(Q,Y){let K=p.createElement("template");return K.innerHTML=Q,K}}function t(Q,Y,K=Q,X){if(Y===l)return Y;let G=X!==void 0?K.__directives?.[X]:K.__directive,q=j4(Y)?void 0:Y._$litDirective$;if(G?.constructor!==q){if(G?._$notifyDirectiveConnectionChanged?.(!1),q===void 0)G=void 0;else G=new q(Q),G._$initialize(Q,K,X);if(X!==void 0)(K.__directives??=[])[X]=G;else K.__directive=G}if(G!==void 0)Y=t(Q,G._$resolve(Q,Y.values),G,X);return Y}class c3{constructor(Q,Y){this._$parts=[],this._$disconnectableChildren=void 0,this._$template=Q,this._$parent=Y}get parentNode(){return this._$parent.parentNode}get _$isConnected(){return this._$parent._$isConnected}_clone(Q){let{el:{content:Y},parts:K}=this._$template,X=(Q?.creationScope??p).importNode(Y,!0);r.currentNode=X;let G=r.nextNode(),q=0,J=0,H=K[0];while(H!==void 0){if(q===H.index){let W;if(H.type===w4)W=new A4(G,G.nextSibling,this,Q);else if(H.type===Q3)W=new H.ctor(G,H.name,H.strings,this,Q);else if(H.type===Y3)W=new f3(G,this,Q);this._$parts.push(W),H=K[++J]}if(q!==H?.index)G=r.nextNode(),q++}return r.currentNode=p,X}_update(Q){let Y=0;for(let K of this._$parts){if(K!==void 0)if(V&&V({kind:"set part",part:K,value:Q[Y],valueIndex:Y,values:Q,templateInstance:this}),K.strings!==void 0)K._$setValue(Q,K,Y),Y+=K.strings.length-2;else K._$setValue(Q[Y]);Y++}}}class A4{get _$isConnected(){return this._$parent?._$isConnected??this.__isConnected}constructor(Q,Y,K,X){this.type=w4,this._$committedValue=B,this._$disconnectableChildren=void 0,this._$startNode=Q,this._$endNode=Y,this._$parent=K,this.options=X,this.__isConnected=X?.isConnected??!0,this._textSanitizer=void 0}get parentNode(){let Q=C(this._$startNode).parentNode,Y=this._$parent;if(Y!==void 0&&Q?.nodeType===11)Q=Y.parentNode;return Q}get startNode(){return this._$startNode}get endNode(){return this._$endNode}_$setValue(Q,Y=this){if(this.parentNode===null)throw Error("This `ChildPart` has no `parentNode` and therefore cannot accept a value. This likely means the element containing the part was manipulated in an unsupported way outside of Lit's control such that the part's marker nodes were ejected from DOM. For example, setting the element's `innerHTML` or `textContent` can do this.");if(Q=t(this,Q,Y),j4(Q)){if(Q===B||Q==null||Q===""){if(this._$committedValue!==B)V&&V({kind:"commit nothing to child",start:this._$startNode,end:this._$endNode,parent:this._$parent,options:this.options}),this._$clear();this._$committedValue=B}else if(Q!==this._$committedValue&&Q!==l)this._commitText(Q)}else if(Q._$litType$!==void 0)this._commitTemplateResult(Q);else if(Q.nodeType!==void 0){if(this.options?.host===Q){this._commitText("[probable mistake: rendered a template's host in itself (commonly caused by writing ${this} in a template]"),console.warn("Attempted to render the template host",Q,"inside itself. This is almost always a mistake, and in dev mode ","we render some warning text. In production however, we'll ","render it, which will usually result in an error, and sometimes ","in the element disappearing from the DOM.");return}this._commitNode(Q)}else if(wQ(Q))this._commitIterable(Q);else this._commitText(Q)}_insert(Q){return C(C(this._$startNode).parentNode).insertBefore(Q,this._$endNode)}_commitNode(Q){if(this._$committedValue!==Q){if(this._$clear(),d!==_4){let Y=this._$startNode.parentNode?.nodeName;if(Y==="STYLE"||Y==="SCRIPT"){let K="Forbidden";if(Y==="STYLE")K="Lit does not support binding inside style nodes. This is a security risk, as style injection attacks can exfiltrate data and spoof UIs. Consider instead using css`...` literals to compose styles, and do dynamic styling with css custom properties, ::parts, <slot>s, and by mutating the DOM rather than stylesheets.";else K="Lit does not support binding inside script nodes. This is a security risk, as it could allow arbitrary code execution.";throw Error(K)}}V&&V({kind:"commit node",start:this._$startNode,parent:this._$parent,value:Q,options:this.options}),this._$committedValue=this._insert(Q)}}_commitText(Q){if(this._$committedValue!==B&&j4(this._$committedValue)){let Y=C(this._$startNode).nextSibling;if(this._textSanitizer===void 0)this._textSanitizer=a4(Y,"data","property");Q=this._textSanitizer(Q),V&&V({kind:"commit text",node:Y,value:Q,options:this.options}),Y.data=Q}else{let Y=p.createTextNode("");if(this._commitNode(Y),this._textSanitizer===void 0)this._textSanitizer=a4(Y,"data","property");Q=this._textSanitizer(Q),V&&V({kind:"commit text",node:Y,value:Q,options:this.options}),Y.data=Q}this._$committedValue=Q}_commitTemplateResult(Q){let{values:Y,["_$litType$"]:K}=Q,X=typeof K==="number"?this._$getTemplate(Q):(K.el===void 0&&(K.el=$4.createElement(h3(K.h,K.h[0]),this.options)),K);if(this._$committedValue?._$template===X)V&&V({kind:"template updating",template:X,instance:this._$committedValue,parts:this._$committedValue._$parts,options:this.options,values:Y}),this._$committedValue._update(Y);else{let G=new c3(X,this),q=G._clone(this.options);V&&V({kind:"template instantiated",template:X,instance:G,parts:G._$parts,options:this.options,fragment:q,values:Y}),G._update(Y),V&&V({kind:"template instantiated and updated",template:X,instance:G,parts:G._$parts,options:this.options,fragment:q,values:Y}),this._commitNode(q),this._$committedValue=G}}_$getTemplate(Q){let Y=b3.get(Q.strings);if(Y===void 0)b3.set(Q.strings,Y=new $4(Q));return Y}_commitIterable(Q){if(!e4(this._$committedValue))this._$committedValue=[],this._$clear();let Y=this._$committedValue,K=0,X;for(let G of Q){if(K===Y.length)Y.push(X=new A4(this._insert(U4()),this._insert(U4()),this,this.options));else X=Y[K];X._$setValue(G),K++}if(K<Y.length)this._$clear(X&&C(X._$endNode).nextSibling,K),Y.length=K}_$clear(Q=C(this._$startNode).nextSibling,Y){this._$notifyConnectionChanged?.(!1,!0,Y);while(Q!==this._$endNode){let K=C(Q).nextSibling;C(Q).remove(),Q=K}}setConnected(Q){if(this._$parent===void 0)this.__isConnected=Q,this._$notifyConnectionChanged?.(Q);else throw Error("part.setConnected() may only be called on a RootPart returned from render().")}}class L4{get tagName(){return this.element.tagName}get _$isConnected(){return this._$parent._$isConnected}constructor(Q,Y,K,X,G){if(this.type=Q3,this._$committedValue=B,this._$disconnectableChildren=void 0,this.element=Q,this.name=Y,this._$parent=X,this.options=G,K.length>2||K[0]!==""||K[1]!=="")this._$committedValue=Array(K.length-1).fill(new String),this.strings=K;else this._$committedValue=B;this._sanitizer=void 0}_$setValue(Q,Y=this,K,X){let G=this.strings,q=!1;if(G===void 0){if(Q=t(this,Q,Y,0),q=!j4(Q)||Q!==this._$committedValue&&Q!==l,q)this._$committedValue=Q}else{let J=Q;Q=G[0];let H,W;for(H=0;H<G.length-1;H++){if(W=t(this,J[K+H],Y,H),W===l)W=this._$committedValue[H];if(q||=!j4(W)||W!==this._$committedValue[H],W===B)Q=B;else if(Q!==B)Q+=(W??"")+G[H+1];this._$committedValue[H]=W}}if(q&&!X)this._commitValue(Q)}_commitValue(Q){if(Q===B)C(this.element).removeAttribute(this.name);else{if(this._sanitizer===void 0)this._sanitizer=d(this.element,this.name,"attribute");Q=this._sanitizer(Q??""),V&&V({kind:"commit attribute",element:this.element,name:this.name,value:Q,options:this.options}),C(this.element).setAttribute(this.name,Q??"")}}}class y3 extends L4{constructor(){super(...arguments);this.type=xQ}_commitValue(Q){if(this._sanitizer===void 0)this._sanitizer=d(this.element,this.name,"property");Q=this._sanitizer(Q),V&&V({kind:"commit property",element:this.element,name:this.name,value:Q,options:this.options}),this.element[this.name]=Q===B?void 0:Q}}class m3 extends L4{constructor(){super(...arguments);this.type=gQ}_commitValue(Q){V&&V({kind:"commit boolean attribute",element:this.element,name:this.name,value:!!(Q&&Q!==B),options:this.options}),C(this.element).toggleAttribute(this.name,!!Q&&Q!==B)}}class u3 extends L4{constructor(Q,Y,K,X,G){super(Q,Y,K,X,G);if(this.type=vQ,this.strings!==void 0)throw Error(`A \`<${Q.localName}>\` has a \`@${Y}=...\` listener with invalid content. Event listeners in templates must have exactly one expression and no surrounding text.`)}_$setValue(Q,Y=this){if(Q=t(this,Q,Y,0)??B,Q===l)return;let K=this._$committedValue,X=Q===B&&K!==B||Q.capture!==K.capture||Q.once!==K.once||Q.passive!==K.passive,G=Q!==B&&(K===B||X);if(V&&V({kind:"commit event listener",element:this.element,name:this.name,value:Q,options:this.options,removeListener:X,addListener:G,oldListener:K}),X)this.element.removeEventListener(this.name,this,K);if(G)this.element.addEventListener(this.name,this,Q);this._$committedValue=Q}handleEvent(Q){if(typeof this._$committedValue==="function")this._$committedValue.call(this.options?.host??this.element,Q);else this._$committedValue.handleEvent(Q)}}class f3{constructor(Q,Y,K){this.element=Q,this.type=Y3,this._$disconnectableChildren=void 0,this._$parent=Y,this.options=K}get _$isConnected(){return this._$parent._$isConnected}_$setValue(Q){V&&V({kind:"commit to element binding",element:this.element,value:Q,options:this.options}),t(this,Q)}}var yQ=T.litHtmlPolyfillSupportDevMode;yQ?.($4,A4);(T.litHtmlVersions??=[]).push("3.3.3");if(T.litHtmlVersions.length>1)queueMicrotask(()=>{W4("multiple-versions","Multiple versions of Lit loaded. Loading multiple versions is not recommended.")});var H4=(Q,Y,K)=>{if(Y==null)throw TypeError(`The container to render into may not be ${Y}`);let X=PQ++,G=K?.renderBefore??Y,q=G._$litPart$;if(V&&V({kind:"begin render",id:X,value:Q,container:Y,options:K,part:q}),q===void 0){let J=K?.renderBefore??null;G._$litPart$=q=new A4(Y.insertBefore(U4(),J),J,void 0,K??{})}return q._$setValue(Q),V&&V({kind:"end render",id:X,value:Q,container:Y,options:K,part:q}),q};H4.setSanitizer=MQ,H4.createSanitizer=a4,H4._testOnlyClearSanitizerFactoryDoNotCallOrElse=ZQ;var mQ=(Q,Y)=>Q,X3=!0,v=globalThis,o3;if(X3)v.litIssuedWarnings??=new Set,o3=(Q,Y)=>{if(Y+=` See https://lit.dev/msg/${Q} for more information.`,!v.litIssuedWarnings.has(Y)&&!v.litIssuedWarnings.has(Q))console.warn(Y),v.litIssuedWarnings.add(Y)};class A extends _{constructor(){super(...arguments);this.renderOptions={host:this},this.__childPart=void 0}createRenderRoot(){let Q=super.createRenderRoot();return this.renderOptions.renderBefore??=Q.firstChild,Q}update(Q){let Y=this.render();if(!this.hasUpdated)this.renderOptions.isConnected=this.isConnected;super.update(Q),this.__childPart=H4(Y,this.renderRoot,this.renderOptions)}connectedCallback(){super.connectedCallback(),this.__childPart?.setConnected(!0)}disconnectedCallback(){super.disconnectedCallback(),this.__childPart?.setConnected(!1)}render(){return l}}A._$litElement$=!0;A[mQ("finalized",A)]=!0;v.litElementHydrateSupport?.({LitElement:A});var uQ=X3?v.litElementPolyfillSupportDevMode:v.litElementPolyfillSupport;uQ?.({LitElement:A});(v.litElementVersions??=[]).push("4.2.2");if(X3&&v.litElementVersions.length>1)queueMicrotask(()=>{o3("multiple-versions","Multiple versions of Lit loaded. Loading multiple versions is not recommended.")});async function h(Q){let Y=await fetch(Q,{credentials:"same-origin"});if(!Y.ok)throw Error(`${Q}: ${Y.status}`);return await Y.json()}async function T4(Q,Y){let K=await fetch(Q,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(Y)});if(!K.ok){let X=await K.text();throw Error(X.trim()||`${Q}: ${K.status}`)}}async function c(Q,Y){let K=await fetch(Q,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(Y)});if(!K.ok){let X=await K.text();throw Error(X.trim()||`${Q}: ${K.status}`)}return await K.json()}async function r3(Q,Y){let K=await fetch(Q,{method:"PUT",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(Y)});if(!K.ok){let X=await K.text();throw Error(X.trim()||`${Q}: ${K.status}`)}return await K.json()}function a(Q){if(!Q||!Q.op)return!1;return Q.stage!==""&&Q.stage!=="done"&&Q.stage!=="aborted"&&Q.stage!=="error"}async function fQ(Q,Y){let K=await fetch(Q,{method:"DELETE",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(Y)});if(!K.ok){let X=await K.text();throw Error(X.trim()||`${Q}: ${K.status}`)}return await K.json()}var I={authStatus:()=>h("/api/auth/status"),setup:(Q)=>c("/api/auth/setup",{password:Q}),login:(Q)=>T4("/api/auth/login",{password:Q}),logout:()=>T4("/api/auth/logout",{}),recover:(Q,Y)=>c("/api/auth/recover",{recovery_code:Q,password:Y}),changePassword:(Q,Y)=>T4("/api/auth/change-password",{current_password:Q,new_password:Y}),regenerateRecovery:()=>c("/api/auth/recovery",{}),fleet:()=>h("/api/fleet"),system:()=>h("/api/system"),history:()=>h("/api/history"),events:(Q={})=>{let Y=new URLSearchParams;if(Q.since_ms)Y.set("since_ms",String(Q.since_ms));if(Q.kind)Y.set("kind",Q.kind);if(Q.severity)Y.set("severity",Q.severity);if(Q.inverter_uid)Y.set("inverter_uid",Q.inverter_uid);if(Q.limit)Y.set("limit",String(Q.limit));let K=Y.toString();return h("/api/events"+(K?`?${K}`:""))},getSettings:async()=>{let Q=await h("/api/settings");if(Q.error)return{error:Q.error};return{settings:{ecu_id:Q.ecu_id,mac:Q.mac,pan_override:Q.pan_override,zigbee_type:Q.zigbee_type,channel:Q.channel,inverter_names:Q.inverter_names??{},effective:Q.effective}}},saveSettings:(Q)=>r3("/api/settings",Q),verifyPassword:async(Q)=>{let Y=await fetch("/api/auth/verify",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:Q})});if(Y.status===200)return!0;if(Y.status===401)return!1;let K=await Y.text();throw Error(K.trim()||`/api/auth/verify: ${Y.status}`)},setPower:(Q)=>c("/api/power",Q),profiles:()=>h("/api/profiles"),overlays:()=>h("/api/overlays"),selectBase:(Q)=>T4("/api/profiles/base",{id:Q}),saveOverlay:(Q)=>r3("/api/profiles/overlay",Q),deleteOverlay:(Q,Y)=>fQ("/api/profiles/overlay",{id:Q,uids:Y}),pairingScan:(Q={})=>c("/api/pairing/scan",Q),pairingAdd:(Q)=>c("/api/pairing/add",{serial:Q}),pairingReplace:(Q,Y)=>c("/api/pairing/replace",{old_uid:Q,new_serial:Y}),pairingRekey:(Q,Y=0)=>c("/api/pairing/rekey",{new_pan:Q,channel:Y}),pairingAbort:()=>c("/api/pairing/abort",{}),pairingStatus:()=>h("/api/pairing/status")};function p3(Q,Y){let K=new EventSource("/api/stream");return K.addEventListener("fleet",(X)=>{try{Q(JSON.parse(X.data))}catch{}}),K.onerror=()=>Y?.(),()=>K.close()}class l3 extends A{static properties={configured:{type:Boolean},error:{state:!0},busy:{state:!0},recoverMode:{state:!0},savedCode:{state:!0},copied:{state:!0}};constructor(){super();this.configured=!0,this.error="",this.busy=!1,this.recoverMode=!1,this.savedCode="",this.copied=!1}static styles=L`
     :host {
       display: grid;
       place-items: center;
       min-height: 100vh;
     }
     .box {
-      width: 320px;
+      width: 340px;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 12px;
@@ -28,7 +28,8 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
     }
     h1 { font-size: 20px; margin: 0 0 4px; color: var(--text); }
     p { color: var(--muted); font-size: 13px; margin: 0 0 18px; }
-    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    label { display: block; font-size: 12px; color: var(--muted); margin: 14px 0 6px; }
+    label:first-of-type { margin-top: 0; }
     input {
       width: 100%;
       box-sizing: border-box;
@@ -39,9 +40,9 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
       color: var(--text);
       font-size: 14px;
     }
-    button {
+    button.primary {
       width: 100%;
-      margin-top: 16px;
+      margin-top: 18px;
       padding: 10px;
       background: var(--accent);
       color: #04222b;
@@ -50,28 +51,94 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
       font-weight: 700;
       cursor: pointer;
     }
-    button:disabled { opacity: 0.6; cursor: default; }
+    button.primary:disabled { opacity: 0.6; cursor: default; }
     .err { color: var(--err); font-size: 13px; margin-top: 12px; min-height: 16px; }
     .brand { color: var(--accent); font-weight: 700; letter-spacing: 0.04em; }
-  `;async submit(Z){Z.preventDefault();let Q=this.renderRoot.querySelector("input")?.value??"";this.busy=!0,this.error="";try{if(this.configured)await O.login(Q);else await O.setup(Q);this.dispatchEvent(new CustomEvent("authed",{bubbles:!0,composed:!0}))}catch($){this.error=$.message||"failed"}finally{this.busy=!1}}render(){return G`
+    .link {
+      display: inline-block;
+      margin-top: 16px;
+      background: none;
+      border: none;
+      padding: 0;
+      color: var(--muted);
+      font-size: 13px;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+    .link:hover { color: var(--text); }
+    .code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 18px;
+      letter-spacing: 0.06em;
+      text-align: center;
+      background: var(--bar-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      color: var(--text);
+      user-select: all;
+      word-break: break-all;
+    }
+    .warn { color: var(--text); font-size: 13px; margin: 0 0 14px; }
+    .copy {
+      width: 100%;
+      margin-top: 10px;
+      padding: 8px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .copy:hover { color: var(--text); border-color: var(--muted); }
+  `;firstUpdated(){this.focusFirst()}updated(Q){if(Q.has("recoverMode")||Q.has("savedCode"))this.focusFirst()}focusFirst(){this.renderRoot.querySelector("input")?.focus()}val(Q){return this.renderRoot.querySelector(`#${Q}`)?.value??""}async submit(Q){if(Q.preventDefault(),this.busy)return;this.error="";let Y=!this.configured,K=this.configured&&this.recoverMode;if(Y||K){if(this.val("pw")!==this.val("pw2")){this.error="Passwords do not match.";return}}this.busy=!0;try{if(Y){let X=await I.setup(this.val("pw"));this.savedCode=X.recovery_code}else if(K){let X=await I.recover(this.val("code"),this.val("pw"));this.savedCode=X.recovery_code}else await I.login(this.val("pw")),this.done()}catch(X){this.error=X.message||"failed"}finally{this.busy=!1}}done(){this.dispatchEvent(new CustomEvent("authed",{bubbles:!0,composed:!0}))}async copyCode(){try{await navigator.clipboard?.writeText(this.savedCode),this.copied=!0}catch{}}render(){if(this.savedCode)return this.renderSaved();let Q=!this.configured,Y=this.configured&&this.recoverMode,K=Y?"Reset password":"ECU Console",X=Q?"First run — choose an operator password (min 8 characters).":Y?"Enter your recovery code and a new password.":"Enter the operator password.";return z`
       <form class="box" @submit=${this.submit}>
-        <h1><span class="brand">ECU</span> Console</h1>
-        <p>
-          ${this.configured?"Enter the operator password.":"First run — choose an operator password (min 8 characters)."}
-        </p>
-        <label for="pw">Password</label>
-        <input
-          id="pw"
-          type="password"
-          autocomplete=${this.configured?"current-password":"new-password"}
-          ?disabled=${this.busy}
-        />
-        <button type="submit" ?disabled=${this.busy}>
-          ${this.busy?"…":this.configured?"Sign in":"Set password"}
+        <h1>${Y?K:z`<span class="brand">ECU</span> Console`}</h1>
+        <p>${X}</p>
+
+        ${Y?z`
+              <label for="code">Recovery code</label>
+              <input id="code" type="text" autocomplete="off" spellcheck="false"
+                placeholder="XXXX-XXXX-XXXX-XXXX" ?disabled=${this.busy} />
+            `:B}
+
+        <label for="pw">${Y||Q?"New password":"Password"}</label>
+        <input id="pw" type="password"
+          autocomplete=${Q||Y?"new-password":"current-password"}
+          ?disabled=${this.busy} />
+
+        ${Q||Y?z`
+              <label for="pw2">Confirm password</label>
+              <input id="pw2" type="password" autocomplete="new-password" ?disabled=${this.busy} />
+            `:B}
+
+        <button class="primary" type="submit" ?disabled=${this.busy}>
+          ${this.busy?"…":Q?"Set password":Y?"Reset password":"Sign in"}
         </button>
         <div class="err">${this.error}</div>
+
+        ${this.configured?z`<button class="link" type="button" @click=${this.toggleRecover}>
+              ${Y?"Back to sign in":"Forgot password?"}
+            </button>`:B}
       </form>
-    `}}customElements.define("login-view",j5);function T(Z){if(!Number.isFinite(Z))return"";return String(Number(Z.toFixed(3)))}function S(Z){if(!Number.isFinite(Z))return"—";if(Math.abs(Z)>=1000)return`${(Z/1000).toFixed(2)} kW`;return`${Math.round(Z)} W`}function n(Z){if(!Number.isFinite(Z))return"—";let K=Math.abs(Z);if(K>=1e6)return`${(Z/1e6).toFixed(2)} MWh`;if(K>=1000)return`${(Z/1000).toFixed(2)} kWh`;return`${Math.round(Z)} Wh`}function v(Z){return Number.isFinite(Z)?`${Z.toFixed(0)}%`:"—"}function t(Z){return Z>0?`${Z.toFixed(1)} V`:"—"}function jZ(Z){return Z>0?`${Z.toFixed(2)} Hz`:"—"}function X5(Z){return Number.isFinite(Z)?`${Z.toFixed(2)} A`:"—"}function XZ(Z){if(!(Z>0))return"idle";if(Z<40)return"low";if(Z<85)return"mid";return"high"}function J5(Z){if(!Number.isFinite(Z)||Z<0)return"—";if(Z<60)return`${Math.round(Z)}s ago`;if(Z<3600)return`${Math.round(Z/60)}m ago`;return`${Math.round(Z/3600)}h ago`}function PZ(Z){return Z.replace(/_/g," ").replace(/\b\w/g,(K)=>K.toUpperCase())}function JZ(Z){if(!Z)return[];return Object.keys(Z).filter((K)=>Z[K]).map(PZ)}function zZ(Z){if(!Z)return"—";return new Date(Z).toLocaleString(void 0,{hour12:!1})}function z5(Z){let K=(Z||"").toLowerCase();if(K==="error"||K==="critical"||K==="crit"||K==="fault")return"err";if(K==="warn"||K==="warning")return"warn";return"info"}class U5 extends U{static properties={power:{type:Number},cap:{type:Number}};constructor(){super();this.power=0,this.cap=0}static styles=H`
+    `}toggleRecover=()=>{this.recoverMode=!this.recoverMode,this.error=""};renderSaved(){return z`
+      <div class="box">
+        <h1>Save your recovery code</h1>
+        <p class="warn">
+          Write this down and keep it safe. It's the only way to reset your password
+          without console access, and it's shown only once. Using it later replaces it
+          with a new code.
+        </p>
+        <div class="code">${this.savedCode}</div>
+        <button class="copy" type="button" @click=${this.copyCode}>
+          ${this.copied?"Copied ✓":"Copy to clipboard"}
+        </button>
+        <button class="primary" type="button" @click=${this.done}>
+          I've saved it — continue
+        </button>
+      </div>
+    `}}customElements.define("login-view",l3);function Z(Q){if(!Number.isFinite(Q))return"";return String(Number(Q.toFixed(3)))}function M(Q){if(!Number.isFinite(Q))return"—";if(Math.abs(Q)>=1000)return`${(Q/1000).toFixed(2)} kW`;return`${Math.round(Q)} W`}function D4(Q){if(!Number.isFinite(Q))return"—";let Y=Math.abs(Q);if(Y>=1e6)return`${(Q/1e6).toFixed(2)} MWh`;if(Y>=1000)return`${(Q/1000).toFixed(2)} kWh`;return`${Math.round(Q)} Wh`}function e(Q){return Number.isFinite(Q)?`${Q.toFixed(0)}%`:"—"}function F4(Q){return Q>0?`${Q.toFixed(1)} V`:"—"}function S4(Q){return Q>0?`${Q.toFixed(2)} Hz`:"—"}function d3(Q){return Number.isFinite(Q)?`${Q.toFixed(2)} A`:"—"}function k4(Q){if(!(Q>0))return"idle";if(Q<40)return"low";if(Q<85)return"mid";return"high"}function n3(Q){if(!Number.isFinite(Q)||Q<0)return"—";if(Q<60)return`${Math.round(Q)}s ago`;if(Q<3600)return`${Math.round(Q/60)}m ago`;return`${Math.round(Q/3600)}h ago`}function G3(Q){return Q.replace(/_/g," ").replace(/\b\w/g,(Y)=>Y.toUpperCase())}function C4(Q){if(!Q)return[];return Object.keys(Q).filter((Y)=>Q[Y]).map(G3)}function b4(Q){if(!Q)return"—";return new Date(Q).toLocaleString(void 0,{hour12:!1})}function i3(Q){let Y=(Q||"").toLowerCase();if(Y==="error"||Y==="critical"||Y==="crit"||Y==="fault")return"err";if(Y==="warn"||Y==="warning")return"warn";return"info"}function x(Q){return Q.nameplate_w||0}function Q4(Q){return Math.round(x(Q)*20/500)}function Y4(Q){let Y=Q.protection?.DA;if(Y==null)return;return Math.round(Y/500*x(Q))}class s3 extends A{static properties={power:{type:Number},cap:{type:Number}};constructor(){super();this.power=0,this.cap=0}static styles=L`
     :host { display: block; text-align: center; }
     .wrap { position: relative; width: 220px; margin: 0 auto; }
     svg { width: 100%; height: auto; display: block; }
@@ -89,7 +156,7 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
     }
     .big { font-size: 30px; font-weight: 700; color: var(--text); }
     .sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
-  `;pct(){if(!(this.cap>0))return 0;return Math.max(0,Math.min(100,this.power/this.cap*100))}render(){let Z=this.pct(),K=XZ(Z),Q=90,$=Math.PI*90,B=$*(1-Z/100);return G`
+  `;pct(){if(!(this.cap>0))return 0;return Math.max(0,Math.min(100,this.power/this.cap*100))}render(){let Q=this.pct(),Y=k4(Q),K=90,X=Math.PI*90,G=X*(1-Q/100);return z`
       <div class="wrap">
         <svg viewBox="0 0 200 120" role="img" aria-label="fleet output gauge">
           <path
@@ -99,20 +166,20 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
             stroke-width="14"
           />
           <path
-            class="arc ${K}"
+            class="arc ${Y}"
             d="M10 110 A 90 90 0 0 1 190 110"
             fill="none"
             stroke-width="14"
-            stroke-dasharray="${$}"
-            stroke-dashoffset="${B}"
+            stroke-dasharray="${X}"
+            stroke-dashoffset="${G}"
           />
         </svg>
         <div class="center">
-          <div class="big">${S(this.power)}</div>
-          <div class="sub">${v(Z)} of ${S(this.cap)}</div>
+          <div class="big">${M(this.power)}</div>
+          <div class="sub">${e(Q)} of ${M(this.cap)}</div>
         </div>
       </div>
-    `}}customElements.define("fleet-gauge",U5);class q5 extends U{static properties={label:{type:String},value:{type:String},sub:{type:String}};constructor(){super();this.label="",this.value="",this.sub=""}static styles=H`
+    `}}customElements.define("fleet-gauge",s3);class t3 extends A{static properties={label:{type:String},value:{type:String},sub:{type:String}};constructor(){super();this.label="",this.value="",this.sub=""}static styles=L`
     :host {
       display: block;
       background: var(--surface);
@@ -137,11 +204,50 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
       color: var(--muted);
       margin-top: 2px;
     }
-  `;render(){return G`
+  `;render(){return z`
       <div class="label">${this.label}</div>
       <div class="value">${this.value}</div>
-      ${this.sub?G`<div class="sub">${this.sub}</div>`:""}
-    `}}customElements.define("stat-card",q5);class H5 extends U{static properties={inverter:{attribute:!1},name:{type:String},profile:{type:String}};constructor(){super();this.name="",this.profile=""}static styles=H`
+      ${this.sub?z`<div class="sub">${this.sub}</div>`:""}
+    `}}customElements.define("stat-card",t3);class a3 extends A{static properties={inverter:{attribute:!1},pendingCap:{state:!0},busy:{state:!0},error:{state:!0}};dragging=!1;constructor(){super();this.pendingCap=null,this.busy=!1,this.error=""}static styles=L`
+    :host { display: block; }
+    .row { display: flex; align-items: center; gap: 10px; }
+    .barwrap { position: relative; height: 20px; flex: 1; min-width: 90px; touch-action: none; cursor: pointer; }
+    .barwrap.off { cursor: default; opacity: 0.6; }
+    .bar { height: 8px; background: var(--bar-bg); border-radius: 4px; position: relative; overflow: hidden; }
+    .fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+    .fill.low { background: var(--ok); }
+    .fill.mid { background: var(--accent); }
+    .fill.high { background: var(--warn); }
+    .fill.idle { background: var(--muted); }
+    .capline { position: absolute; top: -1px; height: 10px; width: 2px; background: var(--err); transform: translateX(-1px); pointer-events: none; }
+    .caret {
+      position: absolute; top: 11px;
+      width: 0; height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-bottom: 7px solid var(--err);
+      transform: translateX(-5px);
+      pointer-events: none;
+    }
+    .capval { color: var(--err); font-size: 13px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .caperr { color: var(--err); font-size: 12px; margin-top: 4px; }
+  `;capFromEvent(Q){let Y=this.renderRoot.querySelector(".bar"),K=x(this.inverter);if(!Y)return this.pendingCap??K;let X=Y.getBoundingClientRect(),G=Math.max(0,Math.min(1,(Q.clientX-X.left)/X.width));return Math.min(K,Math.max(Q4(this.inverter),Math.round(G*K)))}onDown=(Q)=>{if(!this.inverter?.online||this.busy)return;Q.preventDefault(),this.dragging=!0;try{Q.currentTarget.setPointerCapture?.(Q.pointerId)}catch{}this.pendingCap=this.capFromEvent(Q)};onMove=(Q)=>{if(this.dragging)this.pendingCap=this.capFromEvent(Q)};onUp=(Q)=>{if(!this.dragging)return;this.dragging=!1;try{Q.currentTarget.releasePointerCapture?.(Q.pointerId)}catch{}this.commitCap()};async commitCap(){let Q=this.pendingCap;if(Q==null)return;this.busy=!0,this.error="";try{let K=(await I.setPower({uid:this.inverter.uid,watts:Q})).results?.[0];if(K&&!K.ok)this.error=K.error||"failed";else if(K)this.pendingCap=K.applied_watts}catch(Y){this.error=Y.message||"failed"}finally{this.busy=!1}}render(){let Q=this.inverter;if(!Q)return B;let Y=k4(Q.load_pct),K=Math.max(0,Math.min(100,Q.load_pct)),X=x(Q);if(X<=0)return z`<div class="bar"><div class="fill ${Y}" style="width:${K}%"></div></div>`;let G=this.pendingCap??Y4(Q)??X,q=Math.max(0,Math.min(100,G/X*100));return z`
+      <div class="row">
+        <div
+          class="barwrap ${Q.online?"":"off"}"
+          @pointerdown=${this.onDown}
+          @pointermove=${this.onMove}
+          @pointerup=${this.onUp}
+          title="drag to set the output cap"
+        >
+          <div class="bar"><div class="fill ${Y}" style="width:${K}%"></div></div>
+          <div class="capline" style="left:${q}%"></div>
+          <div class="caret" style="left:${q}%"></div>
+        </div>
+        <span class="capval" title="output cap">▼ ${M(G)}</span>
+      </div>
+      ${this.error?z`<div class="caperr">⚠ ${this.error}</div>`:B}
+    `}}customElements.define("cap-bar",a3);class e3 extends A{static properties={inverter:{attribute:!1},name:{type:String},profile:{type:String}};constructor(){super();this.name="",this.profile=""}static styles=L`
     :host {
       display: block;
       background: var(--surface);
@@ -155,15 +261,8 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
       justify-content: space-between;
       margin-bottom: 12px;
     }
-    .model {
-      font-weight: 600;
-      font-size: 15px;
-    }
-    .uid {
-      color: var(--muted);
-      font-size: 12px;
-      font-family: var(--mono);
-    }
+    .model { font-weight: 600; font-size: 15px; }
+    .uid { color: var(--muted); font-size: 12px; font-family: var(--mono); }
     .profile {
       display: inline-flex;
       align-items: center;
@@ -177,74 +276,19 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
       font-size: 11px;
       font-weight: 600;
     }
-    .dot {
-      width: 9px;
-      height: 9px;
-      border-radius: 50%;
-      display: inline-block;
-      margin-right: 6px;
-    }
-    .dot.on {
-      background: var(--ok);
-      box-shadow: 0 0 6px var(--ok);
-    }
-    .dot.off {
-      background: var(--muted);
-    }
-    .state {
-      font-size: 12px;
-      color: var(--muted);
-    }
-    .power {
-      display: flex;
-      align-items: baseline;
-      gap: 8px;
-    }
-    .pw {
-      font-size: 28px;
-      font-weight: 700;
-      color: var(--text);
-    }
-    .cap {
-      color: var(--muted);
-      font-size: 13px;
-    }
-    .bar {
-      height: 8px;
-      background: var(--bar-bg);
-      border-radius: 4px;
-      overflow: hidden;
-      margin: 10px 0 14px;
-    }
-    .fill {
-      height: 100%;
-      border-radius: 4px;
-      transition: width 0.4s ease;
-    }
-    .fill.low { background: var(--ok); }
-    .fill.mid { background: var(--accent); }
-    .fill.high { background: var(--warn); }
-    .fill.idle { background: var(--muted); }
-    .metrics {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 8px;
-      font-size: 13px;
-    }
+    .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+    .dot.on { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+    .dot.off { background: var(--muted); }
+    .state { font-size: 12px; color: var(--muted); }
+    .power { display: flex; align-items: baseline; gap: 8px; }
+    .pw { font-size: 28px; font-weight: 700; color: var(--text); }
+    .cap { color: var(--muted); font-size: 13px; }
+    cap-bar { margin: 10px 0 16px; }
+    .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-size: 13px; }
     .metric .k { color: var(--muted); font-size: 11px; }
     .metric .v { color: var(--text); font-weight: 600; }
-    .panels {
-      margin-top: 14px;
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
-      gap: 6px;
-    }
-    .panel {
-      background: var(--bar-bg);
-      border-radius: 6px;
-      padding: 6px 8px;
-      font-size: 11px;
-    }
+    .panels { margin-top: 14px; display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; }
+    .panel { background: var(--bar-bg); border-radius: 6px; padding: 6px 8px; font-size: 11px; }
     .panel .pi { color: var(--muted); }
     .panel .pw { font-size: 13px; }
     .chips { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
@@ -256,43 +300,43 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
       padding: 2px 8px;
       font-size: 11px;
     }
-  `;render(){let Z=this.inverter;if(!Z)return j;let K=XZ(Z.load_pct),Q=JZ(Z.faults),$=Math.max(0,Math.min(100,Z.load_pct));return G`
+  `;render(){let Q=this.inverter;if(!Q)return B;let Y=C4(Q.faults);return z`
       <div class="head">
         <div>
-          <div class="model">${this.name||Z.model||"unknown"}</div>
-          <div class="uid">${this.name?`${Z.model} · ${Z.uid}`:Z.uid}</div>
-          ${this.profile?G`<div class="profile" title="Local Site profile active">⚙ ${this.profile}</div>`:j}
+          <div class="model">${this.name||Q.model||"unknown"}</div>
+          <div class="uid">${this.name?`${Q.model} · ${Q.uid}`:Q.uid}</div>
+          ${this.profile?z`<div class="profile" title="Local Site profile active">⚙ ${this.profile}</div>`:B}
         </div>
         <div class="state">
-          <span class="dot ${Z.online?"on":"off"}"></span>
-          ${Z.online?"online":"offline"} · ${J5(Z.age_s)}
+          <span class="dot ${Q.online?"on":"off"}"></span>
+          ${Q.online?"online":"offline"} · ${n3(Q.age_s)}
         </div>
       </div>
 
       <div class="power">
-        <span class="pw">${S(Z.active_power_w)}</span>
-        <span class="cap">/ ${Z.nameplate_w} W · ${v(Z.load_pct)}</span>
+        <span class="pw">${M(Q.active_power_w)}</span>
+        <span class="cap">/ ${M(Q.nameplate_w)} · ${e(Q.load_pct)}</span>
       </div>
-      <div class="bar"><div class="fill ${K}" style="width:${$}%"></div></div>
+      <cap-bar .inverter=${Q}></cap-bar>
 
       <div class="metrics">
-        <div class="metric"><div class="k">Grid</div><div class="v">${t(Z.grid_v)}</div></div>
-        <div class="metric"><div class="k">Freq</div><div class="v">${jZ(Z.freq_hz)}</div></div>
-        <div class="metric"><div class="k">RSSI / LQI</div><div class="v">${Z.rssi} / ${Z.lqi}</div></div>
+        <div class="metric"><div class="k">Grid</div><div class="v">${F4(Q.grid_v)}</div></div>
+        <div class="metric"><div class="k">Freq</div><div class="v">${S4(Q.freq_hz)}</div></div>
+        <div class="metric"><div class="k">RSSI / LQI</div><div class="v">${Q.rssi} / ${Q.lqi}</div></div>
       </div>
 
-      ${Z.panels?.length?G`<div class="panels">
-            ${Z.panels.map((B)=>G`<div class="panel">
-                <div class="pi">DC ${B.index+1}</div>
-                <div class="pw">${S(B.w)}</div>
-                <div>${t(B.dc_v)} · ${X5(B.dc_a)}</div>
+      ${Q.panels?.length?z`<div class="panels">
+            ${Q.panels.map((K)=>z`<div class="panel">
+                <div class="pi">DC ${K.index+1}</div>
+                <div class="pw">${M(K.w)}</div>
+                <div>${F4(K.dc_v)} · ${d3(K.dc_a)}</div>
               </div>`)}
-          </div>`:j}
+          </div>`:B}
 
-      ${Q.length?G`<div class="chips">
-            ${Q.map((B)=>G`<span class="chip">${B}</span>`)}
-          </div>`:j}
-    `}}customElements.define("inverter-card",H5);class M5 extends U{static properties={system:{attribute:!1}};constructor(){super();this.system=null}static styles=H`
+      ${Y.length?z`<div class="chips">
+            ${Y.map((K)=>z`<span class="chip">${K}</span>`)}
+          </div>`:B}
+    `}}customElements.define("inverter-card",e3);class Q9 extends A{static properties={system:{attribute:!1}};constructor(){super();this.system=null}static styles=L`
     :host { display: block; }
     .id {
       display: grid;
@@ -324,24 +368,24 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
     .ver { color: var(--muted); font-size: 11px; font-family: var(--mono); min-width: 0; }
     .warn { color: var(--warn); font-size: 12px; margin-top: 10px; }
     .empty { color: var(--muted); font-size: 13px; }
-  `;idRow(Z,K){return K?G`<div class="k">${Z}</div><div class="v">${K}</div>`:j}clients(){let Z=new Map;for(let K of this.system?.peers??[]){let Q=Z.get(K.backend)??{backend:K.backend,version:K.version,controller:!1,conns:0};if(Q.conns++,Q.controller=Q.controller||K.controller,K.version)Q.version=K.version;Z.set(K.backend,Q)}return[...Z.values()].sort((K,Q)=>K.backend.localeCompare(Q.backend))}render(){let Z=this.system,K=Z?.ecu,Q=this.clients(),$=!!(K&&(K.ecu_id||K.hostname));return G`
-      ${$?G`<div class="id">
-            ${this.idRow("ECU ID",K.ecu_id)}
-            ${this.idRow("Host",K.hostname)}
-          </div>`:j}
+  `;idRow(Q,Y){return Y?z`<div class="k">${Q}</div><div class="v">${Y}</div>`:B}clients(){let Q=new Map;for(let Y of this.system?.peers??[]){let K=Q.get(Y.backend)??{backend:Y.backend,version:Y.version,controller:!1,conns:0};if(K.conns++,K.controller=K.controller||Y.controller,Y.version)K.version=Y.version;Q.set(Y.backend,K)}return[...Q.values()].sort((Y,K)=>Y.backend.localeCompare(K.backend))}render(){let Q=this.system,Y=Q?.ecu,K=this.clients(),X=!!(Y&&(Y.ecu_id||Y.hostname));return z`
+      ${X?z`<div class="id">
+            ${this.idRow("ECU ID",Y.ecu_id)}
+            ${this.idRow("Host",Y.hostname)}
+          </div>`:B}
 
       <div class="peers">
-        ${Q.length?Q.map((B)=>G`<div class="peer">
+        ${K.length?K.map((G)=>z`<div class="peer">
                 <span class="dot on"></span>
-                <span class="name">${B.backend||"(unnamed)"}</span>
-                ${B.controller?G`<span class="role ctl">ctrl</span>`:j}
-                ${B.conns>1?G`<span class="role">${B.conns} conns</span>`:j}
-                <span class="ver">${B.version||""}</span>
-              </div>`):G`<div class="empty">No peers connected.</div>`}
+                <span class="name">${G.backend||"(unnamed)"}</span>
+                ${G.controller?z`<span class="role ctl">ctrl</span>`:B}
+                ${G.conns>1?z`<span class="role">${G.conns} conns</span>`:B}
+                <span class="ver">${G.version||""}</span>
+              </div>`):z`<div class="empty">No peers connected.</div>`}
       </div>
 
-      ${Z?.status_error?G`<div class="warn">⚠ ${Z.status_error}</div>`:j}
-    `}}customElements.define("ecu-clients-card",M5);function H6(Z,K,Q){if(Z.length<2)return{line:"",area:"",max:0};let $=Z[0].t,B=Math.max(1,Z[Z.length-1].t-$),Y=Math.max(1,...Z.map((k)=>k.w)),X=(k)=>[(k.t-$)/B*K,Q-k.w/Y*Q],J="";for(let k=0;k<Z.length;k++){let[_,F]=X(Z[k]);J+=`${k===0?"M":"L"}${_.toFixed(1)} ${F.toFixed(1)} `}let[q]=X(Z[0]),[M]=X(Z[Z.length-1]),z=`${J}L${M.toFixed(1)} ${Q} L${q.toFixed(1)} ${Q} Z`;return{line:J.trim(),area:z,max:Y}}var UZ=600,e=160;class k5 extends U{static properties={points:{attribute:!1},hoverIdx:{state:!0}};constructor(){super();this.points=[],this.hoverIdx=-1}static styles=H`
+      ${Q?.status_error?z`<div class="warn">⚠ ${Q.status_error}</div>`:B}
+    `}}customElements.define("ecu-clients-card",Q9);function oQ(Q,Y,K){if(Q.length<2)return{line:"",area:"",max:0};let X=Q[0].t,G=Math.max(1,Q[Q.length-1].t-X),q=Math.max(1,...Q.map(($)=>$.w)),J=($)=>[($.t-X)/G*Y,K-$.w/q*K],H="";for(let $=0;$<Q.length;$++){let[F,D]=J(Q[$]);H+=`${$===0?"M":"L"}${F.toFixed(1)} ${D.toFixed(1)} `}let[W]=J(Q[0]),[U]=J(Q[Q.length-1]),j=`${H}L${U.toFixed(1)} ${K} L${W.toFixed(1)} ${K} Z`;return{line:H.trim(),area:j,max:q}}var x4=600,I4=160;class Y9 extends A{static properties={points:{attribute:!1},hoverIdx:{state:!0}};constructor(){super();this.points=[],this.hoverIdx=-1}static styles=L`
     :host { display: block; }
     .empty { color: var(--muted); text-align: center; padding: 48px 0; font-size: 13px; }
     .wrap { position: relative; }
@@ -367,10 +411,10 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
     .tip .w { font-weight: 600; }
     .labels { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 6px; }
     .cur { color: var(--text); font-weight: 600; }
-  `;onMove=(Z)=>{let K=this.points.length;if(K<2)return;let $=Z.currentTarget.clientWidth||1,B=Math.min(1,Math.max(0,Z.offsetX/$));this.hoverIdx=Math.round(B*(K-1))};onLeave=()=>{this.hoverIdx=-1};render(){let Z=this.points??[];if(Z.length<2)return G`<div class="empty">Collecting power history…</div>`;let{line:K,area:Q,max:$}=H6(Z,UZ,e),B=Z[Z.length-1].w,Y=this.hoverIdx,X=Y>=0&&Y<Z.length,J=Z[0].t,q=Math.max(1,Z[Z.length-1].t-J),M=X?(Z[Y].t-J)/q*UZ:0,z=X?e-Z[Y].w/$*e:0;return G`
+  `;onMove=(Q)=>{let Y=this.points.length;if(Y<2)return;let X=Q.currentTarget.clientWidth||1,G=Math.min(1,Math.max(0,Q.offsetX/X));this.hoverIdx=Math.round(G*(Y-1))};onLeave=()=>{this.hoverIdx=-1};render(){let Q=this.points??[];if(Q.length<2)return z`<div class="empty">Collecting power history…</div>`;let{line:Y,area:K,max:X}=oQ(Q,x4,I4),G=Q[Q.length-1].w,q=this.hoverIdx,J=q>=0&&q<Q.length,H=Q[0].t,W=Math.max(1,Q[Q.length-1].t-H),U=J?(Q[q].t-H)/W*x4:0,j=J?I4-Q[q].w/X*I4:0;return z`
       <div class="wrap">
         <svg
-          viewBox="0 0 ${UZ} ${e}"
+          viewBox="0 0 ${x4} ${I4}"
           preserveAspectRatio="none"
           role="img"
           aria-label="fleet output over time"
@@ -383,20 +427,20 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
               <stop offset="100%" stop-color="var(--accent)" stop-opacity="0" />
             </linearGradient>
           </defs>
-          ${L`<path class="area" d=${Q} />`}
-          ${L`<path class="line" d=${K} />`}
-          ${X?L`<line class="cross" x1=${M} y1="0" x2=${M} y2=${e} /><circle class="cursor" cx=${M} cy=${z} r="3.5" />`:j}
+          ${S`<path class="area" d=${K} />`}
+          ${S`<path class="line" d=${Y} />`}
+          ${J?S`<line class="cross" x1=${U} y1="0" x2=${U} y2=${I4} /><circle class="cursor" cx=${U} cy=${j} r="3.5" />`:B}
         </svg>
-        ${X?G`<div class="tip" style="left:${M/UZ*100}%; top:${z}px">
-              <span class="w">${S(Z[Y].w)}</span>
-              <span class="t">· ${zZ(Z[Y].t)}</span>
-            </div>`:j}
+        ${J?z`<div class="tip" style="left:${U/x4*100}%; top:${j}px">
+              <span class="w">${M(Q[q].w)}</span>
+              <span class="t">· ${b4(Q[q].t)}</span>
+            </div>`:B}
       </div>
       <div class="labels">
-        <span>now <span class="cur">${S(B)}</span></span>
-        <span>peak ${S($)}</span>
+        <span>now <span class="cur">${M(G)}</span></span>
+        <span>peak ${M(X)}</span>
       </div>
-    `}}customElements.define("power-chart",k5);class F5 extends U{static properties={fleet:{attribute:!1},system:{attribute:!1},names:{attribute:!1},profiles:{attribute:!1},history:{state:!0}};timer=null;constructor(){super();this.fleet=null,this.system=null,this.names={},this.profiles={},this.history=[]}connectedCallback(){super.connectedCallback(),this.loadHistory(),this.timer=setInterval(()=>void this.loadHistory(),60000)}disconnectedCallback(){if(super.disconnectedCallback(),this.timer)clearInterval(this.timer);this.timer=null}async loadHistory(){try{this.history=await O.history()}catch{}}chartPoints(){if(!this.fleet)return this.history;return[...this.history,{t:Date.now(),w:this.fleet.active_power_w}]}static styles=H`
+    `}}customElements.define("power-chart",Y9);class K9 extends A{static properties={fleet:{attribute:!1},system:{attribute:!1},names:{attribute:!1},profiles:{attribute:!1},history:{state:!0},arrayPendingCap:{state:!0},arrayBusy:{state:!0},arrayError:{state:!0}};timer=null;constructor(){super();this.fleet=null,this.system=null,this.names={},this.profiles={},this.history=[],this.arrayPendingCap=null,this.arrayBusy=!1,this.arrayError=""}setArrayCap=async(Q)=>{let Y=Math.round(Number(Q.target.value));if(!Number.isFinite(Y)||Y<=0)return;this.arrayPendingCap=Y,this.arrayBusy=!0,this.arrayError="";try{let K=await I.setPower({array:!0,watts:Y}),X=(K.results??[]).filter((G)=>!G.ok);if(X.length)this.arrayError=`${X.length} inverter(s) failed`;else{let G=(K.results??[]).reduce((q,J)=>q+J.applied_watts,0);if(G)this.arrayPendingCap=G}}catch(K){this.arrayError=K.message||"failed"}finally{this.arrayBusy=!1}};connectedCallback(){super.connectedCallback(),this.loadHistory(),this.timer=setInterval(()=>void this.loadHistory(),60000)}disconnectedCallback(){if(super.disconnectedCallback(),this.timer)clearInterval(this.timer);this.timer=null}async loadHistory(){try{this.history=await I.history()}catch{}}chartPoints(){if(!this.fleet)return this.history;return[...this.history,{t:Date.now(),w:this.fleet.active_power_w}]}static styles=L`
     :host { display: block; }
     .grid {
       display: grid;
@@ -414,15 +458,48 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
     .chart { margin-bottom: 16px; }
     .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
     .online { text-align: center; color: var(--muted); font-size: 12px; margin-top: 10px; }
+    .arrcap { margin-top: 16px; }
+    .arrcap label { display: block; color: var(--muted); font-size: 11px; margin-bottom: 6px; }
+    .arrcap-row { display: flex; align-items: center; gap: 10px; }
+    .arrcap input {
+      width: 130px;
+      box-sizing: border-box;
+      padding: 9px 12px;
+      background: var(--bar-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+    }
+    .arrcap input:disabled { opacity: 0.6; }
+    .arrcap-max { color: var(--muted); font-size: 13px; }
+    .caperr { color: var(--err); font-size: 12px; margin-top: 8px; }
     .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
     .empty { color: var(--muted); padding: 32px; text-align: center; }
     @media (max-width: 720px) { .grid, .stats { grid-template-columns: 1fr; } }
-  `;render(){let Z=this.fleet;if(!Z)return G`<div class="empty">Waiting for inv-driver…</div>`;return G`
+  `;render(){let Q=this.fleet;if(!Q)return z`<div class="empty">Waiting for inv-driver…</div>`;let Y=Q.inverters.reduce((q,J)=>q+x(J),0),K=Q.inverters.reduce((q,J)=>q+Q4(J),0),X=Q.inverters.reduce((q,J)=>q+(Y4(J)??x(J)),0),G=this.arrayPendingCap??X;return z`
       <div class="grid">
         <div class="panel">
           <h2>Array output</h2>
-          <fleet-gauge .power=${Z.active_power_w} .cap=${Z.nameplate_total_w}></fleet-gauge>
-          <div class="online">${Z.online_count} / ${Z.inverter_count} inverters online</div>
+          <fleet-gauge .power=${Q.active_power_w} .cap=${Q.nameplate_total_w}></fleet-gauge>
+          <div class="online">${Q.online_count} / ${Q.inverter_count} inverters online</div>
+          ${Y>0?z`<div class="arrcap">
+                <label for="arrcap">Total output cap</label>
+                <div class="arrcap-row">
+                  <input
+                    id="arrcap"
+                    type="number"
+                    min=${K}
+                    max=${Y}
+                    step="10"
+                    .value=${String(G)}
+                    ?disabled=${Q.online_count===0||this.arrayBusy}
+                    @change=${this.setArrayCap}
+                  />
+                  <span class="arrcap-max">W / ${M(Y)}</span>
+                </div>
+                ${this.arrayError?z`<div class="caperr">⚠ ${this.arrayError}</div>`:B}
+              </div>`:B}
         </div>
         <div class="panel">
           <h2>ECU &amp; clients</h2>
@@ -436,23 +513,265 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
       </div>
 
       <div class="stats">
-        <stat-card label="Today" value=${n(Z.today_wh)}></stat-card>
-        <stat-card label="This month" value=${n(Z.month_wh)}></stat-card>
-        <stat-card label="This year" value=${n(Z.year_wh)}></stat-card>
-        <stat-card label="Lifetime" value=${n(Z.lifetime_wh)}></stat-card>
+        <stat-card label="Today" value=${D4(Q.today_wh)}></stat-card>
+        <stat-card label="This month" value=${D4(Q.month_wh)}></stat-card>
+        <stat-card label="This year" value=${D4(Q.year_wh)}></stat-card>
+        <stat-card label="Lifetime" value=${D4(Q.lifetime_wh)}></stat-card>
       </div>
 
       <h2>Inverters</h2>
-      ${Z.inverters.length?G`<div class="cards">
-            ${Z.inverters.map((K)=>G`<inverter-card
-                .inverter=${K}
-                .name=${this.names?.[K.uid]??""}
-                .profile=${this.profiles?.[K.uid]??""}
+      ${Q.inverters.length?z`<div class="cards">
+            ${Q.inverters.map((q)=>z`<inverter-card
+                .inverter=${q}
+                .name=${this.names?.[q.uid]??""}
+                .profile=${this.profiles?.[q.uid]??""}
               ></inverter-card>`)}
-          </div>`:G`<div class="empty">No inverters discovered yet.</div>`}
-      ${j}
-    `}}customElements.define("dashboard-view",F5);class W5 extends U{static properties={fleet:{attribute:!1},names:{attribute:!1}};constructor(){super();this.fleet=null,this.names={}}rename(Z,K){let Q=K.target.value;this.dispatchEvent(new CustomEvent("rename",{detail:{uid:Z,name:Q},bubbles:!0,composed:!0}))}static styles=H`
+          </div>`:z`<div class="empty">No inverters discovered yet.</div>`}
+      ${B}
+    `}}customElements.define("dashboard-view",K9);class X9 extends A{static properties={inverter:{attribute:!1},pendingCap:{state:!0},busy:{state:!0},error:{state:!0}};constructor(){super();this.pendingCap=null,this.busy=!1,this.error=""}static styles=L`
+    :host { display: inline-block; }
+    .row { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+    input {
+      width: 76px;
+      box-sizing: border-box;
+      padding: 5px 7px;
+      background: var(--bar-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font: inherit;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    input:focus { outline: none; border-color: var(--accent); }
+    input:disabled { opacity: 0.6; }
+    .max { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .err { color: var(--err); }
+  `;commit=async(Q)=>{let Y=Math.round(Number(Q.target.value));if(!Number.isFinite(Y)||Y<=0)return;this.pendingCap=Y,this.busy=!0,this.error="";try{let X=(await I.setPower({uid:this.inverter.uid,watts:Y})).results?.[0];if(X&&!X.ok)this.error=X.error||"failed";else if(X)this.pendingCap=X.applied_watts}catch(K){this.error=K.message||"failed"}finally{this.busy=!1}};render(){let Q=this.inverter;if(!Q)return B;let Y=x(Q);if(Y<=0)return z`<span class="max">—</span>`;let K=this.pendingCap??Y4(Q)??Y;return z`
+      <div class="row">
+        <input
+          type="number"
+          min=${Q4(Q)}
+          max=${Y}
+          step="10"
+          .value=${String(Math.round(K))}
+          ?disabled=${!Q.online||this.busy}
+          @change=${this.commit}
+          title="output cap, watts"
+        />
+        <span class="max">/ ${Math.round(Y)} W</span>
+        ${this.error?z`<span class="err" title=${this.error}>⚠</span>`:B}
+      </div>
+    `}}customElements.define("cap-input",X9);class G9 extends A{static properties={busy:{attribute:!1},slow:{state:!0},serial:{state:!0}};constructor(){super();this.busy=!1,this.slow=!1,this.serial=""}static styles=L`
     :host { display: block; }
+    .panel { display: grid; gap: 16px; max-width: 520px; }
+    fieldset { border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin: 0; }
+    legend { color: var(--muted); font-size: 12px; padding: 0 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .toggle button {
+      background: transparent; border: none; color: var(--muted);
+      padding: 7px 16px; font: inherit; font-size: 13px; cursor: pointer;
+    }
+    .toggle button.sel { background: var(--accent); color: #04121a; font-weight: 600; }
+    .warn {
+      color: var(--err); font-size: 12px; background: color-mix(in srgb, var(--err) 12%, transparent);
+      border: 1px solid color-mix(in srgb, var(--err) 40%, transparent);
+      border-radius: 8px; padding: 8px 10px;
+    }
+    input.serial {
+      background: var(--bar-bg); border: 1px solid var(--border); color: var(--text);
+      border-radius: 8px; padding: 8px 11px; font: inherit; font-size: 14px;
+      font-family: var(--mono); width: 170px; letter-spacing: 0.02em;
+    }
+    input.serial:focus { outline: none; border-color: var(--accent); }
+    button.go {
+      background: var(--accent); border: none; color: #04121a; border-radius: 8px;
+      padding: 8px 18px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;
+    }
+    button.go:hover:not(:disabled) { filter: brightness(1.08); }
+    button.go:disabled { opacity: 0.45; cursor: not-allowed; }
+    .hint { font-size: 12px; color: var(--muted); }
+  `;startScan=()=>{if(this.busy)return;this.dispatchEvent(new CustomEvent("scan",{detail:{slow:this.slow},bubbles:!0,composed:!0}))};onSerialInput=(Q)=>{this.serial=Q.target.value.replace(/\D/g,"").slice(0,12)};addById=()=>{if(this.busy||this.serial.length!==12)return;this.dispatchEvent(new CustomEvent("add",{detail:{serial:this.serial},bubbles:!0,composed:!0})),this.serial=""};render(){let Q=this.serial.length===12;return z`
+      <div class="panel">
+        <fieldset>
+          <legend>Scan for inverters</legend>
+          <div class="row">
+            <div class="toggle" role="group" aria-label="Scan speed">
+              <button
+                class=${!this.slow?"sel":""}
+                aria-pressed=${!this.slow}
+                ?disabled=${this.busy}
+                @click=${()=>this.slow=!1}
+              >Fast</button>
+              <button
+                class=${this.slow?"sel":""}
+                aria-pressed=${this.slow}
+                ?disabled=${this.busy}
+                @click=${()=>this.slow=!0}
+              >Slow</button>
+            </div>
+            <button class="go" ?disabled=${this.busy} @click=${this.startScan}>
+              ${this.busy?"Scanning…":"Scan"}
+            </button>
+          </div>
+          ${this.slow?z`<p class="warn" role="alert">
+                Slow scan sweeps the radio across ZigBee channels 11–26 on PAN 0xFFFF.
+                This pauses telemetry for ~30 seconds while the module is off the
+                operating PAN. Use for commissioning only.
+              </p>`:z`<p class="hint">
+                Fast scan solicits new inverters on PAN 0xFFFF on the current channel.
+                Telemetry briefly pauses while the radio is parked for discovery.
+              </p>`}
+        </fieldset>
+
+        <fieldset>
+          <legend>Add by serial</legend>
+          <div class="row">
+            <input
+              class="serial"
+              inputmode="numeric"
+              placeholder="12-digit serial"
+              .value=${this.serial}
+              ?disabled=${this.busy}
+              @input=${this.onSerialInput}
+              @keydown=${(Y)=>{if(Y.key==="Enter")this.addById()}}
+            />
+            <button class="go" ?disabled=${this.busy||!Q} @click=${this.addById}>Add</button>
+          </div>
+          ${this.serial.length>0&&!Q?z`<p class="hint">Serial must be exactly 12 digits (${this.serial.length}/12).</p>`:B}
+        </fieldset>
+      </div>
+    `}}customElements.define("pairing-scan-panel",G9);var q3=["scan","bind","migrate","configure","rekey"],q9={scan:"Scan",bind:"Bind",migrate:"Migrate",configure:"Configure",rekey:"Re-key",done:"Done",aborted:"Aborted",error:"Error"};class J9 extends A{static properties={open:{attribute:!1},status:{attribute:!1},aborting:{attribute:!1}};constructor(){super();this.open=!1,this.status=null,this.aborting=!1}static styles=L`
+    :host { display: block; }
+    .scrim {
+      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45);
+      z-index: 40; display: none;
+    }
+    .scrim.open { display: block; }
+    .drawer {
+      position: fixed; top: 0; right: 0; bottom: 0; width: 420px; max-width: 92vw;
+      background: var(--bg, #0c1116); border-left: 1px solid var(--border);
+      box-shadow: -8px 0 30px rgba(0, 0, 0, 0.4);
+      transform: translateX(100%); transition: transform 0.18s ease;
+      z-index: 41; display: flex; flex-direction: column;
+      box-sizing: border-box;
+    }
+    .scrim.open .drawer { transform: translateX(0); }
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 18px; border-bottom: 1px solid var(--border);
+    }
+    header h2 { margin: 0; font-size: 16px; color: var(--text); }
+    button.x {
+      background: transparent; border: 1px solid var(--border); color: var(--muted);
+      border-radius: 8px; padding: 4px 10px; font-size: 15px; line-height: 1; cursor: pointer;
+    }
+    button.x:disabled { opacity: 0.4; cursor: not-allowed; }
+    .body { padding: 16px 18px; overflow-y: auto; display: grid; gap: 16px; }
+    .stages { display: flex; gap: 6px; flex-wrap: wrap; }
+    .stage {
+      font-size: 11px; padding: 4px 9px; border-radius: 999px;
+      border: 1px solid var(--border); color: var(--muted);
+    }
+    .stage.active { background: var(--accent); color: #04121a; border-color: var(--accent); font-weight: 600; }
+    .stage.done { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 50%, transparent); }
+    .bar { height: 8px; border-radius: 999px; background: var(--bar-bg); overflow: hidden; }
+    .bar > i { display: block; height: 100%; background: var(--accent); transition: width 0.2s ease; }
+    .meta { font-size: 13px; color: var(--text); display: grid; gap: 4px; }
+    .meta .muted { color: var(--muted); }
+    .sweep { font-size: 12px; color: var(--muted); }
+    .err { color: var(--err); font-size: 13px; }
+    .ok { color: var(--ok); font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); text-transform: uppercase; font-size: 10px; letter-spacing: 0.04em; }
+    td.mono { font-family: var(--mono); }
+    .actions { padding: 14px 18px; border-top: 1px solid var(--border); display: flex; gap: 12px; }
+    button.abort {
+      background: transparent; border: 1px solid var(--err); color: var(--err);
+      border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    button.abort:hover:not(:disabled) { background: color-mix(in srgb, var(--err) 14%, transparent); }
+    button.abort:disabled { opacity: 0.4; cursor: not-allowed; }
+    .empty { color: var(--muted); font-size: 13px; }
+    @media (max-width: 480px) { .drawer { width: 100vw; } }
+  `;abort=()=>{this.dispatchEvent(new CustomEvent("abort",{bubbles:!0,composed:!0}))};close=()=>{this.dispatchEvent(new CustomEvent("close",{bubbles:!0,composed:!0}))};stageClass(Q,Y){if(Q===Y)return"stage active";let K=q3.indexOf(Q);if(q3.indexOf(Y)>K&&K>=0)return"stage done";return"stage"}render(){let Q=this.status,Y=a(Q),K=Q?.stage??"",X=Q?.total??0,G=Q?.done??0,q=X>0?Math.min(100,Math.round(G/X*100)):Y?0:0;return z`
+      <div class="scrim ${this.open?"open":""}" @click=${(J)=>{if(J.target===J.currentTarget&&!Y)this.close()}}>
+        <aside class="drawer" role="dialog" aria-label="Pairing progress" aria-modal="true">
+          <header>
+            <h2>${Q?.op?`Pairing: ${Q.op}`:"Pairing"}</h2>
+            <button class="x" aria-label="Close" ?disabled=${Y} @click=${this.close}>✕</button>
+          </header>
+          <div class="body">
+            ${!Q||!Q.op?z`<p class="empty">No pairing operation running.</p>`:z`
+                  <div class="stages">
+                    ${q3.map((J)=>z`<span class=${this.stageClass(J,K)}>${q9[J]}</span>`)}
+                  </div>
+
+                  ${X>0?z`<div class="bar"><i style="width:${q}%"></i></div>
+                        <div class="meta"><span class="muted">${G} / ${X} inverters</span></div>`:B}
+
+                  <div class="meta">
+                    <div><span class="muted">Stage:</span> ${q9[K]??K??"—"}</div>
+                    ${Q.current_serial?z`<div><span class="muted">Current:</span> ${Q.current_serial}</div>`:B}
+                    ${Q.substep?z`<div><span class="muted">Step:</span> ${Q.substep}</div>`:B}
+                    ${Q.message?z`<div class="muted">${Q.message}</div>`:B}
+                  </div>
+
+                  ${Q.sweep?z`<div class="sweep">Channel ${Q.sweep.chan} (sweep ${Q.sweep.chan_lo}–${Q.sweep.chan_hi}) — telemetry paused</div>`:B}
+
+                  ${Q.error?z`<div class="err">Error: ${Q.error}</div>`:B}
+                  ${K==="done"?z`<div class="ok">Completed.</div>`:B}
+                  ${K==="aborted"?z`<div class="muted">Aborted.</div>`:B}
+
+                  ${Q.per_inverter&&Q.per_inverter.length>0?z`<table>
+                        <thead><tr><th>Serial</th><th>Addr</th><th>State</th><th>Link</th></tr></thead>
+                        <tbody>
+                          ${Q.per_inverter.map((J)=>z`<tr>
+                              <td class="mono">${J.serial}</td>
+                              <td class="mono">${J.short_addr?J.short_addr.toString(16):"—"}</td>
+                              <td>${J.state}</td>
+                              <td>${J.encrypted===!0?"\uD83D\uDD12":J.encrypted===!1?"⚠":"—"}</td>
+                            </tr>`)}
+                        </tbody>
+                      </table>`:B}
+                `}
+          </div>
+          <div class="actions">
+            <button class="abort" ?disabled=${!Y||this.aborting} @click=${this.abort}>
+              ${this.aborting?"Aborting…":"Safe abort"}
+            </button>
+          </div>
+        </aside>
+      </div>
+    `}}customElements.define("pairing-progress-drawer",J9);class z9 extends A{static properties={fleet:{attribute:!1},names:{attribute:!1},status:{state:!0},drawerOpen:{state:!0},busy:{state:!0},aborting:{state:!0},notice:{state:!0}};pollTimer=null;constructor(){super();this.fleet=null,this.names={},this.status=null,this.drawerOpen=!1,this.busy=!1,this.aborting=!1,this.notice=""}connectedCallback(){super.connectedCallback(),this.fetchStatus()}disconnectedCallback(){super.disconnectedCallback(),this.stopPoll()}rename(Q,Y){let K=Y.target.value;this.dispatchEvent(new CustomEvent("rename",{detail:{uid:Q,name:K},bubbles:!0,composed:!0}))}encBadge(Q){if(Q===!0)return z`<span class="enc enc-ok" title="AES-encrypted link">🔒 AES</span>`;if(Q===!1)return z`<span class="enc enc-warn" title="Plaintext link — misconfigured or foreign unit">⚠ plaintext</span>`;return z`<span class="enc enc-unknown" title="Encryption state unknown">—</span>`}async fetchStatus(){try{let Q=await I.pairingStatus();if(this.status=Q.status??null,a(this.status))this.drawerOpen=!0,this.startPoll();else this.stopPoll()}catch{}}startPoll(){if(this.pollTimer)return;this.pollTimer=setInterval(()=>void this.fetchStatus(),1000)}stopPoll(){if(this.pollTimer)clearInterval(this.pollTimer);this.pollTimer=null}applyResp(Q){if(this.status=Q??null,this.drawerOpen=!0,a(this.status))this.startPoll()}onScan=async(Q)=>{let{slow:Y}=Q.detail;if(Y&&!confirm("Slow scan sweeps ZigBee channels 11–26 on PAN 0xFFFF and pauses fleet "+"telemetry for ~30 seconds. Continue?"))return;this.busy=!0,this.notice="";try{let K=await I.pairingScan({slow:Y});if(!K.ok)throw Error(K.error||"scan rejected");this.applyResp(K.status)}catch(K){this.notice=String(K.message||K)}finally{this.busy=!1}};onAdd=async(Q)=>{let{serial:Y}=Q.detail;this.busy=!0,this.notice="";try{let K=await I.pairingAdd(Y);if(!K.ok)throw Error(K.error||"add rejected");this.applyResp(K.status)}catch(K){this.notice=String(K.message||K)}finally{this.busy=!1}};onReplace=async(Q)=>{let Y=prompt(`Replace inverter ${Q}.
+
+Enter the replacement's 12-digit serial, or leave blank to scan for it. The new unit inherits this one's grid profile, power cap and array slot.`);if(Y===null)return;let K=Y.replace(/\D/g,"");if(K!==""&&K.length!==12){this.notice="Replacement serial must be 12 digits (or blank to scan).";return}this.busy=!0,this.notice="";try{let X=await I.pairingReplace(Q,K);if(!X.ok)throw Error(X.error||"replace rejected");this.applyResp(X.status)}catch(X){this.notice=String(X.message||X)}finally{this.busy=!1}};onRekey=async()=>{let Q=prompt("Fleet re-key BROADCASTS a new PAN to every inverter (0x22) and moves the radio to it. Telemetry pauses while it runs; on failure the old "+`PAN is restored.
+
+Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.trim();if(!/^[0-9a-fA-F]{1,4}$/.test(Y)){this.notice="PAN must be 1–4 hexadecimal digits.";return}this.busy=!0,this.notice="";try{let K=await I.pairingRekey(Y,0);if(!K.ok)throw Error(K.error||"re-key rejected");this.applyResp(K.status)}catch(K){let X=String(K.message||K);this.notice=/step-up/i.test(X)?"Re-key needs a password confirm. Confirm your password (Settings) then retry.":X}finally{this.busy=!1}};onAbort=async()=>{this.aborting=!0;try{let Q=await I.pairingAbort();this.status=Q.status??this.status}catch(Q){this.notice=String(Q.message||Q)}finally{this.aborting=!1,this.fetchStatus()}};onCloseDrawer=()=>{if(a(this.status))return;this.drawerOpen=!1};static styles=L`
+    :host { display: block; }
+    .controls {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 16px; flex-wrap: wrap; margin-bottom: 20px;
+    }
+    .rekey {
+      display: flex; flex-direction: column; gap: 6px; align-items: flex-end;
+    }
+    button.rekey-btn {
+      background: transparent; border: 1px solid var(--err); color: var(--err);
+      border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+      white-space: nowrap;
+    }
+    button.rekey-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--err) 12%, transparent); }
+    button.rekey-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .rekey .hint { font-size: 11px; color: var(--muted); max-width: 220px; text-align: right; }
+    .notice {
+      color: var(--err); font-size: 13px; margin-bottom: 16px;
+      border: 1px solid color-mix(in srgb, var(--err) 40%, transparent);
+      border-radius: 8px; padding: 8px 10px;
+    }
+    .table-wrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
     th { color: var(--muted); text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em; }
@@ -473,45 +792,133 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
     .dot.on { background: var(--ok); }
     .dot.off { background: var(--muted); }
     .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .capcell { white-space: nowrap; }
     .fw { font-variant-numeric: tabular-nums; color: var(--muted); }
     .fault { color: var(--err); }
     .empty { color: var(--muted); padding: 32px; text-align: center; }
-  `;render(){let Z=this.fleet;if(!Z||Z.inverters.length===0)return G`<div class="empty">No inverters discovered yet.</div>`;return G`
+    .enc { font-size: 11px; white-space: nowrap; }
+    .enc-ok { color: var(--ok); }
+    .enc-warn { color: var(--err); }
+    .enc-unknown { color: var(--muted); }
+    button.replace {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    button.replace:hover { color: var(--text); border-color: var(--muted); }
+  `;renderTable(){let Q=this.fleet;if(!Q||Q.inverters.length===0)return z`<div class="empty">No inverters discovered yet.</div>`;return z`
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Inverter ID</th><th>Name</th><th>Model</th><th>Firmware</th><th>Status</th>
+              <th>Encryption</th>
+              <th class="num">Output</th><th class="num">Load</th><th>Output cap</th>
+              <th class="num">Grid</th><th class="num">Freq</th>
+              <th class="num">Panels</th><th class="num">Faults</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${Q.inverters.map((Y)=>{let K=Y.faults?Object.values(Y.faults).filter(Boolean).length:0;return z`<tr>
+                <td class="uid">${Y.uid}</td>
+                <td>
+                  <input
+                    class="name-in"
+                    .value=${this.names?.[Y.uid]??""}
+                    placeholder="add a name"
+                    @change=${(X)=>this.rename(Y.uid,X)}
+                  />
+                </td>
+                <td>${Y.model||"—"}</td>
+                <td class="fw">${Y.sw_version||"—"}</td>
+                <td>
+                  <span class="dot ${Y.online?"on":"off"}"></span>${Y.online?"online":"offline"}
+                </td>
+                <td>${this.encBadge(Y.encrypted)}</td>
+                <td class="num">${M(Y.active_power_w)} / ${M(Y.nameplate_w)}</td>
+                <td class="num">${e(Y.load_pct)}</td>
+                <td class="capcell"><cap-input .inverter=${Y}></cap-input></td>
+                <td class="num">${F4(Y.grid_v)}</td>
+                <td class="num">${S4(Y.freq_hz)}</td>
+                <td class="num">${Y.panels?.length??0}</td>
+                <td class="num ${K?"fault":""}">${K||"—"}</td>
+                <td>
+                  <button class="replace" title="Replace this inverter with a new unit"
+                    ?disabled=${this.busy}
+                    @click=${()=>this.onReplace(Y.uid)}>Replace</button>
+                </td>
+              </tr>`})}
+          </tbody>
+        </table>
+      </div>
+    `}render(){return z`
+      <div class="controls">
+        <pairing-scan-panel
+          .busy=${this.busy}
+          @scan=${this.onScan}
+          @add=${this.onAdd}
+        ></pairing-scan-panel>
+        <div class="rekey">
+          <button class="rekey-btn" ?disabled=${this.busy} @click=${this.onRekey}>Fleet re-key…</button>
+          <span class="hint">Broadcasts a new PAN to the whole fleet. Confirmation required.</span>
+        </div>
+      </div>
+
+      ${this.notice?z`<div class="notice" role="alert">${this.notice}</div>`:B}
+
+      ${this.renderTable()}
+
+      <pairing-progress-drawer
+        .open=${this.drawerOpen}
+        .status=${this.status}
+        .aborting=${this.aborting}
+        @abort=${this.onAbort}
+        @close=${this.onCloseDrawer}
+      ></pairing-progress-drawer>
+    `}}customElements.define("inverters-view",z9);class B9 extends A{static properties={events:{attribute:!1}};constructor(){super();this.events=[]}static styles=L`
+    :host { display: block; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--muted); text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em; }
+    td { color: var(--text); }
+    .time { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .uid { font-family: var(--mono); color: var(--muted); font-size: 12px; }
+    .by { color: var(--accent); font-size: 12px; white-space: nowrap; }
+    .detail { color: var(--muted); }
+    .sev {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-radius: 999px;
+      padding: 1px 8px;
+      border: 1px solid var(--border);
+    }
+    .sev.info { color: var(--muted); }
+    .sev.warn { color: var(--warn); border-color: var(--warn); }
+    .sev.err { color: var(--err); border-color: var(--err); }
+    .empty { color: var(--muted); padding: 32px; text-align: center; }
+  `;render(){if(!this.events||this.events.length===0)return z`<div class="empty">No events recorded.</div>`;return z`
       <table>
         <thead>
-          <tr>
-            <th>Inverter ID</th><th>Name</th><th>Model</th><th>Firmware</th><th>Status</th>
-            <th class="num">Output</th><th class="num">Load</th>
-            <th class="num">Grid</th><th class="num">Freq</th>
-            <th class="num">Panels</th><th class="num">Faults</th>
-          </tr>
+          <tr><th>Time</th><th>Severity</th><th>Event</th><th>By</th><th>Inverter</th><th>Detail</th></tr>
         </thead>
         <tbody>
-          ${Z.inverters.map((K)=>{let Q=K.faults?Object.values(K.faults).filter(Boolean).length:0;return G`<tr>
-              <td class="uid">${K.uid}</td>
-              <td>
-                <input
-                  class="name-in"
-                  .value=${this.names?.[K.uid]??""}
-                  placeholder="add a name"
-                  @change=${($)=>this.rename(K.uid,$)}
-                />
-              </td>
-              <td>${K.model||"—"}</td>
-              <td class="fw">${K.sw_version||"—"}</td>
-              <td>
-                <span class="dot ${K.online?"on":"off"}"></span>${K.online?"online":"offline"}
-              </td>
-              <td class="num">${S(K.active_power_w)} / ${K.nameplate_w} W</td>
-              <td class="num">${v(K.load_pct)}</td>
-              <td class="num">${t(K.grid_v)}</td>
-              <td class="num">${jZ(K.freq_hz)}</td>
-              <td class="num">${K.panels?.length??0}</td>
-              <td class="num ${Q?"fault":""}">${Q||"—"}</td>
-            </tr>`})}
+          ${this.events.map((Q)=>z`<tr>
+              <td class="time">${b4(Q.ts_ms)}</td>
+              <td><span class="sev ${i3(Q.severity)}">${Q.severity}</span></td>
+              <td>${G3(Q.kind)}</td>
+              <td class="by">${Q.by||"—"}</td>
+              <td class="uid">${Q.inverter_uid||"—"}</td>
+              <td class="detail">${Q.detail||(Q.raw_hex?Q.raw_hex:B)}</td>
+            </tr>`)}
         </tbody>
       </table>
-    `}}customElements.define("inverters-view",W5);class _5 extends U{static properties={fleet:{attribute:!1}};constructor(){super();this.fleet=null}static styles=H`
+    `}}customElements.define("events-table",B9);var rQ=30000,pQ=86400000,lQ=100;class H9 extends A{static properties={fleet:{attribute:!1},recent:{state:!0},recentLoading:{state:!0},recentError:{state:!0}};timer=null;constructor(){super();this.fleet=null,this.recent=[],this.recentLoading=!1,this.recentError=""}static styles=L`
     :host { display: block; }
     .row {
       display: flex;
@@ -538,47 +945,30 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
     .uid { font-family: var(--mono); color: var(--muted); font-size: 12px; }
     .ok { color: var(--muted); padding: 32px; text-align: center; }
     .ok .big { color: var(--ok); font-size: 16px; }
-  `;alarms(){let Z=[];for(let K of this.fleet?.inverters??[]){for(let Q of JZ(K.faults))Z.push({uid:K.uid,model:K.model,label:Q,severity:"fault"});if(!K.online)Z.push({uid:K.uid,model:K.model,label:"Inverter offline",severity:"warning"})}return Z}render(){let Z=this.alarms();if(Z.length===0)return G`<div class="ok"><div class="big">✓ No active alarms</div><div>All inverters reporting healthy.</div></div>`;return G`${Z.map((K)=>G`<div class="row ${K.severity}">
-        <span class="sev">${K.severity}</span>
-        <span class="label">${K.label} <span style="color:var(--muted)">· ${K.model||"?"}</span></span>
-        <span class="uid">${K.uid}</span>
-      </div>`)}`}}customElements.define("alarms-view",_5);class A5 extends U{static properties={events:{attribute:!1}};constructor(){super();this.events=[]}static styles=H`
-    :host { display: block; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
-    th { color: var(--muted); text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em; }
-    td { color: var(--text); }
-    .time { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
-    .uid { font-family: var(--mono); color: var(--muted); font-size: 12px; }
-    .detail { color: var(--muted); }
-    .sev {
-      font-size: 10px;
+
+    .section { margin-top: 24px; }
+    .section h3 {
+      font-size: 12px;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
-      border-radius: 999px;
-      padding: 1px 8px;
-      border: 1px solid var(--border);
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin: 0 0 10px 2px;
+      font-weight: 600;
     }
-    .sev.info { color: var(--muted); }
-    .sev.warn { color: var(--warn); border-color: var(--warn); }
-    .sev.err { color: var(--err); border-color: var(--err); }
-    .empty { color: var(--muted); padding: 32px; text-align: center; }
-  `;render(){if(!this.events||this.events.length===0)return G`<div class="empty">No events recorded.</div>`;return G`
-      <table>
-        <thead>
-          <tr><th>Time</th><th>Severity</th><th>Event</th><th>Inverter</th><th>Detail</th></tr>
-        </thead>
-        <tbody>
-          ${this.events.map((Z)=>G`<tr>
-              <td class="time">${zZ(Z.ts_ms)}</td>
-              <td><span class="sev ${z5(Z.severity)}">${Z.severity}</span></td>
-              <td>${PZ(Z.kind)}</td>
-              <td class="uid">${Z.inverter_uid||"—"}</td>
-              <td class="detail">${Z.detail||(Z.raw_hex?Z.raw_hex:j)}</td>
-            </tr>`)}
-        </tbody>
-      </table>
-    `}}customElements.define("events-table",A5);class O5 extends U{static properties={events:{state:!0},error:{state:!0},loading:{state:!0}};timer=null;constructor(){super();this.events=[],this.error="",this.loading=!1}static styles=H`
+    .section .err { color: var(--muted); font-size: 12px; margin: 0 2px 8px; }
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .empty { color: var(--muted); padding: 24px; text-align: center; font-size: 13px; }
+  `;connectedCallback(){super.connectedCallback(),this.loadRecent(),this.timer=setInterval(()=>void this.loadRecent(),rQ)}disconnectedCallback(){if(super.disconnectedCallback(),this.timer)clearInterval(this.timer),this.timer=null}updated(Q){if(Q.has("fleet"))this.loadRecent()}async loadRecent(){this.recentLoading=!0;try{let Q=await I.events({kind:"fault_raised",since_ms:Date.now()-pQ,limit:lQ});this.recent=Q.events??[],this.recentError=Q.error??""}catch(Q){this.recentError=Q.message||"failed to load events"}finally{this.recentLoading=!1}}alarms(){let Q=[];for(let Y of this.fleet?.inverters??[]){for(let K of C4(Y.faults))Q.push({uid:Y.uid,model:Y.model,label:K,severity:"fault"});if(!Y.online)Q.push({uid:Y.uid,model:Y.model,label:"Inverter offline",severity:"warning"})}return Q}renderLive(){let Q=this.alarms();if(Q.length===0)return z`<div class="ok"><div class="big">✓ No active alarms</div><div>All inverters reporting healthy.</div></div>`;return z`${Q.map((Y)=>z`<div class="row ${Y.severity}">
+        <span class="sev">${Y.severity}</span>
+        <span class="label">${Y.label} <span style="color:var(--muted)">· ${Y.model||"?"}</span></span>
+        <span class="uid">${Y.uid}</span>
+      </div>`)}`}renderRecent(){return z`
+      <section class="section">
+        <h3>Recent (24h)</h3>
+        ${this.recentError?z`<div class="err">⚠ ${this.recentError}</div>`:B}
+        ${this.recent.length===0?z`<div class="panel"><div class="empty">No fault events in the last 24h.</div></div>`:z`<div class="panel"><events-table .events=${this.recent}></events-table></div>`}
+      </section>
+    `}render(){return z`${this.renderLive()}${this.renderRecent()}`}}customElements.define("alarms-view",H9);class W9 extends A{static properties={events:{state:!0},error:{state:!0},loading:{state:!0}};timer=null;constructor(){super();this.events=[],this.error="",this.loading=!1}static styles=L`
     :host { display: block; }
     .bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
     .count { color: var(--muted); font-size: 13px; }
@@ -594,14 +984,14 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
     button:hover { color: var(--text); border-color: var(--muted); }
     .err { color: var(--err); font-size: 13px; margin-bottom: 12px; }
     .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-  `;connectedCallback(){super.connectedCallback(),this.load(),this.timer=setInterval(()=>void this.load(),15000)}disconnectedCallback(){if(super.disconnectedCallback(),this.timer)clearInterval(this.timer);this.timer=null}async load(){this.loading=!0;try{let Z=await O.events({limit:200});this.events=Z.events??[],this.error=Z.error??""}catch(Z){this.error=Z.message}finally{this.loading=!1}}render(){return G`
+  `;connectedCallback(){super.connectedCallback(),this.load(),this.timer=setInterval(()=>void this.load(),15000)}disconnectedCallback(){if(super.disconnectedCallback(),this.timer)clearInterval(this.timer);this.timer=null}async load(){this.loading=!0;try{let Q=await I.events({limit:200});this.events=Q.events??[],this.error=Q.error??""}catch(Q){this.error=Q.message}finally{this.loading=!1}}render(){return z`
       <div class="bar">
         <span class="count">${this.events.length} event(s)${this.loading?" · refreshing…":""}</span>
         <button @click=${()=>void this.load()}>Refresh</button>
       </div>
-      ${this.error?G`<div class="err">⚠ ${this.error}</div>`:j}
+      ${this.error?z`<div class="err">⚠ ${this.error}</div>`:B}
       <div class="panel"><events-table .events=${this.events}></events-table></div>
-    `}}customElements.define("events-view",O5);class I5 extends U{static properties={profiles:{attribute:!1},activeBase:{attribute:!1},reconcilerReady:{attribute:!1},busy:{attribute:!1},selected:{state:!0}};constructor(){super();this.profiles=[],this.activeBase="",this.reconcilerReady=!0,this.busy=!1,this.selected=""}static styles=H`
+    `}}customElements.define("events-view",W9);var U9;function O(Q,Y,K){function X(H,W){if(!H._zod)Object.defineProperty(H,"_zod",{value:{def:W,constr:J,traits:new Set},enumerable:!1});if(H._zod.traits.has(Q))return;H._zod.traits.add(Q),Y(H,W);let U=J.prototype,j=Object.keys(U);for(let $=0;$<j.length;$++){let F=j[$];if(!(F in H))H[F]=U[F].bind(H)}}let G=K?.Parent??Object;class q extends G{}Object.defineProperty(q,"name",{value:Q});function J(H){var W;let U=K?.Parent?new q:this;X(U,H),(W=U._zod).deferred??(W.deferred=[]);for(let j of U._zod.deferred)j();return U}return Object.defineProperty(J,"init",{value:X}),Object.defineProperty(J,Symbol.hasInstance,{value:(H)=>{if(K?.Parent&&H instanceof K.Parent)return!0;return H?._zod?.traits?.has(Q)}}),Object.defineProperty(J,"name",{value:Q}),J}var Q6=Symbol("zod_brand");class y extends Error{constructor(){super("Encountered Promise during synchronous parse. Use .parseAsync() instead.")}}class z3 extends Error{constructor(Q){super(`Encountered unidirectional transform during encode: ${Q}`);this.name="ZodEncodeError"}}(U9=globalThis).__zod_globalConfig??(U9.__zod_globalConfig={});var J3=globalThis.__zod_globalConfig;function K4(Q){if(Q)Object.assign(J3,Q);return J3}function $9(Q,Y){if(typeof Y==="bigint")return Y.toString();return Y}function A9(Q){return{get value(){{let K=Q();return Object.defineProperty(this,"value",{value:K}),K}throw Error("cached value already set")}}}function L9(Q){return Q===null||Q===void 0}function D9(Q){let Y=Q.startsWith("^")?1:0,K=Q.endsWith("$")?Q.length-1:Q.length;return Q.slice(Y,K)}var j9=Symbol("evaluating");function b(Q,Y,K){let X=void 0;Object.defineProperty(Q,Y,{get(){if(X===j9)return;if(X===void 0)X=j9,X=K();return X},set(G){Object.defineProperty(Q,Y,{value:G})},configurable:!0})}var H3="captureStackTrace"in Error?Error.captureStackTrace:(...Q)=>{};function F9(Q){return typeof Q==="object"&&Q!==null&&!Array.isArray(Q)}function W3(Q,Y,K){let X=new Q._zod.constr(Y??Q._zod.def);if(!Y||K?.parent)X._zod.parent=Q;return X}function m(Q){let Y=Q;if(!Y)return{};if(typeof Y==="string")return{error:()=>Y};if(Y?.message!==void 0){if(Y?.error!==void 0)throw Error("Cannot specify both `message` and `error` params");Y.error=Y.message}if(delete Y.message,typeof Y.error==="string")return{...Y,error:()=>Y.error};return Y}function I9(Q){return Object.keys(Q).filter((Y)=>{return Q[Y]._zod.optin==="optional"&&Q[Y]._zod.optout==="optional"})}var dQ={safeint:[Number.MIN_SAFE_INTEGER,Number.MAX_SAFE_INTEGER],int32:[-2147483648,2147483647],uint32:[0,4294967295],float32:[-340282346638528860000000000000000000000,340282346638528860000000000000000000000],float64:[-Number.MAX_VALUE,Number.MAX_VALUE]};function V4(Q,Y=0){if(Q.aborted===!0)return!0;for(let K=Y;K<Q.issues.length;K++)if(Q.issues[K]?.continue!==!0)return!0;return!1}function V9(Q,Y=0){if(Q.aborted===!0)return!0;for(let K=Y;K<Q.issues.length;K++)if(Q.issues[K]?.continue===!1)return!0;return!1}function v4(Q,Y){return Y.map((K)=>{var X;return(X=K).path??(X.path=[]),K.path.unshift(Q),K})}function g4(Q){return typeof Q==="string"?Q:Q?.message}function X4(Q,Y,K){let X=Q.message?Q.message:g4(Q.inst?._zod.def?.error?.(Q))??g4(Y?.error?.(Q))??g4(K.customError?.(Q))??g4(K.localeError?.(Q))??"Invalid input",{inst:G,continue:q,input:J,...H}=Q;if(H.path??(H.path=[]),H.message=X,Y?.reportInput)H.input=J;return H}function N9(Q){if(Array.isArray(Q))return"array";if(typeof Q==="string")return"string";return"unknown"}var O9=(Q,Y)=>{Q.name="$ZodError",Object.defineProperty(Q,"_zod",{value:Q._zod,enumerable:!1}),Object.defineProperty(Q,"issues",{value:Y,enumerable:!1}),Q.message=JSON.stringify(Y,$9,2),Object.defineProperty(Q,"toString",{value:()=>Q.message,enumerable:!1})},P9=O("$ZodError",O9),N4=O("$ZodError",O9,{Parent:Error});var iQ=(Q)=>(Y,K,X,G)=>{let q=X?{...X,async:!1}:{async:!1},J=Y._zod.run({value:K,issues:[]},q);if(J instanceof Promise)throw new y;if(J.issues.length){let H=new(G?.Err??Q)(J.issues.map((W)=>X4(W,q,K4())));throw H3(H,G?.callee),H}return J.value},h4=iQ(N4),sQ=(Q)=>async(Y,K,X,G)=>{let q=X?{...X,async:!0}:{async:!0},J=Y._zod.run({value:K,issues:[]},q);if(J instanceof Promise)J=await J;if(J.issues.length){let H=new(G?.Err??Q)(J.issues.map((W)=>X4(W,q,K4())));throw H3(H,G?.callee),H}return J.value},c4=sQ(N4),tQ=(Q)=>(Y,K,X)=>{let G=X?{...X,async:!1}:{async:!1},q=Y._zod.run({value:K,issues:[]},G);if(q instanceof Promise)throw new y;return q.issues.length?{success:!1,error:new(Q??P9)(q.issues.map((J)=>X4(J,G,K4())))}:{success:!0,data:q.value}},n=tQ(N4),aQ=(Q)=>async(Y,K,X)=>{let G=X?{...X,async:!0}:{async:!0},q=Y._zod.run({value:K,issues:[]},G);if(q instanceof Promise)q=await q;return q.issues.length?{success:!1,error:new Q(q.issues.map((J)=>X4(J,G,K4())))}:{success:!0,data:q.value}},O4=aQ(N4);var eQ="(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))",Q8=new RegExp(`^${eQ}$`);var E9=(Q)=>{let Y=Q?`[\\s\\S]{${Q?.minimum??0},${Q?.maximum??""}}`:"[\\s\\S]*";return new RegExp(`^${Y}$`)};var M9=/^-?\d+(?:\.\d+)?$/;var q4=O("$ZodCheck",(Q,Y)=>{var K;Q._zod??(Q._zod={}),Q._zod.def=Y,(K=Q._zod).onattach??(K.onattach=[])});var R9=O("$ZodCheckMinLength",(Q,Y)=>{var K;q4.init(Q,Y),(K=Q._zod.def).when??(K.when=(X)=>{let G=X.value;return!L9(G)&&G.length!==void 0}),Q._zod.onattach.push((X)=>{let G=X._zod.bag.minimum??Number.NEGATIVE_INFINITY;if(Y.minimum>G)X._zod.bag.minimum=Y.minimum}),Q._zod.check=(X)=>{let G=X.value;if(G.length>=Y.minimum)return;let J=N9(G);X.issues.push({origin:J,code:"too_small",minimum:Y.minimum,inclusive:!0,input:G,inst:Q,continue:!Y.abort})}});var K8=O("$ZodCheckStringFormat",(Q,Y)=>{var K,X;if(q4.init(Q,Y),Q._zod.onattach.push((G)=>{let q=G._zod.bag;if(q.format=Y.format,Y.pattern)q.patterns??(q.patterns=new Set),q.patterns.add(Y.pattern)}),Y.pattern)(K=Q._zod).check??(K.check=(G)=>{if(Y.pattern.lastIndex=0,Y.pattern.test(G.value))return;G.issues.push({origin:"string",code:"invalid_format",format:Y.format,input:G.value,...Y.pattern?{pattern:Y.pattern.toString()}:{},inst:Q,continue:!Y.abort})});else(X=Q._zod).check??(X.check=()=>{})}),w9=O("$ZodCheckRegex",(Q,Y)=>{K8.init(Q,Y),Q._zod.check=(K)=>{if(Y.pattern.lastIndex=0,Y.pattern.test(K.value))return;K.issues.push({origin:"string",code:"invalid_format",format:"regex",input:K.value,pattern:Y.pattern.toString(),inst:Q,continue:!Y.abort})}});var _9=O("$ZodCheckOverwrite",(Q,Y)=>{q4.init(Q,Y),Q._zod.check=(K)=>{K.value=Y.tx(K.value)}});var T9={major:4,minor:4,patch:3};var u=O("$ZodType",(Q,Y)=>{var K;Q??(Q={}),Q._zod.def=Y,Q._zod.bag=Q._zod.bag||{},Q._zod.version=T9;let X=[...Q._zod.def.checks??[]];if(Q._zod.traits.has("$ZodCheck"))X.unshift(Q);for(let G of X)for(let q of G._zod.onattach)q(Q);if(X.length===0)(K=Q._zod).deferred??(K.deferred=[]),Q._zod.deferred?.push(()=>{Q._zod.run=Q._zod.parse});else{let G=(J,H,W)=>{let U=V4(J),j;for(let $ of H){if($._zod.def.when){if(V9(J))continue;if(!$._zod.def.when(J))continue}else if(U)continue;let F=J.issues.length,D=$._zod.check(J);if(D instanceof Promise&&W?.async===!1)throw new y;if(j||D instanceof Promise)j=(j??Promise.resolve()).then(async()=>{if(await D,J.issues.length===F)return;if(!U)U=V4(J,F)});else{if(J.issues.length===F)continue;if(!U)U=V4(J,F)}}if(j)return j.then(()=>{return J});return J},q=(J,H,W)=>{if(V4(J))return J.aborted=!0,J;let U=G(H,X,W);if(U instanceof Promise){if(W.async===!1)throw new y;return U.then((j)=>Q._zod.parse(j,W))}return Q._zod.parse(U,W)};Q._zod.run=(J,H)=>{if(H.skipChecks)return Q._zod.parse(J,H);if(H.direction==="backward"){let U=Q._zod.parse({value:J.value,issues:[]},{...H,skipChecks:!0});if(U instanceof Promise)return U.then((j)=>{return q(j,J,H)});return q(U,J,H)}let W=Q._zod.parse(J,H);if(W instanceof Promise){if(H.async===!1)throw new y;return W.then((U)=>G(U,X,H))}return G(W,X,H)}}b(Q,"~standard",()=>({validate:(G)=>{try{let q=n(Q,G);return q.success?{value:q.data}:{issues:q.error?.issues}}catch(q){return O4(Q,G).then((J)=>J.success?{value:J.data}:{issues:J.error?.issues})}},vendor:"zod",version:1}))}),C9=O("$ZodString",(Q,Y)=>{u.init(Q,Y),Q._zod.pattern=[...Q?._zod.bag?.patterns??[]].pop()??E9(Q._zod.bag),Q._zod.parse=(K,X)=>{if(Y.coerce)try{K.value=String(K.value)}catch(G){}if(typeof K.value==="string")return K;return K.issues.push({expected:"string",code:"invalid_type",input:K.value,inst:Q}),K}});var b9=O("$ZodNumber",(Q,Y)=>{u.init(Q,Y),Q._zod.pattern=Q._zod.bag.pattern??M9,Q._zod.parse=(K,X)=>{if(Y.coerce)try{K.value=Number(K.value)}catch(J){}let G=K.value;if(typeof G==="number"&&!Number.isNaN(G)&&Number.isFinite(G))return K;let q=typeof G==="number"?Number.isNaN(G)?"NaN":!Number.isFinite(G)?"Infinity":void 0:void 0;return K.issues.push({expected:"number",code:"invalid_type",input:G,inst:Q,...q?{received:q}:{}}),K}});function S9(Q,Y,K){if(Q.issues.length)Y.issues.push(...v4(K,Q.issues));Y.value[K]=Q.value}var x9=O("$ZodArray",(Q,Y)=>{u.init(Q,Y),Q._zod.parse=(K,X)=>{let G=K.value;if(!Array.isArray(G))return K.issues.push({expected:"array",code:"invalid_type",input:G,inst:Q}),K;K.value=Array(G.length);let q=[];for(let J=0;J<G.length;J++){let H=G[J],W=Y.element._zod.run({value:H,issues:[]},X);if(W instanceof Promise)q.push(W.then((U)=>S9(U,K,J)));else S9(W,K,J)}if(q.length)return Promise.all(q).then(()=>K);return K}});function m4(Q,Y,K,X,G,q){let J=K in X;if(Q.issues.length){if(G&&q&&!J)return;Y.issues.push(...v4(K,Q.issues))}if(!J&&!G){if(!Q.issues.length)Y.issues.push({code:"invalid_type",expected:"nonoptional",input:void 0,path:[K]});return}if(Q.value===void 0){if(J)Y.value[K]=void 0}else Y.value[K]=Q.value}function q8(Q){let Y=Object.keys(Q.shape);for(let X of Y)if(!Q.shape?.[X]?._zod?.traits?.has("$ZodType"))throw Error(`Invalid element at key "${X}": expected a Zod schema`);let K=I9(Q.shape);return{...Q,keys:Y,keySet:new Set(Y),numKeys:Y.length,optionalKeys:new Set(K)}}function J8(Q,Y,K,X,G,q){let J=[],H=G.keySet,W=G.catchall._zod,U=W.def.type,j=W.optin==="optional",$=W.optout==="optional";for(let F in Y){if(F==="__proto__")continue;if(H.has(F))continue;if(U==="never"){J.push(F);continue}let D=W.run({value:Y[F],issues:[]},X);if(D instanceof Promise)Q.push(D.then((P)=>m4(P,K,F,Y,j,$)));else m4(D,K,F,Y,j,$)}if(J.length)K.issues.push({code:"unrecognized_keys",keys:J,input:Y,inst:q});if(!Q.length)return K;return Promise.all(Q).then(()=>{return K})}var g9=O("$ZodObject",(Q,Y)=>{if(u.init(Q,Y),!Object.getOwnPropertyDescriptor(Y,"shape")?.get){let H=Y.shape;Object.defineProperty(Y,"shape",{get:()=>{let W={...H};return Object.defineProperty(Y,"shape",{value:W}),W}})}let X=A9(()=>q8(Y));b(Q._zod,"propValues",()=>{let H=Y.shape,W={};for(let U in H){let j=H[U]._zod;if(j.values){W[U]??(W[U]=new Set);for(let $ of j.values)W[U].add($)}}return W});let G=F9,q=Y.catchall,J;Q._zod.parse=(H,W)=>{J??(J=X.value);let U=H.value;if(!G(U))return H.issues.push({expected:"object",code:"invalid_type",input:U,inst:Q}),H;H.value={};let j=[],$=J.shape;for(let F of J.keys){let D=$[F],P=D._zod.optin==="optional",N=D._zod.optout==="optional",o=D._zod.run({value:U[F],issues:[]},W);if(o instanceof Promise)j.push(o.then((z4)=>m4(z4,H,F,U,P,N)));else m4(o,H,F,U,P,N)}if(!q)return j.length?Promise.all(j).then(()=>H):H;return J8(j,U,H,W,X.value,Q)}});var v9=O("$ZodTransform",(Q,Y)=>{u.init(Q,Y),Q._zod.optin="optional",Q._zod.parse=(K,X)=>{if(X.direction==="backward")throw new z3(Q.constructor.name);let G=Y.transform(K.value,K);if(X.async)return(G instanceof Promise?G:Promise.resolve(G)).then((J)=>{return K.value=J,K.fallback=!0,K});if(G instanceof Promise)throw new y;return K.value=G,K.fallback=!0,K}});function k9(Q,Y){if(Y===void 0&&(Q.issues.length||Q.fallback))return{issues:[],value:void 0};return Q}var h9=O("$ZodOptional",(Q,Y)=>{u.init(Q,Y),Q._zod.optin="optional",Q._zod.optout="optional",b(Q._zod,"values",()=>{return Y.innerType._zod.values?new Set([...Y.innerType._zod.values,void 0]):void 0}),b(Q._zod,"pattern",()=>{let K=Y.innerType._zod.pattern;return K?new RegExp(`^(${D9(K.source)})?$`):void 0}),Q._zod.parse=(K,X)=>{if(Y.innerType._zod.optin==="optional"){let G=K.value,q=Y.innerType._zod.run(K,X);if(q instanceof Promise)return q.then((J)=>k9(J,G));return k9(q,G)}if(K.value===void 0)return K;return Y.innerType._zod.run(K,X)}});var c9=O("$ZodPipe",(Q,Y)=>{u.init(Q,Y),b(Q._zod,"values",()=>Y.in._zod.values),b(Q._zod,"optin",()=>Y.in._zod.optin),b(Q._zod,"optout",()=>Y.out._zod.optout),b(Q._zod,"propValues",()=>Y.in._zod.propValues),Q._zod.parse=(K,X)=>{if(X.direction==="backward"){let q=Y.out._zod.run(K,X);if(q instanceof Promise)return q.then((J)=>y4(J,Y.in,X));return y4(q,Y.in,X)}let G=Y.in._zod.run(K,X);if(G instanceof Promise)return G.then((q)=>y4(q,Y.out,X));return y4(G,Y.out,X)}});function y4(Q,Y,K){if(Q.issues.length)return Q.aborted=!0,Q;return Y._zod.run({value:Q.value,issues:Q.issues,fallback:Q.fallback},K)}function y9(Q,Y){return new Q({type:"string",...m(Y)})}function m9(Q,Y){return new Q({type:"number",checks:[],...m(Y)})}function P4(Q,Y){return new R9({check:"min_length",...m(Y),minimum:Q})}function u4(Q,Y){return new w9({check:"string_format",format:"regex",...m(Y),pattern:Q})}function u9(Q){return new _9({check:"overwrite",tx:Q})}function U3(){return u9((Q)=>Q.trim())}var i=O("ZodMiniType",(Q,Y)=>{if(!Q._zod)throw Error("Uninitialized schema in ZodMiniType.");u.init(Q,Y),Q.def=Y,Q.type=Y.type,Q.parse=(K,X)=>h4(Q,K,X,{callee:Q.parse}),Q.safeParse=(K,X)=>n(Q,K,X),Q.parseAsync=async(K,X)=>c4(Q,K,X,{callee:Q.parseAsync}),Q.safeParseAsync=async(K,X)=>O4(Q,K,X),Q.check=(...K)=>{return Q.clone({...Y,checks:[...Y.checks??[],...K.map((X)=>typeof X==="function"?{_zod:{check:X,def:{check:"custom"},onattach:[]}}:X)]},{parent:!0})},Q.with=Q.check,Q.clone=(K,X)=>W3(Q,K,X),Q.brand=()=>Q,Q.register=(K,X)=>{return K.add(Q,X),Q},Q.apply=(K)=>K(Q)}),H8=O("ZodMiniString",(Q,Y)=>{C9.init(Q,Y),i.init(Q,Y)});function J4(Q){return y9(H8,Q)}var W8=O("ZodMiniNumber",(Q,Y)=>{b9.init(Q,Y),i.init(Q,Y)});function f9(Q){return m9(W8,Q)}var U8=O("ZodMiniArray",(Q,Y)=>{x9.init(Q,Y),i.init(Q,Y)});function j3(Q,Y){return new U8({type:"array",element:Q,...m(Y)})}var j8=O("ZodMiniObject",(Q,Y)=>{g9.init(Q,Y),i.init(Q,Y),b(Q,"shape",()=>Y.shape)});function $3(Q,Y){let K={type:"object",shape:Q??{},...m(Y)};return new j8(K)}var $8=O("ZodMiniTransform",(Q,Y)=>{v9.init(Q,Y),i.init(Q,Y)});function o9(Q){return new $8({type:"transform",transform:Q})}var A8=O("ZodMiniOptional",(Q,Y)=>{h9.init(Q,Y),i.init(Q,Y)});function A3(Q){return new A8({type:"optional",innerType:Q})}var L8=O("ZodMiniPipe",(Q,Y)=>{c9.init(Q,Y),i.init(Q,Y)});function r9(Q,Y){return new L8({type:"pipe",in:Q,out:Y})}function p9(Q,Y){let K=new q4({check:"custom",...m(Y)});return K._zod.check=Q,K}var l9="invdriver.gridprofile/v1",I8=J4().check(u4(/^[A-Z]{2}$/,"must match ^[A-Z]{2}$")),V8=J4().check(u4(/^[0-9A-Fa-f]{12}$/,"must be 12 hex characters")),N8=r9(o9((Q)=>{if(Q&&typeof Q==="object"){let Y=Q,K="aps_code"in Y||"value"in Y,X="apply"in Y||"native"in Y;if(K)return{aps_code:Y.aps_code,value:Y.value,unit:Y.unit};if(X){let G=Y.apply??{},q=Y.native??{};return{aps_code:G.aps_code,value:q.value,unit:q.unit}}}return Q}),$3({aps_code:I8,value:f9(),unit:A3(J4())})),O8=$3({schema:A3(J4()),id:J4().check(U3(),P4(1,"must be a non-empty string")),uids:j3(V8).check(P4(1,"must contain at least one inverter UID")),points:j3(N8).check(P4(1,"must contain at least one parameter override"))}),P8=O8.check(p9((Q)=>{let Y=Q.value,K=new Map;for(let G=0;G<Y.points.length;G++){let q=Y.points[G].aps_code,J=K.get(q);if(J!==void 0)Q.issues.push({code:"custom",path:["points",G,"aps_code"],message:`duplicate aps_code "${q}" (also at points[${J}])`,input:Y});else K.set(q,G)}let X=new Map;for(let G=0;G<Y.uids.length;G++){let q=Y.uids[G].toLowerCase(),J=X.get(q);if(J!==void 0)Q.issues.push({code:"custom",path:["uids",G],message:`duplicate uid "${Y.uids[G]}" (also at uids[${J}])`,input:Y});else X.set(q,G)}}));function E8(Q){let Y="";for(let K of Q)if(typeof K==="number")Y+=`[${K}]`;else Y+=Y?`.${String(K)}`:String(K);return Y||"(root)"}function d9(Q){let Y=n(P8,Q);if(!Y.success)return{ok:!1,errors:Y.error.issues.map((J)=>`${E8(J.path)}: ${J.message}`)};let K=[];if(Y.data.schema!==void 0&&Y.data.schema!==l9)K.push(`schema tag "${Y.data.schema}" does not match expected "${l9}"`);let X=Y.data.points.map((q)=>{let J={aps_code:q.aps_code,value:q.value};if(q.unit!==void 0&&q.unit!=="")J.unit=q.unit;return J});return{ok:!0,profile:{id:Y.data.id.trim(),uids:Y.data.uids,points:X},warnings:K}}class n9 extends A{static properties={profiles:{attribute:!1},activeBase:{attribute:!1},reconcilerReady:{attribute:!1},busy:{attribute:!1},selected:{state:!0}};constructor(){super();this.profiles=[],this.activeBase="",this.reconcilerReady=!0,this.busy=!1,this.selected=""}static styles=L`
     :host { display: block; }
     .grid { display: grid; gap: 16px; max-width: 460px; }
     .active { font-size: 14px; color: var(--text); }
@@ -635,29 +1025,29 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
     button.apply:hover:not(:disabled) { filter: brightness(1.08); }
     button.apply:disabled { opacity: 0.45; cursor: not-allowed; }
     .hint { font-size: 12px; color: var(--muted); }
-  `;onChange=(Z)=>{this.selected=Z.target.value};apply=()=>{let Z=this.effectiveSelected();if(!Z||Z===this.activeBase)return;this.dispatchEvent(new CustomEvent("apply",{detail:Z,bubbles:!0,composed:!0}))};effectiveSelected(){return this.selected||this.activeBase}labelFor(Z){let K=[`${Z.vnom_v} V`];if(Z.source_ref)K.push(Z.source_ref);return K.push(`${Z.point_count} pts`),`${Z.id} — ${K.join(" · ")}`}render(){let Z=this.effectiveSelected(),K=this.profiles.find(($)=>$.id===this.activeBase),Q=!this.busy&&this.reconcilerReady&&Z!==""&&Z!==this.activeBase;return G`
+  `;onChange=(Q)=>{this.selected=Q.target.value};apply=()=>{let Q=this.effectiveSelected();if(!Q||Q===this.activeBase)return;this.dispatchEvent(new CustomEvent("apply",{detail:Q,bubbles:!0,composed:!0}))};effectiveSelected(){return this.selected||this.activeBase}labelFor(Q){let Y=[`${Q.vnom_v} V`];if(Q.source_ref)Y.push(Q.source_ref);return Y.push(`${Q.point_count} pts`),`${Q.id} — ${Y.join(" · ")}`}render(){let Q=this.effectiveSelected(),Y=this.profiles.find((X)=>X.id===this.activeBase),K=!this.busy&&this.reconcilerReady&&Q!==""&&Q!==this.activeBase;return z`
       <div class="grid">
         <div class="active">
           <span class="muted">Active profile:</span>
-          ${this.activeBase?G` <strong>${this.activeBase}</strong>${K?G` <span class="muted">(${K.vnom_v} V · ${K.point_count} pts)</span>`:j}`:G` <span class="none">none selected</span>`}
+          ${this.activeBase?z` <strong>${this.activeBase}</strong>${Y?z` <span class="muted">(${Y.vnom_v} V · ${Y.point_count} pts)</span>`:B}`:z` <span class="none">none selected</span>`}
         </div>
 
         <label>
           Base profile
-          <select id="profile" .value=${Z} @change=${this.onChange} ?disabled=${this.busy}>
-            ${this.activeBase?j:G`<option value="" disabled selected>Select a profile…</option>`}
-            ${this.profiles.map(($)=>G`<option value=${$.id} ?selected=${$.id===Z}>${this.labelFor($)}</option>`)}
+          <select id="profile" .value=${Q} @change=${this.onChange} ?disabled=${this.busy}>
+            ${this.activeBase?B:z`<option value="" disabled selected>Select a profile…</option>`}
+            ${this.profiles.map((X)=>z`<option value=${X.id} ?selected=${X.id===Q}>${this.labelFor(X)}</option>`)}
           </select>
         </label>
 
         <div class="actions">
-          <button class="apply" @click=${this.apply} ?disabled=${!Q}>
+          <button class="apply" @click=${this.apply} ?disabled=${!K}>
             ${this.busy?"Applying…":"Apply"}
           </button>
-          ${!this.reconcilerReady?G`<span class="hint">reconciler not ready</span>`:Z&&Z!==this.activeBase?G`<span class="hint">applies to all inverters</span>`:j}
+          ${!this.reconcilerReady?z`<span class="hint">reconciler not ready</span>`:Q&&Q!==this.activeBase?z`<span class="hint">applies to all inverters</span>`:B}
         </div>
       </div>
-    `}}customElements.define("grid-profile-form",I5);var T5={AC:{label:"Undervoltage trip — stage 2",desc:"Disconnect when AC voltage drops to this lower-stage level."},AQ:{label:"Undervoltage trip — deep",desc:"Disconnect quickly when voltage falls this far below nominal."},AH:{label:"Undervoltage trip — fast",desc:"Fast disconnect on a severe undervoltage."},AD:{label:"Overvoltage trip — slow",desc:"Disconnect when AC voltage rises above this (slower stage)."},AY:{label:"Overvoltage trip — slow (stage 2)",desc:"Second slower overvoltage disconnect threshold."},AB:{label:"10-minute mean overvoltage",desc:"Trips if the 10-minute average voltage exceeds this (EN 50549 sustained-overvoltage limit)."},AI:{label:"Overvoltage trip — fast",desc:"Fast disconnect on a severe overvoltage."},AE:{label:"Underfrequency trip — slow",desc:"Disconnect when grid frequency falls below this (slower stage)."},AJ:{label:"Underfrequency trip — fast",desc:"Fast disconnect on a severe underfrequency."},AF:{label:"Overfrequency trip — slow",desc:"Disconnect when grid frequency rises above this (slower stage)."},AK:{label:"Overfrequency trip — fast",desc:"Fast disconnect on a severe overfrequency."},BB:{label:"Undervoltage 1 — clearance time",desc:"How long the undervoltage condition must persist before tripping."},BD:{label:"Undervoltage 2 — clearance time",desc:"Clearance delay for the second undervoltage stage."},BC:{label:"Overvoltage 1 — clearance time",desc:"How long the overvoltage condition must persist before tripping."},BE:{label:"Overvoltage 2 — clearance time",desc:"Clearance delay for the second overvoltage stage."},BH:{label:"Underfrequency 1 — clearance time",desc:"Clearance delay for the first underfrequency stage."},BJ:{label:"Underfrequency 2 — clearance time",desc:"Clearance delay for the second underfrequency stage."},BI:{label:"Overfrequency 1 — clearance time",desc:"Clearance delay for the first overfrequency stage."},BK:{label:"Overfrequency 2 — clearance time",desc:"Clearance delay for the second overfrequency stage."},BN:{label:"Enter-service voltage — lower",desc:"Voltage must be above this before the inverter reconnects."},BO:{label:"Enter-service voltage — upper",desc:"Voltage must be below this before the inverter reconnects."},BP:{label:"Enter-service frequency — lower",desc:"Frequency must be above this before the inverter reconnects."},BQ:{label:"Enter-service frequency — upper",desc:"Frequency must be below this before the inverter reconnects."},AG:{label:"Grid-recovery delay",desc:"Wait time after the grid is healthy before reconnecting."},AS:{label:"Power ramp time",desc:"Time taken to ramp output back up after reconnecting."},CV:{label:"Curtailment enable (droop)",desc:"Enables the over-frequency droop power reduction (0 = off, 1 = on)."},CA:{label:"Curtailment start (droop deadband)",desc:"Over-frequency droop: power reduction begins at this frequency (deadband end)."},DD:{label:"Curtailment slope (droop)",desc:"Over-frequency droop gradient: % of rated power reduced per Hz above the start."},CG:{label:"Curtailment response time (droop)",desc:"Filter/response time of the droop control loop."},DH:{label:"Under-freq curve — low",desc:"Legacy frequency-Watt curve: lower frequency point of the under-frequency response."},DI:{label:"Under-freq curve — high",desc:"Legacy frequency-Watt curve: upper frequency point of the under-frequency response."},CB:{label:"Over-freq curve — start",desc:"Legacy frequency-Watt curve: over-frequency power reduction begins at this frequency."},CC:{label:"Over-freq curve — end",desc:"Legacy frequency-Watt curve: over-frequency reduction reaches its limit at this frequency."}},C5={DERFreqDroop:{label:"Frequency-Watt droop",tip:"Linearly reduces active power as frequency rises above a deadband — over-frequency curtailment (SunSpec DERFreqDroop, model 711)."},CrvSet:{label:"Frequency-Watt curve",tip:"Legacy point-based power-versus-frequency response curve (model 134)."},MustTrip:{label:"Trip thresholds",tip:"Voltage and frequency limits that disconnect the inverter from the grid when crossed (protection trips)."},DEREnterService:{label:"Enter service",tip:"The voltage/frequency window and timing the inverter must satisfy before (re)connecting after a trip."}},yZ=["DERFreqDroop","CrvSet","MustTrip","DEREnterService"],V5=new Set(["MustTrip","DEREnterService"]);function M6(Z,K){if(!Z)return K;return Z.replace(/_/g," ").replace(/\b\w/g,(Q)=>Q.toUpperCase())}function D5(Z,K){return T5[Z]?.label??M6(K??"",Z)}function R5(Z){return T5[Z]?.desc??""}function EZ(Z,K){let Q=[];for(let $ of Z){let B=K($.left),Y=K($.right);if(B!==void 0&&Y!==void 0&&!(B<Y))Q.push($.message)}return Q}class N5 extends U{static properties={deadband:{type:Number},slope:{type:Number},trip:{type:Number},nominal:{type:Number}};constructor(){super();this.nominal=50}static styles=H`
+    `}}customElements.define("grid-profile-form",n9);var i9={AC:{label:"Undervoltage trip — stage 2",desc:"Disconnect when AC voltage drops to this lower-stage level."},AQ:{label:"Undervoltage trip — deep",desc:"Disconnect quickly when voltage falls this far below nominal."},AH:{label:"Undervoltage trip — fast",desc:"Fast disconnect on a severe undervoltage."},AD:{label:"Overvoltage trip — slow",desc:"Disconnect when AC voltage rises above this (slower stage)."},AY:{label:"Overvoltage trip — slow (stage 2)",desc:"Second slower overvoltage disconnect threshold."},AB:{label:"10-minute mean overvoltage",desc:"Trips if the 10-minute average voltage exceeds this (EN 50549 sustained-overvoltage limit)."},AI:{label:"Overvoltage trip — fast",desc:"Fast disconnect on a severe overvoltage."},AE:{label:"Underfrequency trip — slow",desc:"Disconnect when grid frequency falls below this (slower stage)."},AJ:{label:"Underfrequency trip — fast",desc:"Fast disconnect on a severe underfrequency."},AF:{label:"Overfrequency trip — slow",desc:"Disconnect when grid frequency rises above this (slower stage)."},AK:{label:"Overfrequency trip — fast",desc:"Fast disconnect on a severe overfrequency."},BB:{label:"Undervoltage 1 — clearance time",desc:"How long the undervoltage condition must persist before tripping."},BD:{label:"Undervoltage 2 — clearance time",desc:"Clearance delay for the second undervoltage stage."},BC:{label:"Overvoltage 1 — clearance time",desc:"How long the overvoltage condition must persist before tripping."},BE:{label:"Overvoltage 2 — clearance time",desc:"Clearance delay for the second overvoltage stage."},BH:{label:"Underfrequency 1 — clearance time",desc:"Clearance delay for the first underfrequency stage."},BJ:{label:"Underfrequency 2 — clearance time",desc:"Clearance delay for the second underfrequency stage."},BI:{label:"Overfrequency 1 — clearance time",desc:"Clearance delay for the first overfrequency stage."},BK:{label:"Overfrequency 2 — clearance time",desc:"Clearance delay for the second overfrequency stage."},BN:{label:"Enter-service voltage — lower",desc:"Voltage must be above this before the inverter reconnects."},BO:{label:"Enter-service voltage — upper",desc:"Voltage must be below this before the inverter reconnects."},BP:{label:"Enter-service frequency — lower",desc:"Frequency must be above this before the inverter reconnects."},BQ:{label:"Enter-service frequency — upper",desc:"Frequency must be below this before the inverter reconnects."},AG:{label:"Grid-recovery delay",desc:"Wait time after the grid is healthy before reconnecting."},AS:{label:"Power ramp time",desc:"Time taken to ramp output back up after reconnecting."},CV:{label:"Curtailment enable (droop)",desc:"Enables the over-frequency droop power reduction (0 = off, 1 = on)."},CA:{label:"Curtailment start (droop deadband)",desc:"Over-frequency droop: power reduction begins at this frequency (deadband end)."},DD:{label:"Curtailment slope (droop)",desc:"Over-frequency droop gradient: % of rated power reduced per Hz above the start."},CG:{label:"Curtailment response time (droop)",desc:"Filter/response time of the droop control loop."},DH:{label:"Under-freq curve — low",desc:"Legacy frequency-Watt curve: lower frequency point of the under-frequency response."},DI:{label:"Under-freq curve — high",desc:"Legacy frequency-Watt curve: upper frequency point of the under-frequency response."},CB:{label:"Over-freq curve — start",desc:"Legacy frequency-Watt curve: over-frequency power reduction begins at this frequency."},CC:{label:"Over-freq curve — end",desc:"Legacy frequency-Watt curve: over-frequency reduction reaches its limit at this frequency."}},s9={DERFreqDroop:{label:"Frequency-Watt droop",tip:"Linearly reduces active power as frequency rises above a deadband — over-frequency curtailment (SunSpec DERFreqDroop, model 711)."},CrvSet:{label:"Frequency-Watt curve",tip:"Legacy point-based power-versus-frequency response curve (model 134)."},MustTrip:{label:"Trip thresholds",tip:"Voltage and frequency limits that disconnect the inverter from the grid when crossed (protection trips)."},DEREnterService:{label:"Enter service",tip:"The voltage/frequency window and timing the inverter must satisfy before (re)connecting after a trip."}},L3=["DERFreqDroop","CrvSet","MustTrip","DEREnterService"],t9=new Set(["MustTrip","DEREnterService"]);function M8(Q,Y){if(!Q)return Y;return Q.replace(/_/g," ").replace(/\b\w/g,(K)=>K.toUpperCase())}function a9(Q,Y){return i9[Q]?.label??M8(Y??"",Q)}function e9(Q){return i9[Q]?.desc??""}function D3(Q,Y){let K=[];for(let X of Q){let G=Y(X.left),q=Y(X.right);if(G!==void 0&&q!==void 0&&!(G<q))K.push(X.message)}return K}class QQ extends A{static properties={deadband:{type:Number},slope:{type:Number},trip:{type:Number},nominal:{type:Number}};constructor(){super();this.nominal=50}static styles=L`
     :host { display: block; }
     svg { width: 100%; height: auto; }
     .frame { stroke: var(--border); fill: none; }
@@ -668,23 +1058,23 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
     text { fill: var(--muted); font-size: 9px; }
     .lbl { fill: var(--text); }
     .empty { color: var(--muted); font-size: 12px; padding: 8px 0; }
-  `;render(){let Z=this.deadband,K=this.slope,Q=this.trip,$=this.nominal;if(Z===void 0||K===void 0||K<=0)return G`<div class="empty">Set the curtailment start frequency and slope to preview the curve.</div>`;let B=Z+100/K,Y=$-0.3,X=Math.max(Q??0,B,Z+1.5,$+1.5)+0.2,J=480,q=170,M=36,z=12,k=10,_=24,F=(I)=>M+(I-Y)/(X-Y)*(J-M-z),C=(I)=>k+(100-I)/100*(q-k-_),A=Math.min(B,X),qZ=Math.max(0,100-K*(A-Z)),HZ=[[Y,100],[Z,100],[A,qZ],...B<X?[[X,0]]:[]].map(([I,w5])=>`${F(I).toFixed(1)},${C(w5).toFixed(1)}`).join(" "),MZ=[];for(let I=Math.ceil(Y*2)/2;I<=X;I+=0.5)MZ.push(I);return G`
-      <svg viewBox="0 0 ${J} ${q}" role="img" aria-label="Frequency-Watt curtailment curve">
-        ${[0,50,100].map((I)=>L`<line class="grid" x1=${M} y1=${C(I)} x2=${J-z} y2=${C(I)} />
-            <text x=${M-4} y=${C(I)+3} text-anchor="end">${I}%</text>`)}
-        ${MZ.map((I)=>L`<text x=${F(I)} y=${q-_+12} text-anchor="middle">${I.toFixed(1)}</text>`)}
-        <line class="frame" x1=${M} y1=${k} x2=${M} y2=${q-_} />
-        <line class="frame" x1=${M} y1=${q-_} x2=${J-z} y2=${q-_} />
-        <line class="dead" x1=${F(Z)} y1=${k} x2=${F(Z)} y2=${q-_} />
-        <text class="lbl" x=${F(Z)} y=${k+8} text-anchor="middle">start ${T(Z)} Hz</text>
-        ${B<=X?L`<line class="dead" x1=${F(B)} y1=${k} x2=${F(B)} y2=${q-_} />
-              <text class="lbl" x=${F(B)} y=${k+8} text-anchor="middle">0% at ${T(B)} Hz</text>`:j}
-        ${Q!==void 0&&Q>=Y&&Q<=X?L`<line class="trip" x1=${F(Q)} y1=${k} x2=${F(Q)} y2=${q-_} />
-              <text x=${F(Q)} y=${q-_-4} text-anchor="middle" fill="var(--err)">trip ${T(Q)} Hz</text>`:j}
-        <polyline class="curve" points=${HZ} />
-        <text x=${J/2} y=${q-2} text-anchor="middle">Power vs frequency · slope ${T(K)} %Pref/Hz</text>
+  `;render(){let Q=this.deadband,Y=this.slope,K=this.trip,X=this.nominal;if(Q===void 0||Y===void 0||Y<=0)return z`<div class="empty">Set the curtailment start frequency and slope to preview the curve.</div>`;let G=Q+100/Y,q=X-0.3,J=Math.max(K??0,G,Q+1.5,X+1.5)+0.2,H=480,W=170,U=36,j=12,$=10,F=24,D=(E)=>U+(E-q)/(J-q)*(H-U-j),P=(E)=>$+(100-E)/100*(W-$-F),N=Math.min(G,J),o=Math.max(0,100-Y*(N-Q)),z4=[[q,100],[Q,100],[N,o],...G<J?[[J,0]]:[]].map(([E,UQ])=>`${D(E).toFixed(1)},${P(UQ).toFixed(1)}`).join(" "),f4=[];for(let E=Math.ceil(q*2)/2;E<=J;E+=0.5)f4.push(E);return z`
+      <svg viewBox="0 0 ${H} ${W}" role="img" aria-label="Frequency-Watt curtailment curve">
+        ${[0,50,100].map((E)=>S`<line class="grid" x1=${U} y1=${P(E)} x2=${H-j} y2=${P(E)} />
+            <text x=${U-4} y=${P(E)+3} text-anchor="end">${E}%</text>`)}
+        ${f4.map((E)=>S`<text x=${D(E)} y=${W-F+12} text-anchor="middle">${E.toFixed(1)}</text>`)}
+        <line class="frame" x1=${U} y1=${$} x2=${U} y2=${W-F} />
+        <line class="frame" x1=${U} y1=${W-F} x2=${H-j} y2=${W-F} />
+        <line class="dead" x1=${D(Q)} y1=${$} x2=${D(Q)} y2=${W-F} />
+        <text class="lbl" x=${D(Q)} y=${$+8} text-anchor="middle">start ${Z(Q)} Hz</text>
+        ${G<=J?S`<line class="dead" x1=${D(G)} y1=${$} x2=${D(G)} y2=${W-F} />
+              <text class="lbl" x=${D(G)} y=${$+8} text-anchor="middle">0% at ${Z(G)} Hz</text>`:B}
+        ${K!==void 0&&K>=q&&K<=J?S`<line class="trip" x1=${D(K)} y1=${$} x2=${D(K)} y2=${W-F} />
+              <text x=${D(K)} y=${W-F-4} text-anchor="middle" fill="var(--err)">trip ${Z(K)} Hz</text>`:B}
+        <polyline class="curve" points=${z4} />
+        <text x=${H/2} y=${W-2} text-anchor="middle">Power vs frequency · slope ${Z(Y)} %Pref/Hz</text>
       </svg>
-    `}}customElements.define("freq-watt-chart",N5);class L5 extends U{static properties={unit:{type:String},nominal:{type:Number},markers:{attribute:!1}};constructor(){super();this.unit="",this.markers=[]}static styles=H`
+    `}}customElements.define("freq-watt-chart",QQ);class YQ extends A{static properties={unit:{type:String},nominal:{type:Number},markers:{attribute:!1}};constructor(){super();this.unit="",this.markers=[]}static styles=L`
     :host { display: block; }
     svg { width: 100%; height: auto; }
     .axis { stroke: var(--border); }
@@ -695,16 +1085,16 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
     .nom { stroke: var(--ok); }
     text { font-size: 9px; fill: var(--muted); }
     .empty { color: var(--muted); font-size: 12px; padding: 6px 0; }
-  `;render(){let Z=(this.markers??[]).filter((A)=>Number.isFinite(A.value));if(!Z.length)return G`<div class="empty">No thresholds set.</div>`;let K=Z.map((A)=>A.value).concat(this.nominal!==void 0?[this.nominal]:[]),Q=Math.min(...K),$=Math.max(...K),B=($-Q)*0.14||1;Q-=B,$+=B;let Y=480,X=70,J=10,q=10,M=34,z=(A)=>J+(A-Q)/($-Q)*(Y-J-q),k=Z.filter((A)=>A.kind==="under").map((A)=>A.value),_=Z.filter((A)=>A.kind==="over").map((A)=>A.value),F=k.length?Math.max(...k):Q,C=_.length?Math.min(..._):$;return G`
-      <svg viewBox="0 0 ${Y} ${X}" role="img" aria-label="Trip thresholds">
-        ${C>F?L`<rect class="band" x=${z(F)} y=${M-8} width=${z(C)-z(F)} height=16 />`:j}
-        <line class="axis" x1=${J} y1=${M} x2=${Y-q} y2=${M} />
-        ${this.nominal!==void 0?L`<line class="nom" x1=${z(this.nominal)} y1=${M-9} x2=${z(this.nominal)} y2=${M+9} />
-              <text x=${z(this.nominal)} y=${M+20} text-anchor="middle" fill="var(--ok)">${T(this.nominal)} ${this.unit}</text>`:j}
-        ${Z.map((A,qZ)=>{let HZ=A.kind,I=qZ%2===0?M-12:M+22;return L`<line class=${HZ} x1=${z(A.value)} y1=${M-7} x2=${z(A.value)} y2=${M+7} />
-            <text x=${z(A.value)} y=${I} text-anchor="middle">${A.label} ${T(A.value)}</text>`})}
+  `;render(){let Q=(this.markers??[]).filter((N)=>Number.isFinite(N.value));if(!Q.length)return z`<div class="empty">No thresholds set.</div>`;let Y=Q.map((N)=>N.value).concat(this.nominal!==void 0?[this.nominal]:[]),K=Math.min(...Y),X=Math.max(...Y),G=(X-K)*0.14||1;K-=G,X+=G;let q=480,J=70,H=10,W=10,U=34,j=(N)=>H+(N-K)/(X-K)*(q-H-W),$=Q.filter((N)=>N.kind==="under").map((N)=>N.value),F=Q.filter((N)=>N.kind==="over").map((N)=>N.value),D=$.length?Math.max(...$):K,P=F.length?Math.min(...F):X;return z`
+      <svg viewBox="0 0 ${q} ${J}" role="img" aria-label="Trip thresholds">
+        ${P>D?S`<rect class="band" x=${j(D)} y=${U-8} width=${j(P)-j(D)} height=16 />`:B}
+        <line class="axis" x1=${H} y1=${U} x2=${q-W} y2=${U} />
+        ${this.nominal!==void 0?S`<line class="nom" x1=${j(this.nominal)} y1=${U-9} x2=${j(this.nominal)} y2=${U+9} />
+              <text x=${j(this.nominal)} y=${U+20} text-anchor="middle" fill="var(--ok)">${Z(this.nominal)} ${this.unit}</text>`:B}
+        ${Q.map((N,o)=>{let z4=N.kind,E=o%2===0?U-12:U+22;return S`<line class=${z4} x1=${j(N.value)} y1=${U-7} x2=${j(N.value)} y2=${U+7} />
+            <text x=${j(N.value)} y=${E} text-anchor="middle">${N.label} ${Z(N.value)}</text>`})}
       </svg>
-    `}}customElements.define("trip-line",L5);class S5 extends U{static properties={params:{attribute:!1},inverters:{attribute:!1},defaults:{attribute:!1},rules:{attribute:!1},profile:{attribute:!1},names:{attribute:!1},busy:{attribute:!1},editing:{attribute:!1},name:{state:!0},selectedUids:{state:!0},values:{state:!0},localError:{state:!0}};constructor(){super();this.params=[],this.inverters=[],this.defaults={},this.rules=[],this.profile=null,this.names={},this.busy=!1,this.editing=!1,this.name="",this.selectedUids=[],this.values={},this.localError=""}static styles=H`
+    `}}customElements.define("trip-line",YQ);class KQ extends A{static properties={params:{attribute:!1},inverters:{attribute:!1},defaults:{attribute:!1},rules:{attribute:!1},profile:{attribute:!1},names:{attribute:!1},busy:{attribute:!1},editing:{attribute:!1},name:{state:!0},selectedUids:{state:!0},values:{state:!0},localError:{state:!0}};constructor(){super();this.params=[],this.inverters=[],this.defaults={},this.rules=[],this.profile=null,this.names={},this.busy=!1,this.editing=!1,this.name="",this.selectedUids=[],this.values={},this.localError=""}static styles=L`
     :host { display: block; }
     .grid { display: grid; gap: 18px; }
     label.field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
@@ -768,90 +1158,90 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
     button:disabled { opacity: 0.45; cursor: not-allowed; }
     .err { color: var(--err); font-size: 13px; }
     .hint { color: var(--muted); font-size: 12px; }
-  `;willUpdate(Z){if(Z.has("profile")){let K=this.profile;this.name=K?.id??"",this.selectedUids=[...K?.uids??[]];let Q={};for(let $ of K?.points??[])Q[$.aps_code]=String($.value);this.values=Q,this.localError=""}}effectiveWritable(){if(!this.selectedUids.length)return new Set;let Z=this.selectedUids.map((Q)=>new Set(this.inverters.find(($)=>$.uid===Q)?.writable_codes??[])),K=Z[0];for(let Q of Z.slice(1))K=new Set([...K].filter(($)=>Q.has($)));return K}targetDefault(Z){let K=this.defaults[Z];if(K)return{value:K.value,source:"base"};if(!this.selectedUids.length)return;let Q;for(let $ of this.selectedUids){let B=this.inverters.find((Y)=>Y.uid===$)?.current?.[Z];if(B===void 0)return;if(Q===void 0)Q=B;else if(Math.abs(B-Q)>0.000001)return}return Q===void 0?void 0:{value:Q,source:"inverter"}}effectiveValue(Z){let K=(this.values[Z]??"").trim();if(K!==""&&!Number.isNaN(Number(K)))return Number(K);return this.targetDefault(Z)?.value}isOverride(Z){let K=(this.values[Z]??"").trim();if(K===""||Number.isNaN(Number(K)))return!1;let Q=this.targetDefault(Z);return!Q||Number(K)!==Q.value}prefill(Z){if((this.values[Z]??"").trim()!=="")return;let K=this.targetDefault(Z);if(K)this.setValue(Z,T(K.value))}outOfRange(Z){let K=(this.values[Z]??"").trim();if(K===""||Number.isNaN(Number(K)))return!1;let Q=this.defaults[Z];if(!Q)return!1;let $=Number(K);return Q.min!==void 0&&$<Q.min||Q.max!==void 0&&$>Q.max}label(Z){return this.names[Z.uid]||Z.model||Z.uid}toggleTarget(Z,K){this.selectedUids=K?[...this.selectedUids,Z]:this.selectedUids.filter((Q)=>Q!==Z)}setValue(Z,K){this.values={...this.values,[Z]:K}}groups(){let Z={};for(let Q of this.params)(Z[Q.group]??=[]).push(Q);return[...yZ,...Object.keys(Z).filter((Q)=>!yZ.includes(Q))].filter((Q)=>Z[Q]?.length).map((Q)=>[Q,Z[Q]])}save=()=>{let Z=this.effectiveWritable(),K=this.params.filter(($)=>Z.has($.aps_code)&&this.isOverride($.aps_code)).map(($)=>({aps_code:$.aps_code,value:Number(this.values[$.aps_code])}));if(!this.name.trim())return void(this.localError="Profile name is required.");if(!this.selectedUids.length)return void(this.localError="Select at least one target inverter.");if(!K.length)return void(this.localError="Change at least one parameter from its default.");if(EZ(this.rules,($)=>this.effectiveValue($)).length)return void(this.localError="Resolve the conflicts before saving.");this.localError="";let Q={id:this.name.trim(),uids:this.selectedUids,points:K};this.dispatchEvent(new CustomEvent("save",{detail:Q,bubbles:!0,composed:!0}))};cancel=()=>this.dispatchEvent(new CustomEvent("cancel",{bubbles:!0,composed:!0}));markers(Z,K){let Q=[];for(let $ of this.params){if($.group!==Z||$.unit!==K)continue;if($.polarity!=="under"&&$.polarity!=="over")continue;let B=this.effectiveValue($.aps_code);if(B!==void 0)Q.push({value:B,label:$.aps_code,kind:$.polarity})}return Q}vizFor(Z){if(Z==="DERFreqDroop")return G`<freq-watt-chart
+  `;willUpdate(Q){if(Q.has("profile")){let Y=this.profile;this.name=Y?.id??"",this.selectedUids=[...Y?.uids??[]];let K={};for(let X of Y?.points??[])K[X.aps_code]=String(X.value);this.values=K,this.localError=""}}effectiveWritable(){if(!this.selectedUids.length)return new Set;let Q=this.selectedUids.map((K)=>new Set(this.inverters.find((X)=>X.uid===K)?.writable_codes??[])),Y=Q[0];for(let K of Q.slice(1))Y=new Set([...Y].filter((X)=>K.has(X)));return Y}targetDefault(Q){let Y=this.defaults[Q];if(Y)return{value:Y.value,source:"base"};if(!this.selectedUids.length)return;let K;for(let X of this.selectedUids){let G=this.inverters.find((q)=>q.uid===X)?.current?.[Q];if(G===void 0)return;if(K===void 0)K=G;else if(Math.abs(G-K)>0.000001)return}return K===void 0?void 0:{value:K,source:"inverter"}}effectiveValue(Q){let Y=(this.values[Q]??"").trim();if(Y!==""&&!Number.isNaN(Number(Y)))return Number(Y);return this.targetDefault(Q)?.value}isOverride(Q){let Y=(this.values[Q]??"").trim();if(Y===""||Number.isNaN(Number(Y)))return!1;let K=this.targetDefault(Q);return!K||Number(Y)!==K.value}prefill(Q){if((this.values[Q]??"").trim()!=="")return;let Y=this.targetDefault(Q);if(Y)this.setValue(Q,Z(Y.value))}outOfRange(Q){let Y=(this.values[Q]??"").trim();if(Y===""||Number.isNaN(Number(Y)))return!1;let K=this.defaults[Q];if(!K)return!1;let X=Number(Y);return K.min!==void 0&&X<K.min||K.max!==void 0&&X>K.max}label(Q){return this.names[Q.uid]||Q.model||Q.uid}toggleTarget(Q,Y){this.selectedUids=Y?[...this.selectedUids,Q]:this.selectedUids.filter((K)=>K!==Q)}setValue(Q,Y){this.values={...this.values,[Q]:Y}}groups(){let Q={};for(let K of this.params)(Q[K.group]??=[]).push(K);return[...L3,...Object.keys(Q).filter((K)=>!L3.includes(K))].filter((K)=>Q[K]?.length).map((K)=>[K,Q[K]])}save=()=>{let Q=this.effectiveWritable(),Y=this.params.filter((X)=>Q.has(X.aps_code)&&this.isOverride(X.aps_code)).map((X)=>({aps_code:X.aps_code,value:Number(this.values[X.aps_code])}));if(!this.name.trim())return void(this.localError="Profile name is required.");if(!this.selectedUids.length)return void(this.localError="Select at least one target inverter.");if(!Y.length)return void(this.localError="Change at least one parameter from its default.");if(D3(this.rules,(X)=>this.effectiveValue(X)).length)return void(this.localError="Resolve the conflicts before saving.");this.localError="";let K={id:this.name.trim(),uids:this.selectedUids,points:Y};this.dispatchEvent(new CustomEvent("save",{detail:K,bubbles:!0,composed:!0}))};cancel=()=>this.dispatchEvent(new CustomEvent("cancel",{bubbles:!0,composed:!0}));markers(Q,Y){let K=[];for(let X of this.params){if(X.group!==Q||X.unit!==Y)continue;if(X.polarity!=="under"&&X.polarity!=="over")continue;let G=this.effectiveValue(X.aps_code);if(G!==void 0)K.push({value:G,label:X.aps_code,kind:X.polarity})}return K}vizFor(Q){if(Q==="DERFreqDroop")return z`<freq-watt-chart
         .deadband=${this.effectiveValue("CA")}
         .slope=${this.effectiveValue("DD")}
         .trip=${this.effectiveValue("AF")}
         .nominal=${50}
-      ></freq-watt-chart>`;if(Z==="CrvSet"){let K=this.markers(Z,"Hz");return K.length?G`<trip-line unit="Hz" .nominal=${50} .markers=${K}></trip-line>`:j}if(Z==="MustTrip"){let K=this.markers(Z,"V"),Q=this.markers(Z,"Hz");return G`
-        ${K.length?G`<trip-line unit="V" .nominal=${230} .markers=${K}></trip-line>`:j}
-        ${Q.length?G`<trip-line unit="Hz" .nominal=${50} .markers=${Q}></trip-line>`:j}
-      `}return j}renderRow(Z,K){let Q=K.has(Z.aps_code),$=this.targetDefault(Z.aps_code),B=this.defaults[Z.aps_code],Y=(this.values[Z.aps_code]??"").trim(),X=this.isOverride(Z.aps_code),J=Q&&this.outOfRange(Z.aps_code),q=Q?this.values[Z.aps_code]??"":$?T($.value):"";return G`<tr class="${Q?"":"off"} ${X?"over":""}">
+      ></freq-watt-chart>`;if(Q==="CrvSet"){let Y=this.markers(Q,"Hz");return Y.length?z`<trip-line unit="Hz" .nominal=${50} .markers=${Y}></trip-line>`:B}if(Q==="MustTrip"){let Y=this.markers(Q,"V"),K=this.markers(Q,"Hz");return z`
+        ${Y.length?z`<trip-line unit="V" .nominal=${230} .markers=${Y}></trip-line>`:B}
+        ${K.length?z`<trip-line unit="Hz" .nominal=${50} .markers=${K}></trip-line>`:B}
+      `}return B}renderRow(Q,Y){let K=Y.has(Q.aps_code),X=this.targetDefault(Q.aps_code),G=this.defaults[Q.aps_code],q=(this.values[Q.aps_code]??"").trim(),J=this.isOverride(Q.aps_code),H=K&&this.outOfRange(Q.aps_code),W=K?this.values[Q.aps_code]??"":X?Z(X.value):"";return z`<tr class="${K?"":"off"} ${J?"over":""}">
       <td>
         <div class="plabel">
-          ${D5(Z.aps_code,Z.long_name)}
-          ${X?G`<span class="otag">overridden</span>`:j}
-          ${!Q&&$?G`<span class="rotag">read-only</span>`:j}
+          ${a9(Q.aps_code,Q.long_name)}
+          ${J?z`<span class="otag">overridden</span>`:B}
+          ${!K&&X?z`<span class="rotag">read-only</span>`:B}
         </div>
-        <div class="pdesc">${R5(Z.aps_code)}</div>
+        <div class="pdesc">${e9(Q.aps_code)}</div>
       </td>
-      <td class="pcode">${Z.aps_code}</td>
+      <td class="pcode">${Q.aps_code}</td>
       <td class="def">
-        ${$?G`${T($.value)} ${Z.unit}${$.source==="inverter"?G` <span class="src" title="from the inverter's current value">inv</span>`:j}`:"—"}
+        ${X?z`${Z(X.value)} ${Q.unit}${X.source==="inverter"?z` <span class="src" title="from the inverter's current value">inv</span>`:B}`:"—"}
       </td>
       <td class="val">
         <input
-          type="number" step="any" ?disabled=${!Q}
-          .value=${q}
-          placeholder=${$?T($.value):Q?"—":"n/a"}
-          @focus=${()=>this.prefill(Z.aps_code)}
-          @input=${(M)=>this.setValue(Z.aps_code,M.target.value)}
+          type="number" step="any" ?disabled=${!K}
+          .value=${W}
+          placeholder=${X?Z(X.value):K?"—":"n/a"}
+          @focus=${()=>this.prefill(Q.aps_code)}
+          @input=${(U)=>this.setValue(Q.aps_code,U.target.value)}
         />
-        <span class="unit">${Z.unit}</span>
-        ${Q&&Y!==""?G`<button class="clear" title="Clear override" @click=${()=>this.setValue(Z.aps_code,"")}>↺</button>`:j}
-        ${J?G`<span class="warn">⚠ outside base range${B?.min!==void 0?` (${T(B.min)}–${T(B.max)} ${Z.unit})`:""}</span>`:j}
+        <span class="unit">${Q.unit}</span>
+        ${K&&q!==""?z`<button class="clear" title="Clear override" @click=${()=>this.setValue(Q.aps_code,"")}>↺</button>`:B}
+        ${H?z`<span class="warn">⚠ outside base range${G?.min!==void 0?` (${Z(G.min)}–${Z(G.max)} ${Q.unit})`:""}</span>`:B}
       </td>
-    </tr>`}render(){let Z=this.effectiveWritable(),K=this.selectedUids.length>0,Q=K?EZ(this.rules,($)=>this.effectiveValue($)):[];return G`
+    </tr>`}render(){let Q=this.effectiveWritable(),Y=this.selectedUids.length>0,K=Y?D3(this.rules,(X)=>this.effectiveValue(X)):[];return z`
       <div class="grid">
         <label class="field">
           Profile name
           <input type="text" .value=${this.name} ?disabled=${this.editing} placeholder="e.g. victron-shift"
-            @input=${($)=>this.name=$.target.value} />
+            @input=${(X)=>this.name=X.target.value} />
         </label>
 
         <fieldset>
           <legend>Target inverters</legend>
           <div class="targets">
-            ${this.inverters.length===0?G`<span class="hint">No inverters seen yet.</span>`:this.inverters.map(($)=>G`<label class="target">
-                    <input type="checkbox" .checked=${this.selectedUids.includes($.uid)}
-                      @change=${(B)=>this.toggleTarget($.uid,B.target.checked)} />
-                    ${this.label($)} <span class="pcode">${$.model}</span>
+            ${this.inverters.length===0?z`<span class="hint">No inverters seen yet.</span>`:this.inverters.map((X)=>z`<label class="target">
+                    <input type="checkbox" .checked=${this.selectedUids.includes(X.uid)}
+                      @change=${(G)=>this.toggleTarget(X.uid,G.target.checked)} />
+                    ${this.label(X)} <span class="pcode">${X.model}</span>
                   </label>`)}
           </div>
         </fieldset>
 
-        ${!K?G`<span class="hint">Select a target to choose editable parameters.</span>`:G`
-              ${Q.length?G`<div class="conflicts">⚠ Conflicting settings — resolve to save:
-                    <ul>${Q.map(($)=>G`<li>${$}</li>`)}</ul>
-                  </div>`:j}
+        ${!Y?z`<span class="hint">Select a target to choose editable parameters.</span>`:z`
+              ${K.length?z`<div class="conflicts">⚠ Conflicting settings — resolve to save:
+                    <ul>${K.map((X)=>z`<li>${X}</li>`)}</ul>
+                  </div>`:B}
 
-              ${this.groups().map(([$,B])=>{let Y=C5[$];return G`<details class="group" ?open=${!V5.has($)}>
+              ${this.groups().map(([X,G])=>{let q=s9[X];return z`<details class="group" ?open=${!t9.has(X)}>
                   <summary>
-                    <span class="gname">${Y?.label??$}</span>
-                    <span class="gcount">${B.length} setting${B.length===1?"":"s"}</span>
+                    <span class="gname">${q?.label??X}</span>
+                    <span class="gcount">${G.length} setting${G.length===1?"":"s"}</span>
                   </summary>
-                  ${Y?.tip?G`<div class="gdesc">${Y.tip}</div>`:j}
-                  <div class="viz">${this.vizFor($)}</div>
+                  ${q?.tip?z`<div class="gdesc">${q.tip}</div>`:B}
+                  <div class="viz">${this.vizFor(X)}</div>
                   <table>
                     <thead><tr><th>Setting</th><th>Code</th><th>Default</th><th>Override</th></tr></thead>
-                    <tbody>${B.map((X)=>this.renderRow(X,Z))}</tbody>
+                    <tbody>${G.map((J)=>this.renderRow(J,Q))}</tbody>
                   </table>
                 </details>`})}
 
-              ${this.selectedUids.length>1?G`<div class="hint">Greyed rows are not writable on every selected target.</div>`:j}
+              ${this.selectedUids.length>1?z`<div class="hint">Greyed rows are not writable on every selected target.</div>`:B}
             `}
 
-        ${this.localError?G`<div class="err">⚠ ${this.localError}</div>`:j}
+        ${this.localError?z`<div class="err">⚠ ${this.localError}</div>`:B}
 
         <div class="actions">
-          <button class="save" @click=${this.save} ?disabled=${this.busy||Q.length>0}>
+          <button class="save" @click=${this.save} ?disabled=${this.busy||K.length>0}>
             ${this.busy?"Applying…":"Save & apply"}
           </button>
           <button class="cancel" @click=${this.cancel} ?disabled=${this.busy}>Cancel</button>
-          <span class="hint">${Q.length?"resolve conflicts to save":"applies to the selected inverters"}</span>
+          <span class="hint">${K.length?"resolve conflicts to save":"applies to the selected inverters"}</span>
         </div>
       </div>
-    `}}customElements.define("local-site-profile-form",S5);class P5 extends U{static properties={data:{state:!0},names:{state:!0},error:{state:!0},notice:{state:!0},baseBusy:{state:!0},overlayBusy:{state:!0},editing:{state:!0},editingExisting:{state:!0}};constructor(){super();this.data=null,this.names={},this.error="",this.notice="",this.baseBusy=!1,this.overlayBusy=!1,this.editing=null,this.editingExisting=!1}static styles=H`
+    `}}customElements.define("local-site-profile-form",KQ);class XQ extends A{static properties={data:{state:!0},names:{state:!0},error:{state:!0},notice:{state:!0},baseBusy:{state:!0},overlayBusy:{state:!0},editing:{state:!0},editingExisting:{state:!0}};constructor(){super();this.data=null,this.names={},this.error="",this.notice="",this.baseBusy=!1,this.overlayBusy=!1,this.editing=null,this.editingExisting=!1}static styles=L`
     :host { display: block; }
     .cols {
       display: grid;
@@ -890,33 +1280,33 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
     .cardactions button { font-size: 12px; border-radius: 6px; padding: 5px 12px; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--text); }
     .cardactions button.del { color: var(--err); border-color: color-mix(in srgb, var(--err) 50%, var(--border)); }
     .empty { color: var(--muted); font-size: 13px; }
-  `;connectedCallback(){super.connectedCallback(),this.load()}async load(){try{let[Z,K]=await Promise.all([O.profiles(),O.getSettings()]);this.data=Z,this.error=Z.error??"",this.names=K.settings?.inverter_names??{}}catch(Z){this.error=Z.message}}invName(Z){if(this.names[Z])return this.names[Z];return this.data?.inverters.find((Q)=>Q.uid===Z)?.model||Z}onSelectBase=async(Z)=>{let K=Z.detail;if(!window.confirm(`Apply base grid profile "${K}" to every inverter? This writes grid-protection settings across the whole fleet.`))return;this.baseBusy=!0,this.notice="",this.error="";try{await O.selectBase(K),await this.load(),this.notice=`Base profile "${K}" applied.`}catch(Q){this.error=Q.message}finally{this.baseBusy=!1}};newProfile(){this.editing={id:"",uids:[],points:[]},this.editingExisting=!1,this.notice="",this.error=""}editProfile(Z){this.editing=Z,this.editingExisting=!0,this.notice="",this.error=""}onCancelEdit=()=>{this.editing=null};exportProfile(Z){let K={id:Z.id,uids:Z.uids,points:Z.points.map((Y)=>({aps_code:Y.aps_code,value:Y.value}))},Q=new Blob([JSON.stringify(K,null,2)],{type:"application/json"}),$=URL.createObjectURL(Q),B=document.createElement("a");B.href=$,B.download=`${Z.id||"profile"}.json`,B.click(),URL.revokeObjectURL($)}triggerImport=()=>{this.shadowRoot?.querySelector("#importfile")?.click()};onImportFile=async(Z)=>{let K=Z.target,Q=K.files?.[0];if(K.value="",!Q)return;try{let $=JSON.parse(await Q.text());if(!$||!Array.isArray($.points))throw Error("not a profile (no points)");let B={id:typeof $.id==="string"?$.id:"",uids:Array.isArray($.uids)?$.uids.filter((Y)=>typeof Y==="string"):[],points:$.points.filter((Y)=>typeof Y?.aps_code==="string"&&typeof Y?.value==="number").map((Y)=>({aps_code:Y.aps_code,value:Y.value}))};this.editing=B,this.editingExisting=!1,this.error="",this.notice=`Imported "${B.id||"profile"}" — review the targets and values, then Save.`}catch($){this.error="Import failed: "+$.message}};onSaveOverlay=async(Z)=>{let K=Z.detail;if(!window.confirm(`Apply Local Site profile "${K.id}" to ${K.uids.length} inverter(s)? This writes grid-protection parameters to each.`))return;this.overlayBusy=!0,this.notice="",this.error="";try{let Q=await O.saveOverlay(K);this.editing=null,await this.load(),this.reportResults(K.id,Q.results)}catch(Q){this.error=Q.message}finally{this.overlayBusy=!1}};deleteProfile=async(Z)=>{if(!window.confirm(`Delete Local Site profile "${Z.id}" and clear it from ${Z.uids.length} inverter(s)?`))return;this.overlayBusy=!0,this.notice="",this.error="";try{let K=await O.deleteOverlay(Z.id,Z.uids);if(this.editing?.id===Z.id)this.editing=null;await this.load(),this.reportResults(Z.id,K.results,"cleared")}catch(K){this.error=K.message}finally{this.overlayBusy=!1}};reportResults(Z,K,Q="applied"){let $=K.filter((B)=>!B.ok);if($.length===0)this.notice=`Profile "${Z}" ${Q} to ${K.length} inverter(s).`;else{let B=Q==="cleared"?"Clearing":"Applying",Y=$.map((X)=>`${this.invName(X.uid)}: ${X.error||"unconfirmed"}`).join("; ");this.notice=`Profile "${Z}" saved. ${B} not confirmed on ${$.length} of ${K.length} inverter(s) now — it is stored as the desired state and applied automatically when each inverter is next reached. ${Y}`}}renderBase(){let Z=this.data?.base;return G`
+  `;connectedCallback(){super.connectedCallback(),this.load()}async load(){try{let[Q,Y]=await Promise.all([I.profiles(),I.getSettings()]);this.data=Q,this.error=Q.error??"",this.names=Y.settings?.inverter_names??{}}catch(Q){this.error=Q.message}}invName(Q){if(this.names[Q])return this.names[Q];return this.data?.inverters.find((K)=>K.uid===Q)?.model||Q}onSelectBase=async(Q)=>{let Y=Q.detail;if(!window.confirm(`Apply base grid profile "${Y}" to every inverter? This writes grid-protection settings across the whole fleet.`))return;this.baseBusy=!0,this.notice="",this.error="";try{await I.selectBase(Y),await this.load(),this.notice=`Base profile "${Y}" applied.`}catch(K){this.error=K.message}finally{this.baseBusy=!1}};newProfile(){this.editing={id:"",uids:[],points:[]},this.editingExisting=!1,this.notice="",this.error=""}editProfile(Q){this.editing=Q,this.editingExisting=!0,this.notice="",this.error=""}onCancelEdit=()=>{this.editing=null};exportProfile(Q){let Y={id:Q.id,uids:Q.uids,points:Q.points.map((q)=>({aps_code:q.aps_code,value:q.value}))},K=new Blob([JSON.stringify(Y,null,2)],{type:"application/json"}),X=URL.createObjectURL(K),G=document.createElement("a");G.href=X,G.download=`${Q.id||"profile"}.json`,G.click(),URL.revokeObjectURL(X)}triggerImport=()=>{this.shadowRoot?.querySelector("#importfile")?.click()};onImportFile=async(Q)=>{let Y=Q.target,K=Y.files?.[0];if(Y.value="",!K)return;let X;try{X=JSON.parse(await K.text())}catch(H){this.error="Import failed: "+H.message;return}let G=d9(X);if(!G.ok){let H=G.errors.slice(0,3).join("; "),W=G.errors.length>3?` (+${G.errors.length-3} more)`:"";this.error="Import failed: "+H+W;return}this.editing=G.profile,this.editingExisting=!1,this.error="";let q=`Imported "${G.profile.id}" — review the targets and values, then Save.`,J=G.warnings.length>0?` — Note: ${G.warnings.join("; ")}`:"";this.notice=q+J};onSaveOverlay=async(Q)=>{let Y=Q.detail;if(!window.confirm(`Apply Local Site profile "${Y.id}" to ${Y.uids.length} inverter(s)? This writes grid-protection parameters to each.`))return;this.overlayBusy=!0,this.notice="",this.error="";try{let K=await I.saveOverlay(Y);this.editing=null,await this.load();let X=K.uids.length;this.notice=`Overlay "${K.id}" queued for ${X} inverter${X===1?"":"s"} — see Events for application results.`}catch(K){this.error=K.message}finally{this.overlayBusy=!1}};deleteProfile=async(Q)=>{if(!window.confirm(`Delete Local Site profile "${Q.id}" and clear it from ${Q.uids.length} inverter(s)?`))return;this.overlayBusy=!0,this.notice="",this.error="";try{let Y=await I.deleteOverlay(Q.id,Q.uids);if(this.editing?.id===Q.id)this.editing=null;await this.load(),this.reportResults(Q.id,Y.results,"cleared")}catch(Y){this.error=Y.message}finally{this.overlayBusy=!1}};reportResults(Q,Y,K="applied"){let X=Y.filter((G)=>!G.ok);if(X.length===0)this.notice=`Profile "${Q}" ${K} to ${Y.length} inverter(s).`;else{let G=K==="cleared"?"Clearing":"Applying",q=X.map((J)=>`${this.invName(J.uid)}: ${J.error||"unconfirmed"}`).join("; ");this.notice=`Profile "${Q}" saved. ${G} not confirmed on ${X.length} of ${Y.length} inverter(s) now — it is stored as the desired state and applied automatically when each inverter is next reached. ${q}`}}renderBase(){let Q=this.data?.base;return z`
       <div class="panel">
         <h2>Base grid profile</h2>
         <grid-profile-form
-          .profiles=${Z?.profiles??[]}
-          .activeBase=${Z?.active_base??""}
-          .reconcilerReady=${Z?.reconciler_ready??!1}
+          .profiles=${Q?.profiles??[]}
+          .activeBase=${Q?.active_base??""}
+          .reconcilerReady=${Q?.reconciler_ready??!1}
           .busy=${this.baseBusy}
           @apply=${this.onSelectBase}
         ></grid-profile-form>
       </div>
-    `}renderLocalSite(){let Z=this.data;return G`
+    `}renderLocalSite(){let Q=this.data;return z`
       <div class="panel">
         <div class="row">
           <h2 style="margin:0">Local Site profiles</h2>
-          ${this.editing===null?G`<div class="hdr-actions">
+          ${this.editing===null?z`<div class="hdr-actions">
                 <button class="ghost" @click=${this.triggerImport}>Import</button>
                 <button class="primary" @click=${()=>this.newProfile()}>+ New profile</button>
-              </div>`:j}
+              </div>`:B}
         </div>
         <input id="importfile" type="file" accept=".json,application/json" hidden @change=${this.onImportFile} />
 
-        ${this.editing!==null?G`<local-site-profile-form
-              .params=${Z?.params??[]}
-              .inverters=${Z?.inverters??[]}
-              .defaults=${Z?.base_defaults??{}}
-              .rules=${Z?.conflict_rules??[]}
+        ${this.editing!==null?z`<local-site-profile-form
+              .params=${Q?.params??[]}
+              .inverters=${Q?.inverters??[]}
+              .defaults=${Q?.base_defaults??{}}
+              .rules=${Q?.conflict_rules??[]}
               .names=${this.names}
               .profile=${this.editing}
               .editing=${this.editingExisting}
@@ -925,27 +1315,27 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
               @cancel=${this.onCancelEdit}
             ></local-site-profile-form>`:this.renderCards()}
       </div>
-    `}renderCards(){let Z=this.data?.overlays??[];if(Z.length===0)return G`<div class="empty">No Local Site profiles yet. Create one to override grid-protection parameters on specific inverters.</div>`;return G`<div class="cards">
-      ${Z.map((K)=>G`<div class="card">
-          <div class="title">${K.id}</div>
-          <div class="meta">Targets: ${K.uids.map((Q)=>this.invName(Q)).join(", ")||"none"}</div>
+    `}renderCards(){let Q=this.data?.overlays??[];if(Q.length===0)return z`<div class="empty">No Local Site profiles yet. Create one to override grid-protection parameters on specific inverters.</div>`;return z`<div class="cards">
+      ${Q.map((Y)=>z`<div class="card">
+          <div class="title">${Y.id}</div>
+          <div class="meta">Targets: ${Y.uids.map((K)=>this.invName(K)).join(", ")||"none"}</div>
           <div class="chips">
-            ${K.points.map((Q)=>G`<span class="chip">${Q.aps_code} = ${T(Q.value)}${Q.unit?` ${Q.unit}`:""}</span>`)}
+            ${Y.points.map((K)=>z`<span class="chip">${K.aps_code} = ${Z(K.value)}${K.unit?` ${K.unit}`:""}</span>`)}
           </div>
           <div class="cardactions">
-            <button @click=${()=>this.editProfile(K)}>Edit</button>
-            <button @click=${()=>this.exportProfile(K)}>Export</button>
-            <button class="del" @click=${()=>this.deleteProfile(K)}>Delete</button>
+            <button @click=${()=>this.editProfile(Y)}>Edit</button>
+            <button @click=${()=>this.exportProfile(Y)}>Export</button>
+            <button class="del" @click=${()=>this.deleteProfile(Y)}>Delete</button>
           </div>
         </div>`)}
-    </div>`}render(){return G`
-      ${this.notice?G`<div class="banner ok">${this.notice}</div>`:j}
-      ${this.error?G`<div class="banner err">⚠ ${this.error}</div>`:j}
-      ${this.data===null?G`<div class="panel"><div class="loading">Loading…</div></div>`:G`<div class="cols">
+    </div>`}render(){return z`
+      ${this.notice?z`<div class="banner ok">${this.notice}</div>`:B}
+      ${this.error?z`<div class="banner err">⚠ ${this.error}</div>`:B}
+      ${this.data===null?z`<div class="panel"><div class="loading">Loading…</div></div>`:z`<div class="cols">
             <div>${this.renderLocalSite()}</div>
             <div>${this.renderBase()}</div>
           </div>`}
-    `}}customElements.define("profiles-view",P5);class y5 extends U{static properties={settings:{attribute:!1}};constructor(){super();this.settings={ecu_id:"",mac:"",pan_override:"",zigbee_type:"apsystems"}}static styles=H`
+    `}}customElements.define("profiles-view",XQ);class JQ extends A{static properties={settings:{attribute:!1},hostname:{attribute:!1},confirming:{state:!0},pendingDetail:{state:!0},pwdError:{state:!0},pwdBusy:{state:!0},typedMac:{state:!0},typedPan:{state:!0},typedChannel:{state:!0}};constructor(){super();this.settings={ecu_id:"",mac:"",pan_override:"",zigbee_type:"apsystems"},this.hostname="",this.confirming=!1,this.pendingDetail=null,this.pwdError="",this.pwdBusy=!1,this.typedMac="",this.typedPan="",this.typedChannel=""}willUpdate(Q){if(Q.has("settings"))this.typedMac=this.settings.mac??"",this.typedPan=this.settings.pan_override??"",this.typedChannel=GQ(this.settings.channel)}static styles=L`
     :host { display: block; }
     .grid { display: grid; gap: 18px; max-width: 460px; }
     label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
@@ -959,6 +1349,24 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
       font-family: inherit;
     }
     input:focus, select:focus { outline: none; border-color: var(--accent); }
+    .hint { font-size: 12px; color: var(--muted); margin-top: -2px; }
+    .err-inline {
+      font-size: 12px;
+      color: var(--err);
+      margin-top: -2px;
+    }
+    .banner.err {
+      color: var(--err);
+      border: 1px solid var(--err);
+      background: color-mix(in srgb, var(--err) 12%, transparent);
+      border-radius: 8px;
+      padding: 9px 11px;
+      font-size: 13px;
+    }
+    button.save:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
     .actions { display: flex; gap: 12px; margin-top: 4px; }
     button.save {
       background: var(--accent);
@@ -971,32 +1379,249 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
       cursor: pointer;
     }
     button.save:hover { filter: brightness(1.08); }
-  `;save=()=>{let Z=this.shadowRoot;if(!Z)return;let K=($)=>(Z.querySelector(`#${$}`)?.value??"").trim(),Q={ecu_id:K("ecu_id"),mac:K("mac"),pan_override:K("pan_override"),zigbee_type:K("zigbee_type")};this.dispatchEvent(new CustomEvent("save",{detail:Q,bubbles:!0,composed:!0}))};render(){let Z=this.settings;return G`
+
+    .backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .dialog {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 22px;
+      max-width: 440px;
+      width: 92%;
+      color: var(--text);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    }
+    .dialog h3 { margin: 0 0 10px; font-size: 15px; }
+    .dialog p { margin: 0 0 14px; font-size: 13px; color: var(--muted); line-height: 1.45; }
+    .dialog label { display: block; font-size: 12px; color: var(--muted); margin: 4px 0 6px; }
+    .dialog input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 9px 11px;
+      background: var(--bar-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font: inherit;
+    }
+    .dialog .err {
+      color: var(--err);
+      border: 1px solid var(--err);
+      background: color-mix(in srgb, var(--err) 12%, transparent);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      margin-top: 10px;
+    }
+    .dialog p.warn {
+      color: var(--text);
+      border: 1px solid var(--accent);
+      background: color-mix(in srgb, var(--accent) 10%, transparent);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      margin: 0 0 12px;
+    }
+    .dialog .row {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 16px;
+    }
+    .dialog button {
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .dialog button.primary { background: var(--accent); color: #04121a; border: none; }
+    .dialog button.secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .dialog button:disabled { opacity: 0.6; cursor: default; }
+  `;currentDetail(){let Q=this.shadowRoot,Y=(K)=>(Q?.querySelector(`#${K}`)?.value??"").trim();return{ecu_id:Y("ecu_id"),mac:Y("mac"),pan_override:Y("pan_override"),zigbee_type:Y("zigbee_type"),channel:w8(Y("channel"))}}computeEffectivePAN(Q){let Y=Z8(Q.pan_override);if(Y)return Y;let K=Q.mac||this.settings.effective?.mac||"";return R8(K)}sensitiveChange(Q){return Q.mac!==(this.settings.mac??"")||Q.pan_override!==(this.settings.pan_override??"")}macInputInvalid(Q){if(Q.mac===(this.settings.mac??""))return!1;return Q.mac!==""&&!F3(Q.mac)}save=()=>{if(qQ(this.typedChannel))return;let Q=this.currentDetail(),Y=this.sensitiveChange(Q);if(Y&&this.macInputInvalid(Q))return;let K=(this.settings.effective?.pan??"").toUpperCase();if(Y&&!K)return;let X=this.computeEffectivePAN(Q);if(K&&X&&X!==K){this.pendingDetail=Q,this.pwdError="",this.confirming=!0,queueMicrotask(()=>{this.shadowRoot?.querySelector("#confirm_pwd")?.focus()});return}this.dispatchSave(Q)};dispatchSave(Q){this.dispatchEvent(new CustomEvent("save",{detail:Q,bubbles:!0,composed:!0}))}confirmCancel=()=>{this.confirming=!1,this.pendingDetail=null,this.pwdError="",this.pwdBusy=!1};confirmSubmit=async()=>{if(this.pwdBusy)return;let Y=this.shadowRoot?.querySelector("#confirm_pwd")?.value??"";if(!Y){this.pwdError="Password required.";return}this.pwdBusy=!0,this.pwdError="";try{if(!await I.verifyPassword(Y)){this.pwdError="Wrong password.";return}let X=this.pendingDetail;if(this.confirming=!1,this.pendingDetail=null,X)this.dispatchSave(X)}catch(K){this.pwdError=K.message||"Verification failed."}finally{this.pwdBusy=!1}};onPwdKey=(Q)=>{if(Q.key==="Enter")Q.preventDefault(),this.confirmSubmit()};render(){let Q=this.settings,Y=Q.effective??{},K="e.g. the serial on the device label",X=Q.ecu_id||this.hostname||"",G=Y.mac?`effective: ${Y.mac}`:"",q=Q.pan_override?Y.pan?`effective: ${Y.pan}`:"":Y.pan?`effective: ${Y.pan} (from MAC)`:"",J=Q.zigbee_type?"":"effective: apsystems (default)",H=Y.channel?`effective: ${Y.channel}`:"",W=this.typedMac!==(Q.mac??""),U=this.typedPan!==(Q.pan_override??""),j=W||U,$=W&&this.typedMac!==""&&!F3(this.typedMac),F=!(Y.pan??""),D=qQ(this.typedChannel),P=D||j&&($||F),N="";if($)N="MAC must be 6 colon-separated hex octets (e.g. 80:97:1b:03:0d:ce).";else if(j&&F)N="Cannot resolve effective PAN; refusing to save MAC / PAN-override changes.";return z`
       <div class="grid">
         <label>
           ECU ID
-          <input id="ecu_id" type="text" .value=${Z.ecu_id??""} />
+          <input
+            id="ecu_id"
+            type="text"
+            placeholder=${"e.g. the serial on the device label"}
+            .value=${X}
+          />
+          ${!Q.ecu_id?z`<div class="hint">Recommended: use the serial on the device label.</div>`:B}
         </label>
         <label>
           MAC
-          <input id="mac" type="text" .value=${Z.mac??""} />
+          <input
+            id="mac"
+            type="text"
+            placeholder="80:97:1b:03:0d:ce"
+            pattern="^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$"
+            .value=${Q.mac??""}
+            @input=${this.onMacInput}
+          />
+          ${G?z`<div class="hint">${G}</div>`:B}
+          ${$?z`<div class="err-inline">Use colon-separated hex (e.g. 80:97:1b:03:0d:ce).</div>`:B}
         </label>
         <label>
           PAN override
-          <input id="pan_override" type="text" placeholder="auto from MAC" .value=${Z.pan_override??""} />
+          <input
+            id="pan_override"
+            type="text"
+            placeholder="auto from MAC"
+            .value=${Q.pan_override??""}
+            @input=${this.onPanInput}
+          />
+          ${q?z`<div class="hint">${q}</div>`:B}
+        </label>
+        <label>
+          ZigBee channel
+          <input
+            id="channel"
+            type="number"
+            min="11"
+            max="26"
+            step="1"
+            placeholder="auto (16)"
+            .value=${GQ(Q.channel)}
+            @input=${this.onChannelInput}
+          />
+          ${H?z`<div class="hint">${H}</div>`:B}
+          ${D?z`<div class="err-inline">Channel must be empty (auto) or an integer 11–26.</div>`:B}
         </label>
         <label>
           ZigBee type
-          <select id="zigbee_type" .value=${Z.zigbee_type||"apsystems"}>
+          <select id="zigbee_type" .value=${Q.zigbee_type||"apsystems"}>
             <option value="apsystems">apsystems</option>
             <option value="general">general</option>
           </select>
+          ${J?z`<div class="hint">${J}</div>`:B}
         </label>
+        ${N?z`<div class="banner err">${N}</div>`:B}
         <div class="actions">
-          <button class="save" @click=${this.save}>Save</button>
+          <button class="save" ?disabled=${P} @click=${this.save}>
+            Save
+          </button>
         </div>
       </div>
-    `}}customElements.define("settings-form",y5);class E5 extends U{static properties={settings:{state:!0},error:{state:!0},notice:{state:!0},loading:{state:!0},saving:{state:!0}};constructor(){super();this.settings=null,this.error="",this.notice="",this.loading=!1,this.saving=!1}static styles=H`
+      ${this.confirming?this.renderDialog():B}
+    `}onMacInput=(Q)=>{this.typedMac=Q.target.value.trim()};onPanInput=(Q)=>{this.typedPan=Q.target.value.trim()};onChannelInput=(Q)=>{this.typedChannel=Q.target.value.trim()};renderDialog(){let Q=(this.settings.effective?.pan??"").toUpperCase(),Y=this.pendingDetail?this.computeEffectivePAN(this.pendingDetail):"",K=!!this.pendingDetail&&(this.pendingDetail.mac??"")!==(this.settings.mac??"");return z`
+      <div class="backdrop" @click=${this.onBackdropClick}>
+        <div class="dialog" role="dialog" aria-modal="true" @click=${this.stop}>
+          <h3>Confirm PAN change</h3>
+          <p>
+            Effective PAN ${Q||"—"} → ${Y||"—"}. Inverters bonded to
+            ${Q||"the current PAN"} may stop responding.
+          </p>
+          ${K?z`<p class="warn">
+                Applying a new MAC drops the network for a few seconds, up to
+                ~15 s if the kernel is slow. Your browser may reconnect
+                automatically; if not, refresh.
+              </p>`:B}
+          <label for="confirm_pwd">Password</label>
+          <input
+            id="confirm_pwd"
+            type="password"
+            autocomplete="current-password"
+            @keydown=${this.onPwdKey}
+            ?disabled=${this.pwdBusy}
+          />
+          ${this.pwdError?z`<div class="err">${this.pwdError}</div>`:B}
+          <div class="row">
+            <button class="secondary" @click=${this.confirmCancel} ?disabled=${this.pwdBusy}>
+              Cancel
+            </button>
+            <button class="primary" @click=${this.confirmSubmit} ?disabled=${this.pwdBusy}>
+              Confirm
+            </button>
+          </div>
+        </div>
+      </div>
+    `}onBackdropClick=()=>this.confirmCancel();stop=(Q)=>Q.stopPropagation()}function Z8(Q){let Y=(Q||"").trim().replace(/^0x/i,"");if(!Y)return"";if(!/^[0-9a-fA-F]{1,4}$/.test(Y))return"";return Y.toUpperCase().padStart(4,"0")}function R8(Q){let Y=(Q||"").trim();if(!Y||!F3(Y))return"";return Y.replace(/:/g,"").slice(-4).toUpperCase()}function F3(Q){return/^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$/.test(Q)}function GQ(Q){return Q&&Q>0?String(Q):""}function w8(Q){let Y=(Q||"").trim();if(!Y)return 0;let K=Number(Y);return Number.isInteger(K)?K:0}function qQ(Q){let Y=(Q||"").trim();if(!Y)return!1;let K=Number(Y);if(!Number.isInteger(K))return!0;return K<11||K>26}customElements.define("settings-form",JQ);class zQ extends A{static properties={pwError:{state:!0},pwNotice:{state:!0},pwBusy:{state:!0},recError:{state:!0},recBusy:{state:!0},newCode:{state:!0}};constructor(){super();this.pwError="",this.pwNotice="",this.pwBusy=!1,this.recError="",this.recBusy=!1,this.newCode=""}static styles=L`
+    :host { display: block; }
+    h3 { font-size: 13px; margin: 0 0 12px; color: var(--text); }
+    .section + .section { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
+    label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 6px; }
+    label:first-of-type { margin-top: 0; }
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 9px 12px;
+      background: var(--bar-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+    }
+    button {
+      margin-top: 14px;
+      padding: 9px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button.primary { background: var(--accent); color: #04222b; border: none; }
+    button.secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    button.secondary:hover { color: var(--text); border-color: var(--muted); }
+    button:disabled { opacity: 0.6; cursor: default; }
+    .muted { color: var(--muted); font-size: 13px; margin: 0 0 6px; }
+    .banner { border-radius: 8px; padding: 8px 12px; font-size: 13px; margin-top: 12px; }
+    .banner.ok { color: var(--ok); border: 1px solid var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
+    .banner.err { color: var(--err); border: 1px solid var(--err); background: color-mix(in srgb, var(--err) 12%, transparent); }
+    .code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 16px;
+      letter-spacing: 0.06em;
+      text-align: center;
+      background: var(--bar-bg);
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 12px;
+      color: var(--text);
+      user-select: all;
+      margin-top: 12px;
+    }
+  `;val(Q){return this.renderRoot.querySelector(`#${Q}`)?.value??""}clear(Q){let Y=this.renderRoot.querySelector(`#${Q}`);if(Y)Y.value=""}changePassword=async(Q)=>{if(Q.preventDefault(),this.pwBusy)return;if(this.pwError="",this.pwNotice="",this.val("new")!==this.val("new2")){this.pwError="New passwords do not match.";return}this.pwBusy=!0;try{await I.changePassword(this.val("cur"),this.val("new")),this.pwNotice="Password changed.",this.clear("cur"),this.clear("new"),this.clear("new2")}catch(Y){this.pwError=Y.message||"failed"}finally{this.pwBusy=!1}};regenerate=async()=>{if(this.recBusy)return;this.recError="",this.newCode="",this.recBusy=!0;try{let Q=await I.regenerateRecovery();this.newCode=Q.recovery_code}catch(Q){this.recError=Q.message||"failed"}finally{this.recBusy=!1}};render(){return z`
+      <div class="section">
+        <h3>Change password</h3>
+        <form @submit=${this.changePassword}>
+          <label for="cur">Current password</label>
+          <input id="cur" type="password" autocomplete="current-password" ?disabled=${this.pwBusy} />
+          <label for="new">New password</label>
+          <input id="new" type="password" autocomplete="new-password" ?disabled=${this.pwBusy} />
+          <label for="new2">Confirm new password</label>
+          <input id="new2" type="password" autocomplete="new-password" ?disabled=${this.pwBusy} />
+          <button class="primary" type="submit" ?disabled=${this.pwBusy}>
+            ${this.pwBusy?"…":"Change password"}
+          </button>
+          ${this.pwNotice?z`<div class="banner ok">${this.pwNotice}</div>`:B}
+          ${this.pwError?z`<div class="banner err">⚠ ${this.pwError}</div>`:B}
+        </form>
+      </div>
+
+      <div class="section">
+        <h3>Recovery code</h3>
+        <p class="muted">
+          The recovery code resets your password without console access. Generating a
+          new one invalidates the previous code. It's shown only once.
+        </p>
+        <button class="secondary" type="button" @click=${this.regenerate} ?disabled=${this.recBusy}>
+          ${this.recBusy?"…":"Generate new recovery code"}
+        </button>
+        ${this.newCode?z`<div class="code">${this.newCode}</div>
+              <p class="muted" style="margin-top:8px">Write this down now — it won't be shown again.</p>`:B}
+        ${this.recError?z`<div class="banner err">⚠ ${this.recError}</div>`:B}
+      </div>
+    `}}customElements.define("account-security-form",zQ);class BQ extends A{static properties={settings:{state:!0},hostname:{state:!0},error:{state:!0},notice:{state:!0},loading:{state:!0},saving:{state:!0}};constructor(){super();this.settings=null,this.hostname="",this.error="",this.notice="",this.loading=!1,this.saving=!1}static styles=L`
     :host { display: block; }
     .panel {
       background: var(--surface);
@@ -1005,22 +1630,28 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
       padding: 24px;
       max-width: 560px;
     }
+    .panel + .panel { margin-top: 22px; }
     h2 { font-size: 15px; margin: 0 0 16px; color: var(--text); }
     .banner { border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-bottom: 16px; }
     .banner.ok { color: var(--ok); border: 1px solid var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
     .banner.err { color: var(--err); border: 1px solid var(--err); background: color-mix(in srgb, var(--err) 12%, transparent); }
     .loading { color: var(--muted); font-size: 13px; }
-  `;connectedCallback(){super.connectedCallback(),this.load()}async load(){this.loading=!0;try{let Z=await O.getSettings();this.settings=Z.settings??null,this.error=Z.error??""}catch(Z){this.error=Z.message}finally{this.loading=!1}}onSave=async(Z)=>{this.saving=!0,this.notice="",this.error="";try{this.settings=await O.saveSettings(Z.detail),this.notice="Settings saved."}catch(K){this.error=K.message}finally{this.saving=!1,await this.load()}};render(){return G`
+  `;connectedCallback(){super.connectedCallback(),this.load(),this.loadHostname()}async load(){this.loading=!0;try{let Q=await I.getSettings();this.settings=Q.settings??null,this.error=Q.error??""}catch(Q){this.error=Q.message}finally{this.loading=!1}}async loadHostname(){try{let Q=await I.system();this.hostname=Q?.ecu?.hostname??""}catch{this.hostname=""}}onSave=async(Q)=>{this.saving=!0,this.notice="",this.error="";try{this.settings=await I.saveSettings(Q.detail),this.notice="Settings saved."}catch(Y){this.error=Y.message}finally{this.saving=!1,await this.load()}};render(){return z`
       <div class="panel">
         <h2>ECU settings</h2>
-        ${this.notice?G`<div class="banner ok">${this.notice}</div>`:j}
-        ${this.error?G`<div class="banner err">⚠ ${this.error}</div>`:j}
-        ${this.loading&&!this.settings?G`<div class="loading">Loading…</div>`:G`<settings-form
+        ${this.notice?z`<div class="banner ok">${this.notice}</div>`:B}
+        ${this.error?z`<div class="banner err">⚠ ${this.error}</div>`:B}
+        ${this.loading&&!this.settings?z`<div class="loading">Loading…</div>`:z`<settings-form
               .settings=${this.settings??{ecu_id:"",mac:"",pan_override:"",zigbee_type:"apsystems"}}
+              .hostname=${this.hostname}
               @save=${this.onSave}
             ></settings-form>`}
       </div>
-    `}}customElements.define("settings-view",E5);class x5 extends U{static properties={items:{attribute:!1},route:{type:String},open:{type:Boolean}};constructor(){super();this.items=[],this.route="dashboard",this.open=!1}close=()=>{this.dispatchEvent(new CustomEvent("close",{bubbles:!0,composed:!0}))};static styles=H`
+      <div class="panel">
+        <h2>Account &amp; security</h2>
+        <account-security-form></account-security-form>
+      </div>
+    `}}customElements.define("settings-view",BQ);class HQ extends A{static properties={items:{attribute:!1},route:{type:String},open:{type:Boolean}};constructor(){super();this.items=[],this.route="dashboard",this.open=!1}close=()=>{this.dispatchEvent(new CustomEvent("close",{bubbles:!0,composed:!0}))};static styles=L`
     :host { display: block; height: 100%; }
     nav {
       height: 100%;
@@ -1067,17 +1698,17 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
       nav.open { transform: translateX(0); box-shadow: 4px 0 32px rgba(0, 0, 0, 0.5); }
       .scrim { display: block; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); z-index: 20; }
     }
-  `;render(){return G`
+  `;render(){return z`
       <nav class=${this.open?"open":""}>
         <div class="brand">ECU CONSOLE</div>
-        ${this.items.map((Z)=>G`<a
-            class="item ${this.route===Z.id?"active":""}"
-            href="#/${Z.id}"
+        ${this.items.map((Q)=>z`<a
+            class="item ${this.route===Q.id?"active":""}"
+            href="#/${Q.id}"
             @click=${this.close}
-          ><span class="ic">${Z.icon}</span>${Z.label}</a>`)}
+          ><span class="ic">${Q.icon}</span>${Q.label}</a>`)}
       </nav>
-      ${this.open?G`<div class="scrim" @click=${this.close}></div>`:j}
-    `}}customElements.define("app-nav",x5);var xZ=[{id:"dashboard",label:"Dashboard",icon:"▮▮"},{id:"inverters",label:"Inverters",icon:"⌁"},{id:"alarms",label:"Alarms",icon:"!"},{id:"events",label:"Events",icon:"≣"},{id:"profiles",label:"Profiles",icon:"⛭"},{id:"settings",label:"Settings",icon:"⚙"}];class b5 extends U{static properties={ready:{state:!0},authed:{state:!0},configured:{state:!0},route:{state:!0},fleet:{state:!0},system:{state:!0},names:{state:!0},customProfiles:{state:!0},navOpen:{state:!0}};closeSSE=null;sysTimer=null;settingsCache=null;constructor(){super();this.ready=!1,this.authed=!1,this.configured=!0,this.route="dashboard",this.fleet=null,this.system=null,this.names={},this.customProfiles={},this.navOpen=!1}static styles=H`
+      ${this.open?z`<div class="scrim" @click=${this.close}></div>`:B}
+    `}}customElements.define("app-nav",HQ);var I3=[{id:"dashboard",label:"Dashboard",icon:"▮▮"},{id:"inverters",label:"Inverters",icon:"⌁"},{id:"alarms",label:"Alarms",icon:"!"},{id:"events",label:"Events",icon:"≣"},{id:"profiles",label:"Profiles",icon:"⛭"},{id:"settings",label:"Settings",icon:"⚙"}];class WQ extends A{static properties={ready:{state:!0},authed:{state:!0},configured:{state:!0},route:{state:!0},fleet:{state:!0},system:{state:!0},names:{state:!0},customProfiles:{state:!0},navOpen:{state:!0}};closeSSE=null;sysTimer=null;settingsCache=null;constructor(){super();this.ready=!1,this.authed=!1,this.configured=!0,this.route="dashboard",this.fleet=null,this.system=null,this.names={},this.customProfiles={},this.navOpen=!1}static styles=L`
     :host { display: block; }
     .layout { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
     main { padding: 24px 28px; }
@@ -1117,23 +1748,31 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
       cursor: pointer;
     }
     @media (max-width: 720px) {
-      .layout { grid-template-columns: 1fr; }
+      .layout {
+        grid-template-columns: 1fr;
+        /* On mobile, app-nav is position:fixed → its grid row is empty.
+           Without this, the two implicit rows stretch (align-content: normal
+           ≈ stretch) and split min-height:100vh 50/50, pushing main into the
+           vertical middle. Pin row 1 to content (0) and row 2 to 1fr so main
+           top-aligns and fills the viewport. */
+        grid-template-rows: auto 1fr;
+      }
       button.hamburger { display: inline-flex; }
       main { padding: 18px 16px; }
     }
-  `;connectedCallback(){super.connectedCallback(),window.addEventListener("hashchange",this.onHash),this.onHash(),this.init()}disconnectedCallback(){super.disconnectedCallback(),window.removeEventListener("hashchange",this.onHash),this.stopStreams()}onHash=()=>{let Z=(location.hash.replace(/^#\/?/,"")||"dashboard").split("/")[0];if(this.route=xZ.some((K)=>K.id===Z)?Z:"dashboard",this.navOpen=!1,this.route==="dashboard"&&this.authed)this.fetchOverlays()};async init(){try{let Z=await O.authStatus();if(this.configured=Z.configured,this.authed=Z.authenticated,this.authed)this.startStreams()}catch{}finally{this.ready=!0}}onAuthed=async()=>{this.authed=!0,this.startStreams()};logout=async()=>{try{await O.logout()}catch{}this.authed=!1,this.stopStreams(),this.fleet=null,this.system=null};startStreams(){this.stopStreams(),this.closeSSE=Y5((K)=>{this.fleet=K});let Z=()=>O.system().then((K)=>this.system=K).catch(()=>{});Z(),this.sysTimer=setInterval(Z,5000),this.fetchSettings(),this.fetchOverlays()}async fetchSettings(){try{let Z=await O.getSettings();if(Z.settings)this.settingsCache=Z.settings,this.names=Z.settings.inverter_names??{}}catch{}}async fetchOverlays(){try{let Z=await O.overlays(),K={};for(let Q of Z)for(let $ of Q.uids)K[$]=Q.id;this.customProfiles=K}catch{}}onRename=async(Z)=>{let{uid:K,name:Q}=Z.detail,$=this.settingsCache??{ecu_id:"",mac:"",pan_override:"",zigbee_type:""},B={...$.inverter_names??{}};if(Q.trim())B[K]=Q.trim();else delete B[K];let Y={...$,inverter_names:B};try{await O.saveSettings(Y),this.settingsCache=Y,this.names=B}catch{}};stopStreams(){if(this.closeSSE?.(),this.closeSSE=null,this.sysTimer)clearInterval(this.sysTimer);this.sysTimer=null}activeView(){switch(this.route){case"inverters":return G`<inverters-view
+  `;connectedCallback(){super.connectedCallback(),window.addEventListener("hashchange",this.onHash),this.onHash(),this.init()}disconnectedCallback(){super.disconnectedCallback(),window.removeEventListener("hashchange",this.onHash),this.stopStreams()}onHash=()=>{let Q=(location.hash.replace(/^#\/?/,"")||"dashboard").split("/")[0];if(this.route=I3.some((Y)=>Y.id===Q)?Q:"dashboard",this.navOpen=!1,this.route==="dashboard"&&this.authed)this.fetchOverlays()};async init(){try{let Q=await I.authStatus();if(this.configured=Q.configured,this.authed=Q.authenticated,this.authed)this.startStreams()}catch{}finally{this.ready=!0}}onAuthed=async()=>{this.authed=!0,this.configured=!0,this.startStreams()};logout=async()=>{try{await I.logout()}catch{}this.authed=!1,this.stopStreams(),this.fleet=null,this.system=null};startStreams(){this.stopStreams(),this.closeSSE=p3((Y)=>{this.fleet=Y});let Q=()=>I.system().then((Y)=>this.system=Y).catch(()=>{});Q(),this.sysTimer=setInterval(Q,5000),this.fetchSettings(),this.fetchOverlays()}async fetchSettings(){try{let Q=await I.getSettings();if(Q.settings)this.settingsCache=Q.settings,this.names=Q.settings.inverter_names??{}}catch{}}async fetchOverlays(){try{let Q=await I.overlays(),Y={};for(let K of Q)for(let X of K.uids)Y[X]=K.id;this.customProfiles=Y}catch{}}onRename=async(Q)=>{let{uid:Y,name:K}=Q.detail,X=this.settingsCache??{ecu_id:"",mac:"",pan_override:"",zigbee_type:""},G={...X.inverter_names??{}};if(K.trim())G[Y]=K.trim();else delete G[Y];let q={...X,inverter_names:G};try{await I.saveSettings(q),this.settingsCache=q,this.names=G}catch{}};stopStreams(){if(this.closeSSE?.(),this.closeSSE=null,this.sysTimer)clearInterval(this.sysTimer);this.sysTimer=null}activeView(){switch(this.route){case"inverters":return z`<inverters-view
           .fleet=${this.fleet}
           .names=${this.names}
           @rename=${this.onRename}
-        ></inverters-view>`;case"alarms":return G`<alarms-view .fleet=${this.fleet}></alarms-view>`;case"events":return G`<events-view></events-view>`;case"profiles":return G`<profiles-view></profiles-view>`;case"settings":return G`<settings-view></settings-view>`;default:return G`<dashboard-view
+        ></inverters-view>`;case"alarms":return z`<alarms-view .fleet=${this.fleet}></alarms-view>`;case"events":return z`<events-view></events-view>`;case"profiles":return z`<profiles-view></profiles-view>`;case"settings":return z`<settings-view></settings-view>`;default:return z`<dashboard-view
           .fleet=${this.fleet}
           .system=${this.system}
           .names=${this.names}
           .profiles=${this.customProfiles}
-        ></dashboard-view>`}}render(){if(!this.ready)return j;if(!this.authed)return G`<login-view .configured=${this.configured} @authed=${this.onAuthed}></login-view>`;let Z=xZ.find((Q)=>Q.id===this.route)?.label??"Dashboard",K=this.system?.invdriver_connected??!1;return G`
+        ></dashboard-view>`}}render(){if(!this.ready)return B;if(!this.authed)return z`<login-view .configured=${this.configured} @authed=${this.onAuthed}></login-view>`;let Q=I3.find((K)=>K.id===this.route)?.label??"Dashboard",Y=this.system?.invdriver_connected??!1;return z`
       <div class="layout">
         <app-nav
-          .items=${xZ}
+          .items=${I3}
           .route=${this.route}
           .open=${this.navOpen}
           @close=${()=>this.navOpen=!1}
@@ -1142,12 +1781,12 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
           <div class="topbar">
             <div class="titlewrap">
               <button class="hamburger" aria-label="Menu" aria-expanded=${this.navOpen} @click=${()=>this.navOpen=!this.navOpen}>☰</button>
-              <h1>${Z}</h1>
+              <h1>${Q}</h1>
             </div>
             <div class="right">
               <span class="conn">
-                <span class="dot ${K?"on":"off"}"></span>
-                inv-driver ${K?"connected":"down"}
+                <span class="dot ${Y?"on":"off"}"></span>
+                inv-driver ${Y?"connected":"down"}
               </span>
               <button class="logout" @click=${this.logout}>Sign out</button>
             </div>
@@ -1155,4 +1794,4 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
           ${this.activeView()}
         </main>
       </div>
-    `}}customElements.define("ecu-app",b5);
+    `}}customElements.define("ecu-app",WQ);

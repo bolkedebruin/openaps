@@ -100,6 +100,12 @@ type Ingestor struct {
 	// by the hook implementation (e.g. from the state store).
 	// Intended for hooking VerifyStartup from the gridprofile reconciler.
 	OnFirstSeen func(uid string)
+
+	// PairingResults, when non-nil, receives every inbound PairingCmdResult
+	// so the pairing transport can correlate it (by req_id) to the waiting
+	// primitive. Implemented by *pairing.Transport. Lives here to avoid an
+	// ingest -> pairing import.
+	PairingResults PairingResultSink
 	// protFamily caches whether each UID is DS3-family (from telemetry),
 	// so a protection reply whose inferred family contradicts the known
 	// model is rejected (guards against reply cross-talk on the modem).
@@ -109,6 +115,18 @@ type Ingestor struct {
 	// ecu-zb's single-frame reassembly cross-talk between inverters).
 	protReadOnce  sync.Once
 	protReadQueue chan string
+
+	// online tracker maintains per-uid online/offline transitions (debounced
+	// for offline so radio flaps don't spam the events log) and fleet-level
+	// sunrise/sundown. See online_events.go. Started by StartOnlineSweep.
+	online *onlineTracker
+
+	// faults tracker maintains per-uid fault-bit transitions and emits
+	// fault_raised / fault_cleared events into the store with the live
+	// grid context at the moment of the transition. See fault_events.go.
+	// Initialised exactly once via faultsOnce on first markFaults call.
+	faultsOnce sync.Once
+	faults     *faultTracker
 }
 
 // cacheProtection stores the latest Protection per UID for replay.
@@ -145,6 +163,13 @@ const peerUIDUnknown = -1
 // downstream envelopes. Lives here to avoid an ingest -> ipc import.
 type Router interface {
 	SendToBackend(backend string, env *wire.Envelope) bool
+}
+
+// PairingResultSink receives inbound PairingCmdResult envelopes for req_id
+// correlation. Implemented by *pairing.Transport. Deliver returns false when
+// no waiter is registered (late/duplicate/unknown id) — informational only.
+type PairingResultSink interface {
+	Deliver(res *wire.PairingCmdResult) bool
 }
 
 // Handle dispatches an Envelope by oneof body. Returns an error only
@@ -209,6 +234,25 @@ func (in *Ingestor) HandleWithPeer(ctx context.Context, peerUID int, backend str
 		return in.S.AppendDecodeFailed(ctx, df.GetTsMs(), df.GetShortAddr(), df.GetError(), df.GetRawHex())
 	case *wire.Envelope_Send, *wire.Envelope_Broadcast:
 		return in.routeDownstream(peerUID, backend, env)
+	case *wire.Envelope_PairingResult:
+		if b.PairingResult == nil {
+			return fmt.Errorf("pairing_result envelope without body")
+		}
+		// Only the registered bus backend (the same backend that executes
+		// pairing primitives) may deliver results. Reject a forged result
+		// from a second publisher; non-fatal (log + drop).
+		if in.RouteBackend == "" || backend != in.RouteBackend {
+			log.Printf("ingest: pairing_result dropped (from backend %q, not the bus backend %q)", backend, in.RouteBackend)
+			return nil
+		}
+		if in.PairingResults == nil {
+			log.Printf("ingest: pairing_result dropped (no pairing transport configured)")
+			return nil
+		}
+		if !in.PairingResults.Deliver(b.PairingResult) {
+			log.Printf("ingest: pairing_result req_id=%d had no waiter (late/duplicate)", b.PairingResult.GetReqId())
+		}
+		return nil
 	case nil:
 		return fmt.Errorf("envelope without body")
 	default:
@@ -241,7 +285,30 @@ func (in *Ingestor) routeDownstream(peerUID int, sender string, env *wire.Envelo
 		return fmt.Errorf("downstream route to backend %q failed (publisher absent or queue full)", in.RouteBackend)
 	}
 	in.maybeReadAfterWrite(env)
+	in.auditWrite(env, sender)
 	return nil
+}
+
+// auditWrite appends a power_cap_set or protection_set event when the routed
+// Send is recognised as such, attributing it to the originating controller
+// backend. Detail is left empty for v1 — the value flows back via the read-back
+// (DA for set-power; the protection-page decode for protection writes).
+func (in *Ingestor) auditWrite(env *wire.Envelope, sender string) {
+	s := env.GetSend()
+	if s == nil || in.S == nil {
+		return
+	}
+	frame := s.GetFrame()
+	var kind string
+	switch {
+	case codec.IsSetPower(frame):
+		kind = "power_cap_set"
+	case codec.IsProtectionWrite(frame):
+		kind = "protection_set"
+	default:
+		return
+	}
+	_ = in.S.AppendEvent(context.Background(), time.Now().UnixMilli(), s.GetPeerUid(), kind, "info", sender, "")
 }
 
 // isControllerUID reports whether peerUID is on the allow-list.
@@ -296,6 +363,7 @@ func (in *Ingestor) handleTelemetry(ctx context.Context, t *wire.Telemetry) erro
 	}
 	in.noteProtFamily(uid, t.GetModel())
 	in.protReadOnFirstSeen(uid)
+	in.markSeen(uid, t.GetTsMs())
 	if n := len(t.GetPanels()); n > maxTelemetryPanels {
 		return fmt.Errorf("telemetry: panel count %d exceeds cap %d", n, maxTelemetryPanels)
 	}
@@ -363,6 +431,7 @@ func (in *Ingestor) handleTelemetry(ctx context.Context, t *wire.Telemetry) erro
 	// Telemetry is stored in telemetry_live; it is not an audit event, so
 	// it is not appended to the events log (which would flood it and slow
 	// operational-event queries).
+	in.markFaults(uid, tsMs, t.GetFaults(), t.GetFreqHz(), t.GetGridV(), t.GetActivePowerW())
 	return nil
 }
 
@@ -412,6 +481,13 @@ func (in *Ingestor) handleRawFrame(ctx context.Context, rf *wire.RawFrame) error
 	env, err := codec.ParseL1(raw)
 	if err != nil {
 		return in.S.AppendDecodeFailed(ctx, tsMs, rf.GetShortAddr(), err.Error(), truncHex(raw))
+	}
+	// Record the last-observed frame type per inverter for the pairing
+	// encryption badge. The L1 gate byte distinguishes AES-wrapped from
+	// plaintext; ecu-zb forwards both kinds with the gate intact. A known
+	// peer UID is required to attribute it (best-effort, never fatal).
+	if uid := env.PeerUIDString(); isValidPeerUID(uid) {
+		_ = in.S.SetInverterEncrypted(ctx, uid, env.Encrypted)
 	}
 	if env.Encrypted {
 		return in.S.AppendDecodeFailed(ctx, tsMs, rf.GetShortAddr(), "L1 encrypted", truncHex(raw))
@@ -504,6 +580,12 @@ func (in *Ingestor) tryTelemetry(ctx context.Context, tsMs int64, env codec.L1En
 		return false, nil
 	}
 	t := telemetryFromReply(rep, tsMs)
+	// Carry the observed frame type so subscribers (the ecu-web encryption
+	// badge) can show plaintext vs AES per inverter. env.Encrypted is always
+	// false here (ciphertext frames return early in handleRawFrame), so this
+	// records a definite "observed plaintext" rather than leaving it unset.
+	enc := env.Encrypted
+	t.Encrypted = &enc
 	if err := in.handleTelemetry(ctx, t); err != nil {
 		return true, err
 	}

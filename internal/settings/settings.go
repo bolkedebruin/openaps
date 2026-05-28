@@ -30,6 +30,9 @@ type Settings struct {
 	ZigbeeType string `json:"zigbee_type"`
 	// InverterNames maps an inverter UID to an operator-chosen label.
 	InverterNames map[string]string `json:"inverter_names,omitempty"`
+	// Channel is the ZigBee radio channel (11-26). Zero means unset, in
+	// which case the built-in default channel is used.
+	Channel uint32 `json:"channel,omitempty"`
 }
 
 // Store is the concurrency-safe owner of the settings file.
@@ -71,12 +74,14 @@ func (st *Store) Save(s Settings) error {
 		return err
 	}
 	if dir := filepath.Dir(st.path); dir != "" {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return err
 		}
 	}
 	tmp := st.path + ".tmp"
-	if err := os.WriteFile(tmp, append(b, '\n'), 0o644); err != nil {
+	// 0o600: the settings file holds operator identifiers and the MAC
+	// override; only root needs to read it.
+	if err := os.WriteFile(tmp, append(b, '\n'), 0o600); err != nil {
 		return fmt.Errorf("settings: write %s: %w", tmp, err)
 	}
 	if err := os.Rename(tmp, st.path); err != nil {

@@ -272,4 +272,20 @@ func TestParamCatalog(t *testing.T) {
 	if cv := seen["CV"]; cv.Unit != "" && cv.Group == "" {
 		t.Errorf("CV metadata incomplete: %+v", cv)
 	}
+	// BP/BQ — reconnect-frequency thresholds, encodable on DS3 + QS1A since
+	// the BP/BQ encoders landed. The UI's Enter-service group needs them to
+	// render more than just AG/AS.
+	for _, code := range []string{"BP", "BQ"} {
+		entry, ok := seen[code]
+		if !ok {
+			t.Errorf("catalog missing %q (reconnect-freq, should be encodable)", code)
+			continue
+		}
+		if entry.Group != "DEREnterService" {
+			t.Errorf("%s group=%q want %q", code, entry.Group, "DEREnterService")
+		}
+		if entry.Unit != "Hz" {
+			t.Errorf("%s unit=%q want Hz", code, entry.Unit)
+		}
+	}
 }

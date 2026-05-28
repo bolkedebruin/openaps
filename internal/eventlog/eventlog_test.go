@@ -22,7 +22,7 @@ func openStore(t *testing.T) *store.Store {
 func TestHandle_MapsAndDefaultsLimit(t *testing.T) {
 	ctx := context.Background()
 	st := openStore(t)
-	_ = st.AppendEvent(ctx, 100, "uidA", "paired", "info")
+	_ = st.AppendEvent(ctx, 100, "uidA", "paired", "info", "", "")
 	_ = st.AppendDecodeFailed(ctx, 200, 9, "crc", "AA")
 
 	h := NewHandler(st)
@@ -43,10 +43,10 @@ func TestHandle_MapsAndDefaultsLimit(t *testing.T) {
 func TestHandle_ExcludesFirehoseByDefault(t *testing.T) {
 	ctx := context.Background()
 	st := openStore(t)
-	_ = st.AppendEvent(ctx, 100, "u", "paired", "info")
+	_ = st.AppendEvent(ctx, 100, "u", "paired", "info", "", "")
 	for i := int64(0); i < 10; i++ {
-		_ = st.AppendEvent(ctx, 200+i, "u", "telemetry", "info")
-		_ = st.AppendEvent(ctx, 300+i, "u", "inverter_info", "info")
+		_ = st.AppendEvent(ctx, 200+i, "u", "telemetry", "info", "", "")
+		_ = st.AppendEvent(ctx, 300+i, "u", "inverter_info", "info", "", "")
 	}
 	h := NewHandler(st)
 
@@ -66,7 +66,7 @@ func TestHandle_LimitClamped(t *testing.T) {
 	ctx := context.Background()
 	st := openStore(t)
 	for i := int64(0); i < 5; i++ {
-		_ = st.AppendEvent(ctx, i+1, "u", "k", "info")
+		_ = st.AppendEvent(ctx, i+1, "u", "k", "info", "", "")
 	}
 	h := &Handler{Store: st, DefaultLimit: 200, MaxLimit: 3}
 	resp := h.Handle(ctx, &wire.EventsRequest{Limit: 100}) // clamps to MaxLimit=3

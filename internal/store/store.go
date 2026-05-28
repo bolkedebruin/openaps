@@ -41,6 +41,29 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("store.Open: schema: %w", err)
 	}
+	// Idempotent column add for legacy DBs created before events.by existed.
+	// SQLite returns "duplicate column" once the column is present, which is
+	// the steady-state path — treat it as a no-op.
+	if _, err := db.ExecContext(ctx, "ALTER TABLE events ADD COLUMN by TEXT"); err != nil &&
+		!strings.Contains(err.Error(), "duplicate column") {
+		_ = db.Close()
+		return nil, fmt.Errorf("store.Open: migrate events.by: %w", err)
+	}
+	// Pairing columns on the inverters table (same idempotent ALTER pattern):
+	//   encrypted        — last-observed AES (1) vs plaintext (0) frame, NULL=unknown
+	//   pairing_state    — free-text state from the pairing state machine
+	//   last_announce_ms — wall-clock of the last 0x1D report-id announcement
+	for _, mig := range []string{
+		"ALTER TABLE inverters ADD COLUMN encrypted INTEGER",
+		"ALTER TABLE inverters ADD COLUMN pairing_state TEXT",
+		"ALTER TABLE inverters ADD COLUMN last_announce_ms INTEGER",
+	} {
+		if _, err := db.ExecContext(ctx, mig); err != nil &&
+			!strings.Contains(err.Error(), "duplicate column") {
+			_ = db.Close()
+			return nil, fmt.Errorf("store.Open: migrate %q: %w", mig, err)
+		}
+	}
 	return &Store{db: db}, nil
 }
 
@@ -161,6 +184,127 @@ ON CONFLICT(uid) DO UPDATE SET
 	)
 	if err != nil {
 		return fmt.Errorf("UpsertInverterInfo: %w", err)
+	}
+	return nil
+}
+
+// SetInverterEncrypted records the last-observed L1 frame type for an
+// inverter: true = AES-wrapped (CC EE/FC FC), false = plaintext. The row
+// must already exist (created by telemetry/info upsert); a missing row is a
+// no-op, matching the "telemetry seeds identity, pairing annotates it"
+// ordering. Stored as 0/1 in the idempotently-migrated encrypted column.
+func (s *Store) SetInverterEncrypted(ctx context.Context, uid string, encrypted bool) error {
+	v := int64(0)
+	if encrypted {
+		v = 1
+	}
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE inverters SET encrypted=? WHERE uid=?`, v, uid)
+	if err != nil {
+		return fmt.Errorf("SetInverterEncrypted: %w", err)
+	}
+	return nil
+}
+
+// SetInverterPairingState records the pairing state machine's per-inverter
+// state string (and optionally the last 0x1D announcement wall-clock). A
+// zero lastAnnounceMs leaves the column untouched. The row is upserted so a
+// scan that discovers a never-before-seen serial can annotate it before any
+// telemetry arrives.
+func (s *Store) SetInverterPairingState(ctx context.Context, uid, state string, lastAnnounceMs int64) error {
+	const q = `
+INSERT INTO inverters (uid, paired_at_ms, last_seen_ms, pairing_state, last_announce_ms)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(uid) DO UPDATE SET
+    pairing_state    = excluded.pairing_state,
+    last_announce_ms = COALESCE(NULLIF(excluded.last_announce_ms, 0), inverters.last_announce_ms)
+`
+	now := time.Now().UnixMilli()
+	_, err := s.db.ExecContext(ctx, q, uid, now, now, nullable(state), lastAnnounceMs)
+	if err != nil {
+		return fmt.Errorf("SetInverterPairingState: %w", err)
+	}
+	return nil
+}
+
+// InverterPairingRow is the pairing-relevant view of one inverters row.
+// Encrypted is nil when the column is NULL (never observed).
+type InverterPairingRow struct {
+	UID            string
+	ShortAddr      uint32
+	Encrypted      *bool
+	PairingState   string
+	LastAnnounceMs int64
+}
+
+// GetInverterPairing returns the pairing columns for one inverter, or
+// sql.ErrNoRows if the uid is unknown.
+func (s *Store) GetInverterPairing(ctx context.Context, uid string) (InverterPairingRow, error) {
+	var (
+		row   InverterPairingRow
+		sa    sql.NullInt64
+		enc   sql.NullInt64
+		state sql.NullString
+		annMs sql.NullInt64
+	)
+	err := s.db.QueryRowContext(ctx, `
+SELECT uid, short_addr, encrypted, pairing_state, last_announce_ms
+FROM   inverters WHERE uid=?`, uid).Scan(&row.UID, &sa, &enc, &state, &annMs)
+	if err != nil {
+		return InverterPairingRow{}, err
+	}
+	row.ShortAddr = uint32(sa.Int64)
+	if enc.Valid {
+		b := enc.Int64 != 0
+		row.Encrypted = &b
+	}
+	row.PairingState = state.String
+	row.LastAnnounceMs = annMs.Int64
+	return row, nil
+}
+
+// DeleteInverter removes an inverter and its dependent rows. Used by the
+// pairing Replace flow to retire a dead unit before binding its replacement.
+// Child rows (telemetry_live, panels, energy_lifetime, metrics) reference
+// inverters(uid); they are deleted first so the FK (when enforced) stays
+// satisfied.
+func (s *Store) DeleteInverter(ctx context.Context, uid string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("DeleteInverter: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, q := range []string{
+		`DELETE FROM telemetry_live   WHERE inverter_uid=?`,
+		`DELETE FROM inverter_panels  WHERE inverter_uid=?`,
+		`DELETE FROM energy_lifetime  WHERE inverter_uid=?`,
+		`DELETE FROM inverter_metrics WHERE inverter_uid=?`,
+		`DELETE FROM inverters        WHERE uid=?`,
+	} {
+		if _, err := tx.ExecContext(ctx, q, uid); err != nil {
+			return fmt.Errorf("DeleteInverter %q: %w", uid, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("DeleteInverter: commit: %w", err)
+	}
+	return nil
+}
+
+// SetInverterShortAddr updates only the short_addr for an inverter (used by
+// the pairing bind/rekey flow once get_short_addr returns the assigned SA).
+// The row is upserted so a freshly-discovered serial gets a row even before
+// telemetry flows.
+func (s *Store) SetInverterShortAddr(ctx context.Context, uid string, shortAddr uint16) error {
+	const q = `
+INSERT INTO inverters (uid, short_addr, paired_at_ms, last_seen_ms)
+VALUES (?, ?, ?, ?)
+ON CONFLICT(uid) DO UPDATE SET short_addr = excluded.short_addr
+`
+	now := time.Now().UnixMilli()
+	_, err := s.db.ExecContext(ctx, q, uid, int(shortAddr), now, now)
+	if err != nil {
+		return fmt.Errorf("SetInverterShortAddr: %w", err)
 	}
 	return nil
 }
@@ -515,18 +659,23 @@ ORDER  BY uid ASC`)
 	return out, rows.Err()
 }
 
-// AppendEvent inserts an append-only event row with the typed columns.
-// short_addr / error / raw_hex stay NULL for non-decode_failed kinds —
-// use AppendDecodeFailed for those.
-func (s *Store) AppendEvent(ctx context.Context, tsMs int64, inverterUID, kind, severity string) error {
+// AppendEvent inserts an append-only event row with the typed columns. by
+// attributes the row to its originating backend (the Hello-reported name of
+// the controller that caused it, e.g. "ecu-web" / "ecu-sunspec" /
+// "reconciler"); empty string is stored as NULL for legacy/internal events.
+// detail is a short human-readable summary (e.g. "300 W/panel"); stored in
+// the events.error column and surfaced as the Detail field. short_addr /
+// raw_hex stay NULL for non-decode_failed kinds — use AppendDecodeFailed for
+// those.
+func (s *Store) AppendEvent(ctx context.Context, tsMs int64, inverterUID, kind, severity, by, detail string) error {
 	if severity == "" {
 		severity = "info"
 	}
 	const q = `
-INSERT INTO events (ts_ms, inverter_uid, kind, severity)
-VALUES (?, ?, ?, ?)
+INSERT INTO events (ts_ms, inverter_uid, kind, severity, by, error)
+VALUES (?, ?, ?, ?, ?, ?)
 `
-	_, err := s.db.ExecContext(ctx, q, tsMs, nullable(inverterUID), kind, severity)
+	_, err := s.db.ExecContext(ctx, q, tsMs, nullable(inverterUID), kind, severity, nullable(by), nullable(detail))
 	if err != nil {
 		return fmt.Errorf("AppendEvent: %w", err)
 	}
@@ -534,11 +683,12 @@ VALUES (?, ?, ?, ?)
 }
 
 // AppendDecodeFailed inserts a decode_failed event row with the
-// short_addr/error/raw_hex columns populated.
+// short_addr/error/raw_hex columns populated. by is always inv-driver: the
+// decode happens at the ingest boundary, where no controller is involved.
 func (s *Store) AppendDecodeFailed(ctx context.Context, tsMs int64, shortAddr uint32, errMsg, rawHex string) error {
 	const q = `
-INSERT INTO events (ts_ms, inverter_uid, kind, severity, short_addr, error, raw_hex)
-VALUES (?, NULL, 'decode_failed', 'warn', ?, ?, ?)
+INSERT INTO events (ts_ms, inverter_uid, kind, severity, short_addr, error, raw_hex, by)
+VALUES (?, NULL, 'decode_failed', 'warn', ?, ?, ?, 'inv-driver')
 `
 	_, err := s.db.ExecContext(ctx, q, tsMs, nullableUint32(shortAddr), nullable(errMsg), nullable(rawHex))
 	if err != nil {
@@ -558,6 +708,7 @@ type Event struct {
 	ShortAddr   uint32
 	Detail      string // events.error column (decode error / message)
 	RawHex      string
+	By          string // originating backend (Hello name); empty for legacy
 }
 
 // EventFilter parameterises QueryEvents. Zero-value string fields mean
@@ -576,7 +727,7 @@ type EventFilter struct {
 // and the Events UDS API so the filter/scan logic lives in one place.
 func (s *Store) QueryEvents(ctx context.Context, f EventFilter) ([]Event, error) {
 	q := `
-SELECT id, ts_ms, inverter_uid, kind, severity, short_addr, error, raw_hex
+SELECT id, ts_ms, inverter_uid, kind, severity, short_addr, error, raw_hex, by
 FROM   events
 WHERE  ts_ms >= ?`
 	args := []any{f.SinceMs}
@@ -622,14 +773,16 @@ WHERE  ts_ms >= ?`
 			shortAddr sql.NullInt64
 			detail    sql.NullString
 			rawHex    sql.NullString
+			by        sql.NullString
 		)
-		if err := rows.Scan(&e.ID, &e.TsMs, &uid, &e.Kind, &e.Severity, &shortAddr, &detail, &rawHex); err != nil {
+		if err := rows.Scan(&e.ID, &e.TsMs, &uid, &e.Kind, &e.Severity, &shortAddr, &detail, &rawHex, &by); err != nil {
 			return nil, fmt.Errorf("QueryEvents scan: %w", err)
 		}
 		e.InverterUID = uid.String
 		e.ShortAddr = uint32(shortAddr.Int64)
 		e.Detail = detail.String
 		e.RawHex = rawHex.String
+		e.By = by.String
 		out = append(out, e)
 	}
 	return out, rows.Err()

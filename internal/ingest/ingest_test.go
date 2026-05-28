@@ -785,6 +785,40 @@ func TestReadbackSeq_IncrementOnCache(t *testing.T) {
 	}
 }
 
+type fakePairingSink struct{ delivered int }
+
+func (f *fakePairingSink) Deliver(*wire.PairingCmdResult) bool {
+	f.delivered++
+	return true
+}
+
+func TestHandle_PairingResult_PeerGate(t *testing.T) {
+	t.Parallel()
+	in := newIngestor(t)
+	in.RouteBackend = "apsystems-stock-zb"
+	sink := &fakePairingSink{}
+	in.PairingResults = sink
+
+	env := &wire.Envelope{Body: &wire.Envelope_PairingResult{
+		PairingResult: &wire.PairingCmdResult{ReqId: 7, Ok: true}}}
+
+	// A forged result from a second publisher is dropped, not delivered.
+	if err := in.Handle(context.Background(), "stranger", env); err != nil {
+		t.Fatalf("handle forged pairing_result: %v", err)
+	}
+	if sink.delivered != 0 {
+		t.Fatalf("forged pairing_result was delivered (%d); want dropped", sink.delivered)
+	}
+
+	// The registered bus backend is accepted.
+	if err := in.Handle(context.Background(), "apsystems-stock-zb", env); err != nil {
+		t.Fatalf("handle bus pairing_result: %v", err)
+	}
+	if sink.delivered != 1 {
+		t.Fatalf("bus pairing_result delivered=%d; want 1", sink.delivered)
+	}
+}
+
 // makeTelemetry constructs a minimal Telemetry for a given uid and model string.
 func makeTelemetry(uid, model string) *wire.Telemetry {
 	return &wire.Telemetry{

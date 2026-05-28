@@ -37,6 +37,15 @@ message Envelope {
 
     SettingsRequest      settings_req       = 20;
     SettingsResponse     settings_resp      = 21;
+
+    // Pairing management. *_req/_resp are controller -> driver (ecu-web
+    // starts/aborts/queries a pairing op). *_cmd/_result are driver ->
+    // bus backend (ecu-zb): inv-driver's pairing state machine issues a
+    // radio primitive and correlates the asynchronous result by req_id.
+    PairingRequest       pairing_req        = 22;
+    PairingResponse      pairing_resp       = 23;
+    PairingCmd           pairing_cmd        = 24;
+    PairingCmdResult     pairing_result     = 25;
   }
 }
 
@@ -108,6 +117,12 @@ message Telemetry {
   // can derive the inter-frame interval (this frame's ts_ms minus
   // prev_frame_ms) as a per-inverter response-time proxy.
   int64 prev_frame_ms = 19;
+  // encrypted reflects the L1 gate byte of the frame this telemetry was
+  // decoded from: true = AES-wrapped ciphertext, false = plaintext.
+  // optional so unset means "frame type unknown" (e.g. legacy/direct
+  // telemetry not decoded from a RawFrame) rather than "plaintext". Feeds
+  // the ecu-web per-inverter encryption badge.
+  optional bool encrypted = 20;
 }
 
 // InverterFaults dispatches on family. Each variant mirrors the
@@ -394,6 +409,10 @@ message Event {
   uint32 short_addr   = 6;
   string detail       = 7;  // error / message text (events.error column)
   string raw_hex      = 8;
+  // by attributes the event to its originating backend (the Hello-reported
+  // name of the controller that caused it): "inv-driver", "ecu-web",
+  // "ecu-sunspec", "reconciler", "inv-driver-cli", … Empty for legacy rows.
+  string by           = 9;
 }
 
 // Settings is the operator-owned configuration inv-driver persists in its
@@ -406,6 +425,9 @@ message Settings {
   // inverter_names maps an inverter UID (12-char hex) to an operator
   // label shown in place of the UID.
   map<string, string> inverter_names = 5;
+  // channel is the ZigBee radio channel (11-26); 0 = unset (use the
+  // built-in default).
+  uint32 channel = 6;
 }
 
 // SettingsRequest reads (get) or replaces (set) the settings. Set carries
@@ -417,9 +439,142 @@ message SettingsRequest {
   }
 }
 
+// ── Pairing management ──────────────────────────────────────────────
+//
+// Two channels share these messages:
+//   1. controller -> driver: PairingRequest / PairingResponse. ecu-web
+//      starts an op, aborts the running op, or polls status. Only ONE
+//      pairing op runs at a time (global pairing lock, mutually exclusive
+//      with grid-profile broadcast). Fine-grained progress is in-memory
+//      and read via GetStatus (NOT spammed into the events log); only
+//      milestones (scan_started/inverter_found/bind_ok/migrate_ok/
+//      rekey_committed/...) are written to events for audit.
+//   2. driver -> bus backend: PairingCmd / PairingCmdResult. inv-driver's
+//      state machine issues one radio primitive at a time and awaits the
+//      matching PairingCmdResult (correlated by req_id) on the upstream
+//      ingest path. ecu-zb owns the modem: it can park the radio on a PAN
+//      /channel and hop channels while a primitive runs.
+
+// PairingRequest is a controller-gated op (same gate as GridProfile:
+// IsControllerBackend && IsControllerUID). Exactly one oneof field set.
+message PairingRequest {
+  oneof op {
+    ScanStart       scan        = 1;  // discover inverters (fast|slow)
+    AddById         add_by_id   = 2;  // insert a known serial, then bind
+    ReplaceInverter replace     = 3;  // swap a dead unit, inherit config+slot
+    FleetRekey      fleet_rekey = 4;  // move whole fleet to a new PAN
+    Empty           abort       = 5;  // abort the running op (Safe-Abort)
+    Empty           get_status  = 6;  // poll current op status (in-memory)
+  }
+}
+
+// ScanStart begins discovery. slow=false → "fast": one 0xD1 report-id
+// solicitation on the module's current channel parked on PAN 0xFFFF.
+// slow=true → "slow": sweep RF channels [chan_lo..chan_hi] on PAN 0xFFFF,
+// dwelling dwell_ms per channel (caller default 11..26 @ ~2000ms). Slow
+// AND any 0xFFFF op blacks out telemetry while the radio is off the
+// operating PAN — the UI must warn. Found serials are bound after scan.
+message ScanStart {
+  bool   slow     = 1;
+  uint32 chan_lo  = 2;  // 0 → server default (11)
+  uint32 chan_hi  = 3;  // 0 → server default (26)
+  uint32 dwell_ms = 4;  // 0 → server default (2000)
+}
+
+// AddById inserts a known 12-digit serial (off the inverter label) into
+// the inverter set, then runs the bind (+ migrate if off-PAN) flow. No
+// radio discovery needed.
+message AddById {
+  string serial = 1;  // 12-digit decimal serial
+}
+
+// ReplaceInverter swaps a failed unit for a new one: remove old_uid,
+// discover/add new_serial (scan if empty), then apply old_uid's grid
+// profile + power cap + array-layout slot to the replacement.
+message ReplaceInverter {
+  string old_uid    = 1;  // dead unit's serial
+  string new_serial = 2;  // replacement serial; empty → scan to find it
+}
+
+// FleetRekey moves every paired inverter to new_pan via the 0xFFFF
+// rendezvous (0x11 prime per inverter → 0x22 commit → module to new PAN
+// → re-query short addrs). Reversible: on commit failure the state
+// machine restores the old PAN. new_pan is 1-4 hex digits (like
+// Settings.pan_override); empty → derive from MAC (not recommended for
+// rekey). Persisted via Settings.pan_override, never ecu_eth0_mac.conf.
+message FleetRekey {
+  string new_pan  = 1;  // hex 16-bit, e.g. "0DCE"
+  uint32 channel  = 2;  // 0 → keep current channel
+}
+
+// PairingResponse returns immediately for start/abort, or carries the
+// current op status for get_status. status_json is a PairingStatus
+// serialised as JSON (in-memory snapshot; the source of truth for the
+// progress drawer).
+message PairingResponse {
+  bool   ok          = 1;
+  string error       = 2;
+  bytes  status_json = 3;  // PairingStatus JSON (op, stage, per-inverter, channel sweep)
+}
+
+// PairingCmd is one radio primitive driver -> bus backend. req_id
+// correlates the asynchronous PairingCmdResult. Exactly one oneof set.
+message PairingCmd {
+  uint64 req_id = 1;
+  oneof op {
+    SetModulePan          set_module_pan = 2;  // 0x05: park module on pan/channel (use pan=0xFFFF for rendezvous)
+    ReportIdScan          report_scan    = 3;  // 0xD1 on → collect 0x1D → 0xD2 off
+    GetShortAddr          get_short_addr = 4;  // 0x0E directed
+    SetInverterPanChannel set_inv_pan    = 5;  // 0x0F directed
+    PrimeInverterPan      prime_inv      = 6;  // 0x11 prime
+    CommitPanNow          commit_pan     = 7;  // 0x22 broadcast commit
+    BindQuiet             bind_quiet     = 8;  // 0x08 directed (stop report-id)
+  }
+}
+
+message SetModulePan          { uint32 pan = 1; uint32 channel = 2; }
+message ReportIdScan          { uint32 timeout_ms = 1; }  // 0 → server default
+message GetShortAddr          { string serial = 1; }
+message SetInverterPanChannel { string serial = 1; uint32 pan = 2; uint32 channel = 3; }
+message PrimeInverterPan      { string serial = 1; uint32 pan = 2; uint32 channel = 3; }
+message CommitPanNow          { uint32 pan = 1; uint32 channel = 2; }
+message BindQuiet             { uint32 short_addr = 1; }
+
+// PairingCmdResult is the asynchronous result of one PairingCmd, matched
+// by req_id. found is populated only for report_scan; short_addr only for
+// get_short_addr.
+message PairingCmdResult {
+  uint64 req_id    = 1;
+  bool   ok        = 2;
+  string error     = 3;
+  repeated FoundInverter found = 4;  // report_scan: announcing units
+  uint32 short_addr = 5;            // get_short_addr: assigned SA
+}
+
+// FoundInverter is one inverter that announced itself (0x1D reply) during
+// a report-id scan.
+message FoundInverter {
+  string serial     = 1;  // 12-digit decimal
+  uint32 short_addr = 2;  // 0 if not yet assigned
+  bool   encrypted  = 3;  // announcement arrived AES-wrapped (CC EE/FC FC)
+}
+
+// EffectiveSettings reports the values inv-driver is actually using right
+// now: the operator's settings with empty fields resolved against the live
+// system (eth0 MAC, derived PAN, default zigbee type). The Settings screen
+// shows these alongside the operator inputs so a working device with empty
+// inputs doesn't look unconfigured.
+message EffectiveSettings {
+  string mac         = 1;
+  string pan         = 2;  // 4 hex digits, uppercase, e.g. "0DCE"
+  string zigbee_type = 3;
+  uint32 channel     = 4;  // resolved ZigBee channel (settings or default 16)
+}
+
 // SettingsResponse returns ok/error plus the current settings after the op.
 message SettingsResponse {
-  bool     ok       = 1;
-  string   error    = 2;
-  Settings settings = 3;
+  bool              ok        = 1;
+  string            error     = 2;
+  Settings          settings  = 3;
+  EffectiveSettings effective = 4;
 }

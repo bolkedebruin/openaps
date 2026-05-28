@@ -148,8 +148,10 @@ func TestPutOverlayBuildsValidDocAndAppliesPerUID(t *testing.T) {
 	body := `{"id":"victron-shift","uids":["` + a + `","` + b + `"],"points":[{"aps_code":"CB","value":50.3}]}`
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, withCookies(jsonReq("PUT", "/api/profiles/overlay", body), cookies))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("put overlay => %d (%s)", rec.Code, rec.Body)
+	// PUT now returns 202 Accepted because inv-driver runs the per-UID apply
+	// asynchronously and surfaces outcomes via the events log.
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("put overlay => %d (%s); want 202 Accepted", rec.Code, rec.Body)
 	}
 	if len(seen) != 2 {
 		t.Fatalf("want set_overlay for 2 uids, got %d", len(seen))
@@ -165,6 +167,70 @@ func TestPutOverlayBuildsValidDocAndAppliesPerUID(t *testing.T) {
 	}
 	if seen[0].GetUid() != a || seen[1].GetUid() != b {
 		t.Errorf("set_overlay uids: got %q,%q", seen[0].GetUid(), seen[1].GetUid())
+	}
+	// Response shape: {id, status:"queued", uids:[...]}, no per-UID results.
+	var qr struct {
+		ID     string   `json:"id"`
+		Status string   `json:"status"`
+		UIDs   []string `json:"uids"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &qr); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if qr.ID != "victron-shift" || qr.Status != "queued" || len(qr.UIDs) != 2 {
+		t.Errorf("queued response wrong: %+v", qr)
+	}
+}
+
+// TestSetOverlay_PartialQueueAllReturned verifies the partial-result loop:
+// when inv-driver rejects one uid but accepts the other, the handler does
+// NOT bail on the first error — it returns 202 with the queued uid in uids[]
+// and the rejected uid in failed[]. Closes the regression where the first
+// non-OK reply 400'd the whole request and earlier successes vanished from
+// the response.
+func TestSetOverlay_PartialQueueAllReturned(t *testing.T) {
+	a := "704000006835"
+	b := "806000042582"
+	h, cookies := newSettingsServer(t, Config{
+		GridProfileFn: func(_ context.Context, req *wire.GridProfileRequest) (*wire.GridProfileResponse, error) {
+			so := req.GetSetOverlay()
+			if so == nil {
+				return &wire.GridProfileResponse{Ok: false}, errors.New("unexpected op")
+			}
+			if so.GetUid() == b {
+				// inv-driver rejects this uid (e.g. fleet-membership check).
+				return &wire.GridProfileResponse{Ok: false, Error: "uid not in fleet"}, nil
+			}
+			return &wire.GridProfileResponse{Ok: true, Json: []byte(`{}`)}, nil
+		},
+	})
+	body := `{"id":"victron-shift","uids":["` + a + `","` + b + `"],"points":[{"aps_code":"CB","value":50.3}]}`
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, withCookies(jsonReq("PUT", "/api/profiles/overlay", body), cookies))
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("partial-queue should still return 202 (at least one queued); got %d: %s", rec.Code, rec.Body)
+	}
+	var qr struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+		UIDs   []string
+		Failed []struct {
+			UID   string `json:"uid"`
+			Error string `json:"error"`
+		} `json:"failed"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &qr); err != nil {
+		t.Fatalf("decode: %v body=%s", err, rec.Body)
+	}
+	if len(qr.UIDs) != 1 || qr.UIDs[0] != a {
+		t.Errorf("uids[] should hold only the queued uid (%s); got %v", a, qr.UIDs)
+	}
+	if len(qr.Failed) != 1 || qr.Failed[0].UID != b {
+		t.Fatalf("failed[] should hold the rejected uid (%s); got %+v", b, qr.Failed)
+	}
+	if !strings.Contains(qr.Failed[0].Error, "not in fleet") {
+		t.Errorf("failed[].error should carry inv-driver's reason; got %q", qr.Failed[0].Error)
 	}
 }
 

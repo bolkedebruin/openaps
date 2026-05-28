@@ -49,6 +49,14 @@ type SettingsHandler interface {
 	Handle(ctx context.Context, req *wire.SettingsRequest) *wire.SettingsResponse
 }
 
+// PairingHandler handles PairingRequest envelopes from controller-gated
+// connections (same gate as GridProfile). by is the originating backend
+// name, used for milestone audit attribution. Implemented by
+// pairing.Manager.
+type PairingHandler interface {
+	Handle(ctx context.Context, by string, req *wire.PairingRequest) *wire.PairingResponse
+}
+
 // PeerRecorder is notified of UDS peer connect/disconnect so
 // SystemStatus can report the live peer set. Implemented by
 // systemstatus.Registry. id is the server's per-connection id.
@@ -118,6 +126,10 @@ type Server struct {
 	// Settings, when non-nil, handles SettingsRequest envelopes. A get op
 	// is served for any peer; a set op requires the controller gate.
 	Settings SettingsHandler
+
+	// Pairing, when non-nil, handles PairingRequest envelopes from
+	// controller-gated connections (same gate as GridProfile).
+	Pairing PairingHandler
 
 	// Peers, when non-nil, is notified of every peer's connect/disconnect
 	// (from its Hello) so SystemStatus can list the live peer set.
@@ -340,6 +352,12 @@ func (s *Server) handlePublisher(ctx context.Context, peerUID int, tag, backend 
 			}
 			continue
 		}
+		if req := next.GetPairingReq(); req != nil {
+			if err := s.handlePairingReq(ctx, peerUID, backend, tag, c, req); err != nil {
+				log.Printf("ipc %s: pairing: %v", tag, err)
+			}
+			continue
+		}
 		if err := s.Ingestor.HandleWithPeer(ctx, peerUID, backend, &next); err != nil {
 			// Per-event error: log and continue. Connection is still
 			// synchronised on the next length prefix. Unknown body
@@ -374,7 +392,26 @@ func (s *Server) handleGridProfileReq(ctx context.Context, peerUID int, backend,
 	if resp == nil {
 		resp = &wire.GridProfileResponse{Ok: false, Error: "grid-profile handler returned nil"}
 	}
+	if resp.GetOk() && s.Ingestor != nil && s.Ingestor.S != nil {
+		if kind := gridProfileAuditKind(req); kind != "" {
+			_ = s.Ingestor.S.AppendEvent(ctx, time.Now().UnixMilli(), "", kind, "info", backend, "")
+		}
+	}
 	return writeGridProfileResp(tag, c, resp)
+}
+
+// gridProfileAuditKind picks the event kind for an audited grid-profile op,
+// or "" if the op is a read (list/get/refresh) that needs no audit row.
+func gridProfileAuditKind(req *wire.GridProfileRequest) string {
+	switch {
+	case req.GetSelectBase() != nil:
+		return "profile_select"
+	case req.GetSetOverlay() != nil:
+		return "overlay_set"
+	case req.GetClearOverlay() != nil:
+		return "overlay_delete"
+	}
+	return ""
 }
 
 // handleSystemStatusReq processes a SystemStatusRequest on a publisher
@@ -459,6 +496,9 @@ func (s *Server) handleSettingsReq(ctx context.Context, peerUID int, backend, ta
 	if resp == nil {
 		resp = &wire.SettingsResponse{Ok: false, Error: "settings handler returned nil"}
 	}
+	if resp.GetOk() && req.GetSet() != nil && s.Ingestor != nil && s.Ingestor.S != nil {
+		_ = s.Ingestor.S.AppendEvent(ctx, time.Now().UnixMilli(), "", "settings_set", "info", backend, "")
+	}
 	return writeSettingsResp(tag, c, resp)
 }
 
@@ -471,6 +511,39 @@ func writeSettingsResp(tag string, c net.Conn, resp *wire.SettingsResponse) erro
 		return fmt.Errorf("write settings response: %w", err)
 	}
 	log.Printf("ipc %s: settings response ok=%v", tag, resp.GetOk())
+	return nil
+}
+
+// handlePairingReq processes a PairingRequest on a publisher connection.
+// Same controller gate as Send/Broadcast/GridProfile: the sender backend
+// must be on ControllerBackends and the peer UID must be on ControllerUIDs.
+// The backend name is forwarded as the milestone-audit attribution.
+func (s *Server) handlePairingReq(ctx context.Context, peerUID int, backend, tag string, c net.Conn, req *wire.PairingRequest) error {
+	if !s.Ingestor.IsControllerBackend(backend) {
+		return writePairingResp(tag, c, &wire.PairingResponse{Ok: false, Error: fmt.Sprintf("pairing refused: backend %q not an allowed controller", backend)})
+	}
+	if !s.Ingestor.IsControllerUID(peerUID) {
+		return writePairingResp(tag, c, &wire.PairingResponse{Ok: false, Error: fmt.Sprintf("pairing refused: peer uid=%d not in controller-uids allow-list", peerUID)})
+	}
+	if s.Pairing == nil {
+		return writePairingResp(tag, c, &wire.PairingResponse{Ok: false, Error: "pairing handler not configured"})
+	}
+	resp := s.Pairing.Handle(ctx, backend, req)
+	if resp == nil {
+		resp = &wire.PairingResponse{Ok: false, Error: "pairing handler returned nil"}
+	}
+	return writePairingResp(tag, c, resp)
+}
+
+// writePairingResp wraps a PairingResponse in an Envelope and writes it to
+// conn with the configured write deadline.
+func writePairingResp(tag string, c net.Conn, resp *wire.PairingResponse) error {
+	env := &wire.Envelope{Body: &wire.Envelope_PairingResp{PairingResp: resp}}
+	_ = c.SetWriteDeadline(time.Now().Add(writeDeadline))
+	if err := wire.WriteFrame(c, env); err != nil {
+		return fmt.Errorf("write pairing response: %w", err)
+	}
+	log.Printf("ipc %s: pairing response ok=%v", tag, resp.GetOk())
 	return nil
 }
 

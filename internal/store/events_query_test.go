@@ -9,10 +9,10 @@ func TestQueryEvents_FiltersAndOrder(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	if err := s.AppendEvent(ctx, 100, "uidA", "paired", "info"); err != nil {
+	if err := s.AppendEvent(ctx, 100, "uidA", "paired", "info", "", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.AppendEvent(ctx, 200, "uidB", "fault_detected", "error"); err != nil {
+	if err := s.AppendEvent(ctx, 200, "uidB", "fault_detected", "error", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.AppendDecodeFailed(ctx, 300, 7, "bad crc", "FCFC00"); err != nil {

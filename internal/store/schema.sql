@@ -106,7 +106,8 @@ CREATE TABLE IF NOT EXISTS events (
     severity        TEXT NOT NULL DEFAULT 'info',
     short_addr      INTEGER,
     error           TEXT,
-    raw_hex         TEXT
+    raw_hex         TEXT,
+    by              TEXT            -- originating backend (Hello name); see Open() for ALTER on legacy DBs
 );
 
 CREATE INDEX IF NOT EXISTS events_ts_idx ON events(ts_ms);

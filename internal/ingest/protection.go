@@ -63,28 +63,40 @@ func (in *Ingestor) protReadWorker() {
 	}
 }
 
-// cacheProtectionValues stores a copy of the native-unit value map from
-// a decoded protection reading. Used by ReadbackNative to serve the
-// reconciler without re-decoding the proto.  Each update increments the
-// per-UID sequence so callers can detect a stale cache.
-func (in *Ingestor) cacheProtectionValues(uid string, values map[string]float64) {
-	if uid == "" || len(values) == 0 {
-		return
-	}
-	cp := make(map[string]float64, len(values))
-	for k, v := range values {
-		cp[k] = v
+// cacheProtectionValues MERGES the native-unit value map from a decoded
+// reading into the per-UID cumulative set and returns a copy of the merged
+// result. Merging (not replacing) means a later partial read — a QS1A read
+// whose page B reply was dropped or truncated — can't erase a previously-known
+// code (e.g. the DA output cap); a real change still overwrites its code on the
+// next read that carries it. Used by ReadbackNative (reconciler) and to build
+// the published/replayed wire.Protection. Each update increments the per-UID
+// sequence so callers can detect a stale cache.
+func (in *Ingestor) cacheProtectionValues(uid string, values map[string]float64) map[string]float64 {
+	if uid == "" {
+		return nil
 	}
 	in.protMu.Lock()
+	defer in.protMu.Unlock()
 	if in.protValues == nil {
 		in.protValues = make(map[string]map[string]float64)
 	}
-	in.protValues[uid] = cp
+	acc := in.protValues[uid]
+	if acc == nil {
+		acc = make(map[string]float64, len(values))
+		in.protValues[uid] = acc
+	}
+	for k, v := range values {
+		acc[k] = v
+	}
 	if in.protValueSeq == nil {
 		in.protValueSeq = make(map[string]uint64)
 	}
 	in.protValueSeq[uid]++
-	in.protMu.Unlock()
+	cp := make(map[string]float64, len(acc))
+	for k, v := range acc {
+		cp[k] = v
+	}
+	return cp
 }
 
 // ReadbackSeq returns the current cache sequence for uid.  The sequence
@@ -177,11 +189,14 @@ func (in *Ingestor) protReadOnFirstSeen(uid string) {
 }
 
 // maybeReadAfterWrite schedules a protection read-back after a routed
-// protection write lands, so the published thresholds reflect the change
-// without polling.
+// protection OR set-power write lands, so the published thresholds and the
+// output-cap read-back (code "DA") reflect the change without polling. Set-power
+// goes through a different opcode path than protection params, so it must be
+// matched too — otherwise the cap is changed on the wire but the read-back (and
+// the dashboard's per-inverter and total cap) stays stale.
 func (in *Ingestor) maybeReadAfterWrite(env *wire.Envelope) {
 	s := env.GetSend()
-	if s == nil || !codec.IsProtectionWrite(s.GetFrame()) {
+	if s == nil || (!codec.IsProtectionWrite(s.GetFrame()) && !codec.IsSetPower(s.GetFrame())) {
 		return
 	}
 	uid := s.GetPeerUid()
@@ -236,9 +251,11 @@ func (in *Ingestor) handleProtectionPage(ctx context.Context, tsMs int64, env co
 	if err != nil {
 		return
 	}
+	// Merge into the cumulative per-UID set and publish that, so a dropped or
+	// truncated page in this read doesn't erase previously-known codes.
+	reading.Values = in.cacheProtectionValues(uid, reading.Values)
 	p := readingToProto(uid, tsMs, reading)
 	in.cacheProtection(p)
-	in.cacheProtectionValues(uid, reading.Values)
 	in.publish(&wire.Envelope{Body: &wire.Envelope_Protection{Protection: p}})
 
 	// Log only when the decoded set changes, so a steady poll is quiet.

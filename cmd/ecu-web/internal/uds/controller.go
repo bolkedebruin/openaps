@@ -73,6 +73,30 @@ func (c *Controller) roundtrip(ctx context.Context, req *wire.Envelope, match fu
 	}
 }
 
+// Send injects one L2 frame addressed to a single inverter (by peer_uid)
+// over a one-shot control connection. It is fire-and-forget: a nil return
+// means inv-driver accepted the frame for downstream delivery, NOT that the
+// inverter applied it (matching ecu-sunspec's Send semantics).
+func (c *Controller) Send(ctx context.Context, uid string, frame []byte) error {
+	if uid == "" {
+		return fmt.Errorf("uds: empty uid")
+	}
+	if len(frame) == 0 {
+		return fmt.Errorf("uds: empty frame")
+	}
+	conn, err := c.dialHello(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	_ = conn.SetWriteDeadline(time.Now().Add(controllerTimeout))
+	env := &wire.Envelope{Body: &wire.Envelope_Send{Send: &wire.Send{PeerUid: uid, Frame: frame}}}
+	if err := wire.WriteFrame(conn, env); err != nil {
+		return fmt.Errorf("uds: send: %w", err)
+	}
+	return nil
+}
+
 // SystemStatus fetches ECU identity + connected peers from inv-driver.
 func (c *Controller) SystemStatus(ctx context.Context) (*wire.SystemStatusResponse, error) {
 	req := &wire.Envelope{Body: &wire.Envelope_SystemStatusReq{SystemStatusReq: &wire.SystemStatusRequest{}}}
@@ -131,6 +155,25 @@ func (c *Controller) GridProfile(ctx context.Context, req *wire.GridProfileReque
 		return nil, err
 	}
 	resp := env.GetGridProfileResp()
+	if !resp.GetOk() {
+		return resp, fmt.Errorf("inv-driver: %s", resp.GetError())
+	}
+	return resp, nil
+}
+
+// Pairing issues one pairing op (the request carries exactly one oneof
+// field) and returns inv-driver's response. Like GridProfile it is
+// controller-gated. A response with ok=false is returned alongside a
+// non-nil error; the response may still carry StatusJson (the in-memory
+// PairingStatus snapshot — the source of truth for the progress drawer).
+func (c *Controller) Pairing(ctx context.Context, req *wire.PairingRequest) (*wire.PairingResponse, error) {
+	env, err := c.roundtrip(ctx,
+		&wire.Envelope{Body: &wire.Envelope_PairingReq{PairingReq: req}},
+		func(e *wire.Envelope) bool { return e.GetPairingResp() != nil })
+	if err != nil {
+		return nil, err
+	}
+	resp := env.GetPairingResp()
 	if !resp.GetOk() {
 		return resp, fmt.Errorf("inv-driver: %s", resp.GetError())
 	}

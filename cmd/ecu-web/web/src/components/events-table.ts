@@ -20,6 +20,7 @@ export class EventsTable extends LitElement {
     td { color: var(--text); }
     .time { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
     .uid { font-family: var(--mono); color: var(--muted); font-size: 12px; }
+    .by { color: var(--accent); font-size: 12px; white-space: nowrap; }
     .detail { color: var(--muted); }
     .sev {
       font-size: 10px;
@@ -42,7 +43,7 @@ export class EventsTable extends LitElement {
     return html`
       <table>
         <thead>
-          <tr><th>Time</th><th>Severity</th><th>Event</th><th>Inverter</th><th>Detail</th></tr>
+          <tr><th>Time</th><th>Severity</th><th>Event</th><th>By</th><th>Inverter</th><th>Detail</th></tr>
         </thead>
         <tbody>
           ${this.events.map(
@@ -50,6 +51,7 @@ export class EventsTable extends LitElement {
               <td class="time">${fmtTime(e.ts_ms)}</td>
               <td><span class="sev ${severityClass(e.severity)}">${e.severity}</span></td>
               <td>${humanizeFault(e.kind)}</td>
+              <td class="by">${e.by || "—"}</td>
               <td class="uid">${e.inverter_uid || "—"}</td>
               <td class="detail">${e.detail || (e.raw_hex ? e.raw_hex : nothing)}</td>
             </tr>`,

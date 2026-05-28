@@ -37,6 +37,10 @@ func handle(c net.Conn) {
 	}
 	send(c, &wire.Envelope{Body: &wire.Envelope_Info{Info: &wire.InverterInfo{PeerUid: "aabbccddeeff", ModelCode: u32(0x18)}}})
 	send(c, &wire.Envelope{Body: &wire.Envelope_Info{Info: &wire.InverterInfo{PeerUid: "112233445566", ModelCode: u32(0x20)}}})
+	// Output-cap read-backs (code "DA", per-panel where 500 = full): QS1A
+	// curtailed to 75% (DA=375), DS3 uncapped (DA=500).
+	send(c, &wire.Envelope{Body: &wire.Envelope_Protection{Protection: &wire.Protection{PeerUid: "aabbccddeeff", Model: "QS1A", Values: map[string]float64{"DA": 375}}}})
+	send(c, &wire.Envelope{Body: &wire.Envelope_Protection{Protection: &wire.Protection{PeerUid: "112233445566", Model: "DS3", Values: map[string]float64{"DA": 500}}}})
 	send(c, &wire.Envelope{Body: &wire.Envelope_Fleet{Fleet: &wire.FleetSummary{NameplateTotalW: 2350, TodayWh: 4200, MonthWh: 120000, YearWh: 980000, LifetimeWh: 1234567}}})
 	for {
 		now := time.Now().UnixMilli()

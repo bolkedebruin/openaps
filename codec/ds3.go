@@ -118,6 +118,13 @@ var ds3ProtParams = map[string]ds3ProtParam{
 	// 10-min average over-voltage (main.exe: min10_Over_average_voltage / ac_600s)
 	// Scale: int(V/ds3GridVScale), truncates, 16-bit. Golden capture: 253 V → 944.
 	"min10_Over_average_voltage": {0x42, ds3ScaleVolt}, // AB
+
+	// Reconnect-frequency thresholds (main.exe: Reconnection_over/under_frequency).
+	// Source: set_paraName_paraValue_inverter @ 0x69bdc — DS3 (model 0x20/0x22/0x21/0x36)
+	// dispatches to set_protection_dsp_ds3_D_one with sub 0x23 (BQ) / 0x24 (BP),
+	// scale int(Hz × DAT_0006ce38) = int(Hz × 100), byte_count 2.
+	"Reconnection_over_frequency":  {0x23, ds3ScaleHz}, // BQ
+	"Reconnection_under_frequency": {0x24, ds3ScaleHz}, // BP
 }
 
 // encodeProtectionDS3 builds a DS3 protection frame for one param using
@@ -157,6 +164,11 @@ func dsVoltAvg(raw int) float64 { return float64(int(float64(raw) * ds3GridVScal
 // the same factor main.exe applies on page A for AG. ~16.7 = EN 50549-1 max.
 func dsDroop(raw int) float64 { return float64(raw) * ds3DroopNum / ds3DroopDen * 100.0 }
 
+// dsMaxPower is the rated/limited output cap (DA), per panel: raw16 × 0.06027 W
+// — the exact inverse of EncodeSetPowerDS3's round(W / 0.06027).
+// (main.exe resolve_protection_paras_DS3_DS3D, key "DA".)
+func dsMaxPower(raw int) float64 { return float64(raw) * setPowerScaleDS3Inv }
+
 // dsMode is the over-frequency-watt mode (CV): a 1-byte enum the firmware
 // remaps 0→0xF, 1→0xD, 2→0xE (else 0xF) into the 60code column.
 func dsMode(raw int) float64 {
@@ -189,6 +201,7 @@ var (
 		{code: "BQ", off: 0x41, width: 2, scale: dsFreq}, {code: "BP", off: 0x43, width: 2, scale: dsFreq}, {code: "AG", off: 0x45, width: 2, scale: dsAG},
 	}
 	ds3ReadPageB = []protReadField{
+		{code: "DA", off: 0x03, width: 2, scale: dsMaxPower}, // output cap, W/panel
 		{code: "CV", off: 0x05, width: 1, scale: dsMode},
 		{code: "DC", off: 0x06, width: 2, scale: dsFreq}, {code: "CC", off: 0x08, width: 2, scale: dsFreq}, {code: "CB", off: 0x0a, width: 2, scale: dsFreq},
 		{code: "DD", off: 0x0c, width: 2, scale: dsDroop},

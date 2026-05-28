@@ -20,6 +20,27 @@ func checkPanelWatts(panelWatts uint16) error {
 	return nil
 }
 
+// IsSetPower reports whether an L2 frame is a per-inverter set-power (output
+// cap) write, so the ingest layer can re-read protection afterwards (the cap
+// reads back as code "DA"). It matches the unicast set-power opcodes: DS3 0xAA
+// with the max-power sub, QS1 0x1C with the max-power sub, and C3 0xC3. (DS3/QS1
+// share their opcode with protection writes, distinguished by the sub byte.)
+func IsSetPower(frame []byte) bool {
+	if len(frame) < 5 {
+		return false
+	}
+	cmd, sub := frame[3], frame[4]
+	switch cmd {
+	case CmdSetPowerDS3Unicast:
+		return sub == SubMaxPowerDS3
+	case CmdSetPowerQS1Unicast:
+		return sub == SubMaxPowerQS1
+	case CmdSetPowerC3Unicast:
+		return true
+	}
+	return false
+}
+
 // EncodeSetPower picks the right encoder for the given inverter model
 // code and returns the canonical L2 frame for the configured per-panel
 // watt setpoint.

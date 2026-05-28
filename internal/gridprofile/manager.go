@@ -2,10 +2,13 @@ package gridprofile
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sync"
 
+	"github.com/bolke/inv-driver/internal/buslock"
 	"github.com/bolke/inv-driver/wire"
 )
 
@@ -38,6 +41,36 @@ type Manager struct {
 	// BroadcastModelCodes lists the model families targeted by selectBase
 	// broadcast. Required when BroadcastEnabled is true.
 	BroadcastModelCodes []uint8
+
+	// BusLock, when non-nil, serialises the broadcast-apply path against the
+	// pairing state machine (the two are mutually exclusive — both disrupt
+	// the fleet bus). MUST be the same *buslock.Lock the pairing manager
+	// uses. Nil disables the guard (unicast paths don't need it).
+	BusLock *buslock.Lock
+
+	// Events, when non-nil, receives audit events emitted by the async
+	// overlay applier (overlay_apply_started / overlay_param_written /
+	// overlay_param_failed / overlay_apply_complete). A nil sink disables
+	// event emission; the apply still runs.
+	Events EventSink
+
+	// ApplyParent is the cancellation root for async overlay applies. Production
+	// callers MUST set it to the daemon's root context so shutdown cancels all
+	// in-flight applies; nil falls back to context.Background which only suits
+	// in-process tests that block until done channels close.
+	ApplyParent context.Context
+
+	applierOnce sync.Once
+	applierInst *applier
+}
+
+// asyncApplier lazily constructs the per-Manager applier instance bound to
+// the Reconciler + Events sink.
+func (m *Manager) asyncApplier() *applier {
+	m.applierOnce.Do(func() {
+		m.applierInst = newApplier(m.Reconciler, m.Events)
+	})
+	return m.applierInst
 }
 
 // Handle dispatches a GridProfileRequest to the appropriate operation
@@ -143,6 +176,13 @@ func (m *Manager) selectBase(ctx context.Context, id string) *wire.GridProfileRe
 	}
 
 	if m.BroadcastEnabled && m.BroadcastSender != nil && len(m.BroadcastModelCodes) > 0 {
+		// Broadcast disrupts the fleet bus; serialise against pairing.
+		if m.BusLock != nil {
+			if ok, owner := m.BusLock.TryAcquire("gridprofile-broadcast"); !ok {
+				return errResp(fmt.Sprintf("bus busy: held by %q (grid-profile broadcast and pairing are mutually exclusive)", owner))
+			}
+			defer m.BusLock.Release()
+		}
 		return m.selectBaseViaBroadcast(ctx)
 	}
 
@@ -191,8 +231,19 @@ func (m *Manager) selectBaseViaBroadcast(ctx context.Context) *wire.GridProfileR
 	return okResp(raw)
 }
 
-// setOverlay validates and upserts a per-inverter overlay, then triggers
-// reconciliation for that inverter.
+// setOverlay validates and upserts a per-inverter overlay, then queues an
+// async reconcile for that inverter.
+//
+// Fleet-membership policy: every uid in the overlay body's uids[] list (and
+// the IPC uid itself) MUST be a current fleet member as reported by the
+// reconciler's modelOf(). An uid that's never been seen — typo or stale
+// device — is rejected up-front so gp_overlays can't grow dead rows. An uid
+// that's a real fleet member but currently offline is ALSO rejected here:
+// modelOf returns false for any uid the store has no recent telemetry for,
+// and we prefer "operator re-saves when the inverter is back" over silently
+// persisting an overlay that the reconcile-on-reappear path will pick up
+// eventually anyway. Consistent with [overlay-apply-is-queue]: persist only
+// what we know we can apply.
 func (m *Manager) setOverlay(ctx context.Context, uid string, overlayJSON []byte) *wire.GridProfileResponse {
 	if uid == "" {
 		return errResp("SetOverlay: uid is empty")
@@ -214,6 +265,18 @@ func (m *Manager) setOverlay(ctx context.Context, uid string, overlayJSON []byte
 	if !overlayContainsUID(o, uid) {
 		return errResp(fmt.Sprintf("SetOverlay: uid %q not listed in overlay body uids[]", uid))
 	}
+	// Fleet-membership check (see method comment). Verify BEFORE persisting so
+	// a typo or stale uid can never create an orphan gp_overlays row.
+	if m.Reconciler != nil {
+		if _, ok := m.Reconciler.modelOf(uid); !ok {
+			return errResp(fmt.Sprintf("SetOverlay: uid %q not in fleet", uid))
+		}
+		for _, u := range o.UIDs {
+			if _, ok := m.Reconciler.modelOf(u); !ok {
+				return errResp(fmt.Sprintf("SetOverlay: uid %q not in fleet", u))
+			}
+		}
+	}
 	// Reject a conflicting overlay (base ⊕ overlay) before persisting it, so an
 	// incoherent profile never enters the store (the reconcile path is the
 	// ultimate backstop, but it would store-then-fail). Same rules as the editor.
@@ -226,19 +289,127 @@ func (m *Manager) setOverlay(ctx context.Context, uid string, overlayJSON []byte
 	if m.Reconciler == nil {
 		return errResp("SetOverlay: reconciler not available; overlay stored but not applied")
 	}
-	report, err := m.Reconciler.ReconcileUID(ctx, uid)
-	if err != nil {
-		return errResp(fmt.Sprintf("SetOverlay: ReconcileUID: %v", err))
+
+	// Apply asynchronously: spawn one goroutine per uid (bounded), emit
+	// per-point events to the audit log, return immediately. The caller
+	// surfaces progress via the events stream.
+	parent := m.ApplyParent
+	if parent == nil {
+		parent = context.Background()
 	}
-	raw, err := json.Marshal(report)
+	m.asyncApplier().enqueueWithPoints(parent, uid, o.ID, overlayCodes(o.Points))
+
+	raw, err := json.Marshal(overlayQueuedResp{Status: "queued", ID: o.ID, UIDs: []string{uid}})
 	if err != nil {
-		return errResp(fmt.Sprintf("SetOverlay: marshal report: %v", err))
-	}
-	if summary := pointFailedSummary(report.Points); summary != "" {
-		return &wire.GridProfileResponse{Ok: false, Json: raw,
-			Error: "SetOverlay: one or more points not confirmed: " + summary}
+		return errResp(fmt.Sprintf("SetOverlay: marshal queued: %v", err))
 	}
 	return okResp(raw)
+}
+
+// overlayQueuedResp is the JSON payload of a SetOverlay response under the
+// async apply path: the overlay is persisted, the reconcile loop runs in the
+// background, and progress is reported via the events log.
+type overlayQueuedResp struct {
+	Status string   `json:"status"`
+	ID     string   `json:"id"`
+	UIDs   []string `json:"uids"`
+}
+
+// ReconcileOverlaysForUID enqueues an async overlay reconcile for one uid
+// IFF an overlay is persisted for it AND the inverter is in the fleet.
+// Intended to be called from the ingest OnFirstSeen hook: the protection
+// cache is warm by the time first-seen fires (the startup protection read
+// has completed), so the reconciler can compare intended-vs-readback
+// without spurious no_readback rows. Per-uid hook also re-arms on radio
+// rejoin (protLastSeen gap > protReseenGap), so an inverter that goes
+// dark and returns re-triggers the overlay reconcile automatically.
+//
+// No-op (no error) when there is no overlay, no reconciler, or the uid
+// isn't in the fleet — those are all expected during normal boot races.
+func (m *Manager) ReconcileOverlaysForUID(ctx context.Context, uid string) error {
+	if m.Store == nil || m.Reconciler == nil {
+		return nil
+	}
+	if uid == "" || !uidRe.MatchString(uid) {
+		return nil
+	}
+	if _, ok := m.Reconciler.modelOf(uid); !ok {
+		return nil
+	}
+	o, err := m.Store.GetOverlay(ctx, uid)
+	if err != nil {
+		// sql.ErrNoRows is the common "no overlay for this uid" case — not an
+		// error from the caller's perspective.
+		if err == sql.ErrNoRows {
+			return nil
+		}
+		return fmt.Errorf("ReconcileOverlaysForUID %q: %w", uid, err)
+	}
+	parent := m.ApplyParent
+	if parent == nil {
+		parent = context.Background()
+	}
+	m.asyncApplier().enqueueWithPoints(parent, uid, o.ID, overlayCodes(o.Points))
+	return nil
+}
+
+// overlayCodes extracts the APS code list from overlay points, used to scope
+// per-point event emission to overlay-owned codes only.
+func overlayCodes(points []PointEntry) []string {
+	out := make([]string, 0, len(points))
+	for _, p := range points {
+		out = append(out, p.Apply.ApsCode)
+	}
+	return out
+}
+
+// ReconcileAllOverlays enqueues an async reconcile for every (uid, overlay)
+// pair currently persisted in the store. It is idempotent: a uid whose state
+// already matches the overlay produces only in_sync rows.
+//
+// NOTE: This is NOT called at boot — the protection cache is empty until
+// the per-uid startup read completes, and the reconciler would treat every
+// param as no_readback and emit spurious overlay_param_failed rows.
+// Per-uid reconcile is hooked into ingest.OnFirstSeen via
+// ReconcileOverlaysForUID, which fires AFTER the protection read settles
+// and also re-arms on radio rejoin. ReconcileAllOverlays is retained for
+// admin/IPC-driven full-fleet sweeps where the caller has independent
+// evidence the cache is warm.
+//
+// uids absent from the current fleet (modelOf returns false) are skipped —
+// they'll converge when the inverter is next seen, same policy as setOverlay
+// itself (see its method comment for the fleet-membership rationale).
+//
+// Best-effort: errors loading the overlay list are logged via the returned
+// error but never block boot; the daemon still comes up.
+func (m *Manager) ReconcileAllOverlays(ctx context.Context) error {
+	if m.Store == nil {
+		return nil
+	}
+	overlays, err := m.Store.ListOverlays(ctx)
+	if err != nil {
+		return fmt.Errorf("ReconcileAllOverlays: list: %w", err)
+	}
+	if m.Reconciler == nil {
+		// No reconciler yet: nothing to enqueue against. Not an error — boot
+		// order may legitimately race the first telemetry.
+		return nil
+	}
+	parent := m.ApplyParent
+	if parent == nil {
+		parent = context.Background()
+	}
+	app := m.asyncApplier()
+	for _, o := range overlays {
+		codes := overlayCodes(o.Points)
+		for _, uid := range o.UIDs {
+			if _, ok := m.Reconciler.modelOf(uid); !ok {
+				continue
+			}
+			app.enqueueWithPoints(parent, uid, o.ID, codes)
+		}
+	}
+	return nil
 }
 
 // clearOverlay removes the overlay for an inverter and triggers reconciliation.
@@ -395,6 +566,70 @@ func (m *Manager) getBase(ctx context.Context) *wire.GridProfileResponse {
 		return errResp(fmt.Sprintf("GetBase: marshal: %v", err))
 	}
 	return okResp(raw)
+}
+
+// InheritProfile copies any per-inverter overlay from oldUID onto newUID and
+// reconciles newUID against the active base, then clears the old overlay. It
+// implements the inv-driver-scoped half of the pairing Replace "inherit
+// config" step (the grid profile + Local Site overlay). Power cap and
+// array-slot layout live outside inv-driver's DB and are re-applied by the
+// controller after Replace completes.
+//
+// Returns a short human-readable summary for the pairing status. A missing
+// old overlay is not an error: the replacement simply inherits the active
+// base via the reconcile, with no per-inverter overrides.
+func (m *Manager) InheritProfile(ctx context.Context, oldUID, newUID string) (string, error) {
+	if m.Store == nil {
+		return "", fmt.Errorf("InheritProfile: store not available")
+	}
+	if !uidRe.MatchString(newUID) {
+		return "", fmt.Errorf("InheritProfile: new uid %q invalid", newUID)
+	}
+
+	o, err := m.Store.GetOverlay(ctx, oldUID)
+	switch {
+	case err == sql.ErrNoRows:
+		// No overlay to inherit — just reconcile the new unit to the base.
+		if m.Reconciler != nil {
+			if _, rErr := m.Reconciler.ReconcileUID(ctx, newUID); rErr != nil {
+				return "", fmt.Errorf("InheritProfile: reconcile %q: %w", newUID, rErr)
+			}
+		}
+		return "no overlay to inherit; applied active base", nil
+	case err != nil:
+		return "", fmt.Errorf("InheritProfile: get overlay %q: %w", oldUID, err)
+	}
+
+	// Remap the overlay's uids[] from old to new so it targets the
+	// replacement (the per-uid row key is newUID; the body's uids[] must
+	// agree, mirroring setOverlay's membership check).
+	remapped := make([]string, 0, len(o.UIDs))
+	hasNew := false
+	for _, u := range o.UIDs {
+		if u == oldUID {
+			u = newUID
+		}
+		if u == newUID {
+			hasNew = true
+		}
+		remapped = append(remapped, u)
+	}
+	if !hasNew {
+		remapped = append(remapped, newUID)
+	}
+	o.UIDs = remapped
+
+	if err := m.Store.UpsertOverlay(ctx, newUID, o); err != nil {
+		return "", fmt.Errorf("InheritProfile: upsert overlay %q: %w", newUID, err)
+	}
+	_ = m.Store.ClearOverlay(ctx, oldUID)
+
+	if m.Reconciler != nil {
+		if _, rErr := m.Reconciler.ReconcileUID(ctx, newUID); rErr != nil {
+			return "", fmt.Errorf("InheritProfile: reconcile %q: %w", newUID, rErr)
+		}
+	}
+	return fmt.Sprintf("inherited overlay %q (%d points)", o.ID, len(o.Points)), nil
 }
 
 // candidateConflicts evaluates the conflict rules against base ⊕ candidate

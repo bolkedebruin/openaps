@@ -73,6 +73,12 @@ var qs1ProtFreqSubs = map[string]byte{
 	"Over_frequency_Watt_High_set":  0x65, // CC
 	"Under_Frequency_Watt_Low_set":  0xA1, // DH
 	"Under_Frequency_Watt_High_set": 0xA4, // DI
+	// Reconnect-frequency thresholds (main.exe: Reconnection_over/under_frequency).
+	// Source: set_paraName_paraValue_inverter @ 0x69bdc — QS1A (model 0x18/8) dispatches
+	// to set_protection_new_one with sub 0x4e (BQ) / 0x51 (BP), scale int(50e6/Hz),
+	// byte_count 3 (same family as CA/CB/CC/DH/DI).
+	"Reconnection_over_frequency":  0x4e, // BQ
+	"Reconnection_under_frequency": 0x51, // BP
 }
 
 // qs1VoltTripSubs maps voltage-trip params that use the QS1 0x1C builder
@@ -188,6 +194,11 @@ func qsIdent(raw int) float64 { return float64(raw) }
 // ~16.7 = EN 50549-1 max.
 func qsDroop(raw int) float64 { return float64(raw) * qsProtDroopScale }
 
+// qsMaxPower is the rated/limited output cap (DA), per panel: raw16 × 256/7395
+// — the inverse of EncodeSetPowerQS1A's (W × 0x1CE3) >> 8.
+// (main.exe resolve_protection60_paras_YC600, key "DA".)
+func qsMaxPower(raw int) float64 { return float64(raw) * 256.0 / 7395.0 }
+
 // qsModeFromPageB decodes the QS1 over-frequency-watt mode (CV), a nibble
 // of base+0x3f selected by the page-variant flag at base+0x4a: flag==0 →
 // low nibble; flag=='f' → ((b>>4)&3)+0xc (the page-f packing). Any other
@@ -264,6 +275,8 @@ var (
 		{code: "BP", off: 0x05, width: 3, scale: qsFreq}, {code: "BQ", off: 0x08, width: 3, scale: qsFreq},
 		// 10-min average over-voltage (24-bit) + freq-watt droop slope:
 		{code: "AB", off: 0x19, width: 3, scale: qsAvgOv}, {code: "DD", off: 0x45, width: 2, scale: qsDroop},
+		// output cap (W/panel), the 2 bytes right after DD:
+		{code: "DA", off: 0x47, width: 2, scale: qsMaxPower},
 		// over-freq-watt mode nibble (page-variant gated):
 		{code: "CV", fn: qsModeFromPageB},
 		// freq-watt curve (over-freq), offsets pinned by differential write:

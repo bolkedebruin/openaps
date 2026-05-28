@@ -215,6 +215,7 @@ func TestWriteable_DS3(t *testing.T) {
 		"AC", "AD", "AQ", "AY", "AB", // volt trips
 		"AE", "AF", "AJ", "AK", // freq trips
 		"BB", "BC", "BD", "BE", "BH", "BI", "BJ", "BK", // clear times
+		"BP", "BQ", // reconnect freq thresholds (DS3 sub 0x24/0x23, int(Hz×100))
 	}
 	for _, code := range writeable {
 		if !Writeable(testDS3, code) {
@@ -243,6 +244,7 @@ func TestWriteable_QS1A_Writable(t *testing.T) {
 		"AC", "AD", "AQ", "AY", "AB", // volt trips
 		"AE", "AF", "AJ", "AK", // freq trips
 		"BB", "BC", "BD", "BE", "BH", "BI", "BJ", "BK", // clear times
+		"BP", "BQ", // reconnect freq thresholds (QS1A sub 0x51/0x4e, int(50e6/Hz))
 	}
 	for _, code := range writable {
 		if !Writeable(testQS1A, code) {

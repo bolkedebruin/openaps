@@ -105,6 +105,10 @@ type Envelope struct {
 	//	*Envelope_EventsResp
 	//	*Envelope_SettingsReq
 	//	*Envelope_SettingsResp
+	//	*Envelope_PairingReq
+	//	*Envelope_PairingResp
+	//	*Envelope_PairingCmd
+	//	*Envelope_PairingResult
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -318,6 +322,42 @@ func (x *Envelope) GetSettingsResp() *SettingsResponse {
 	return nil
 }
 
+func (x *Envelope) GetPairingReq() *PairingRequest {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_PairingReq); ok {
+			return x.PairingReq
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetPairingResp() *PairingResponse {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_PairingResp); ok {
+			return x.PairingResp
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetPairingCmd() *PairingCmd {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_PairingCmd); ok {
+			return x.PairingCmd
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetPairingResult() *PairingCmdResult {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_PairingResult); ok {
+			return x.PairingResult
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -398,6 +438,26 @@ type Envelope_SettingsResp struct {
 	SettingsResp *SettingsResponse `protobuf:"bytes,21,opt,name=settings_resp,json=settingsResp,proto3,oneof"`
 }
 
+type Envelope_PairingReq struct {
+	// Pairing management. *_req/_resp are controller -> driver (ecu-web
+	// starts/aborts/queries a pairing op). *_cmd/_result are driver ->
+	// bus backend (ecu-zb): inv-driver's pairing state machine issues a
+	// radio primitive and correlates the asynchronous result by req_id.
+	PairingReq *PairingRequest `protobuf:"bytes,22,opt,name=pairing_req,json=pairingReq,proto3,oneof"`
+}
+
+type Envelope_PairingResp struct {
+	PairingResp *PairingResponse `protobuf:"bytes,23,opt,name=pairing_resp,json=pairingResp,proto3,oneof"`
+}
+
+type Envelope_PairingCmd struct {
+	PairingCmd *PairingCmd `protobuf:"bytes,24,opt,name=pairing_cmd,json=pairingCmd,proto3,oneof"`
+}
+
+type Envelope_PairingResult struct {
+	PairingResult *PairingCmdResult `protobuf:"bytes,25,opt,name=pairing_result,json=pairingResult,proto3,oneof"`
+}
+
 func (*Envelope_Hello) isEnvelope_Body() {}
 
 func (*Envelope_Telemetry) isEnvelope_Body() {}
@@ -435,6 +495,14 @@ func (*Envelope_EventsResp) isEnvelope_Body() {}
 func (*Envelope_SettingsReq) isEnvelope_Body() {}
 
 func (*Envelope_SettingsResp) isEnvelope_Body() {}
+
+func (*Envelope_PairingReq) isEnvelope_Body() {}
+
+func (*Envelope_PairingResp) isEnvelope_Body() {}
+
+func (*Envelope_PairingCmd) isEnvelope_Body() {}
+
+func (*Envelope_PairingResult) isEnvelope_Body() {}
 
 // Hello is the first frame on every backend connection. The driver
 // uses it to identify the bus backend (e.g. apsystems-stock-zb) and
@@ -622,7 +690,13 @@ type Telemetry struct {
 	// frame inv-driver received for this UID, or 0 if none. Subscribers
 	// can derive the inter-frame interval (this frame's ts_ms minus
 	// prev_frame_ms) as a per-inverter response-time proxy.
-	PrevFrameMs   int64 `protobuf:"varint,19,opt,name=prev_frame_ms,json=prevFrameMs,proto3" json:"prev_frame_ms,omitempty"`
+	PrevFrameMs int64 `protobuf:"varint,19,opt,name=prev_frame_ms,json=prevFrameMs,proto3" json:"prev_frame_ms,omitempty"`
+	// encrypted reflects the L1 gate byte of the frame this telemetry was
+	// decoded from: true = AES-wrapped ciphertext, false = plaintext.
+	// optional so unset means "frame type unknown" (e.g. legacy/direct
+	// telemetry not decoded from a RawFrame) rather than "plaintext". Feeds
+	// the ecu-web per-inverter encryption badge.
+	Encrypted     *bool `protobuf:"varint,20,opt,name=encrypted,proto3,oneof" json:"encrypted,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -781,6 +855,13 @@ func (x *Telemetry) GetPrevFrameMs() int64 {
 		return x.PrevFrameMs
 	}
 	return 0
+}
+
+func (x *Telemetry) GetEncrypted() bool {
+	if x != nil && x.Encrypted != nil {
+		return *x.Encrypted
+	}
+	return false
 }
 
 // InverterFaults dispatches on family. Each variant mirrors the
@@ -2806,15 +2887,19 @@ func (x *EventsResponse) GetEvents() []*Event {
 
 // Event is one row of the append-only events log.
 type Event struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	TsMs          int64                  `protobuf:"varint,2,opt,name=ts_ms,json=tsMs,proto3" json:"ts_ms,omitempty"`
-	InverterUid   string                 `protobuf:"bytes,3,opt,name=inverter_uid,json=inverterUid,proto3" json:"inverter_uid,omitempty"`
-	Kind          string                 `protobuf:"bytes,4,opt,name=kind,proto3" json:"kind,omitempty"`
-	Severity      string                 `protobuf:"bytes,5,opt,name=severity,proto3" json:"severity,omitempty"` // info | warn | error | …
-	ShortAddr     uint32                 `protobuf:"varint,6,opt,name=short_addr,json=shortAddr,proto3" json:"short_addr,omitempty"`
-	Detail        string                 `protobuf:"bytes,7,opt,name=detail,proto3" json:"detail,omitempty"` // error / message text (events.error column)
-	RawHex        string                 `protobuf:"bytes,8,opt,name=raw_hex,json=rawHex,proto3" json:"raw_hex,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Id          int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	TsMs        int64                  `protobuf:"varint,2,opt,name=ts_ms,json=tsMs,proto3" json:"ts_ms,omitempty"`
+	InverterUid string                 `protobuf:"bytes,3,opt,name=inverter_uid,json=inverterUid,proto3" json:"inverter_uid,omitempty"`
+	Kind        string                 `protobuf:"bytes,4,opt,name=kind,proto3" json:"kind,omitempty"`
+	Severity    string                 `protobuf:"bytes,5,opt,name=severity,proto3" json:"severity,omitempty"` // info | warn | error | …
+	ShortAddr   uint32                 `protobuf:"varint,6,opt,name=short_addr,json=shortAddr,proto3" json:"short_addr,omitempty"`
+	Detail      string                 `protobuf:"bytes,7,opt,name=detail,proto3" json:"detail,omitempty"` // error / message text (events.error column)
+	RawHex      string                 `protobuf:"bytes,8,opt,name=raw_hex,json=rawHex,proto3" json:"raw_hex,omitempty"`
+	// by attributes the event to its originating backend (the Hello-reported
+	// name of the controller that caused it): "inv-driver", "ecu-web",
+	// "ecu-sunspec", "reconciler", "inv-driver-cli", … Empty for legacy rows.
+	By            string `protobuf:"bytes,9,opt,name=by,proto3" json:"by,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2905,6 +2990,13 @@ func (x *Event) GetRawHex() string {
 	return ""
 }
 
+func (x *Event) GetBy() string {
+	if x != nil {
+		return x.By
+	}
+	return ""
+}
+
 // Settings is the operator-owned configuration inv-driver persists in its
 // own settings file. Used as both the set payload and the response body.
 type Settings struct {
@@ -2916,6 +3008,9 @@ type Settings struct {
 	// inverter_names maps an inverter UID (12-char hex) to an operator
 	// label shown in place of the UID.
 	InverterNames map[string]string `protobuf:"bytes,5,rep,name=inverter_names,json=inverterNames,proto3" json:"inverter_names,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// channel is the ZigBee radio channel (11-26); 0 = unset (use the
+	// built-in default).
+	Channel       uint32 `protobuf:"varint,6,opt,name=channel,proto3" json:"channel,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2983,6 +3078,13 @@ func (x *Settings) GetInverterNames() map[string]string {
 		return x.InverterNames
 	}
 	return nil
+}
+
+func (x *Settings) GetChannel() uint32 {
+	if x != nil {
+		return x.Channel
+	}
+	return 0
 }
 
 // SettingsRequest reads (get) or replaces (set) the settings. Set carries
@@ -3069,19 +3171,1208 @@ func (*SettingsRequest_Get) isSettingsRequest_Op() {}
 
 func (*SettingsRequest_Set) isSettingsRequest_Op() {}
 
+// PairingRequest is a controller-gated op (same gate as GridProfile:
+// IsControllerBackend && IsControllerUID). Exactly one oneof field set.
+type PairingRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Op:
+	//
+	//	*PairingRequest_Scan
+	//	*PairingRequest_AddById
+	//	*PairingRequest_Replace
+	//	*PairingRequest_FleetRekey
+	//	*PairingRequest_Abort
+	//	*PairingRequest_GetStatus
+	Op            isPairingRequest_Op `protobuf_oneof:"op"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PairingRequest) Reset() {
+	*x = PairingRequest{}
+	mi := &file_busmgr_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PairingRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PairingRequest) ProtoMessage() {}
+
+func (x *PairingRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PairingRequest.ProtoReflect.Descriptor instead.
+func (*PairingRequest) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *PairingRequest) GetOp() isPairingRequest_Op {
+	if x != nil {
+		return x.Op
+	}
+	return nil
+}
+
+func (x *PairingRequest) GetScan() *ScanStart {
+	if x != nil {
+		if x, ok := x.Op.(*PairingRequest_Scan); ok {
+			return x.Scan
+		}
+	}
+	return nil
+}
+
+func (x *PairingRequest) GetAddById() *AddById {
+	if x != nil {
+		if x, ok := x.Op.(*PairingRequest_AddById); ok {
+			return x.AddById
+		}
+	}
+	return nil
+}
+
+func (x *PairingRequest) GetReplace() *ReplaceInverter {
+	if x != nil {
+		if x, ok := x.Op.(*PairingRequest_Replace); ok {
+			return x.Replace
+		}
+	}
+	return nil
+}
+
+func (x *PairingRequest) GetFleetRekey() *FleetRekey {
+	if x != nil {
+		if x, ok := x.Op.(*PairingRequest_FleetRekey); ok {
+			return x.FleetRekey
+		}
+	}
+	return nil
+}
+
+func (x *PairingRequest) GetAbort() *Empty {
+	if x != nil {
+		if x, ok := x.Op.(*PairingRequest_Abort); ok {
+			return x.Abort
+		}
+	}
+	return nil
+}
+
+func (x *PairingRequest) GetGetStatus() *Empty {
+	if x != nil {
+		if x, ok := x.Op.(*PairingRequest_GetStatus); ok {
+			return x.GetStatus
+		}
+	}
+	return nil
+}
+
+type isPairingRequest_Op interface {
+	isPairingRequest_Op()
+}
+
+type PairingRequest_Scan struct {
+	Scan *ScanStart `protobuf:"bytes,1,opt,name=scan,proto3,oneof"` // discover inverters (fast|slow)
+}
+
+type PairingRequest_AddById struct {
+	AddById *AddById `protobuf:"bytes,2,opt,name=add_by_id,json=addById,proto3,oneof"` // insert a known serial, then bind
+}
+
+type PairingRequest_Replace struct {
+	Replace *ReplaceInverter `protobuf:"bytes,3,opt,name=replace,proto3,oneof"` // swap a dead unit, inherit config+slot
+}
+
+type PairingRequest_FleetRekey struct {
+	FleetRekey *FleetRekey `protobuf:"bytes,4,opt,name=fleet_rekey,json=fleetRekey,proto3,oneof"` // move whole fleet to a new PAN
+}
+
+type PairingRequest_Abort struct {
+	Abort *Empty `protobuf:"bytes,5,opt,name=abort,proto3,oneof"` // abort the running op (Safe-Abort)
+}
+
+type PairingRequest_GetStatus struct {
+	GetStatus *Empty `protobuf:"bytes,6,opt,name=get_status,json=getStatus,proto3,oneof"` // poll current op status (in-memory)
+}
+
+func (*PairingRequest_Scan) isPairingRequest_Op() {}
+
+func (*PairingRequest_AddById) isPairingRequest_Op() {}
+
+func (*PairingRequest_Replace) isPairingRequest_Op() {}
+
+func (*PairingRequest_FleetRekey) isPairingRequest_Op() {}
+
+func (*PairingRequest_Abort) isPairingRequest_Op() {}
+
+func (*PairingRequest_GetStatus) isPairingRequest_Op() {}
+
+// ScanStart begins discovery. slow=false → "fast": one 0xD1 report-id
+// solicitation on the module's current channel parked on PAN 0xFFFF.
+// slow=true → "slow": sweep RF channels [chan_lo..chan_hi] on PAN 0xFFFF,
+// dwelling dwell_ms per channel (caller default 11..26 @ ~2000ms). Slow
+// AND any 0xFFFF op blacks out telemetry while the radio is off the
+// operating PAN — the UI must warn. Found serials are bound after scan.
+type ScanStart struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Slow          bool                   `protobuf:"varint,1,opt,name=slow,proto3" json:"slow,omitempty"`
+	ChanLo        uint32                 `protobuf:"varint,2,opt,name=chan_lo,json=chanLo,proto3" json:"chan_lo,omitempty"`    // 0 → server default (11)
+	ChanHi        uint32                 `protobuf:"varint,3,opt,name=chan_hi,json=chanHi,proto3" json:"chan_hi,omitempty"`    // 0 → server default (26)
+	DwellMs       uint32                 `protobuf:"varint,4,opt,name=dwell_ms,json=dwellMs,proto3" json:"dwell_ms,omitempty"` // 0 → server default (2000)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ScanStart) Reset() {
+	*x = ScanStart{}
+	mi := &file_busmgr_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ScanStart) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ScanStart) ProtoMessage() {}
+
+func (x *ScanStart) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ScanStart.ProtoReflect.Descriptor instead.
+func (*ScanStart) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *ScanStart) GetSlow() bool {
+	if x != nil {
+		return x.Slow
+	}
+	return false
+}
+
+func (x *ScanStart) GetChanLo() uint32 {
+	if x != nil {
+		return x.ChanLo
+	}
+	return 0
+}
+
+func (x *ScanStart) GetChanHi() uint32 {
+	if x != nil {
+		return x.ChanHi
+	}
+	return 0
+}
+
+func (x *ScanStart) GetDwellMs() uint32 {
+	if x != nil {
+		return x.DwellMs
+	}
+	return 0
+}
+
+// AddById inserts a known 12-digit serial (off the inverter label) into
+// the inverter set, then runs the bind (+ migrate if off-PAN) flow. No
+// radio discovery needed.
+type AddById struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Serial        string                 `protobuf:"bytes,1,opt,name=serial,proto3" json:"serial,omitempty"` // 12-digit decimal serial
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddById) Reset() {
+	*x = AddById{}
+	mi := &file_busmgr_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddById) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddById) ProtoMessage() {}
+
+func (x *AddById) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddById.ProtoReflect.Descriptor instead.
+func (*AddById) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *AddById) GetSerial() string {
+	if x != nil {
+		return x.Serial
+	}
+	return ""
+}
+
+// ReplaceInverter swaps a failed unit for a new one: remove old_uid,
+// discover/add new_serial (scan if empty), then apply old_uid's grid
+// profile + power cap + array-layout slot to the replacement.
+type ReplaceInverter struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OldUid        string                 `protobuf:"bytes,1,opt,name=old_uid,json=oldUid,proto3" json:"old_uid,omitempty"`          // dead unit's serial
+	NewSerial     string                 `protobuf:"bytes,2,opt,name=new_serial,json=newSerial,proto3" json:"new_serial,omitempty"` // replacement serial; empty → scan to find it
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReplaceInverter) Reset() {
+	*x = ReplaceInverter{}
+	mi := &file_busmgr_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReplaceInverter) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReplaceInverter) ProtoMessage() {}
+
+func (x *ReplaceInverter) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReplaceInverter.ProtoReflect.Descriptor instead.
+func (*ReplaceInverter) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *ReplaceInverter) GetOldUid() string {
+	if x != nil {
+		return x.OldUid
+	}
+	return ""
+}
+
+func (x *ReplaceInverter) GetNewSerial() string {
+	if x != nil {
+		return x.NewSerial
+	}
+	return ""
+}
+
+// FleetRekey moves every paired inverter to new_pan via the 0xFFFF
+// rendezvous (0x11 prime per inverter → 0x22 commit → module to new PAN
+// → re-query short addrs). Reversible: on commit failure the state
+// machine restores the old PAN. new_pan is 1-4 hex digits (like
+// Settings.pan_override); empty → derive from MAC (not recommended for
+// rekey). Persisted via Settings.pan_override, never ecu_eth0_mac.conf.
+type FleetRekey struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NewPan        string                 `protobuf:"bytes,1,opt,name=new_pan,json=newPan,proto3" json:"new_pan,omitempty"` // hex 16-bit, e.g. "0DCE"
+	Channel       uint32                 `protobuf:"varint,2,opt,name=channel,proto3" json:"channel,omitempty"`            // 0 → keep current channel
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FleetRekey) Reset() {
+	*x = FleetRekey{}
+	mi := &file_busmgr_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FleetRekey) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FleetRekey) ProtoMessage() {}
+
+func (x *FleetRekey) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FleetRekey.ProtoReflect.Descriptor instead.
+func (*FleetRekey) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *FleetRekey) GetNewPan() string {
+	if x != nil {
+		return x.NewPan
+	}
+	return ""
+}
+
+func (x *FleetRekey) GetChannel() uint32 {
+	if x != nil {
+		return x.Channel
+	}
+	return 0
+}
+
+// PairingResponse returns immediately for start/abort, or carries the
+// current op status for get_status. status_json is a PairingStatus
+// serialised as JSON (in-memory snapshot; the source of truth for the
+// progress drawer).
+type PairingResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	StatusJson    []byte                 `protobuf:"bytes,3,opt,name=status_json,json=statusJson,proto3" json:"status_json,omitempty"` // PairingStatus JSON (op, stage, per-inverter, channel sweep)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PairingResponse) Reset() {
+	*x = PairingResponse{}
+	mi := &file_busmgr_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PairingResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PairingResponse) ProtoMessage() {}
+
+func (x *PairingResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PairingResponse.ProtoReflect.Descriptor instead.
+func (*PairingResponse) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *PairingResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *PairingResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *PairingResponse) GetStatusJson() []byte {
+	if x != nil {
+		return x.StatusJson
+	}
+	return nil
+}
+
+// PairingCmd is one radio primitive driver -> bus backend. req_id
+// correlates the asynchronous PairingCmdResult. Exactly one oneof set.
+type PairingCmd struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	ReqId uint64                 `protobuf:"varint,1,opt,name=req_id,json=reqId,proto3" json:"req_id,omitempty"`
+	// Types that are valid to be assigned to Op:
+	//
+	//	*PairingCmd_SetModulePan
+	//	*PairingCmd_ReportScan
+	//	*PairingCmd_GetShortAddr
+	//	*PairingCmd_SetInvPan
+	//	*PairingCmd_PrimeInv
+	//	*PairingCmd_CommitPan
+	//	*PairingCmd_BindQuiet
+	Op            isPairingCmd_Op `protobuf_oneof:"op"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PairingCmd) Reset() {
+	*x = PairingCmd{}
+	mi := &file_busmgr_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PairingCmd) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PairingCmd) ProtoMessage() {}
+
+func (x *PairingCmd) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PairingCmd.ProtoReflect.Descriptor instead.
+func (*PairingCmd) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *PairingCmd) GetReqId() uint64 {
+	if x != nil {
+		return x.ReqId
+	}
+	return 0
+}
+
+func (x *PairingCmd) GetOp() isPairingCmd_Op {
+	if x != nil {
+		return x.Op
+	}
+	return nil
+}
+
+func (x *PairingCmd) GetSetModulePan() *SetModulePan {
+	if x != nil {
+		if x, ok := x.Op.(*PairingCmd_SetModulePan); ok {
+			return x.SetModulePan
+		}
+	}
+	return nil
+}
+
+func (x *PairingCmd) GetReportScan() *ReportIdScan {
+	if x != nil {
+		if x, ok := x.Op.(*PairingCmd_ReportScan); ok {
+			return x.ReportScan
+		}
+	}
+	return nil
+}
+
+func (x *PairingCmd) GetGetShortAddr() *GetShortAddr {
+	if x != nil {
+		if x, ok := x.Op.(*PairingCmd_GetShortAddr); ok {
+			return x.GetShortAddr
+		}
+	}
+	return nil
+}
+
+func (x *PairingCmd) GetSetInvPan() *SetInverterPanChannel {
+	if x != nil {
+		if x, ok := x.Op.(*PairingCmd_SetInvPan); ok {
+			return x.SetInvPan
+		}
+	}
+	return nil
+}
+
+func (x *PairingCmd) GetPrimeInv() *PrimeInverterPan {
+	if x != nil {
+		if x, ok := x.Op.(*PairingCmd_PrimeInv); ok {
+			return x.PrimeInv
+		}
+	}
+	return nil
+}
+
+func (x *PairingCmd) GetCommitPan() *CommitPanNow {
+	if x != nil {
+		if x, ok := x.Op.(*PairingCmd_CommitPan); ok {
+			return x.CommitPan
+		}
+	}
+	return nil
+}
+
+func (x *PairingCmd) GetBindQuiet() *BindQuiet {
+	if x != nil {
+		if x, ok := x.Op.(*PairingCmd_BindQuiet); ok {
+			return x.BindQuiet
+		}
+	}
+	return nil
+}
+
+type isPairingCmd_Op interface {
+	isPairingCmd_Op()
+}
+
+type PairingCmd_SetModulePan struct {
+	SetModulePan *SetModulePan `protobuf:"bytes,2,opt,name=set_module_pan,json=setModulePan,proto3,oneof"` // 0x05: park module on pan/channel (use pan=0xFFFF for rendezvous)
+}
+
+type PairingCmd_ReportScan struct {
+	ReportScan *ReportIdScan `protobuf:"bytes,3,opt,name=report_scan,json=reportScan,proto3,oneof"` // 0xD1 on → collect 0x1D → 0xD2 off
+}
+
+type PairingCmd_GetShortAddr struct {
+	GetShortAddr *GetShortAddr `protobuf:"bytes,4,opt,name=get_short_addr,json=getShortAddr,proto3,oneof"` // 0x0E directed
+}
+
+type PairingCmd_SetInvPan struct {
+	SetInvPan *SetInverterPanChannel `protobuf:"bytes,5,opt,name=set_inv_pan,json=setInvPan,proto3,oneof"` // 0x0F directed
+}
+
+type PairingCmd_PrimeInv struct {
+	PrimeInv *PrimeInverterPan `protobuf:"bytes,6,opt,name=prime_inv,json=primeInv,proto3,oneof"` // 0x11 prime
+}
+
+type PairingCmd_CommitPan struct {
+	CommitPan *CommitPanNow `protobuf:"bytes,7,opt,name=commit_pan,json=commitPan,proto3,oneof"` // 0x22 broadcast commit
+}
+
+type PairingCmd_BindQuiet struct {
+	BindQuiet *BindQuiet `protobuf:"bytes,8,opt,name=bind_quiet,json=bindQuiet,proto3,oneof"` // 0x08 directed (stop report-id)
+}
+
+func (*PairingCmd_SetModulePan) isPairingCmd_Op() {}
+
+func (*PairingCmd_ReportScan) isPairingCmd_Op() {}
+
+func (*PairingCmd_GetShortAddr) isPairingCmd_Op() {}
+
+func (*PairingCmd_SetInvPan) isPairingCmd_Op() {}
+
+func (*PairingCmd_PrimeInv) isPairingCmd_Op() {}
+
+func (*PairingCmd_CommitPan) isPairingCmd_Op() {}
+
+func (*PairingCmd_BindQuiet) isPairingCmd_Op() {}
+
+type SetModulePan struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Pan           uint32                 `protobuf:"varint,1,opt,name=pan,proto3" json:"pan,omitempty"`
+	Channel       uint32                 `protobuf:"varint,2,opt,name=channel,proto3" json:"channel,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetModulePan) Reset() {
+	*x = SetModulePan{}
+	mi := &file_busmgr_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetModulePan) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetModulePan) ProtoMessage() {}
+
+func (x *SetModulePan) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetModulePan.ProtoReflect.Descriptor instead.
+func (*SetModulePan) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *SetModulePan) GetPan() uint32 {
+	if x != nil {
+		return x.Pan
+	}
+	return 0
+}
+
+func (x *SetModulePan) GetChannel() uint32 {
+	if x != nil {
+		return x.Channel
+	}
+	return 0
+}
+
+type ReportIdScan struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TimeoutMs     uint32                 `protobuf:"varint,1,opt,name=timeout_ms,json=timeoutMs,proto3" json:"timeout_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReportIdScan) Reset() {
+	*x = ReportIdScan{}
+	mi := &file_busmgr_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportIdScan) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportIdScan) ProtoMessage() {}
+
+func (x *ReportIdScan) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportIdScan.ProtoReflect.Descriptor instead.
+func (*ReportIdScan) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *ReportIdScan) GetTimeoutMs() uint32 {
+	if x != nil {
+		return x.TimeoutMs
+	}
+	return 0
+}
+
+type GetShortAddr struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Serial        string                 `protobuf:"bytes,1,opt,name=serial,proto3" json:"serial,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetShortAddr) Reset() {
+	*x = GetShortAddr{}
+	mi := &file_busmgr_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetShortAddr) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetShortAddr) ProtoMessage() {}
+
+func (x *GetShortAddr) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetShortAddr.ProtoReflect.Descriptor instead.
+func (*GetShortAddr) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *GetShortAddr) GetSerial() string {
+	if x != nil {
+		return x.Serial
+	}
+	return ""
+}
+
+type SetInverterPanChannel struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Serial        string                 `protobuf:"bytes,1,opt,name=serial,proto3" json:"serial,omitempty"`
+	Pan           uint32                 `protobuf:"varint,2,opt,name=pan,proto3" json:"pan,omitempty"`
+	Channel       uint32                 `protobuf:"varint,3,opt,name=channel,proto3" json:"channel,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetInverterPanChannel) Reset() {
+	*x = SetInverterPanChannel{}
+	mi := &file_busmgr_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetInverterPanChannel) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetInverterPanChannel) ProtoMessage() {}
+
+func (x *SetInverterPanChannel) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetInverterPanChannel.ProtoReflect.Descriptor instead.
+func (*SetInverterPanChannel) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *SetInverterPanChannel) GetSerial() string {
+	if x != nil {
+		return x.Serial
+	}
+	return ""
+}
+
+func (x *SetInverterPanChannel) GetPan() uint32 {
+	if x != nil {
+		return x.Pan
+	}
+	return 0
+}
+
+func (x *SetInverterPanChannel) GetChannel() uint32 {
+	if x != nil {
+		return x.Channel
+	}
+	return 0
+}
+
+type PrimeInverterPan struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Serial        string                 `protobuf:"bytes,1,opt,name=serial,proto3" json:"serial,omitempty"`
+	Pan           uint32                 `protobuf:"varint,2,opt,name=pan,proto3" json:"pan,omitempty"`
+	Channel       uint32                 `protobuf:"varint,3,opt,name=channel,proto3" json:"channel,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PrimeInverterPan) Reset() {
+	*x = PrimeInverterPan{}
+	mi := &file_busmgr_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PrimeInverterPan) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PrimeInverterPan) ProtoMessage() {}
+
+func (x *PrimeInverterPan) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PrimeInverterPan.ProtoReflect.Descriptor instead.
+func (*PrimeInverterPan) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *PrimeInverterPan) GetSerial() string {
+	if x != nil {
+		return x.Serial
+	}
+	return ""
+}
+
+func (x *PrimeInverterPan) GetPan() uint32 {
+	if x != nil {
+		return x.Pan
+	}
+	return 0
+}
+
+func (x *PrimeInverterPan) GetChannel() uint32 {
+	if x != nil {
+		return x.Channel
+	}
+	return 0
+}
+
+type CommitPanNow struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Pan           uint32                 `protobuf:"varint,1,opt,name=pan,proto3" json:"pan,omitempty"`
+	Channel       uint32                 `protobuf:"varint,2,opt,name=channel,proto3" json:"channel,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CommitPanNow) Reset() {
+	*x = CommitPanNow{}
+	mi := &file_busmgr_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CommitPanNow) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CommitPanNow) ProtoMessage() {}
+
+func (x *CommitPanNow) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CommitPanNow.ProtoReflect.Descriptor instead.
+func (*CommitPanNow) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *CommitPanNow) GetPan() uint32 {
+	if x != nil {
+		return x.Pan
+	}
+	return 0
+}
+
+func (x *CommitPanNow) GetChannel() uint32 {
+	if x != nil {
+		return x.Channel
+	}
+	return 0
+}
+
+type BindQuiet struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ShortAddr     uint32                 `protobuf:"varint,1,opt,name=short_addr,json=shortAddr,proto3" json:"short_addr,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BindQuiet) Reset() {
+	*x = BindQuiet{}
+	mi := &file_busmgr_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BindQuiet) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BindQuiet) ProtoMessage() {}
+
+func (x *BindQuiet) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BindQuiet.ProtoReflect.Descriptor instead.
+func (*BindQuiet) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *BindQuiet) GetShortAddr() uint32 {
+	if x != nil {
+		return x.ShortAddr
+	}
+	return 0
+}
+
+// PairingCmdResult is the asynchronous result of one PairingCmd, matched
+// by req_id. found is populated only for report_scan; short_addr only for
+// get_short_addr.
+type PairingCmdResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ReqId         uint64                 `protobuf:"varint,1,opt,name=req_id,json=reqId,proto3" json:"req_id,omitempty"`
+	Ok            bool                   `protobuf:"varint,2,opt,name=ok,proto3" json:"ok,omitempty"`
+	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	Found         []*FoundInverter       `protobuf:"bytes,4,rep,name=found,proto3" json:"found,omitempty"`                           // report_scan: announcing units
+	ShortAddr     uint32                 `protobuf:"varint,5,opt,name=short_addr,json=shortAddr,proto3" json:"short_addr,omitempty"` // get_short_addr: assigned SA
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PairingCmdResult) Reset() {
+	*x = PairingCmdResult{}
+	mi := &file_busmgr_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PairingCmdResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PairingCmdResult) ProtoMessage() {}
+
+func (x *PairingCmdResult) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PairingCmdResult.ProtoReflect.Descriptor instead.
+func (*PairingCmdResult) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *PairingCmdResult) GetReqId() uint64 {
+	if x != nil {
+		return x.ReqId
+	}
+	return 0
+}
+
+func (x *PairingCmdResult) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *PairingCmdResult) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *PairingCmdResult) GetFound() []*FoundInverter {
+	if x != nil {
+		return x.Found
+	}
+	return nil
+}
+
+func (x *PairingCmdResult) GetShortAddr() uint32 {
+	if x != nil {
+		return x.ShortAddr
+	}
+	return 0
+}
+
+// FoundInverter is one inverter that announced itself (0x1D reply) during
+// a report-id scan.
+type FoundInverter struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Serial        string                 `protobuf:"bytes,1,opt,name=serial,proto3" json:"serial,omitempty"`                         // 12-digit decimal
+	ShortAddr     uint32                 `protobuf:"varint,2,opt,name=short_addr,json=shortAddr,proto3" json:"short_addr,omitempty"` // 0 if not yet assigned
+	Encrypted     bool                   `protobuf:"varint,3,opt,name=encrypted,proto3" json:"encrypted,omitempty"`                  // announcement arrived AES-wrapped (CC EE/FC FC)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FoundInverter) Reset() {
+	*x = FoundInverter{}
+	mi := &file_busmgr_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FoundInverter) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FoundInverter) ProtoMessage() {}
+
+func (x *FoundInverter) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FoundInverter.ProtoReflect.Descriptor instead.
+func (*FoundInverter) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *FoundInverter) GetSerial() string {
+	if x != nil {
+		return x.Serial
+	}
+	return ""
+}
+
+func (x *FoundInverter) GetShortAddr() uint32 {
+	if x != nil {
+		return x.ShortAddr
+	}
+	return 0
+}
+
+func (x *FoundInverter) GetEncrypted() bool {
+	if x != nil {
+		return x.Encrypted
+	}
+	return false
+}
+
+// EffectiveSettings reports the values inv-driver is actually using right
+// now: the operator's settings with empty fields resolved against the live
+// system (eth0 MAC, derived PAN, default zigbee type). The Settings screen
+// shows these alongside the operator inputs so a working device with empty
+// inputs doesn't look unconfigured.
+type EffectiveSettings struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Mac           string                 `protobuf:"bytes,1,opt,name=mac,proto3" json:"mac,omitempty"`
+	Pan           string                 `protobuf:"bytes,2,opt,name=pan,proto3" json:"pan,omitempty"` // 4 hex digits, uppercase, e.g. "0DCE"
+	ZigbeeType    string                 `protobuf:"bytes,3,opt,name=zigbee_type,json=zigbeeType,proto3" json:"zigbee_type,omitempty"`
+	Channel       uint32                 `protobuf:"varint,4,opt,name=channel,proto3" json:"channel,omitempty"` // resolved ZigBee channel (settings or default 16)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EffectiveSettings) Reset() {
+	*x = EffectiveSettings{}
+	mi := &file_busmgr_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EffectiveSettings) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EffectiveSettings) ProtoMessage() {}
+
+func (x *EffectiveSettings) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EffectiveSettings.ProtoReflect.Descriptor instead.
+func (*EffectiveSettings) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *EffectiveSettings) GetMac() string {
+	if x != nil {
+		return x.Mac
+	}
+	return ""
+}
+
+func (x *EffectiveSettings) GetPan() string {
+	if x != nil {
+		return x.Pan
+	}
+	return ""
+}
+
+func (x *EffectiveSettings) GetZigbeeType() string {
+	if x != nil {
+		return x.ZigbeeType
+	}
+	return ""
+}
+
+func (x *EffectiveSettings) GetChannel() uint32 {
+	if x != nil {
+		return x.Channel
+	}
+	return 0
+}
+
 // SettingsResponse returns ok/error plus the current settings after the op.
 type SettingsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
 	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
 	Settings      *Settings              `protobuf:"bytes,3,opt,name=settings,proto3" json:"settings,omitempty"`
+	Effective     *EffectiveSettings     `protobuf:"bytes,4,opt,name=effective,proto3" json:"effective,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SettingsResponse) Reset() {
 	*x = SettingsResponse{}
-	mi := &file_busmgr_proto_msgTypes[32]
+	mi := &file_busmgr_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3093,7 +4384,7 @@ func (x *SettingsResponse) String() string {
 func (*SettingsResponse) ProtoMessage() {}
 
 func (x *SettingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[32]
+	mi := &file_busmgr_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3106,7 +4397,7 @@ func (x *SettingsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SettingsResponse.ProtoReflect.Descriptor instead.
 func (*SettingsResponse) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{32}
+	return file_busmgr_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *SettingsResponse) GetOk() bool {
@@ -3130,11 +4421,19 @@ func (x *SettingsResponse) GetSettings() *Settings {
 	return nil
 }
 
+func (x *SettingsResponse) GetEffective() *EffectiveSettings {
+	if x != nil {
+		return x.Effective
+	}
+	return nil
+}
+
 var File_busmgr_proto protoreflect.FileDescriptor
 
 const file_busmgr_proto_rawDesc = "" +
 	"\n" +
-	"\fbusmgr.proto\x12\tbusmgr.v1\"\xfc\b\n" +
+	"\fbusmgr.proto\x12\tbusmgr.v1\"\xfb\n" +
+	"\n" +
 	"\bEnvelope\x12(\n" +
 	"\x05hello\x18\x01 \x01(\v2\x10.busmgr.v1.HelloH\x00R\x05hello\x124\n" +
 	"\ttelemetry\x18\x02 \x01(\v2\x14.busmgr.v1.TelemetryH\x00R\ttelemetry\x12>\n" +
@@ -3159,7 +4458,13 @@ const file_busmgr_proto_rawDesc = "" +
 	"\vevents_resp\x18\x13 \x01(\v2\x19.busmgr.v1.EventsResponseH\x00R\n" +
 	"eventsResp\x12?\n" +
 	"\fsettings_req\x18\x14 \x01(\v2\x1a.busmgr.v1.SettingsRequestH\x00R\vsettingsReq\x12B\n" +
-	"\rsettings_resp\x18\x15 \x01(\v2\x1b.busmgr.v1.SettingsResponseH\x00R\fsettingsRespB\x06\n" +
+	"\rsettings_resp\x18\x15 \x01(\v2\x1b.busmgr.v1.SettingsResponseH\x00R\fsettingsResp\x12<\n" +
+	"\vpairing_req\x18\x16 \x01(\v2\x19.busmgr.v1.PairingRequestH\x00R\n" +
+	"pairingReq\x12?\n" +
+	"\fpairing_resp\x18\x17 \x01(\v2\x1a.busmgr.v1.PairingResponseH\x00R\vpairingResp\x128\n" +
+	"\vpairing_cmd\x18\x18 \x01(\v2\x15.busmgr.v1.PairingCmdH\x00R\n" +
+	"pairingCmd\x12D\n" +
+	"\x0epairing_result\x18\x19 \x01(\v2\x1b.busmgr.v1.PairingCmdResultH\x00R\rpairingResultB\x06\n" +
 	"\x04body\"\xbb\x01\n" +
 	"\x05Hello\x12\x18\n" +
 	"\abackend\x18\x01 \x01(\tR\abackend\x12\x18\n" +
@@ -3172,7 +4477,7 @@ const file_busmgr_proto_rawDesc = "" +
 	"\x05ts_ms\x18\x01 \x01(\x03R\x04tsMs\x12\x1d\n" +
 	"\n" +
 	"short_addr\x18\x02 \x01(\rR\tshortAddr\x12\x19\n" +
-	"\bl1_frame\x18\x03 \x01(\fR\al1Frame\"\xa6\x04\n" +
+	"\bl1_frame\x18\x03 \x01(\fR\al1Frame\"\xd7\x04\n" +
 	"\tTelemetry\x12\x13\n" +
 	"\x05ts_ms\x18\x01 \x01(\x03R\x04tsMs\x12\x1d\n" +
 	"\n" +
@@ -3194,7 +4499,10 @@ const file_busmgr_proto_rawDesc = "" +
 	"\x06faults\x18\x10 \x01(\v2\x19.busmgr.v1.InverterFaultsR\x06faults\x12\x12\n" +
 	"\x04rssi\x18\x11 \x01(\rR\x04rssi\x12\x10\n" +
 	"\x03lqi\x18\x12 \x01(\rR\x03lqi\x12\"\n" +
-	"\rprev_frame_ms\x18\x13 \x01(\x03R\vprevFrameMsJ\x04\b\x0f\x10\x10\"q\n" +
+	"\rprev_frame_ms\x18\x13 \x01(\x03R\vprevFrameMs\x12!\n" +
+	"\tencrypted\x18\x14 \x01(\bH\x00R\tencrypted\x88\x01\x01B\f\n" +
+	"\n" +
+	"_encryptedJ\x04\b\x0f\x10\x10\"q\n" +
 	"\x0eInverterFaults\x12(\n" +
 	"\x03ds3\x18\x01 \x01(\v2\x14.busmgr.v1.DS3FaultsH\x00R\x03ds3\x12+\n" +
 	"\x04qs1a\x18\x02 \x01(\v2\x15.busmgr.v1.QS1AFaultsH\x00R\x04qs1aB\b\n" +
@@ -3367,7 +4675,7 @@ const file_busmgr_proto_rawDesc = "" +
 	"\x0eEventsResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12(\n" +
-	"\x06events\x18\x03 \x03(\v2\x10.busmgr.v1.EventR\x06events\"\xcf\x01\n" +
+	"\x06events\x18\x03 \x03(\v2\x10.busmgr.v1.EventR\x06events\"\xdf\x01\n" +
 	"\x05Event\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x13\n" +
 	"\x05ts_ms\x18\x02 \x01(\x03R\x04tsMs\x12!\n" +
@@ -3377,25 +4685,112 @@ const file_busmgr_proto_rawDesc = "" +
 	"\n" +
 	"short_addr\x18\x06 \x01(\rR\tshortAddr\x12\x16\n" +
 	"\x06detail\x18\a \x01(\tR\x06detail\x12\x17\n" +
-	"\araw_hex\x18\b \x01(\tR\x06rawHex\"\x88\x02\n" +
+	"\araw_hex\x18\b \x01(\tR\x06rawHex\x12\x0e\n" +
+	"\x02by\x18\t \x01(\tR\x02by\"\xa2\x02\n" +
 	"\bSettings\x12\x15\n" +
 	"\x06ecu_id\x18\x01 \x01(\tR\x05ecuId\x12\x10\n" +
 	"\x03mac\x18\x02 \x01(\tR\x03mac\x12!\n" +
 	"\fpan_override\x18\x03 \x01(\tR\vpanOverride\x12\x1f\n" +
 	"\vzigbee_type\x18\x04 \x01(\tR\n" +
 	"zigbeeType\x12M\n" +
-	"\x0einverter_names\x18\x05 \x03(\v2&.busmgr.v1.Settings.InverterNamesEntryR\rinverterNames\x1a@\n" +
+	"\x0einverter_names\x18\x05 \x03(\v2&.busmgr.v1.Settings.InverterNamesEntryR\rinverterNames\x12\x18\n" +
+	"\achannel\x18\x06 \x01(\rR\achannel\x1a@\n" +
 	"\x12InverterNamesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"f\n" +
 	"\x0fSettingsRequest\x12$\n" +
 	"\x03get\x18\x01 \x01(\v2\x10.busmgr.v1.EmptyH\x00R\x03get\x12'\n" +
 	"\x03set\x18\x02 \x01(\v2\x13.busmgr.v1.SettingsH\x00R\x03setB\x04\n" +
-	"\x02op\"i\n" +
+	"\x02op\"\xc3\x02\n" +
+	"\x0ePairingRequest\x12*\n" +
+	"\x04scan\x18\x01 \x01(\v2\x14.busmgr.v1.ScanStartH\x00R\x04scan\x120\n" +
+	"\tadd_by_id\x18\x02 \x01(\v2\x12.busmgr.v1.AddByIdH\x00R\aaddById\x126\n" +
+	"\areplace\x18\x03 \x01(\v2\x1a.busmgr.v1.ReplaceInverterH\x00R\areplace\x128\n" +
+	"\vfleet_rekey\x18\x04 \x01(\v2\x15.busmgr.v1.FleetRekeyH\x00R\n" +
+	"fleetRekey\x12(\n" +
+	"\x05abort\x18\x05 \x01(\v2\x10.busmgr.v1.EmptyH\x00R\x05abort\x121\n" +
+	"\n" +
+	"get_status\x18\x06 \x01(\v2\x10.busmgr.v1.EmptyH\x00R\tgetStatusB\x04\n" +
+	"\x02op\"l\n" +
+	"\tScanStart\x12\x12\n" +
+	"\x04slow\x18\x01 \x01(\bR\x04slow\x12\x17\n" +
+	"\achan_lo\x18\x02 \x01(\rR\x06chanLo\x12\x17\n" +
+	"\achan_hi\x18\x03 \x01(\rR\x06chanHi\x12\x19\n" +
+	"\bdwell_ms\x18\x04 \x01(\rR\adwellMs\"!\n" +
+	"\aAddById\x12\x16\n" +
+	"\x06serial\x18\x01 \x01(\tR\x06serial\"I\n" +
+	"\x0fReplaceInverter\x12\x17\n" +
+	"\aold_uid\x18\x01 \x01(\tR\x06oldUid\x12\x1d\n" +
+	"\n" +
+	"new_serial\x18\x02 \x01(\tR\tnewSerial\"?\n" +
+	"\n" +
+	"FleetRekey\x12\x17\n" +
+	"\anew_pan\x18\x01 \x01(\tR\x06newPan\x12\x18\n" +
+	"\achannel\x18\x02 \x01(\rR\achannel\"X\n" +
+	"\x0fPairingResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\x12\x1f\n" +
+	"\vstatus_json\x18\x03 \x01(\fR\n" +
+	"statusJson\"\xd8\x03\n" +
+	"\n" +
+	"PairingCmd\x12\x15\n" +
+	"\x06req_id\x18\x01 \x01(\x04R\x05reqId\x12?\n" +
+	"\x0eset_module_pan\x18\x02 \x01(\v2\x17.busmgr.v1.SetModulePanH\x00R\fsetModulePan\x12:\n" +
+	"\vreport_scan\x18\x03 \x01(\v2\x17.busmgr.v1.ReportIdScanH\x00R\n" +
+	"reportScan\x12?\n" +
+	"\x0eget_short_addr\x18\x04 \x01(\v2\x17.busmgr.v1.GetShortAddrH\x00R\fgetShortAddr\x12B\n" +
+	"\vset_inv_pan\x18\x05 \x01(\v2 .busmgr.v1.SetInverterPanChannelH\x00R\tsetInvPan\x12:\n" +
+	"\tprime_inv\x18\x06 \x01(\v2\x1b.busmgr.v1.PrimeInverterPanH\x00R\bprimeInv\x128\n" +
+	"\n" +
+	"commit_pan\x18\a \x01(\v2\x17.busmgr.v1.CommitPanNowH\x00R\tcommitPan\x125\n" +
+	"\n" +
+	"bind_quiet\x18\b \x01(\v2\x14.busmgr.v1.BindQuietH\x00R\tbindQuietB\x04\n" +
+	"\x02op\":\n" +
+	"\fSetModulePan\x12\x10\n" +
+	"\x03pan\x18\x01 \x01(\rR\x03pan\x12\x18\n" +
+	"\achannel\x18\x02 \x01(\rR\achannel\"-\n" +
+	"\fReportIdScan\x12\x1d\n" +
+	"\n" +
+	"timeout_ms\x18\x01 \x01(\rR\ttimeoutMs\"&\n" +
+	"\fGetShortAddr\x12\x16\n" +
+	"\x06serial\x18\x01 \x01(\tR\x06serial\"[\n" +
+	"\x15SetInverterPanChannel\x12\x16\n" +
+	"\x06serial\x18\x01 \x01(\tR\x06serial\x12\x10\n" +
+	"\x03pan\x18\x02 \x01(\rR\x03pan\x12\x18\n" +
+	"\achannel\x18\x03 \x01(\rR\achannel\"V\n" +
+	"\x10PrimeInverterPan\x12\x16\n" +
+	"\x06serial\x18\x01 \x01(\tR\x06serial\x12\x10\n" +
+	"\x03pan\x18\x02 \x01(\rR\x03pan\x12\x18\n" +
+	"\achannel\x18\x03 \x01(\rR\achannel\":\n" +
+	"\fCommitPanNow\x12\x10\n" +
+	"\x03pan\x18\x01 \x01(\rR\x03pan\x12\x18\n" +
+	"\achannel\x18\x02 \x01(\rR\achannel\"*\n" +
+	"\tBindQuiet\x12\x1d\n" +
+	"\n" +
+	"short_addr\x18\x01 \x01(\rR\tshortAddr\"\x9e\x01\n" +
+	"\x10PairingCmdResult\x12\x15\n" +
+	"\x06req_id\x18\x01 \x01(\x04R\x05reqId\x12\x0e\n" +
+	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x14\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\x12.\n" +
+	"\x05found\x18\x04 \x03(\v2\x18.busmgr.v1.FoundInverterR\x05found\x12\x1d\n" +
+	"\n" +
+	"short_addr\x18\x05 \x01(\rR\tshortAddr\"d\n" +
+	"\rFoundInverter\x12\x16\n" +
+	"\x06serial\x18\x01 \x01(\tR\x06serial\x12\x1d\n" +
+	"\n" +
+	"short_addr\x18\x02 \x01(\rR\tshortAddr\x12\x1c\n" +
+	"\tencrypted\x18\x03 \x01(\bR\tencrypted\"r\n" +
+	"\x11EffectiveSettings\x12\x10\n" +
+	"\x03mac\x18\x01 \x01(\tR\x03mac\x12\x10\n" +
+	"\x03pan\x18\x02 \x01(\tR\x03pan\x12\x1f\n" +
+	"\vzigbee_type\x18\x03 \x01(\tR\n" +
+	"zigbeeType\x12\x18\n" +
+	"\achannel\x18\x04 \x01(\rR\achannel\"\xa5\x01\n" +
 	"\x10SettingsResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12/\n" +
-	"\bsettings\x18\x03 \x01(\v2\x13.busmgr.v1.SettingsR\bsettings*;\n" +
+	"\bsettings\x18\x03 \x01(\v2\x13.busmgr.v1.SettingsR\bsettings\x12:\n" +
+	"\teffective\x18\x04 \x01(\v2\x1c.busmgr.v1.EffectiveSettingsR\teffective*;\n" +
 	"\x04Role\x12\x14\n" +
 	"\x10ROLE_UNSPECIFIED\x10\x00\x12\r\n" +
 	"\tPUBLISHER\x10\x01\x12\x0e\n" +
@@ -3415,44 +4810,61 @@ func file_busmgr_proto_rawDescGZIP() []byte {
 }
 
 var file_busmgr_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_busmgr_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
+var file_busmgr_proto_msgTypes = make([]protoimpl.MessageInfo, 52)
 var file_busmgr_proto_goTypes = []any{
-	(Role)(0),                    // 0: busmgr.v1.Role
-	(*Envelope)(nil),             // 1: busmgr.v1.Envelope
-	(*Hello)(nil),                // 2: busmgr.v1.Hello
-	(*RawFrame)(nil),             // 3: busmgr.v1.RawFrame
-	(*Telemetry)(nil),            // 4: busmgr.v1.Telemetry
-	(*InverterFaults)(nil),       // 5: busmgr.v1.InverterFaults
-	(*DS3Faults)(nil),            // 6: busmgr.v1.DS3Faults
-	(*QS1AFaults)(nil),           // 7: busmgr.v1.QS1AFaults
-	(*Panel)(nil),                // 8: busmgr.v1.Panel
-	(*DecodeFailed)(nil),         // 9: busmgr.v1.DecodeFailed
-	(*Send)(nil),                 // 10: busmgr.v1.Send
-	(*Broadcast)(nil),            // 11: busmgr.v1.Broadcast
-	(*Reset)(nil),                // 12: busmgr.v1.Reset
-	(*SubscribeRaw)(nil),         // 13: busmgr.v1.SubscribeRaw
-	(*FleetSummary)(nil),         // 14: busmgr.v1.FleetSummary
-	(*InverterInfo)(nil),         // 15: busmgr.v1.InverterInfo
-	(*Protection)(nil),           // 16: busmgr.v1.Protection
-	(*GridProfileRequest)(nil),   // 17: busmgr.v1.GridProfileRequest
-	(*Empty)(nil),                // 18: busmgr.v1.Empty
-	(*SelectBase)(nil),           // 19: busmgr.v1.SelectBase
-	(*OverlaySet)(nil),           // 20: busmgr.v1.OverlaySet
-	(*ClearOverlay)(nil),         // 21: busmgr.v1.ClearOverlay
-	(*GetEffective)(nil),         // 22: busmgr.v1.GetEffective
-	(*GridProfileResponse)(nil),  // 23: busmgr.v1.GridProfileResponse
-	(*SystemStatusRequest)(nil),  // 24: busmgr.v1.SystemStatusRequest
-	(*SystemStatusResponse)(nil), // 25: busmgr.v1.SystemStatusResponse
-	(*EcuIdentity)(nil),          // 26: busmgr.v1.EcuIdentity
-	(*PeerStatus)(nil),           // 27: busmgr.v1.PeerStatus
-	(*EventsRequest)(nil),        // 28: busmgr.v1.EventsRequest
-	(*EventsResponse)(nil),       // 29: busmgr.v1.EventsResponse
-	(*Event)(nil),                // 30: busmgr.v1.Event
-	(*Settings)(nil),             // 31: busmgr.v1.Settings
-	(*SettingsRequest)(nil),      // 32: busmgr.v1.SettingsRequest
-	(*SettingsResponse)(nil),     // 33: busmgr.v1.SettingsResponse
-	nil,                          // 34: busmgr.v1.Protection.ValuesEntry
-	nil,                          // 35: busmgr.v1.Settings.InverterNamesEntry
+	(Role)(0),                     // 0: busmgr.v1.Role
+	(*Envelope)(nil),              // 1: busmgr.v1.Envelope
+	(*Hello)(nil),                 // 2: busmgr.v1.Hello
+	(*RawFrame)(nil),              // 3: busmgr.v1.RawFrame
+	(*Telemetry)(nil),             // 4: busmgr.v1.Telemetry
+	(*InverterFaults)(nil),        // 5: busmgr.v1.InverterFaults
+	(*DS3Faults)(nil),             // 6: busmgr.v1.DS3Faults
+	(*QS1AFaults)(nil),            // 7: busmgr.v1.QS1AFaults
+	(*Panel)(nil),                 // 8: busmgr.v1.Panel
+	(*DecodeFailed)(nil),          // 9: busmgr.v1.DecodeFailed
+	(*Send)(nil),                  // 10: busmgr.v1.Send
+	(*Broadcast)(nil),             // 11: busmgr.v1.Broadcast
+	(*Reset)(nil),                 // 12: busmgr.v1.Reset
+	(*SubscribeRaw)(nil),          // 13: busmgr.v1.SubscribeRaw
+	(*FleetSummary)(nil),          // 14: busmgr.v1.FleetSummary
+	(*InverterInfo)(nil),          // 15: busmgr.v1.InverterInfo
+	(*Protection)(nil),            // 16: busmgr.v1.Protection
+	(*GridProfileRequest)(nil),    // 17: busmgr.v1.GridProfileRequest
+	(*Empty)(nil),                 // 18: busmgr.v1.Empty
+	(*SelectBase)(nil),            // 19: busmgr.v1.SelectBase
+	(*OverlaySet)(nil),            // 20: busmgr.v1.OverlaySet
+	(*ClearOverlay)(nil),          // 21: busmgr.v1.ClearOverlay
+	(*GetEffective)(nil),          // 22: busmgr.v1.GetEffective
+	(*GridProfileResponse)(nil),   // 23: busmgr.v1.GridProfileResponse
+	(*SystemStatusRequest)(nil),   // 24: busmgr.v1.SystemStatusRequest
+	(*SystemStatusResponse)(nil),  // 25: busmgr.v1.SystemStatusResponse
+	(*EcuIdentity)(nil),           // 26: busmgr.v1.EcuIdentity
+	(*PeerStatus)(nil),            // 27: busmgr.v1.PeerStatus
+	(*EventsRequest)(nil),         // 28: busmgr.v1.EventsRequest
+	(*EventsResponse)(nil),        // 29: busmgr.v1.EventsResponse
+	(*Event)(nil),                 // 30: busmgr.v1.Event
+	(*Settings)(nil),              // 31: busmgr.v1.Settings
+	(*SettingsRequest)(nil),       // 32: busmgr.v1.SettingsRequest
+	(*PairingRequest)(nil),        // 33: busmgr.v1.PairingRequest
+	(*ScanStart)(nil),             // 34: busmgr.v1.ScanStart
+	(*AddById)(nil),               // 35: busmgr.v1.AddById
+	(*ReplaceInverter)(nil),       // 36: busmgr.v1.ReplaceInverter
+	(*FleetRekey)(nil),            // 37: busmgr.v1.FleetRekey
+	(*PairingResponse)(nil),       // 38: busmgr.v1.PairingResponse
+	(*PairingCmd)(nil),            // 39: busmgr.v1.PairingCmd
+	(*SetModulePan)(nil),          // 40: busmgr.v1.SetModulePan
+	(*ReportIdScan)(nil),          // 41: busmgr.v1.ReportIdScan
+	(*GetShortAddr)(nil),          // 42: busmgr.v1.GetShortAddr
+	(*SetInverterPanChannel)(nil), // 43: busmgr.v1.SetInverterPanChannel
+	(*PrimeInverterPan)(nil),      // 44: busmgr.v1.PrimeInverterPan
+	(*CommitPanNow)(nil),          // 45: busmgr.v1.CommitPanNow
+	(*BindQuiet)(nil),             // 46: busmgr.v1.BindQuiet
+	(*PairingCmdResult)(nil),      // 47: busmgr.v1.PairingCmdResult
+	(*FoundInverter)(nil),         // 48: busmgr.v1.FoundInverter
+	(*EffectiveSettings)(nil),     // 49: busmgr.v1.EffectiveSettings
+	(*SettingsResponse)(nil),      // 50: busmgr.v1.SettingsResponse
+	nil,                           // 51: busmgr.v1.Protection.ValuesEntry
+	nil,                           // 52: busmgr.v1.Settings.InverterNamesEntry
 }
 var file_busmgr_proto_depIdxs = []int32{
 	2,  // 0: busmgr.v1.Envelope.hello:type_name -> busmgr.v1.Hello
@@ -3473,34 +4885,53 @@ var file_busmgr_proto_depIdxs = []int32{
 	28, // 15: busmgr.v1.Envelope.events_req:type_name -> busmgr.v1.EventsRequest
 	29, // 16: busmgr.v1.Envelope.events_resp:type_name -> busmgr.v1.EventsResponse
 	32, // 17: busmgr.v1.Envelope.settings_req:type_name -> busmgr.v1.SettingsRequest
-	33, // 18: busmgr.v1.Envelope.settings_resp:type_name -> busmgr.v1.SettingsResponse
-	0,  // 19: busmgr.v1.Hello.role:type_name -> busmgr.v1.Role
-	8,  // 20: busmgr.v1.Telemetry.panels:type_name -> busmgr.v1.Panel
-	5,  // 21: busmgr.v1.Telemetry.faults:type_name -> busmgr.v1.InverterFaults
-	6,  // 22: busmgr.v1.InverterFaults.ds3:type_name -> busmgr.v1.DS3Faults
-	7,  // 23: busmgr.v1.InverterFaults.qs1a:type_name -> busmgr.v1.QS1AFaults
-	34, // 24: busmgr.v1.Protection.values:type_name -> busmgr.v1.Protection.ValuesEntry
-	18, // 25: busmgr.v1.GridProfileRequest.list_profiles:type_name -> busmgr.v1.Empty
-	18, // 26: busmgr.v1.GridProfileRequest.refresh_profiles:type_name -> busmgr.v1.Empty
-	19, // 27: busmgr.v1.GridProfileRequest.select_base:type_name -> busmgr.v1.SelectBase
-	20, // 28: busmgr.v1.GridProfileRequest.set_overlay:type_name -> busmgr.v1.OverlaySet
-	21, // 29: busmgr.v1.GridProfileRequest.clear_overlay:type_name -> busmgr.v1.ClearOverlay
-	22, // 30: busmgr.v1.GridProfileRequest.get_effective:type_name -> busmgr.v1.GetEffective
-	18, // 31: busmgr.v1.GridProfileRequest.get_status:type_name -> busmgr.v1.Empty
-	18, // 32: busmgr.v1.GridProfileRequest.list_overlays:type_name -> busmgr.v1.Empty
-	18, // 33: busmgr.v1.GridProfileRequest.get_base:type_name -> busmgr.v1.Empty
-	26, // 34: busmgr.v1.SystemStatusResponse.ecu:type_name -> busmgr.v1.EcuIdentity
-	27, // 35: busmgr.v1.SystemStatusResponse.peers:type_name -> busmgr.v1.PeerStatus
-	30, // 36: busmgr.v1.EventsResponse.events:type_name -> busmgr.v1.Event
-	35, // 37: busmgr.v1.Settings.inverter_names:type_name -> busmgr.v1.Settings.InverterNamesEntry
-	18, // 38: busmgr.v1.SettingsRequest.get:type_name -> busmgr.v1.Empty
-	31, // 39: busmgr.v1.SettingsRequest.set:type_name -> busmgr.v1.Settings
-	31, // 40: busmgr.v1.SettingsResponse.settings:type_name -> busmgr.v1.Settings
-	41, // [41:41] is the sub-list for method output_type
-	41, // [41:41] is the sub-list for method input_type
-	41, // [41:41] is the sub-list for extension type_name
-	41, // [41:41] is the sub-list for extension extendee
-	0,  // [0:41] is the sub-list for field type_name
+	50, // 18: busmgr.v1.Envelope.settings_resp:type_name -> busmgr.v1.SettingsResponse
+	33, // 19: busmgr.v1.Envelope.pairing_req:type_name -> busmgr.v1.PairingRequest
+	38, // 20: busmgr.v1.Envelope.pairing_resp:type_name -> busmgr.v1.PairingResponse
+	39, // 21: busmgr.v1.Envelope.pairing_cmd:type_name -> busmgr.v1.PairingCmd
+	47, // 22: busmgr.v1.Envelope.pairing_result:type_name -> busmgr.v1.PairingCmdResult
+	0,  // 23: busmgr.v1.Hello.role:type_name -> busmgr.v1.Role
+	8,  // 24: busmgr.v1.Telemetry.panels:type_name -> busmgr.v1.Panel
+	5,  // 25: busmgr.v1.Telemetry.faults:type_name -> busmgr.v1.InverterFaults
+	6,  // 26: busmgr.v1.InverterFaults.ds3:type_name -> busmgr.v1.DS3Faults
+	7,  // 27: busmgr.v1.InverterFaults.qs1a:type_name -> busmgr.v1.QS1AFaults
+	51, // 28: busmgr.v1.Protection.values:type_name -> busmgr.v1.Protection.ValuesEntry
+	18, // 29: busmgr.v1.GridProfileRequest.list_profiles:type_name -> busmgr.v1.Empty
+	18, // 30: busmgr.v1.GridProfileRequest.refresh_profiles:type_name -> busmgr.v1.Empty
+	19, // 31: busmgr.v1.GridProfileRequest.select_base:type_name -> busmgr.v1.SelectBase
+	20, // 32: busmgr.v1.GridProfileRequest.set_overlay:type_name -> busmgr.v1.OverlaySet
+	21, // 33: busmgr.v1.GridProfileRequest.clear_overlay:type_name -> busmgr.v1.ClearOverlay
+	22, // 34: busmgr.v1.GridProfileRequest.get_effective:type_name -> busmgr.v1.GetEffective
+	18, // 35: busmgr.v1.GridProfileRequest.get_status:type_name -> busmgr.v1.Empty
+	18, // 36: busmgr.v1.GridProfileRequest.list_overlays:type_name -> busmgr.v1.Empty
+	18, // 37: busmgr.v1.GridProfileRequest.get_base:type_name -> busmgr.v1.Empty
+	26, // 38: busmgr.v1.SystemStatusResponse.ecu:type_name -> busmgr.v1.EcuIdentity
+	27, // 39: busmgr.v1.SystemStatusResponse.peers:type_name -> busmgr.v1.PeerStatus
+	30, // 40: busmgr.v1.EventsResponse.events:type_name -> busmgr.v1.Event
+	52, // 41: busmgr.v1.Settings.inverter_names:type_name -> busmgr.v1.Settings.InverterNamesEntry
+	18, // 42: busmgr.v1.SettingsRequest.get:type_name -> busmgr.v1.Empty
+	31, // 43: busmgr.v1.SettingsRequest.set:type_name -> busmgr.v1.Settings
+	34, // 44: busmgr.v1.PairingRequest.scan:type_name -> busmgr.v1.ScanStart
+	35, // 45: busmgr.v1.PairingRequest.add_by_id:type_name -> busmgr.v1.AddById
+	36, // 46: busmgr.v1.PairingRequest.replace:type_name -> busmgr.v1.ReplaceInverter
+	37, // 47: busmgr.v1.PairingRequest.fleet_rekey:type_name -> busmgr.v1.FleetRekey
+	18, // 48: busmgr.v1.PairingRequest.abort:type_name -> busmgr.v1.Empty
+	18, // 49: busmgr.v1.PairingRequest.get_status:type_name -> busmgr.v1.Empty
+	40, // 50: busmgr.v1.PairingCmd.set_module_pan:type_name -> busmgr.v1.SetModulePan
+	41, // 51: busmgr.v1.PairingCmd.report_scan:type_name -> busmgr.v1.ReportIdScan
+	42, // 52: busmgr.v1.PairingCmd.get_short_addr:type_name -> busmgr.v1.GetShortAddr
+	43, // 53: busmgr.v1.PairingCmd.set_inv_pan:type_name -> busmgr.v1.SetInverterPanChannel
+	44, // 54: busmgr.v1.PairingCmd.prime_inv:type_name -> busmgr.v1.PrimeInverterPan
+	45, // 55: busmgr.v1.PairingCmd.commit_pan:type_name -> busmgr.v1.CommitPanNow
+	46, // 56: busmgr.v1.PairingCmd.bind_quiet:type_name -> busmgr.v1.BindQuiet
+	48, // 57: busmgr.v1.PairingCmdResult.found:type_name -> busmgr.v1.FoundInverter
+	31, // 58: busmgr.v1.SettingsResponse.settings:type_name -> busmgr.v1.Settings
+	49, // 59: busmgr.v1.SettingsResponse.effective:type_name -> busmgr.v1.EffectiveSettings
+	60, // [60:60] is the sub-list for method output_type
+	60, // [60:60] is the sub-list for method input_type
+	60, // [60:60] is the sub-list for extension type_name
+	60, // [60:60] is the sub-list for extension extendee
+	0,  // [0:60] is the sub-list for field type_name
 }
 
 func init() { file_busmgr_proto_init() }
@@ -3528,7 +4959,12 @@ func file_busmgr_proto_init() {
 		(*Envelope_EventsResp)(nil),
 		(*Envelope_SettingsReq)(nil),
 		(*Envelope_SettingsResp)(nil),
+		(*Envelope_PairingReq)(nil),
+		(*Envelope_PairingResp)(nil),
+		(*Envelope_PairingCmd)(nil),
+		(*Envelope_PairingResult)(nil),
 	}
+	file_busmgr_proto_msgTypes[3].OneofWrappers = []any{}
 	file_busmgr_proto_msgTypes[4].OneofWrappers = []any{
 		(*InverterFaults_Ds3)(nil),
 		(*InverterFaults_Qs1A)(nil),
@@ -3549,13 +4985,30 @@ func file_busmgr_proto_init() {
 		(*SettingsRequest_Get)(nil),
 		(*SettingsRequest_Set)(nil),
 	}
+	file_busmgr_proto_msgTypes[32].OneofWrappers = []any{
+		(*PairingRequest_Scan)(nil),
+		(*PairingRequest_AddById)(nil),
+		(*PairingRequest_Replace)(nil),
+		(*PairingRequest_FleetRekey)(nil),
+		(*PairingRequest_Abort)(nil),
+		(*PairingRequest_GetStatus)(nil),
+	}
+	file_busmgr_proto_msgTypes[38].OneofWrappers = []any{
+		(*PairingCmd_SetModulePan)(nil),
+		(*PairingCmd_ReportScan)(nil),
+		(*PairingCmd_GetShortAddr)(nil),
+		(*PairingCmd_SetInvPan)(nil),
+		(*PairingCmd_PrimeInv)(nil),
+		(*PairingCmd_CommitPan)(nil),
+		(*PairingCmd_BindQuiet)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_busmgr_proto_rawDesc), len(file_busmgr_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   35,
+			NumMessages:   52,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

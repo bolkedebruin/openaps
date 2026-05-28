@@ -81,6 +81,8 @@ func TestDecodeProtectionReply_DS3_LiveCapture(t *testing.T) {
 		"DC": 50.2, "CC": 52, "CB": 50.2, "DH": 47, "DI": 49.75,
 		// page-B residuals recovered statically (security/protection-param-read.md):
 		"CV": 13, "DD": 16.5698, "AB": 253,
+		// output cap (DA), W/panel: 8296 × 0.06027 ≈ 500 = uncapped (max).
+		"DA": 500,
 		// page-A clearance times (seconds): capture-sane spot values.
 		"BC": 0.09, "BB": 0.02, "BE": 0.04, "BD": 1.19, "BI": 0.29, "BH": 0.16,
 	}
@@ -119,7 +121,9 @@ func TestDecodeProtectionReply_QS1_LiveCapture(t *testing.T) {
 		"CB": 50.2, "CC": 52,
 		// page-B/C residuals recovered statically: AB (24-bit avg-OV), DD
 		// (droop), CV (page-f mode nibble), DC (24-bit, zero in this capture).
-		"AB": 253, "DD": 16.562, "CV": 15, "DC": 0}
+		"AB": 253, "DD": 16.562, "CV": 15, "DC": 0,
+		// output cap (DA), W/panel: 14443 × 256/7395 ≈ 500 = uncapped (max).
+		"DA": 500}
 	for code, w := range want {
 		got, ok := r.Values[code]
 		if !ok {

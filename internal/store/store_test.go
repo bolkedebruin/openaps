@@ -205,10 +205,10 @@ func TestAppendEvent_Defaults(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	if err := s.AppendEvent(ctx, 10, "uidA", "kindA", ""); err != nil {
+	if err := s.AppendEvent(ctx, 10, "uidA", "kindA", "", "", ""); err != nil {
 		t.Fatalf("append 1: %v", err)
 	}
-	if err := s.AppendEvent(ctx, 20, "uidB", "kindB", "warn"); err != nil {
+	if err := s.AppendEvent(ctx, 20, "uidB", "kindB", "warn", "", ""); err != nil {
 		t.Fatalf("append 2: %v", err)
 	}
 
@@ -283,7 +283,7 @@ func TestAppendEvent_NullableInverterUID(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)
 	ctx := context.Background()
-	if err := s.AppendEvent(ctx, 1, "", "service_start", "info"); err != nil {
+	if err := s.AppendEvent(ctx, 1, "", "service_start", "info", "", ""); err != nil {
 		t.Fatalf("append: %v", err)
 	}
 	var uid sql.NullString
@@ -549,7 +549,7 @@ func TestPruneEvents(t *testing.T) {
 		{2500, "decode_failed"},
 	}
 	for _, r := range rows {
-		if err := s.AppendEvent(ctx, r.tsMs, "", r.kind, "info"); err != nil {
+		if err := s.AppendEvent(ctx, r.tsMs, "", r.kind, "info", "", ""); err != nil {
 			t.Fatalf("AppendEvent: %v", err)
 		}
 	}

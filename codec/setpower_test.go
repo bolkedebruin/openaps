@@ -260,3 +260,29 @@ func TestEncodeSetPower_PanelWattsOutOfRange(t *testing.T) {
 		}
 	}
 }
+
+func TestIsSetPower(t *testing.T) {
+	t.Parallel()
+	// Real set-power frames are detected per family.
+	for _, mc := range []uint8{ModelDS3, ModelQS1A, ModelYC600} {
+		f, err := EncodeSetPower(mc, 300, false)
+		if err != nil {
+			t.Fatalf("model 0x%02X: %v", mc, err)
+		}
+		if !IsSetPower(f) {
+			t.Errorf("model 0x%02X: IsSetPower(% X) = false, want true", mc, f)
+		}
+	}
+	// A DS3 protection write shares opcode 0xAA but a different sub byte — must
+	// NOT be classified as set-power (and the reverse).
+	protDS3 := BuildL2Frame(CmdSetPowerDS3Unicast, []byte{SubMaxPowerDS3 + 1, 0, 0, 0x01, 0x02})
+	if IsSetPower(protDS3) {
+		t.Error("DS3 non-max-power sub classified as set-power")
+	}
+	if !IsProtectionWrite(protDS3) {
+		t.Error("DS3 non-max-power sub should be a protection write")
+	}
+	if IsSetPower(nil) || IsSetPower([]byte{0xFB, 0xFB}) {
+		t.Error("short/empty frame must not be set-power")
+	}
+}

@@ -203,8 +203,8 @@ var forwardMap = map[string]mapEntry{
 	// --- Enter-service (Model 703 DEREnterService, scalars) ---
 	"BN": {Model: 703, Group: "DEREnterService", Point: "ESVLo", SFRef: sfRefStr("V_SF"), SF: -2, Unit: "%VNom", IsVoltagePct: true},
 	"BO": {Model: 703, Group: "DEREnterService", Point: "ESVHi", SFRef: sfRefStr("V_SF"), SF: -2, Unit: "%VNom", IsVoltagePct: true},
-	"BP": {Model: 703, Group: "DEREnterService", Point: "ESHzLo", SFRef: sfRefStr("Hz_SF"), SF: -2, Unit: "Hz"},
-	"BQ": {Model: 703, Group: "DEREnterService", Point: "ESHzHi", SFRef: sfRefStr("Hz_SF"), SF: -2, Unit: "Hz"},
+	"BP": {Model: 703, Group: "DEREnterService", Point: "ESHzLo", SFRef: sfRefStr("Hz_SF"), SF: -2, Unit: "Hz", LongName: "Reconnection_under_frequency"},
+	"BQ": {Model: 703, Group: "DEREnterService", Point: "ESHzHi", SFRef: sfRefStr("Hz_SF"), SF: -2, Unit: "Hz", LongName: "Reconnection_over_frequency"},
 	// AG: grid_recovery / reconnect delay; no SF (unscaled in SunSpec ESDlyTms, seconds)
 	"AG": {Model: 703, Group: "DEREnterService", Point: "ESDlyTms", SFRef: nil, SF: 0, Unit: "s", LongName: "grid_recovery_time"},
 	// AS: start ramp (ESRmpTms in seconds); unscaled (no SF) per enter_service.go emitter.

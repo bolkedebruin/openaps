@@ -51,8 +51,15 @@ describe("<inverter-card>", () => {
     expect(t).toContain("QS1A");
     expect(t).toContain("aabbccddeeff");
     expect(t).toContain("800 W");
-    expect(t).toContain("1600 W");
+    expect(t).toContain("1.60 kW"); // nameplate, formatted
     expect(t).toContain("50%");
+  });
+
+  test("renders the cap-bar control", async () => {
+    const el = await mount(sample());
+    const cb = el.shadowRoot?.querySelector("cap-bar") as HTMLElement & { inverter?: Inverter };
+    expect(cb).not.toBeNull();
+    expect(cb?.inverter?.uid).toBe("aabbccddeeff");
   });
 
   test("shows online state and panels", async () => {
@@ -67,13 +74,6 @@ describe("<inverter-card>", () => {
     const el = await mount(sample({ online: false }));
     expect(el.shadowRoot?.querySelector(".dot.off")).not.toBeNull();
     expect(text(el)).toContain("offline");
-  });
-
-  test("load bucket drives fill colour class", async () => {
-    const high = await mount(sample({ load_pct: 95 }));
-    expect(high.shadowRoot?.querySelector(".fill.high")).not.toBeNull();
-    const low = await mount(sample({ load_pct: 10 }));
-    expect(low.shadowRoot?.querySelector(".fill.low")).not.toBeNull();
   });
 
   test("active faults render as chips", async () => {

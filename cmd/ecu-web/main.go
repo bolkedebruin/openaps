@@ -79,6 +79,8 @@ func main() {
 		SettingsGet:   ctrl.GetSettings,
 		SettingsSet:   ctrl.SetSettings,
 		GridProfileFn: ctrl.GridProfile,
+		SendFrame:     ctrl.Send,
+		PairingFn:     ctrl.Pairing,
 	})
 	snap.SetOnChange(srv.MarkDirty)
 
