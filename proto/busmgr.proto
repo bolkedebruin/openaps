@@ -529,8 +529,21 @@ message PairingCmd {
     PrimeInverterPan      prime_inv      = 6;  // 0x11 prime
     CommitPanNow          commit_pan     = 7;  // 0x22 broadcast commit
     BindQuiet             bind_quiet     = 8;  // 0x08 directed (stop report-id)
+    Empty                 get_module_pan = 9;  // read the backend's operating PAN
   }
 }
+
+// SetModulePan special PAN values (driver -> backend):
+//   pan = 0xFFFF : temporary rendezvous park; the backend does NOT change its
+//                  remembered operating PAN.
+//   pan = 0      : restore to the backend's operating PAN (the value it set at
+//                  bring-up / the last real set). The driver never needs to
+//                  know the numeric PAN to restore — the radio owner (ecu-zb)
+//                  resolves it. channel is ignored (backend's own is used).
+//   pan = other  : set this PAN and adopt it as the new operating PAN (rekey).
+// get_module_pan returns the backend's current operating PAN in
+// PairingCmdResult.pan so the driver can prime/migrate inverters onto it
+// without re-deriving it from settings.
 
 message SetModulePan          { uint32 pan = 1; uint32 channel = 2; }
 message ReportIdScan          { uint32 timeout_ms = 1; }  // 0 → server default
@@ -549,6 +562,7 @@ message PairingCmdResult {
   string error     = 3;
   repeated FoundInverter found = 4;  // report_scan: announcing units
   uint32 short_addr = 5;            // get_short_addr: assigned SA
+  uint32 pan = 6;                   // get_module_pan: backend's operating PAN
 }
 
 // FoundInverter is one inverter that announced itself (0x1D reply) during

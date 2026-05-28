@@ -94,8 +94,10 @@ type NameInheritor interface {
 	InheritName(ctx context.Context, oldUID, newUID string) (moved bool, err error)
 }
 
-// Settings reads/writes the pan_override field. FleetRekey persists the new
-// PAN here and NEVER touches ecu_eth0_mac.conf (macapp race).
+// Settings persists the pan_override field after a successful FleetRekey
+// (mirroring the new PAN ecu-zb is now on) and NEVER touches
+// ecu_eth0_mac.conf (macapp race). The live operating PAN is owned by ecu-zb
+// and read via Transport.getModulePan, not derived here.
 type Settings interface {
 	PANOverride() string
 	SetPANOverride(ctx context.Context, panHex string) error

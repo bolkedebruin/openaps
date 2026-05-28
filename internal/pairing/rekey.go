@@ -31,9 +31,17 @@ func (m *Manager) startRekey(by string, req *wire.FleetRekey) *wire.PairingRespo
 	if err != nil {
 		return errResp("rekey: " + err.Error())
 	}
-	oldPan, ok := m.operatingPAN()
-	if !ok {
-		return errResp("rekey: current/operating PAN unknown (set pan_override first)")
+	// The current (old) PAN is whatever ecu-zb is bonded to — queried from the
+	// radio owner, not re-derived from settings.
+	rootCtx := m.Parent
+	if rootCtx == nil {
+		rootCtx = context.Background()
+	}
+	qctx, qcancel := context.WithTimeout(rootCtx, defaultCmdTimeout)
+	oldPan, err := m.Transport.getModulePan(qctx)
+	qcancel()
+	if err != nil {
+		return errResp("rekey: current/operating PAN unknown: " + err.Error())
 	}
 	if newPan == oldPan {
 		return errResp(fmt.Sprintf("rekey: new PAN 0x%04X equals current PAN", newPan))
@@ -197,20 +205,6 @@ func (m *Manager) fleetSerials() ([]string, error) {
 		}
 	}
 	return out, nil
-}
-
-// operatingPAN resolves the current operating PAN from pan_override. Returns
-// ok=false when no override is set (we never derive from the MAC for pairing
-// — the rekey/migrate flows require an explicit known PAN).
-func (m *Manager) operatingPAN() (uint32, bool) {
-	if m.Settings == nil {
-		return 0, false
-	}
-	pan, err := parsePAN(m.Settings.PANOverride())
-	if err != nil {
-		return 0, false
-	}
-	return pan, true
 }
 
 // parsePAN parses a 1-4 hex digit PAN string into a uint16-range value.

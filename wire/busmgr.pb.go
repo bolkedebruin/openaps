@@ -3631,6 +3631,7 @@ type PairingCmd struct {
 	//	*PairingCmd_PrimeInv
 	//	*PairingCmd_CommitPan
 	//	*PairingCmd_BindQuiet
+	//	*PairingCmd_GetModulePan
 	Op            isPairingCmd_Op `protobuf_oneof:"op"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -3743,6 +3744,15 @@ func (x *PairingCmd) GetBindQuiet() *BindQuiet {
 	return nil
 }
 
+func (x *PairingCmd) GetGetModulePan() *Empty {
+	if x != nil {
+		if x, ok := x.Op.(*PairingCmd_GetModulePan); ok {
+			return x.GetModulePan
+		}
+	}
+	return nil
+}
+
 type isPairingCmd_Op interface {
 	isPairingCmd_Op()
 }
@@ -3775,6 +3785,10 @@ type PairingCmd_BindQuiet struct {
 	BindQuiet *BindQuiet `protobuf:"bytes,8,opt,name=bind_quiet,json=bindQuiet,proto3,oneof"` // 0x08 directed (stop report-id)
 }
 
+type PairingCmd_GetModulePan struct {
+	GetModulePan *Empty `protobuf:"bytes,9,opt,name=get_module_pan,json=getModulePan,proto3,oneof"` // read the backend's operating PAN
+}
+
 func (*PairingCmd_SetModulePan) isPairingCmd_Op() {}
 
 func (*PairingCmd_ReportScan) isPairingCmd_Op() {}
@@ -3788,6 +3802,8 @@ func (*PairingCmd_PrimeInv) isPairingCmd_Op() {}
 func (*PairingCmd_CommitPan) isPairingCmd_Op() {}
 
 func (*PairingCmd_BindQuiet) isPairingCmd_Op() {}
+
+func (*PairingCmd_GetModulePan) isPairingCmd_Op() {}
 
 type SetModulePan struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -4155,6 +4171,7 @@ type PairingCmdResult struct {
 	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
 	Found         []*FoundInverter       `protobuf:"bytes,4,rep,name=found,proto3" json:"found,omitempty"`                           // report_scan: announcing units
 	ShortAddr     uint32                 `protobuf:"varint,5,opt,name=short_addr,json=shortAddr,proto3" json:"short_addr,omitempty"` // get_short_addr: assigned SA
+	Pan           uint32                 `protobuf:"varint,6,opt,name=pan,proto3" json:"pan,omitempty"`                              // get_module_pan: backend's operating PAN
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4220,6 +4237,13 @@ func (x *PairingCmdResult) GetFound() []*FoundInverter {
 func (x *PairingCmdResult) GetShortAddr() uint32 {
 	if x != nil {
 		return x.ShortAddr
+	}
+	return 0
+}
+
+func (x *PairingCmdResult) GetPan() uint32 {
+	if x != nil {
+		return x.Pan
 	}
 	return 0
 }
@@ -4731,7 +4755,7 @@ const file_busmgr_proto_rawDesc = "" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12\x1f\n" +
 	"\vstatus_json\x18\x03 \x01(\fR\n" +
-	"statusJson\"\xd8\x03\n" +
+	"statusJson\"\x92\x04\n" +
 	"\n" +
 	"PairingCmd\x12\x15\n" +
 	"\x06req_id\x18\x01 \x01(\x04R\x05reqId\x12?\n" +
@@ -4744,7 +4768,8 @@ const file_busmgr_proto_rawDesc = "" +
 	"\n" +
 	"commit_pan\x18\a \x01(\v2\x17.busmgr.v1.CommitPanNowH\x00R\tcommitPan\x125\n" +
 	"\n" +
-	"bind_quiet\x18\b \x01(\v2\x14.busmgr.v1.BindQuietH\x00R\tbindQuietB\x04\n" +
+	"bind_quiet\x18\b \x01(\v2\x14.busmgr.v1.BindQuietH\x00R\tbindQuiet\x128\n" +
+	"\x0eget_module_pan\x18\t \x01(\v2\x10.busmgr.v1.EmptyH\x00R\fgetModulePanB\x04\n" +
 	"\x02op\":\n" +
 	"\fSetModulePan\x12\x10\n" +
 	"\x03pan\x18\x01 \x01(\rR\x03pan\x12\x18\n" +
@@ -4767,14 +4792,15 @@ const file_busmgr_proto_rawDesc = "" +
 	"\achannel\x18\x02 \x01(\rR\achannel\"*\n" +
 	"\tBindQuiet\x12\x1d\n" +
 	"\n" +
-	"short_addr\x18\x01 \x01(\rR\tshortAddr\"\x9e\x01\n" +
+	"short_addr\x18\x01 \x01(\rR\tshortAddr\"\xb0\x01\n" +
 	"\x10PairingCmdResult\x12\x15\n" +
 	"\x06req_id\x18\x01 \x01(\x04R\x05reqId\x12\x0e\n" +
 	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x14\n" +
 	"\x05error\x18\x03 \x01(\tR\x05error\x12.\n" +
 	"\x05found\x18\x04 \x03(\v2\x18.busmgr.v1.FoundInverterR\x05found\x12\x1d\n" +
 	"\n" +
-	"short_addr\x18\x05 \x01(\rR\tshortAddr\"d\n" +
+	"short_addr\x18\x05 \x01(\rR\tshortAddr\x12\x10\n" +
+	"\x03pan\x18\x06 \x01(\rR\x03pan\"d\n" +
 	"\rFoundInverter\x12\x16\n" +
 	"\x06serial\x18\x01 \x01(\tR\x06serial\x12\x1d\n" +
 	"\n" +
@@ -4924,14 +4950,15 @@ var file_busmgr_proto_depIdxs = []int32{
 	44, // 54: busmgr.v1.PairingCmd.prime_inv:type_name -> busmgr.v1.PrimeInverterPan
 	45, // 55: busmgr.v1.PairingCmd.commit_pan:type_name -> busmgr.v1.CommitPanNow
 	46, // 56: busmgr.v1.PairingCmd.bind_quiet:type_name -> busmgr.v1.BindQuiet
-	48, // 57: busmgr.v1.PairingCmdResult.found:type_name -> busmgr.v1.FoundInverter
-	31, // 58: busmgr.v1.SettingsResponse.settings:type_name -> busmgr.v1.Settings
-	49, // 59: busmgr.v1.SettingsResponse.effective:type_name -> busmgr.v1.EffectiveSettings
-	60, // [60:60] is the sub-list for method output_type
-	60, // [60:60] is the sub-list for method input_type
-	60, // [60:60] is the sub-list for extension type_name
-	60, // [60:60] is the sub-list for extension extendee
-	0,  // [0:60] is the sub-list for field type_name
+	18, // 57: busmgr.v1.PairingCmd.get_module_pan:type_name -> busmgr.v1.Empty
+	48, // 58: busmgr.v1.PairingCmdResult.found:type_name -> busmgr.v1.FoundInverter
+	31, // 59: busmgr.v1.SettingsResponse.settings:type_name -> busmgr.v1.Settings
+	49, // 60: busmgr.v1.SettingsResponse.effective:type_name -> busmgr.v1.EffectiveSettings
+	61, // [61:61] is the sub-list for method output_type
+	61, // [61:61] is the sub-list for method input_type
+	61, // [61:61] is the sub-list for extension type_name
+	61, // [61:61] is the sub-list for extension extendee
+	0,  // [0:61] is the sub-list for field type_name
 }
 
 func init() { file_busmgr_proto_init() }
@@ -5001,6 +5028,7 @@ func file_busmgr_proto_init() {
 		(*PairingCmd_PrimeInv)(nil),
 		(*PairingCmd_CommitPan)(nil),
 		(*PairingCmd_BindQuiet)(nil),
+		(*PairingCmd_GetModulePan)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

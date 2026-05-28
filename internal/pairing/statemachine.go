@@ -82,6 +82,9 @@ func (m *Manager) fastScan(ctx context.Context, ch uint32) ([]*wire.FoundInverte
 // sweepScan walks channels chLo..chHi on PAN 0xFFFF, dwelling dwell per
 // channel and accumulating distinct serials.
 func (m *Manager) sweepScan(ctx context.Context, restoreCh, chLo, chHi, dwell uint32) ([]*wire.FoundInverter, error) {
+	// Restore the radio to the operating PAN on EVERY exit path — a failed
+	// channel step or a mid-sweep abort must not leave it parked on 0xFFFF.
+	defer m.restoreModule(restoreCh)
 	byID := map[string]*wire.FoundInverter{}
 	order := []string{}
 	for ch := chLo; ch <= chHi; ch++ {
@@ -106,8 +109,6 @@ func (m *Manager) sweepScan(ctx context.Context, restoreCh, chLo, chHi, dwell ui
 			byID[fi.GetSerial()] = fi
 		}
 	}
-	// Restore the module to the operating PAN on the resolved channel.
-	m.restoreModule(restoreCh)
 	out := make([]*wire.FoundInverter, 0, len(order))
 	for _, id := range order {
 		out = append(out, byID[id])
@@ -115,19 +116,18 @@ func (m *Manager) sweepScan(ctx context.Context, restoreCh, chLo, chHi, dwell ui
 	return out, nil
 }
 
-// restoreModule returns the module to the operating PAN (pan_override or
-// current) on ch. Best-effort: a restore failure is logged via status but
-// not fatal (the next telemetry cycle / startup will re-park it).
-func (m *Manager) restoreModule(ch uint32) {
-	pan, ok := m.operatingPAN()
-	if !ok {
-		return
-	}
+// restoreModule returns the radio to ecu-zb's operating PAN by sending the
+// pan=0 sentinel — ecu-zb (the radio owner) resolves the actual PAN+channel
+// it bonded to, so inv-driver never re-derives it. Best-effort: a restore
+// failure is logged via status but not fatal (the next telemetry cycle /
+// ecu-zb restart re-parks it). The ch argument is unused for pan=0 (ecu-zb
+// uses its own operating channel) but kept for call-site symmetry.
+func (m *Manager) restoreModule(_ uint32) {
 	// Use a fresh short-lived context so an aborted op still restores the
 	// radio rather than leaving it parked on 0xFFFF.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultCmdTimeout)
 	defer cancel()
-	if err := m.Transport.setModulePan(ctx, pan, ch); err != nil {
+	if err := m.Transport.setModulePan(ctx, 0, 0); err != nil {
 		m.status.update(func(s *PairingStatus) { s.Message = "warning: module not restored to operating PAN: " + err.Error() })
 	}
 }
@@ -261,9 +261,11 @@ func (m *Manager) startReplace(by string, req *wire.ReplaceInverter) *wire.Pairi
 // (0xFFFF → prime → commit → operating PAN) and re-queries. On success the
 // short address is persisted and the unit is bound quiet.
 func (m *Manager) bindAndMigrate(ctx context.Context, serial string) error {
-	pan, ok := m.operatingPAN()
-	if !ok {
-		return fmt.Errorf("operating PAN unknown (set pan_override)")
+	// The migrate target PAN is ecu-zb's operating PAN, queried from the radio
+	// owner rather than re-derived here.
+	pan, err := m.Transport.getModulePan(ctx)
+	if err != nil {
+		return fmt.Errorf("operating PAN: %w", err)
 	}
 	ch, err := m.channelOrCurrent(0)
 	if err != nil {

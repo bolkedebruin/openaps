@@ -21,13 +21,18 @@ type mockTransport struct {
 	mu   sync.Mutex
 	cmds []*wire.PairingCmd
 	tr   *Transport
+	// opPAN is the operating PAN the simulated ecu-zb reports for
+	// get_module_pan (the radio-owned PAN inv-driver queries instead of
+	// deriving). Defaults to 0x0DCE.
+	opPAN uint32
 	// responder returns the result for a given cmd. If nil, every cmd
-	// succeeds with an empty result.
+	// succeeds with an empty result. get_module_pan is answered globally
+	// (before the responder) so tests don't each have to handle it.
 	responder func(cmd *wire.PairingCmd) *wire.PairingCmdResult
 }
 
 func newMockTransport() (*Transport, *mockTransport) {
-	m := &mockTransport{}
+	m := &mockTransport{opPAN: 0x0DCE}
 	tr := NewTransport(m, "ecu-zb")
 	tr.Timeout = 2 * time.Second
 	m.tr = tr
@@ -42,10 +47,14 @@ func (m *mockTransport) SendToBackend(_ string, env *wire.Envelope) bool {
 	m.mu.Lock()
 	m.cmds = append(m.cmds, cmd)
 	resp := m.responder
+	opPAN := m.opPAN
 	m.mu.Unlock()
 
 	var res *wire.PairingCmdResult
-	if resp != nil {
+	// get_module_pan is answered globally so each test responder need not.
+	if _, ok := cmd.GetOp().(*wire.PairingCmd_GetModulePan); ok {
+		res = &wire.PairingCmdResult{Ok: true, Pan: opPAN}
+	} else if resp != nil {
 		res = resp(cmd)
 	}
 	if res == nil {
@@ -83,6 +92,8 @@ func opName(c *wire.PairingCmd) string {
 		return "commit_pan"
 	case *wire.PairingCmd_BindQuiet:
 		return "bind_quiet"
+	case *wire.PairingCmd_GetModulePan:
+		return "get_module_pan"
 	}
 	return "?"
 }

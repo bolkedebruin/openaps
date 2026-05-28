@@ -199,3 +199,21 @@ func (t *Transport) bindQuiet(ctx context.Context, shortAddr uint16) error {
 		BindQuiet: &wire.BindQuiet{ShortAddr: uint32(shortAddr)}}})
 	return err
 }
+
+// getModulePan reads the bus backend's (ecu-zb's) operating PAN — the value
+// it configured at bring-up or adopted on the last real set. inv-driver uses
+// it as the prime/migrate target and the rekey old-PAN, so the radio owner is
+// the single source of truth and the driver never re-derives the PAN from
+// settings.
+func (t *Transport) getModulePan(ctx context.Context) (uint32, error) {
+	res, err := t.do(ctx, &wire.PairingCmd{Op: &wire.PairingCmd_GetModulePan{
+		GetModulePan: &wire.Empty{}}})
+	if err != nil {
+		return 0, err
+	}
+	pan := res.GetPan()
+	if pan == 0 || pan > 0xFFFF {
+		return 0, fmt.Errorf("get_module_pan: backend reported no/invalid operating PAN (0x%X)", pan)
+	}
+	return pan, nil
+}
