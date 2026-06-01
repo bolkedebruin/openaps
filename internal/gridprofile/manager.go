@@ -179,7 +179,7 @@ func (m *Manager) selectBase(ctx context.Context, id string) *wire.GridProfileRe
 		// Broadcast disrupts the fleet bus; serialise against pairing.
 		if m.BusLock != nil {
 			if ok, owner := m.BusLock.TryAcquire("gridprofile-broadcast"); !ok {
-				return errResp(fmt.Sprintf("bus busy: held by %q (grid-profile broadcast and pairing are mutually exclusive)", owner))
+				return errResp(fmt.Sprintf("ZigBee bus is busy with %s; please retry in a few seconds", owner))
 			}
 			defer m.BusLock.Release()
 		}

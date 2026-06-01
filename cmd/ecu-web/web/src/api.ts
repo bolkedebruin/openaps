@@ -82,9 +82,26 @@ export interface SystemStatus {
   status_error?: string;
 }
 
+// errorMessage extracts a human-readable error from a non-OK response.
+// Many endpoints return a JSON envelope like {"ok":false,"error":"..."}
+// even on 4xx; surface that string instead of the raw JSON blob.
+async function errorMessage(res: Response, path: string): Promise<string> {
+  const text = (await res.text()).trim();
+  if (text) {
+    try {
+      const obj = JSON.parse(text) as { error?: unknown };
+      if (typeof obj?.error === "string" && obj.error) return obj.error;
+    } catch {
+      // not JSON — fall through to raw text
+    }
+    return text;
+  }
+  return `${path}: ${res.status}`;
+}
+
 async function getJSON<T>(path: string): Promise<T> {
   const res = await fetch(path, { credentials: "same-origin" });
-  if (!res.ok) throw new Error(`${path}: ${res.status}`);
+  if (!res.ok) throw new Error(await errorMessage(res, path));
   return (await res.json()) as T;
 }
 
@@ -95,10 +112,7 @@ async function postJSON(path: string, body: unknown): Promise<void> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text.trim() || `${path}: ${res.status}`);
-  }
+  if (!res.ok) throw new Error(await errorMessage(res, path));
 }
 
 async function postJSONResult<T>(path: string, body: unknown): Promise<T> {
@@ -108,10 +122,7 @@ async function postJSONResult<T>(path: string, body: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text.trim() || `${path}: ${res.status}`);
-  }
+  if (!res.ok) throw new Error(await errorMessage(res, path));
   return (await res.json()) as T;
 }
 
@@ -122,10 +133,7 @@ async function putJSON<T>(path: string, body: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text.trim() || `${path}: ${res.status}`);
-  }
+  if (!res.ok) throw new Error(await errorMessage(res, path));
   return (await res.json()) as T;
 }
 
@@ -333,10 +341,7 @@ async function delJSON<T>(path: string, body: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text.trim() || `${path}: ${res.status}`);
-  }
+  if (!res.ok) throw new Error(await errorMessage(res, path));
   return (await res.json()) as T;
 }
 

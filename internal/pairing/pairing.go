@@ -225,7 +225,7 @@ func (m *Manager) startOp(by, op, stage string, total int, fn func(ctx context.C
 
 	if m.Lock != nil {
 		if ok, owner := m.Lock.TryAcquire(lockOwner); !ok {
-			return errResp(fmt.Sprintf("bus busy: held by %q (pairing and grid-profile broadcast are mutually exclusive)", owner))
+			return errResp(fmt.Sprintf("ZigBee bus is busy with %s; please retry in a few seconds", owner))
 		}
 	}
 
