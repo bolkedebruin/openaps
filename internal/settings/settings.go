@@ -7,10 +7,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
+
+// DefaultChannel is the ZigBee channel used when Settings.Channel is unset.
+// inv-driver no longer interprets the channel beyond this 0->default
+// fallback; ecu-zb owns range validation.
+const DefaultChannel uint32 = 16
 
 // Settings is the operator-owned configuration persisted as one JSON
 // file. Zero values mean "unset".
@@ -91,4 +98,24 @@ func (st *Store) Save(s Settings) error {
 	st.s = s
 	st.mu.Unlock()
 	return nil
+}
+
+// ReadEth0MAC returns the live eth0 MAC as a lower-case colon-separated
+// string, or "" on any error. It first reads the sysfs attribute (cheap,
+// no syscall overhead) and falls back to net.Interfaces for portability
+// on hosts without /sys (the developer's macOS). It is used to log the
+// live MAC alongside a MAC-apply event; inv-driver no longer derives a PAN
+// from it.
+func ReadEth0MAC() string {
+	if b, err := os.ReadFile("/sys/class/net/eth0/address"); err == nil {
+		s := strings.TrimSpace(string(b))
+		if s != "" {
+			return strings.ToLower(s)
+		}
+	}
+	ifi, err := net.InterfaceByName("eth0")
+	if err == nil && len(ifi.HardwareAddr) > 0 {
+		return strings.ToLower(ifi.HardwareAddr.String())
+	}
+	return ""
 }

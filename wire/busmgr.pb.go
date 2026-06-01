@@ -3183,6 +3183,7 @@ type PairingRequest struct {
 	//	*PairingRequest_FleetRekey
 	//	*PairingRequest_Abort
 	//	*PairingRequest_GetStatus
+	//	*PairingRequest_ChangeChannel
 	Op            isPairingRequest_Op `protobuf_oneof:"op"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -3279,6 +3280,15 @@ func (x *PairingRequest) GetGetStatus() *Empty {
 	return nil
 }
 
+func (x *PairingRequest) GetChangeChannel() *FleetChangeChannel {
+	if x != nil {
+		if x, ok := x.Op.(*PairingRequest_ChangeChannel); ok {
+			return x.ChangeChannel
+		}
+	}
+	return nil
+}
+
 type isPairingRequest_Op interface {
 	isPairingRequest_Op()
 }
@@ -3307,6 +3317,10 @@ type PairingRequest_GetStatus struct {
 	GetStatus *Empty `protobuf:"bytes,6,opt,name=get_status,json=getStatus,proto3,oneof"` // poll current op status (in-memory)
 }
 
+type PairingRequest_ChangeChannel struct {
+	ChangeChannel *FleetChangeChannel `protobuf:"bytes,7,opt,name=change_channel,json=changeChannel,proto3,oneof"` // move whole fleet to a new RF channel
+}
+
 func (*PairingRequest_Scan) isPairingRequest_Op() {}
 
 func (*PairingRequest_AddById) isPairingRequest_Op() {}
@@ -3318,6 +3332,59 @@ func (*PairingRequest_FleetRekey) isPairingRequest_Op() {}
 func (*PairingRequest_Abort) isPairingRequest_Op() {}
 
 func (*PairingRequest_GetStatus) isPairingRequest_Op() {}
+
+func (*PairingRequest_ChangeChannel) isPairingRequest_Op() {}
+
+// FleetChangeChannel moves every paired inverter to a new RF channel: each
+// inverter is sent a directed 0x0F (set-inv-pan with the current PAN + new
+// channel) while still reachable on the current channel, then the module
+// follows to the new channel and short addresses are re-queried. Reversible:
+// on failure the state machine restores the old channel. inv-driver does NOT
+// validate the channel range (a ZigBee concern); the bus backend (ecu-zb)
+// rejects an out-of-range channel. Persisted via Settings.channel on success.
+type FleetChangeChannel struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Channel       uint32                 `protobuf:"varint,1,opt,name=channel,proto3" json:"channel,omitempty"` // target RF channel (backend validates the range)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FleetChangeChannel) Reset() {
+	*x = FleetChangeChannel{}
+	mi := &file_busmgr_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FleetChangeChannel) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FleetChangeChannel) ProtoMessage() {}
+
+func (x *FleetChangeChannel) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FleetChangeChannel.ProtoReflect.Descriptor instead.
+func (*FleetChangeChannel) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *FleetChangeChannel) GetChannel() uint32 {
+	if x != nil {
+		return x.Channel
+	}
+	return 0
+}
 
 // ScanStart begins discovery. slow=false → "fast": one 0xD1 report-id
 // solicitation on the module's current channel parked on PAN 0xFFFF.
@@ -3337,7 +3404,7 @@ type ScanStart struct {
 
 func (x *ScanStart) Reset() {
 	*x = ScanStart{}
-	mi := &file_busmgr_proto_msgTypes[33]
+	mi := &file_busmgr_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3349,7 +3416,7 @@ func (x *ScanStart) String() string {
 func (*ScanStart) ProtoMessage() {}
 
 func (x *ScanStart) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[33]
+	mi := &file_busmgr_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3362,7 +3429,7 @@ func (x *ScanStart) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScanStart.ProtoReflect.Descriptor instead.
 func (*ScanStart) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{33}
+	return file_busmgr_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ScanStart) GetSlow() bool {
@@ -3405,7 +3472,7 @@ type AddById struct {
 
 func (x *AddById) Reset() {
 	*x = AddById{}
-	mi := &file_busmgr_proto_msgTypes[34]
+	mi := &file_busmgr_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3417,7 +3484,7 @@ func (x *AddById) String() string {
 func (*AddById) ProtoMessage() {}
 
 func (x *AddById) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[34]
+	mi := &file_busmgr_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3430,7 +3497,7 @@ func (x *AddById) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddById.ProtoReflect.Descriptor instead.
 func (*AddById) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{34}
+	return file_busmgr_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *AddById) GetSerial() string {
@@ -3453,7 +3520,7 @@ type ReplaceInverter struct {
 
 func (x *ReplaceInverter) Reset() {
 	*x = ReplaceInverter{}
-	mi := &file_busmgr_proto_msgTypes[35]
+	mi := &file_busmgr_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3465,7 +3532,7 @@ func (x *ReplaceInverter) String() string {
 func (*ReplaceInverter) ProtoMessage() {}
 
 func (x *ReplaceInverter) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[35]
+	mi := &file_busmgr_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3478,7 +3545,7 @@ func (x *ReplaceInverter) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplaceInverter.ProtoReflect.Descriptor instead.
 func (*ReplaceInverter) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{35}
+	return file_busmgr_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ReplaceInverter) GetOldUid() string {
@@ -3511,7 +3578,7 @@ type FleetRekey struct {
 
 func (x *FleetRekey) Reset() {
 	*x = FleetRekey{}
-	mi := &file_busmgr_proto_msgTypes[36]
+	mi := &file_busmgr_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3523,7 +3590,7 @@ func (x *FleetRekey) String() string {
 func (*FleetRekey) ProtoMessage() {}
 
 func (x *FleetRekey) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[36]
+	mi := &file_busmgr_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3536,7 +3603,7 @@ func (x *FleetRekey) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FleetRekey.ProtoReflect.Descriptor instead.
 func (*FleetRekey) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{36}
+	return file_busmgr_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *FleetRekey) GetNewPan() string {
@@ -3568,7 +3635,7 @@ type PairingResponse struct {
 
 func (x *PairingResponse) Reset() {
 	*x = PairingResponse{}
-	mi := &file_busmgr_proto_msgTypes[37]
+	mi := &file_busmgr_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3580,7 +3647,7 @@ func (x *PairingResponse) String() string {
 func (*PairingResponse) ProtoMessage() {}
 
 func (x *PairingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[37]
+	mi := &file_busmgr_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3593,7 +3660,7 @@ func (x *PairingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PairingResponse.ProtoReflect.Descriptor instead.
 func (*PairingResponse) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{37}
+	return file_busmgr_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *PairingResponse) GetOk() bool {
@@ -3639,7 +3706,7 @@ type PairingCmd struct {
 
 func (x *PairingCmd) Reset() {
 	*x = PairingCmd{}
-	mi := &file_busmgr_proto_msgTypes[38]
+	mi := &file_busmgr_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3651,7 +3718,7 @@ func (x *PairingCmd) String() string {
 func (*PairingCmd) ProtoMessage() {}
 
 func (x *PairingCmd) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[38]
+	mi := &file_busmgr_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3664,7 +3731,7 @@ func (x *PairingCmd) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PairingCmd.ProtoReflect.Descriptor instead.
 func (*PairingCmd) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{38}
+	return file_busmgr_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *PairingCmd) GetReqId() uint64 {
@@ -3815,7 +3882,7 @@ type SetModulePan struct {
 
 func (x *SetModulePan) Reset() {
 	*x = SetModulePan{}
-	mi := &file_busmgr_proto_msgTypes[39]
+	mi := &file_busmgr_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3827,7 +3894,7 @@ func (x *SetModulePan) String() string {
 func (*SetModulePan) ProtoMessage() {}
 
 func (x *SetModulePan) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[39]
+	mi := &file_busmgr_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3840,7 +3907,7 @@ func (x *SetModulePan) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetModulePan.ProtoReflect.Descriptor instead.
 func (*SetModulePan) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{39}
+	return file_busmgr_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *SetModulePan) GetPan() uint32 {
@@ -3866,7 +3933,7 @@ type ReportIdScan struct {
 
 func (x *ReportIdScan) Reset() {
 	*x = ReportIdScan{}
-	mi := &file_busmgr_proto_msgTypes[40]
+	mi := &file_busmgr_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3878,7 +3945,7 @@ func (x *ReportIdScan) String() string {
 func (*ReportIdScan) ProtoMessage() {}
 
 func (x *ReportIdScan) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[40]
+	mi := &file_busmgr_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3891,7 +3958,7 @@ func (x *ReportIdScan) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportIdScan.ProtoReflect.Descriptor instead.
 func (*ReportIdScan) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{40}
+	return file_busmgr_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *ReportIdScan) GetTimeoutMs() uint32 {
@@ -3910,7 +3977,7 @@ type GetShortAddr struct {
 
 func (x *GetShortAddr) Reset() {
 	*x = GetShortAddr{}
-	mi := &file_busmgr_proto_msgTypes[41]
+	mi := &file_busmgr_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3922,7 +3989,7 @@ func (x *GetShortAddr) String() string {
 func (*GetShortAddr) ProtoMessage() {}
 
 func (x *GetShortAddr) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[41]
+	mi := &file_busmgr_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3935,7 +4002,7 @@ func (x *GetShortAddr) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetShortAddr.ProtoReflect.Descriptor instead.
 func (*GetShortAddr) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{41}
+	return file_busmgr_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *GetShortAddr) GetSerial() string {
@@ -3956,7 +4023,7 @@ type SetInverterPanChannel struct {
 
 func (x *SetInverterPanChannel) Reset() {
 	*x = SetInverterPanChannel{}
-	mi := &file_busmgr_proto_msgTypes[42]
+	mi := &file_busmgr_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3968,7 +4035,7 @@ func (x *SetInverterPanChannel) String() string {
 func (*SetInverterPanChannel) ProtoMessage() {}
 
 func (x *SetInverterPanChannel) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[42]
+	mi := &file_busmgr_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3981,7 +4048,7 @@ func (x *SetInverterPanChannel) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetInverterPanChannel.ProtoReflect.Descriptor instead.
 func (*SetInverterPanChannel) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{42}
+	return file_busmgr_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *SetInverterPanChannel) GetSerial() string {
@@ -4016,7 +4083,7 @@ type PrimeInverterPan struct {
 
 func (x *PrimeInverterPan) Reset() {
 	*x = PrimeInverterPan{}
-	mi := &file_busmgr_proto_msgTypes[43]
+	mi := &file_busmgr_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4028,7 +4095,7 @@ func (x *PrimeInverterPan) String() string {
 func (*PrimeInverterPan) ProtoMessage() {}
 
 func (x *PrimeInverterPan) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[43]
+	mi := &file_busmgr_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4041,7 +4108,7 @@ func (x *PrimeInverterPan) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrimeInverterPan.ProtoReflect.Descriptor instead.
 func (*PrimeInverterPan) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{43}
+	return file_busmgr_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *PrimeInverterPan) GetSerial() string {
@@ -4075,7 +4142,7 @@ type CommitPanNow struct {
 
 func (x *CommitPanNow) Reset() {
 	*x = CommitPanNow{}
-	mi := &file_busmgr_proto_msgTypes[44]
+	mi := &file_busmgr_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4087,7 +4154,7 @@ func (x *CommitPanNow) String() string {
 func (*CommitPanNow) ProtoMessage() {}
 
 func (x *CommitPanNow) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[44]
+	mi := &file_busmgr_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4100,7 +4167,7 @@ func (x *CommitPanNow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommitPanNow.ProtoReflect.Descriptor instead.
 func (*CommitPanNow) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{44}
+	return file_busmgr_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *CommitPanNow) GetPan() uint32 {
@@ -4126,7 +4193,7 @@ type BindQuiet struct {
 
 func (x *BindQuiet) Reset() {
 	*x = BindQuiet{}
-	mi := &file_busmgr_proto_msgTypes[45]
+	mi := &file_busmgr_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4138,7 +4205,7 @@ func (x *BindQuiet) String() string {
 func (*BindQuiet) ProtoMessage() {}
 
 func (x *BindQuiet) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[45]
+	mi := &file_busmgr_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4151,7 +4218,7 @@ func (x *BindQuiet) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BindQuiet.ProtoReflect.Descriptor instead.
 func (*BindQuiet) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{45}
+	return file_busmgr_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *BindQuiet) GetShortAddr() uint32 {
@@ -4172,13 +4239,14 @@ type PairingCmdResult struct {
 	Found         []*FoundInverter       `protobuf:"bytes,4,rep,name=found,proto3" json:"found,omitempty"`                           // report_scan: announcing units
 	ShortAddr     uint32                 `protobuf:"varint,5,opt,name=short_addr,json=shortAddr,proto3" json:"short_addr,omitempty"` // get_short_addr: assigned SA
 	Pan           uint32                 `protobuf:"varint,6,opt,name=pan,proto3" json:"pan,omitempty"`                              // get_module_pan: backend's operating PAN
+	Channel       uint32                 `protobuf:"varint,7,opt,name=channel,proto3" json:"channel,omitempty"`                      // get_module_pan: backend's operating channel
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PairingCmdResult) Reset() {
 	*x = PairingCmdResult{}
-	mi := &file_busmgr_proto_msgTypes[46]
+	mi := &file_busmgr_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4190,7 +4258,7 @@ func (x *PairingCmdResult) String() string {
 func (*PairingCmdResult) ProtoMessage() {}
 
 func (x *PairingCmdResult) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[46]
+	mi := &file_busmgr_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4203,7 +4271,7 @@ func (x *PairingCmdResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PairingCmdResult.ProtoReflect.Descriptor instead.
 func (*PairingCmdResult) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{46}
+	return file_busmgr_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *PairingCmdResult) GetReqId() uint64 {
@@ -4248,6 +4316,13 @@ func (x *PairingCmdResult) GetPan() uint32 {
 	return 0
 }
 
+func (x *PairingCmdResult) GetChannel() uint32 {
+	if x != nil {
+		return x.Channel
+	}
+	return 0
+}
+
 // FoundInverter is one inverter that announced itself (0x1D reply) during
 // a report-id scan.
 type FoundInverter struct {
@@ -4261,7 +4336,7 @@ type FoundInverter struct {
 
 func (x *FoundInverter) Reset() {
 	*x = FoundInverter{}
-	mi := &file_busmgr_proto_msgTypes[47]
+	mi := &file_busmgr_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4273,7 +4348,7 @@ func (x *FoundInverter) String() string {
 func (*FoundInverter) ProtoMessage() {}
 
 func (x *FoundInverter) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[47]
+	mi := &file_busmgr_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4286,7 +4361,7 @@ func (x *FoundInverter) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FoundInverter.ProtoReflect.Descriptor instead.
 func (*FoundInverter) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{47}
+	return file_busmgr_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *FoundInverter) GetSerial() string {
@@ -4327,7 +4402,7 @@ type EffectiveSettings struct {
 
 func (x *EffectiveSettings) Reset() {
 	*x = EffectiveSettings{}
-	mi := &file_busmgr_proto_msgTypes[48]
+	mi := &file_busmgr_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4339,7 +4414,7 @@ func (x *EffectiveSettings) String() string {
 func (*EffectiveSettings) ProtoMessage() {}
 
 func (x *EffectiveSettings) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[48]
+	mi := &file_busmgr_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4352,7 +4427,7 @@ func (x *EffectiveSettings) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EffectiveSettings.ProtoReflect.Descriptor instead.
 func (*EffectiveSettings) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{48}
+	return file_busmgr_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *EffectiveSettings) GetMac() string {
@@ -4396,7 +4471,7 @@ type SettingsResponse struct {
 
 func (x *SettingsResponse) Reset() {
 	*x = SettingsResponse{}
-	mi := &file_busmgr_proto_msgTypes[49]
+	mi := &file_busmgr_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4408,7 +4483,7 @@ func (x *SettingsResponse) String() string {
 func (*SettingsResponse) ProtoMessage() {}
 
 func (x *SettingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_busmgr_proto_msgTypes[49]
+	mi := &file_busmgr_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4421,7 +4496,7 @@ func (x *SettingsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SettingsResponse.ProtoReflect.Descriptor instead.
 func (*SettingsResponse) Descriptor() ([]byte, []int) {
-	return file_busmgr_proto_rawDescGZIP(), []int{49}
+	return file_busmgr_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *SettingsResponse) GetOk() bool {
@@ -4725,7 +4800,7 @@ const file_busmgr_proto_rawDesc = "" +
 	"\x0fSettingsRequest\x12$\n" +
 	"\x03get\x18\x01 \x01(\v2\x10.busmgr.v1.EmptyH\x00R\x03get\x12'\n" +
 	"\x03set\x18\x02 \x01(\v2\x13.busmgr.v1.SettingsH\x00R\x03setB\x04\n" +
-	"\x02op\"\xc3\x02\n" +
+	"\x02op\"\x8b\x03\n" +
 	"\x0ePairingRequest\x12*\n" +
 	"\x04scan\x18\x01 \x01(\v2\x14.busmgr.v1.ScanStartH\x00R\x04scan\x120\n" +
 	"\tadd_by_id\x18\x02 \x01(\v2\x12.busmgr.v1.AddByIdH\x00R\aaddById\x126\n" +
@@ -4734,8 +4809,11 @@ const file_busmgr_proto_rawDesc = "" +
 	"fleetRekey\x12(\n" +
 	"\x05abort\x18\x05 \x01(\v2\x10.busmgr.v1.EmptyH\x00R\x05abort\x121\n" +
 	"\n" +
-	"get_status\x18\x06 \x01(\v2\x10.busmgr.v1.EmptyH\x00R\tgetStatusB\x04\n" +
-	"\x02op\"l\n" +
+	"get_status\x18\x06 \x01(\v2\x10.busmgr.v1.EmptyH\x00R\tgetStatus\x12F\n" +
+	"\x0echange_channel\x18\a \x01(\v2\x1d.busmgr.v1.FleetChangeChannelH\x00R\rchangeChannelB\x04\n" +
+	"\x02op\".\n" +
+	"\x12FleetChangeChannel\x12\x18\n" +
+	"\achannel\x18\x01 \x01(\rR\achannel\"l\n" +
 	"\tScanStart\x12\x12\n" +
 	"\x04slow\x18\x01 \x01(\bR\x04slow\x12\x17\n" +
 	"\achan_lo\x18\x02 \x01(\rR\x06chanLo\x12\x17\n" +
@@ -4792,7 +4870,7 @@ const file_busmgr_proto_rawDesc = "" +
 	"\achannel\x18\x02 \x01(\rR\achannel\"*\n" +
 	"\tBindQuiet\x12\x1d\n" +
 	"\n" +
-	"short_addr\x18\x01 \x01(\rR\tshortAddr\"\xb0\x01\n" +
+	"short_addr\x18\x01 \x01(\rR\tshortAddr\"\xca\x01\n" +
 	"\x10PairingCmdResult\x12\x15\n" +
 	"\x06req_id\x18\x01 \x01(\x04R\x05reqId\x12\x0e\n" +
 	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x14\n" +
@@ -4800,7 +4878,8 @@ const file_busmgr_proto_rawDesc = "" +
 	"\x05found\x18\x04 \x03(\v2\x18.busmgr.v1.FoundInverterR\x05found\x12\x1d\n" +
 	"\n" +
 	"short_addr\x18\x05 \x01(\rR\tshortAddr\x12\x10\n" +
-	"\x03pan\x18\x06 \x01(\rR\x03pan\"d\n" +
+	"\x03pan\x18\x06 \x01(\rR\x03pan\x12\x18\n" +
+	"\achannel\x18\a \x01(\rR\achannel\"d\n" +
 	"\rFoundInverter\x12\x16\n" +
 	"\x06serial\x18\x01 \x01(\tR\x06serial\x12\x1d\n" +
 	"\n" +
@@ -4836,7 +4915,7 @@ func file_busmgr_proto_rawDescGZIP() []byte {
 }
 
 var file_busmgr_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_busmgr_proto_msgTypes = make([]protoimpl.MessageInfo, 52)
+var file_busmgr_proto_msgTypes = make([]protoimpl.MessageInfo, 53)
 var file_busmgr_proto_goTypes = []any{
 	(Role)(0),                     // 0: busmgr.v1.Role
 	(*Envelope)(nil),              // 1: busmgr.v1.Envelope
@@ -4872,25 +4951,26 @@ var file_busmgr_proto_goTypes = []any{
 	(*Settings)(nil),              // 31: busmgr.v1.Settings
 	(*SettingsRequest)(nil),       // 32: busmgr.v1.SettingsRequest
 	(*PairingRequest)(nil),        // 33: busmgr.v1.PairingRequest
-	(*ScanStart)(nil),             // 34: busmgr.v1.ScanStart
-	(*AddById)(nil),               // 35: busmgr.v1.AddById
-	(*ReplaceInverter)(nil),       // 36: busmgr.v1.ReplaceInverter
-	(*FleetRekey)(nil),            // 37: busmgr.v1.FleetRekey
-	(*PairingResponse)(nil),       // 38: busmgr.v1.PairingResponse
-	(*PairingCmd)(nil),            // 39: busmgr.v1.PairingCmd
-	(*SetModulePan)(nil),          // 40: busmgr.v1.SetModulePan
-	(*ReportIdScan)(nil),          // 41: busmgr.v1.ReportIdScan
-	(*GetShortAddr)(nil),          // 42: busmgr.v1.GetShortAddr
-	(*SetInverterPanChannel)(nil), // 43: busmgr.v1.SetInverterPanChannel
-	(*PrimeInverterPan)(nil),      // 44: busmgr.v1.PrimeInverterPan
-	(*CommitPanNow)(nil),          // 45: busmgr.v1.CommitPanNow
-	(*BindQuiet)(nil),             // 46: busmgr.v1.BindQuiet
-	(*PairingCmdResult)(nil),      // 47: busmgr.v1.PairingCmdResult
-	(*FoundInverter)(nil),         // 48: busmgr.v1.FoundInverter
-	(*EffectiveSettings)(nil),     // 49: busmgr.v1.EffectiveSettings
-	(*SettingsResponse)(nil),      // 50: busmgr.v1.SettingsResponse
-	nil,                           // 51: busmgr.v1.Protection.ValuesEntry
-	nil,                           // 52: busmgr.v1.Settings.InverterNamesEntry
+	(*FleetChangeChannel)(nil),    // 34: busmgr.v1.FleetChangeChannel
+	(*ScanStart)(nil),             // 35: busmgr.v1.ScanStart
+	(*AddById)(nil),               // 36: busmgr.v1.AddById
+	(*ReplaceInverter)(nil),       // 37: busmgr.v1.ReplaceInverter
+	(*FleetRekey)(nil),            // 38: busmgr.v1.FleetRekey
+	(*PairingResponse)(nil),       // 39: busmgr.v1.PairingResponse
+	(*PairingCmd)(nil),            // 40: busmgr.v1.PairingCmd
+	(*SetModulePan)(nil),          // 41: busmgr.v1.SetModulePan
+	(*ReportIdScan)(nil),          // 42: busmgr.v1.ReportIdScan
+	(*GetShortAddr)(nil),          // 43: busmgr.v1.GetShortAddr
+	(*SetInverterPanChannel)(nil), // 44: busmgr.v1.SetInverterPanChannel
+	(*PrimeInverterPan)(nil),      // 45: busmgr.v1.PrimeInverterPan
+	(*CommitPanNow)(nil),          // 46: busmgr.v1.CommitPanNow
+	(*BindQuiet)(nil),             // 47: busmgr.v1.BindQuiet
+	(*PairingCmdResult)(nil),      // 48: busmgr.v1.PairingCmdResult
+	(*FoundInverter)(nil),         // 49: busmgr.v1.FoundInverter
+	(*EffectiveSettings)(nil),     // 50: busmgr.v1.EffectiveSettings
+	(*SettingsResponse)(nil),      // 51: busmgr.v1.SettingsResponse
+	nil,                           // 52: busmgr.v1.Protection.ValuesEntry
+	nil,                           // 53: busmgr.v1.Settings.InverterNamesEntry
 }
 var file_busmgr_proto_depIdxs = []int32{
 	2,  // 0: busmgr.v1.Envelope.hello:type_name -> busmgr.v1.Hello
@@ -4911,17 +4991,17 @@ var file_busmgr_proto_depIdxs = []int32{
 	28, // 15: busmgr.v1.Envelope.events_req:type_name -> busmgr.v1.EventsRequest
 	29, // 16: busmgr.v1.Envelope.events_resp:type_name -> busmgr.v1.EventsResponse
 	32, // 17: busmgr.v1.Envelope.settings_req:type_name -> busmgr.v1.SettingsRequest
-	50, // 18: busmgr.v1.Envelope.settings_resp:type_name -> busmgr.v1.SettingsResponse
+	51, // 18: busmgr.v1.Envelope.settings_resp:type_name -> busmgr.v1.SettingsResponse
 	33, // 19: busmgr.v1.Envelope.pairing_req:type_name -> busmgr.v1.PairingRequest
-	38, // 20: busmgr.v1.Envelope.pairing_resp:type_name -> busmgr.v1.PairingResponse
-	39, // 21: busmgr.v1.Envelope.pairing_cmd:type_name -> busmgr.v1.PairingCmd
-	47, // 22: busmgr.v1.Envelope.pairing_result:type_name -> busmgr.v1.PairingCmdResult
+	39, // 20: busmgr.v1.Envelope.pairing_resp:type_name -> busmgr.v1.PairingResponse
+	40, // 21: busmgr.v1.Envelope.pairing_cmd:type_name -> busmgr.v1.PairingCmd
+	48, // 22: busmgr.v1.Envelope.pairing_result:type_name -> busmgr.v1.PairingCmdResult
 	0,  // 23: busmgr.v1.Hello.role:type_name -> busmgr.v1.Role
 	8,  // 24: busmgr.v1.Telemetry.panels:type_name -> busmgr.v1.Panel
 	5,  // 25: busmgr.v1.Telemetry.faults:type_name -> busmgr.v1.InverterFaults
 	6,  // 26: busmgr.v1.InverterFaults.ds3:type_name -> busmgr.v1.DS3Faults
 	7,  // 27: busmgr.v1.InverterFaults.qs1a:type_name -> busmgr.v1.QS1AFaults
-	51, // 28: busmgr.v1.Protection.values:type_name -> busmgr.v1.Protection.ValuesEntry
+	52, // 28: busmgr.v1.Protection.values:type_name -> busmgr.v1.Protection.ValuesEntry
 	18, // 29: busmgr.v1.GridProfileRequest.list_profiles:type_name -> busmgr.v1.Empty
 	18, // 30: busmgr.v1.GridProfileRequest.refresh_profiles:type_name -> busmgr.v1.Empty
 	19, // 31: busmgr.v1.GridProfileRequest.select_base:type_name -> busmgr.v1.SelectBase
@@ -4934,31 +5014,32 @@ var file_busmgr_proto_depIdxs = []int32{
 	26, // 38: busmgr.v1.SystemStatusResponse.ecu:type_name -> busmgr.v1.EcuIdentity
 	27, // 39: busmgr.v1.SystemStatusResponse.peers:type_name -> busmgr.v1.PeerStatus
 	30, // 40: busmgr.v1.EventsResponse.events:type_name -> busmgr.v1.Event
-	52, // 41: busmgr.v1.Settings.inverter_names:type_name -> busmgr.v1.Settings.InverterNamesEntry
+	53, // 41: busmgr.v1.Settings.inverter_names:type_name -> busmgr.v1.Settings.InverterNamesEntry
 	18, // 42: busmgr.v1.SettingsRequest.get:type_name -> busmgr.v1.Empty
 	31, // 43: busmgr.v1.SettingsRequest.set:type_name -> busmgr.v1.Settings
-	34, // 44: busmgr.v1.PairingRequest.scan:type_name -> busmgr.v1.ScanStart
-	35, // 45: busmgr.v1.PairingRequest.add_by_id:type_name -> busmgr.v1.AddById
-	36, // 46: busmgr.v1.PairingRequest.replace:type_name -> busmgr.v1.ReplaceInverter
-	37, // 47: busmgr.v1.PairingRequest.fleet_rekey:type_name -> busmgr.v1.FleetRekey
+	35, // 44: busmgr.v1.PairingRequest.scan:type_name -> busmgr.v1.ScanStart
+	36, // 45: busmgr.v1.PairingRequest.add_by_id:type_name -> busmgr.v1.AddById
+	37, // 46: busmgr.v1.PairingRequest.replace:type_name -> busmgr.v1.ReplaceInverter
+	38, // 47: busmgr.v1.PairingRequest.fleet_rekey:type_name -> busmgr.v1.FleetRekey
 	18, // 48: busmgr.v1.PairingRequest.abort:type_name -> busmgr.v1.Empty
 	18, // 49: busmgr.v1.PairingRequest.get_status:type_name -> busmgr.v1.Empty
-	40, // 50: busmgr.v1.PairingCmd.set_module_pan:type_name -> busmgr.v1.SetModulePan
-	41, // 51: busmgr.v1.PairingCmd.report_scan:type_name -> busmgr.v1.ReportIdScan
-	42, // 52: busmgr.v1.PairingCmd.get_short_addr:type_name -> busmgr.v1.GetShortAddr
-	43, // 53: busmgr.v1.PairingCmd.set_inv_pan:type_name -> busmgr.v1.SetInverterPanChannel
-	44, // 54: busmgr.v1.PairingCmd.prime_inv:type_name -> busmgr.v1.PrimeInverterPan
-	45, // 55: busmgr.v1.PairingCmd.commit_pan:type_name -> busmgr.v1.CommitPanNow
-	46, // 56: busmgr.v1.PairingCmd.bind_quiet:type_name -> busmgr.v1.BindQuiet
-	18, // 57: busmgr.v1.PairingCmd.get_module_pan:type_name -> busmgr.v1.Empty
-	48, // 58: busmgr.v1.PairingCmdResult.found:type_name -> busmgr.v1.FoundInverter
-	31, // 59: busmgr.v1.SettingsResponse.settings:type_name -> busmgr.v1.Settings
-	49, // 60: busmgr.v1.SettingsResponse.effective:type_name -> busmgr.v1.EffectiveSettings
-	61, // [61:61] is the sub-list for method output_type
-	61, // [61:61] is the sub-list for method input_type
-	61, // [61:61] is the sub-list for extension type_name
-	61, // [61:61] is the sub-list for extension extendee
-	0,  // [0:61] is the sub-list for field type_name
+	34, // 50: busmgr.v1.PairingRequest.change_channel:type_name -> busmgr.v1.FleetChangeChannel
+	41, // 51: busmgr.v1.PairingCmd.set_module_pan:type_name -> busmgr.v1.SetModulePan
+	42, // 52: busmgr.v1.PairingCmd.report_scan:type_name -> busmgr.v1.ReportIdScan
+	43, // 53: busmgr.v1.PairingCmd.get_short_addr:type_name -> busmgr.v1.GetShortAddr
+	44, // 54: busmgr.v1.PairingCmd.set_inv_pan:type_name -> busmgr.v1.SetInverterPanChannel
+	45, // 55: busmgr.v1.PairingCmd.prime_inv:type_name -> busmgr.v1.PrimeInverterPan
+	46, // 56: busmgr.v1.PairingCmd.commit_pan:type_name -> busmgr.v1.CommitPanNow
+	47, // 57: busmgr.v1.PairingCmd.bind_quiet:type_name -> busmgr.v1.BindQuiet
+	18, // 58: busmgr.v1.PairingCmd.get_module_pan:type_name -> busmgr.v1.Empty
+	49, // 59: busmgr.v1.PairingCmdResult.found:type_name -> busmgr.v1.FoundInverter
+	31, // 60: busmgr.v1.SettingsResponse.settings:type_name -> busmgr.v1.Settings
+	50, // 61: busmgr.v1.SettingsResponse.effective:type_name -> busmgr.v1.EffectiveSettings
+	62, // [62:62] is the sub-list for method output_type
+	62, // [62:62] is the sub-list for method input_type
+	62, // [62:62] is the sub-list for extension type_name
+	62, // [62:62] is the sub-list for extension extendee
+	0,  // [0:62] is the sub-list for field type_name
 }
 
 func init() { file_busmgr_proto_init() }
@@ -5019,8 +5100,9 @@ func file_busmgr_proto_init() {
 		(*PairingRequest_FleetRekey)(nil),
 		(*PairingRequest_Abort)(nil),
 		(*PairingRequest_GetStatus)(nil),
+		(*PairingRequest_ChangeChannel)(nil),
 	}
-	file_busmgr_proto_msgTypes[38].OneofWrappers = []any{
+	file_busmgr_proto_msgTypes[39].OneofWrappers = []any{
 		(*PairingCmd_SetModulePan)(nil),
 		(*PairingCmd_ReportScan)(nil),
 		(*PairingCmd_GetShortAddr)(nil),
@@ -5036,7 +5118,7 @@ func file_busmgr_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_busmgr_proto_rawDesc), len(file_busmgr_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   52,
+			NumMessages:   53,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

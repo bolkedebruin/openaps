@@ -79,17 +79,18 @@ describe("<settings-form>", () => {
   });
 });
 
-describe("<settings-form> effective hints", () => {
-  test("renders effective MAC / PAN / zigbee-type hints", async () => {
+describe("<settings-form> effective hints (computed client-side)", () => {
+  test("renders effective PAN (from configured MAC) / zigbee-type hints", async () => {
+    // Effective PAN is now computed CLIENT-SIDE from the configured MAC; the
+    // server no longer sends SettingsResponse.effective for radio fields.
     const el = await mount({
       ecu_id: "",
-      mac: "",
+      mac: "80:97:1b:03:0d:ce",
       pan_override: "",
       zigbee_type: "",
-      effective: { mac: "80:97:1b:03:0d:ce", pan: "0DCE", zigbee_type: "apsystems" },
     });
     const text = el.shadowRoot!.textContent ?? "";
-    expect(text).toContain("effective: 80:97:1b:03:0d:ce");
+    expect(text).toContain("effective PAN source: 80:97:1b:03:0d:ce");
     expect(text).toContain("effective: 0DCE (from MAC)");
     expect(text).toContain("effective: apsystems (default)");
   });
@@ -100,7 +101,6 @@ describe("<settings-form> effective hints", () => {
       mac: "",
       pan_override: "1234",
       zigbee_type: "apsystems",
-      effective: { mac: "80:97:1b:03:0d:ce", pan: "1234", zigbee_type: "apsystems" },
     });
     const text = el.shadowRoot!.textContent ?? "";
     expect(text).toContain("effective: 1234");
@@ -161,13 +161,18 @@ describe("<settings-form> PAN-change confirm dialog", () => {
     document.body.querySelectorAll(".backdrop").forEach((n) => n.remove());
   });
 
+  // makeWithEffectivePAN persists a colon MAC whose lower-16 IS the wanted
+  // effective PAN, so the client-side computation reproduces it without any
+  // server-sent effective value.
   function makeWithEffectivePAN(pan: string): Settings {
+    // pan "0DCE" -> MAC ...0d:ce. Build a MAC ending in the pan's two octets.
+    const lo = pan.toUpperCase().padStart(4, "0");
+    const mac = `80:97:1b:03:${lo.slice(0, 2)}:${lo.slice(2, 4)}`.toLowerCase();
     return {
       ecu_id: "",
-      mac: "80971b030dce",
+      mac,
       pan_override: "",
       zigbee_type: "apsystems",
-      effective: { mac: "80:97:1b:03:0d:ce", pan, zigbee_type: "apsystems" },
     };
   }
 
@@ -285,17 +290,19 @@ function setInput(root: ShadowRoot, id: string, value: string) {
   inp.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-describe("<settings-form> empty-effective-PAN fail-closed", () => {
-  test("empty effective.pan + MAC change: Save disabled, banner shown", async () => {
+describe("<settings-form> unresolvable-PAN fail-closed (client-side)", () => {
+  test("clearing both MAC and PAN-override: Save disabled, banner shown", async () => {
+    // Both MAC and override empty resolve to NO client-side PAN (the radio
+    // would fall back to the live eth0 MAC, which the browser can't preview),
+    // so a sensitive change to that state is fail-closed.
     const el = await mount({
       ecu_id: "",
-      mac: "",
+      mac: "80:97:1b:03:0d:ce",
       pan_override: "",
       zigbee_type: "apsystems",
-      effective: { mac: "", pan: "", zigbee_type: "apsystems" },
     });
     const root = el.shadowRoot!;
-    setInput(root, "mac", "80:97:1b:03:0d:ce");
+    setInput(root, "mac", ""); // clear the MAC -> no resolvable PAN
     await el.updateComplete;
 
     const save = root.querySelector<HTMLButtonElement>("button.save")!;
@@ -310,17 +317,16 @@ describe("<settings-form> empty-effective-PAN fail-closed", () => {
     expect(dispatched).toBe(false);
   });
 
-  test("empty effective.pan + only ecu_id change: Save enabled (non-sensitive)", async () => {
+  test("no MAC/override + only ecu_id change: Save enabled (non-sensitive)", async () => {
     const el = await mount({
       ecu_id: "",
       mac: "",
       pan_override: "",
       zigbee_type: "apsystems",
-      effective: { mac: "", pan: "", zigbee_type: "apsystems" },
     });
     const root = el.shadowRoot!;
     // ECU ID isn't a step-up-gated field; the form should let Save through
-    // even with no resolved effective PAN.
+    // even with no resolvable effective PAN.
     const save = root.querySelector<HTMLButtonElement>("button.save")!;
     expect(save.disabled).toBe(false);
 
@@ -333,13 +339,12 @@ describe("<settings-form> empty-effective-PAN fail-closed", () => {
     expect(detail).not.toBeNull();
   });
 
-  test("resolved effective.pan + MAC change: Save enabled (will open confirm)", async () => {
+  test("MAC change to a new colon MAC: Save enabled (will open confirm)", async () => {
     const el = await mount({
       ecu_id: "",
       mac: "80:97:1b:03:0d:ce",
       pan_override: "",
       zigbee_type: "apsystems",
-      effective: { mac: "80:97:1b:03:0d:ce", pan: "0DCE", zigbee_type: "apsystems" },
     });
     const root = el.shadowRoot!;
     setInput(root, "mac", "aa:bb:cc:dd:ee:ff");
@@ -381,7 +386,6 @@ describe("<settings-form> MAC-change network-drop warning", () => {
       mac: "80:97:1b:03:0d:ce",
       pan_override: "",
       zigbee_type: "apsystems",
-      effective: { mac: "80:97:1b:03:0d:ce", pan: "0DCE", zigbee_type: "apsystems" },
     });
     const root = el.shadowRoot!;
     setInput(root, "mac", "aa:bb:cc:dd:ee:ff");
@@ -399,7 +403,6 @@ describe("<settings-form> MAC-change network-drop warning", () => {
       mac: "80:97:1b:03:0d:ce",
       pan_override: "0DCE",
       zigbee_type: "apsystems",
-      effective: { mac: "80:97:1b:03:0d:ce", pan: "0DCE", zigbee_type: "apsystems" },
     });
     const root = el.shadowRoot!;
     setInput(root, "pan_override", "1234");
@@ -419,24 +422,26 @@ describe("<settings-form> ZigBee channel", () => {
   function withEffectiveChannel(channel?: number): Settings {
     return {
       ecu_id: "e",
-      mac: "80971b030dce",
+      mac: "80:97:1b:03:0d:ce",
       pan_override: "",
       zigbee_type: "apsystems",
       channel: channel,
-      effective: { mac: "80:97:1b:03:0d:ce", pan: "0DCE", zigbee_type: "apsystems", channel: 16 },
     };
   }
 
   test("renders the persisted channel and the effective channel hint", async () => {
+    // Effective channel is computed CLIENT-SIDE: settings.channel || 16.
     const el = await mount(withEffectiveChannel(20));
     const root = el.shadowRoot!;
     expect(root.querySelector<HTMLInputElement>("#channel")!.value).toBe("20");
-    expect(root.textContent ?? "").toContain("effective: 16");
+    expect(root.textContent ?? "").toContain("effective: 20");
   });
 
-  test("channel 0 / undefined renders as an empty (auto) field", async () => {
+  test("channel 0 / undefined renders empty (auto) and effective defaults to 16", async () => {
     const el = await mount(withEffectiveChannel(0));
-    expect(el.shadowRoot!.querySelector<HTMLInputElement>("#channel")!.value).toBe("");
+    const root = el.shadowRoot!;
+    expect(root.querySelector<HTMLInputElement>("#channel")!.value).toBe("");
+    expect(root.textContent ?? "").toContain("effective: 16");
   });
 
   test("a valid channel persists and is carried in the save detail", async () => {
@@ -508,10 +513,9 @@ describe("<settings-form> MAC strictness (Go-side)", () => {
   test("bare-hex MAC input: inline error + Save disabled, no PAN computed", async () => {
     const el = await mount({
       ecu_id: "",
-      mac: "",
+      mac: "80:97:1b:03:0d:ce",
       pan_override: "",
       zigbee_type: "apsystems",
-      effective: { mac: "80:97:1b:03:0d:ce", pan: "0DCE", zigbee_type: "apsystems" },
     });
     const root = el.shadowRoot!;
     setInput(root, "mac", "80971b030dce"); // bare hex — rejected by the Go validator
@@ -532,10 +536,9 @@ describe("<settings-form> MAC strictness (Go-side)", () => {
   test("colon-separated MAC: accepted, PAN computed", async () => {
     const el = await mount({
       ecu_id: "",
-      mac: "",
+      mac: "80:97:1b:03:0d:ce",
       pan_override: "",
       zigbee_type: "apsystems",
-      effective: { mac: "80:97:1b:03:0d:ce", pan: "0DCE", zigbee_type: "apsystems" },
     });
     const root = el.shadowRoot!;
     setInput(root, "mac", "aa:bb:cc:dd:ee:ff");

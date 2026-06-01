@@ -156,6 +156,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/pairing/add", s.cfg.Auth.Require(http.HandlerFunc(s.handlePairingAdd)))
 	mux.Handle("POST /api/pairing/replace", s.cfg.Auth.Require(http.HandlerFunc(s.handlePairingReplace)))
 	mux.Handle("POST /api/pairing/rekey", s.cfg.Auth.Require(http.HandlerFunc(s.handlePairingRekey)))
+	mux.Handle("POST /api/pairing/change-channel", s.cfg.Auth.Require(http.HandlerFunc(s.handlePairingChangeChannel)))
 	mux.Handle("POST /api/pairing/abort", s.cfg.Auth.Require(http.HandlerFunc(s.handlePairingAbort)))
 	mux.Handle("GET /api/pairing/status", s.cfg.Auth.Require(http.HandlerFunc(s.handlePairingStatus)))
 	mux.Handle("GET /api/stream", s.cfg.Auth.Require(s.hub))

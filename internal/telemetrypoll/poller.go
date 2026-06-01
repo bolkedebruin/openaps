@@ -12,9 +12,14 @@ import (
 	"time"
 
 	"github.com/bolke/inv-driver/codec"
+	"github.com/bolke/inv-driver/internal/buslock"
 	"github.com/bolke/inv-driver/internal/store"
 	"github.com/bolke/inv-driver/wire"
 )
+
+// busLockOwner is the owner label the poll round uses when it acquires
+// the shared bus guard. Visible in buslock.Held() diagnostics.
+const busLockOwner = "telemetry-poll"
 
 // InverterRef is one inventory entry suitable for poll dispatch.
 type InverterRef struct {
@@ -46,8 +51,24 @@ type Poller struct {
 	// Defaults to 200ms.
 	SendInterval time.Duration
 
+	// BusLock, if non-nil, is the process-wide guard that pairing ops
+	// and gridprofile broadcasts hold for the duration of a fleet-
+	// disruptive operation. Each poll round TryAcquire's it before
+	// emitting any 0xBB frames and Release's at end; rounds where the
+	// lock is already held (pairing in flight) are skipped so the poller
+	// can never interleave a 0xBB query with a pairing 0x05/0x0E/0x22
+	// on the modem fd. The poll cadence is short enough (~600ms per
+	// round at the default 200ms spacing × 3 inverters) that skipping a
+	// round during a multi-second pairing op is the right trade-off.
+	// nil disables the gate (legacy behaviour); production wiring must
+	// set it.
+	BusLock *buslock.Lock
+
 	// cold-start: log "no inverters" once, not every round.
 	emptyOnce sync.Once
+	// busyOnce throttles the "skipped round, lock held" log so a
+	// minutes-long pairing op produces one line, not one per second.
+	busyOnce sync.Once
 }
 
 // Run starts the poll loop and blocks until ctx is cancelled.
@@ -81,9 +102,30 @@ func (p *Poller) Run(ctx context.Context) {
 // poll executes one round: enumerate inverters, send one 0xBB query
 // each. Returns nil on normal completion (including an empty inventory
 // or an absent backend).
+//
+// When BusLock is wired, the round first TryAcquire's it. If a pairing
+// op (or gridprofile broadcast) already owns the lock, the round is
+// skipped — telemetry frames must not interleave with pairing
+// primitives on the modem fd. The lock is released before return so
+// the next round (or a pairing op queued behind this one) sees a free
+// bus.
 func (p *Poller) poll(ctx context.Context) error {
 	if p.Store == nil || p.Server == nil || p.Backend == "" {
 		return fmt.Errorf("Store, Server, and Backend must be set")
+	}
+	if p.BusLock != nil {
+		ok, owner := p.BusLock.TryAcquire(busLockOwner)
+		if !ok {
+			p.busyOnce.Do(func() {
+				log.Printf("telemetrypoll: bus busy (owner=%q); skipping rounds until released", owner)
+			})
+			return nil
+		}
+		// Reset the once so the next contention window also logs once.
+		defer func() {
+			p.BusLock.Release()
+			p.busyOnce = sync.Once{}
+		}()
 	}
 	inverters, err := p.Store.ListInvertersForPoll(ctx)
 	if err != nil {

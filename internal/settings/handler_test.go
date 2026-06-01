@@ -78,14 +78,14 @@ func TestHandle_SetValidPersistsAndEchoes(t *testing.T) {
 }
 
 func TestHandle_SetInvalidDoesNotPersist(t *testing.T) {
+	// The ZigBee radio fields (zigbee_type, pan_override, channel) are no
+	// longer validated here — ecu-zb owns that. Only non-radio checks (MAC
+	// gating an eth0 apply, ecu_id length) remain.
 	cases := []struct {
 		name string
 		in   *wire.Settings
 		want string
 	}{
-		{"bad zigbee_type", &wire.Settings{ZigbeeType: "zwave"}, "zigbee_type"},
-		{"bad pan_override too long", &wire.Settings{PanOverride: "12345"}, "pan_override"},
-		{"bad pan_override non-hex", &wire.Settings{PanOverride: "xyz"}, "pan_override"},
 		{"bad mac", &wire.Settings{Mac: "80-97-1b-03-0d-ce"}, "mac"},
 		{"over-long ecu_id", &wire.Settings{EcuId: strings.Repeat("a", maxEcuIDLen+1)}, "ecu_id"},
 	}
@@ -132,43 +132,32 @@ func TestValidate_RejectsBadMACClasses(t *testing.T) {
 	}
 }
 
-func TestHandle_EffectivePopulatedOnGet(t *testing.T) {
+// inv-driver no longer computes/returns effective radio values — the UI
+// derives them client-side and ecu-zb owns validation. The response carries
+// the stored Settings only; the radio Effective fields are not populated.
+func TestHandle_NoEffectiveRadioOnGet(t *testing.T) {
 	h, _ := newHandler(t)
 	h.LiveMAC = func() string { return "80:97:1b:03:0d:ce" }
 	resp := h.Handle(context.Background(), getReq())
-	eff := resp.GetEffective()
-	if eff == nil {
-		t.Fatal("Effective missing on GET response")
-	}
-	if eff.GetMac() != "80:97:1b:03:0d:ce" {
-		t.Errorf("Effective.Mac = %q, want live MAC", eff.GetMac())
-	}
-	if eff.GetPan() != "0DCE" {
-		t.Errorf("Effective.Pan = %q, want 0DCE", eff.GetPan())
-	}
-	if eff.GetZigbeeType() != "apsystems" {
-		t.Errorf("Effective.ZigbeeType = %q, want apsystems (default)", eff.GetZigbeeType())
+	if eff := resp.GetEffective(); eff != nil &&
+		(eff.GetPan() != "" || eff.GetChannel() != 0 || eff.GetZigbeeType() != "") {
+		t.Fatalf("radio Effective fields should not be populated: %+v", eff)
 	}
 }
 
-func TestHandle_EffectivePopulatedOnSet(t *testing.T) {
-	h, _ := newHandler(t)
-	h.LiveMAC = func() string { return "80:97:1b:03:0d:ce" }
-	in := &wire.Settings{EcuId: "site-a", PanOverride: "1f"}
+// Radio fields are stored verbatim — no validation, no derivation. A
+// non-canonical pan_override and an out-of-range channel both persist as
+// given (ecu-zb rejects bad values at the wire, not here).
+func TestHandle_RadioFieldsStoredVerbatim(t *testing.T) {
+	h, st := newHandler(t)
+	in := &wire.Settings{PanOverride: "12345", ZigbeeType: "zwave", Channel: 99}
 	resp := h.Handle(context.Background(), setReq(in))
 	if !resp.GetOk() {
-		t.Fatalf("set not ok: %s", resp.GetError())
+		t.Fatalf("set should succeed (no radio validation): %s", resp.GetError())
 	}
-	eff := resp.GetEffective()
-	if eff == nil {
-		t.Fatal("Effective missing on SET response")
-	}
-	// Operator override beats the MAC-derived PAN, padded to 4 hex chars.
-	if eff.GetPan() != "001F" {
-		t.Errorf("Effective.Pan = %q, want 001F (override+pad)", eff.GetPan())
-	}
-	if eff.GetMac() != "80:97:1b:03:0d:ce" {
-		t.Errorf("Effective.Mac = %q, want live MAC (no operator override)", eff.GetMac())
+	got := st.Get()
+	if got.PANOverride != "12345" || got.ZigbeeType != "zwave" || got.Channel != 99 {
+		t.Fatalf("radio fields not stored verbatim: %+v", got)
 	}
 }
 
@@ -392,8 +381,9 @@ func TestHandle_OnChangeFiresOnSuccessfulSetOnly(t *testing.T) {
 		t.Fatalf("OnChange fired on get: %d", fired)
 	}
 
-	// Invalid set does not fire OnChange.
-	h.Handle(context.Background(), setReq(&wire.Settings{ZigbeeType: "bogus"}))
+	// Invalid set does not fire OnChange (over-long ecu_id is a non-radio
+	// check that still rejects).
+	h.Handle(context.Background(), setReq(&wire.Settings{EcuId: strings.Repeat("a", maxEcuIDLen+1)}))
 	if fired != 0 {
 		t.Fatalf("OnChange fired on invalid set: %d", fired)
 	}

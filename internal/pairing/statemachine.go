@@ -33,8 +33,10 @@ func (m *Manager) startScan(by string, req *wire.ScanStart) *wire.PairingRespons
 	dwell = clampScanWindow(dwell)
 	slow := req.GetSlow()
 
-	// Reject an out-of-range effective channel before launching the op so a
-	// bad channel never reaches a wire primitive.
+	// Resolve the effective channel (0 → current) before launching the op so
+	// a missing current channel fails fast. The range itself is not validated
+	// here — ecu-zb's checkChannel is the authority and rejects an
+	// out-of-range value at the wire.
 	ch, err := m.channelOrCurrent(0)
 	if err != nil {
 		return errResp("scan: " + err.Error())

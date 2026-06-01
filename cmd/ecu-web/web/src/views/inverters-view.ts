@@ -4,6 +4,7 @@ import { fmtW, fmtV, fmtHz, fmtPct } from "../format.ts";
 import "../components/cap-input.ts";
 import "../components/pairing-scan-panel.ts";
 import "../components/pairing-progress-drawer.ts";
+import "../components/password-confirm-dialog.ts";
 
 /**
  * <inverters-view .fleet=${} .names=${}> — the Inverters screen. It renders
@@ -25,6 +26,10 @@ export class InvertersView extends LitElement {
     busy: { state: true },
     aborting: { state: true },
     notice: { state: true },
+    // privileged-action dialog state: which kind is open ("" = none) and the
+    // last action error to surface inside the dialog.
+    privilegedDialog: { state: true },
+    privilegedError: { state: true },
   };
   declare fleet: Fleet | null;
   declare names: Record<string, string>;
@@ -33,6 +38,8 @@ export class InvertersView extends LitElement {
   declare busy: boolean;
   declare aborting: boolean;
   declare notice: string;
+  declare privilegedDialog: "" | "rekey" | "channel";
+  declare privilegedError: string;
 
   private pollTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -45,6 +52,8 @@ export class InvertersView extends LitElement {
     this.busy = false;
     this.aborting = false;
     this.notice = "";
+    this.privilegedDialog = "";
+    this.privilegedError = "";
   }
 
   connectedCallback(): void {
@@ -170,29 +179,51 @@ export class InvertersView extends LitElement {
     }
   };
 
-  private onRekey = async () => {
-    const pan = prompt(
-      "Fleet re-key BROADCASTS a new PAN to every inverter (0x22) and moves " +
-      "the radio to it. Telemetry pauses while it runs; on failure the old " +
-      "PAN is restored.\n\nEnter the new PAN (1–4 hex digits, e.g. 0DCE):",
-    );
-    if (pan === null) return;
-    const newPan = pan.trim();
-    if (!/^[0-9a-fA-F]{1,4}$/.test(newPan)) {
-      this.notice = "PAN must be 1–4 hexadecimal digits.";
-      return;
-    }
+  // onRekey / onChangeChannel open an inline password-confirm dialog that
+  // collects the new value + the operator's password in one place. The dialog
+  // verifies the password (api.verifyPassword) before invoking the privileged
+  // action, so we never surface a 403 "step-up required" detour to Settings.
+  private onRekey = () => {
+    this.notice = "";
+    this.privilegedError = "";
+    this.privilegedDialog = "rekey";
+  };
+
+  private onChangeChannel = () => {
+    this.notice = "";
+    this.privilegedError = "";
+    this.privilegedDialog = "channel";
+  };
+
+  private onPrivilegedCancel = () => {
+    if (this.busy) return;
+    this.privilegedDialog = "";
+    this.privilegedError = "";
+  };
+
+  private onPrivilegedConfirm = async (e: Event) => {
+    const kind = this.privilegedDialog;
+    if (!kind) return;
+    const { value } = (e as CustomEvent<{ value: string }>).detail;
     this.busy = true;
+    this.privilegedError = "";
     this.notice = "";
     try {
-      const r = await api.pairingRekey(newPan, 0);
-      if (!r.ok) throw new Error(r.error || "re-key rejected");
+      const r = kind === "rekey"
+        ? await api.pairingRekey(value, 0)
+        : await api.pairingChangeChannel(Number(value));
+      if (!r.ok) {
+        const msg = r.error || (kind === "rekey" ? "re-key rejected" : "channel change rejected");
+        throw new Error(msg);
+      }
+      // success: close the dialog and open the progress drawer.
+      this.privilegedDialog = "";
+      this.privilegedError = "";
       this.applyResp(r.status);
     } catch (err) {
-      const msg = String((err as Error).message || err);
-      this.notice = /step-up/i.test(msg)
-        ? "Re-key needs a password confirm. Confirm your password (Settings) then retry."
-        : msg;
+      // Render the action error INSIDE the still-open dialog so the operator
+      // can correct the value (or password) and retry without losing context.
+      this.privilegedError = String((err as Error).message || err);
     } finally {
       this.busy = false;
     }
@@ -347,6 +378,8 @@ export class InvertersView extends LitElement {
         <div class="rekey">
           <button class="rekey-btn" ?disabled=${this.busy} @click=${this.onRekey}>Fleet re-key…</button>
           <span class="hint">Broadcasts a new PAN to the whole fleet. Confirmation required.</span>
+          <button class="rekey-btn" ?disabled=${this.busy} @click=${this.onChangeChannel}>Change ZigBee channel…</button>
+          <span class="hint">Migrates the whole fleet to a new RF channel. Confirmation required.</span>
         </div>
       </div>
 
@@ -361,6 +394,16 @@ export class InvertersView extends LitElement {
         @abort=${this.onAbort}
         @close=${this.onCloseDrawer}
       ></pairing-progress-drawer>
+
+      ${this.privilegedDialog
+        ? html`<password-confirm-dialog
+            .kind=${this.privilegedDialog}
+            .busy=${this.busy}
+            .actionError=${this.privilegedError}
+            @confirm=${this.onPrivilegedConfirm}
+            @cancel=${this.onPrivilegedCancel}
+          ></password-confirm-dialog>`
+        : nothing}
     `;
   }
 }

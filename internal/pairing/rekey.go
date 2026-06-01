@@ -130,43 +130,16 @@ func (m *Manager) runRekey(ctx context.Context, serials []string, oldPan, newPan
 	}
 	m.milestone(ctx, "", "rekey_committed", "info", fmt.Sprintf("0x%04X -> 0x%04X ch=%d", oldPan, newPan, ch))
 
-	// REBIND + VERIFY: re-query each short address on the new PAN.
-	m.status.setStage(StageRekey, "verify")
-	verified := 0
-	for i, s := range serials {
-		if ctx.Err() != nil {
-			// Already committed + persisted; abort here means partial verify,
-			// not a rollback — the fleet is on the new PAN now.
-			break
-		}
-		m.status.update(func(st *PairingStatus) { st.CurrentSerial = s; st.Substep = "verify " + s; st.Done = i })
-		sa, err := m.Transport.getShortAddr(ctx, s)
-		if err != nil || sa == 0 {
-			m.status.setInverterState(s, "unverified")
-			continue
-		}
-		if m.Store != nil {
-			_ = m.Store.SetInverterShortAddr(ctx, s, sa)
-			_ = m.Store.SetInverterPairingState(ctx, s, "bound", 0)
-		}
-		m.status.upsertInverter(PerInverter{Serial: s, ShortAddr: uint32(sa), State: "verified"})
-		verified++
-	}
-
-	if verified < len(serials) {
-		// Commit already persisted the new PAN; we do NOT roll back (the
-		// fleet has moved). Report the partial result so the operator can
-		// re-run verify / investigate the stragglers.
-		m.status.update(func(st *PairingStatus) {
-			st.Stage = StageError
-			st.Error = fmt.Sprintf("rekey committed to 0x%04X but only %d/%d inverters verified", newPan, verified, len(serials))
-			st.Done = verified
-		})
-		m.milestone(context.Background(), "", "pairing_error", "warn",
-			fmt.Sprintf("rekey partial verify %d/%d", verified, len(serials)))
-		return
-	}
-	m.status.finishDone(fmt.Sprintf("fleet rekeyed to 0x%04X (%d/%d verified)", newPan, verified, len(serials)))
+	// REBIND + VERIFY: re-query each short address on the new PAN. The fleet
+	// has already moved (commit persisted), so a partial result is reported,
+	// not rolled back.
+	m.rebindVerify(ctx, serials, rebindTemplates{
+		stage:      StageRekey,
+		errKind:    "pairing_error",
+		partialErr: fmt.Sprintf("rekey committed to 0x%04X but only %%d/%%d inverters verified", newPan),
+		partialMsg: "rekey partial verify %d/%d",
+		done:       fmt.Sprintf("fleet rekeyed to 0x%04X (%%d/%%d verified)", newPan),
+	})
 }
 
 // rekeyRollback restores the module to the old PAN and records the error.

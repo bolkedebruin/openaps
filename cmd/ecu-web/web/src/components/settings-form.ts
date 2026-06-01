@@ -1,6 +1,11 @@
 import { LitElement, html, css, nothing } from "lit";
 import { api, type Settings } from "../api.ts";
 
+// DEFAULT_CHANNEL is the ZigBee channel the radio falls back to when the
+// operator hasn't set one (settings.channel == 0 / undefined). Mirrors
+// ecu-zb's channel.conf default.
+const DEFAULT_CHANNEL = 16;
+
 /**
  * <settings-form .settings=${s} .hostname=${h}> renders the editable ECU
  * settings. Below each ZigBee-coupled field it shows the effective value (the
@@ -186,14 +191,28 @@ export class SettingsForm extends LitElement {
     };
   }
 
-  // computeEffectivePAN derives the effective PAN given typed settings,
-  // falling back to the current effective MAC for the empty-MAC case.
-  // Returns a 4-uppercase-hex string, or "" when nothing usable is available.
+  // computeEffectivePAN derives the effective PAN given settings, CLIENT-SIDE.
+  // inv-driver no longer computes effective radio values, so the UI mirrors
+  // ecu-zb's resolution order: pan_override wins, else the lower-16 of the
+  // configured MAC. Returns a 4-uppercase-hex string, or "" when neither is
+  // set (the backend then uses the live eth0 MAC, which the browser can't see).
   private computeEffectivePAN(d: Settings): string {
     const pan = panFromOverride(d.pan_override);
     if (pan) return pan;
-    const macSource = d.mac || this.settings.effective?.mac || "";
-    return panFromMAC(macSource);
+    return panFromMAC(d.mac || "");
+  }
+
+  // effectivePAN for the persisted settings (display + the sensitive-change
+  // gate), computed client-side.
+  private effectivePAN(): string {
+    return this.computeEffectivePAN(this.settings);
+  }
+
+  // effectiveChannel resolves the channel the radio uses: the configured
+  // channel, else DEFAULT_CHANNEL. Computed client-side.
+  private effectiveChannel(): number {
+    const ch = this.settings.channel;
+    return ch && ch > 0 ? ch : DEFAULT_CHANNEL;
   }
 
   // sensitiveChange reports whether d changes a step-up-gated field (mac
@@ -227,15 +246,15 @@ export class SettingsForm extends LitElement {
       // Bad input: don't dispatch, the inline validation hint already shows.
       return;
     }
-    const currentPAN = (this.settings.effective?.pan ?? "").toUpperCase();
-    if (sensitive && !currentPAN) {
-      // Fail-closed: with no resolved effective PAN we can't show the
-      // post-change PAN in the confirm dialog and can't tell whether the
-      // change re-PANs the radio. The save button is disabled in render(),
+    const currentPAN = this.effectivePAN();
+    const newPAN = this.computeEffectivePAN(detail);
+    if (sensitive && !newPAN) {
+      // Fail-closed: a sensitive change that resolves to no PAN (both MAC and
+      // PAN-override cleared) would hand the radio to the live eth0 MAC, which
+      // the browser can't preview. The save button is disabled in render(),
       // but guard the handler too for keyboard-driven Save attempts.
       return;
     }
-    const newPAN = this.computeEffectivePAN(detail);
     if (currentPAN && newPAN && newPAN !== currentPAN) {
       this.pendingDetail = detail;
       this.pwdError = "";
@@ -299,19 +318,24 @@ export class SettingsForm extends LitElement {
 
   render() {
     const s = this.settings;
-    const eff = s.effective ?? {};
     const ecuPlaceholder = "e.g. the serial on the device label";
     const ecuInitial = s.ecu_id || this.hostname || "";
-    const macHint = eff.mac ? `effective: ${eff.mac}` : "";
+    // Effective radio values are computed CLIENT-SIDE: inv-driver no longer
+    // returns them. The PAN comes from pan_override, else the lower-16 of the
+    // configured MAC (empty → the backend uses the live eth0 MAC, not visible
+    // here). The channel is settings.channel || 16.
+    const effPan = this.effectivePAN();
+    const effChannel = this.effectiveChannel();
+    const macHint = s.mac ? `effective PAN source: ${s.mac}` : "";
     const panHint = s.pan_override
-      ? eff.pan
-        ? `effective: ${eff.pan}`
+      ? effPan
+        ? `effective: ${effPan}`
         : ""
-      : eff.pan
-        ? `effective: ${eff.pan} (from MAC)`
+      : effPan
+        ? `effective: ${effPan} (from MAC)`
         : "";
     const zbHint = s.zigbee_type ? "" : "effective: apsystems (default)";
-    const chHint = eff.channel ? `effective: ${eff.channel}` : "";
+    const chHint = `effective: ${effChannel}`;
 
     // Derive Save-disabled state from the live typed values. A sensitive
     // change (mac / pan_override differs from what's persisted) requires
@@ -322,7 +346,12 @@ export class SettingsForm extends LitElement {
     const panChanged = this.typedPan !== (s.pan_override ?? "");
     const typedSensitive = macChanged || panChanged;
     const macInvalid = macChanged && this.typedMac !== "" && !isColonMAC(this.typedMac);
-    const noEffectivePan = !(eff.pan ?? "");
+    // With effective computed client-side, a sensitive change is blocked only
+    // when it resolves to NO PAN (both MAC and override empty) — the radio
+    // would then fall back to the live eth0 MAC, which we can't preview.
+    const typedPanResolves =
+      !!panFromOverride(this.typedPan) || !!panFromMAC(this.typedMac);
+    const noEffectivePan = typedSensitive && !typedPanResolves;
     // The channel is not step-up-gated, but an out-of-range value must still
     // block Save (the Go validator only accepts 0 or 11..26).
     const channelInvalid = channelInputInvalid(this.typedChannel);
@@ -386,7 +415,7 @@ export class SettingsForm extends LitElement {
             min="11"
             max="26"
             step="1"
-            placeholder="auto (16)"
+            placeholder=${`auto (${DEFAULT_CHANNEL})`}
             .value=${channelToInput(s.channel)}
             @input=${this.onChannelInput}
           />
@@ -429,7 +458,7 @@ export class SettingsForm extends LitElement {
   };
 
   private renderDialog() {
-    const current = (this.settings.effective?.pan ?? "").toUpperCase();
+    const current = this.effectivePAN();
     const next = this.pendingDetail ? this.computeEffectivePAN(this.pendingDetail) : "";
     // A MAC change reconfigures eth0 immediately (ip link down/up), so
     // the operator's HTTP session briefly drops. Warn before they commit.

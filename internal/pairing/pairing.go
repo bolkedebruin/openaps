@@ -36,6 +36,13 @@ var uidRe = regexp.MustCompile(`^[0-9A-Fa-f]{12}$`)
 // lockOwner is the buslock owner label for pairing operations.
 const lockOwner = "pairing"
 
+// verifyRetrySleep is the production default wait between rebindVerify
+// passes. Inverters (notably QS1A on this fleet) take a few seconds after a
+// rearm/commit before they answer a directed 0x0E, while their 1 Hz BB
+// telemetry already works — the retry pass catches them without yelling
+// "unverified" at the operator.
+const verifyRetrySleep = 3 * time.Second
+
 // Default sweep / dwell parameters (contract §Channel 1 server defaults).
 const (
 	defaultChanLo  uint32 = 11
@@ -94,13 +101,18 @@ type NameInheritor interface {
 	InheritName(ctx context.Context, oldUID, newUID string) (moved bool, err error)
 }
 
-// Settings persists the pan_override field after a successful FleetRekey
-// (mirroring the new PAN ecu-zb is now on) and NEVER touches
+// Settings persists radio config after a successful migration: the
+// pan_override after a FleetRekey (mirroring the new PAN ecu-zb is now on)
+// and the channel after a FleetChangeChannel. It NEVER touches
 // ecu_eth0_mac.conf (macapp race). The live operating PAN is owned by ecu-zb
 // and read via Transport.getModulePan, not derived here.
 type Settings interface {
 	PANOverride() string
 	SetPANOverride(ctx context.Context, panHex string) error
+	// SetChannel persists the operating RF channel after a successful
+	// channel migration. inv-driver does not validate the channel range —
+	// ecu-zb is the authority and rejects an out-of-range value at the wire.
+	SetChannel(ctx context.Context, channel uint32) error
 }
 
 // Manager owns the pairing state machines, the single-op lock, the
@@ -130,6 +142,11 @@ type Manager struct {
 	// CommitSettle overrides the post-0x22-commit quiet window. Zero uses
 	// the production default (commitSettle). Tests set a short value.
 	CommitSettle time.Duration
+	// VerifyRetrySleep overrides the wait between rebindVerify passes for
+	// stragglers (inverters slow to answer the directed 0x0E right after a
+	// rearm/commit). Zero uses the production default (verifyRetrySleep).
+	// Tests set a short value.
+	VerifyRetrySleep time.Duration
 
 	status statusTracker
 
@@ -156,6 +173,8 @@ func (m *Manager) Handle(ctx context.Context, by string, req *wire.PairingReques
 		return m.startReplace(by, req.GetReplace())
 	case *wire.PairingRequest_FleetRekey:
 		return m.startRekey(by, req.GetFleetRekey())
+	case *wire.PairingRequest_ChangeChannel:
+		return m.startChangeChannel(by, req.GetChangeChannel())
 	case *wire.PairingRequest_Abort:
 		return m.abort()
 	case *wire.PairingRequest_GetStatus:
@@ -252,18 +271,21 @@ func (m *Manager) settleDur() time.Duration {
 	return commitSettle
 }
 
-// ZigBee 2.4 GHz channel bounds (IEEE 802.15.4 channels 11-26). A channel
-// outside this range must never reach the wire (the byte() casts downstream
-// would truncate it).
-const (
-	minChannel uint32 = 11
-	maxChannel uint32 = 26
-)
+// verifyRetryDur is the wait between rebindVerify passes, overridable for
+// tests via Manager.VerifyRetrySleep.
+func (m *Manager) verifyRetryDur() time.Duration {
+	if m.VerifyRetrySleep > 0 {
+		return m.VerifyRetrySleep
+	}
+	return verifyRetrySleep
+}
 
-// channelOrCurrent resolves a request channel (0 → current radio channel)
-// and validates the result is a usable 2.4 GHz channel (11-26). It returns
-// an error rather than letting an out-of-range value reach a wire primitive
-// (where a uint32→byte cast would silently truncate it).
+// channelOrCurrent resolves a request channel: 0 means "keep the current
+// channel" and falls back to CurrentChannel(). inv-driver does NOT validate
+// the channel range — that is ZigBee radio knowledge owned by ecu-zb, whose
+// checkChannel rejects an out-of-range value at the wire and propagates the
+// error back via PairingCmdResult. A still-zero result (no CurrentChannel
+// configured) is an error since it can't name a real channel.
 func (m *Manager) channelOrCurrent(reqChannel uint32) (uint32, error) {
 	ch := reqChannel
 	if ch == 0 {
@@ -271,8 +293,8 @@ func (m *Manager) channelOrCurrent(reqChannel uint32) (uint32, error) {
 			ch = m.CurrentChannel()
 		}
 	}
-	if ch < minChannel || ch > maxChannel {
-		return 0, fmt.Errorf("channel %d out of range (want %d-%d)", ch, minChannel, maxChannel)
+	if ch == 0 {
+		return 0, fmt.Errorf("channel unset and no current channel available")
 	}
 	return ch, nil
 }
@@ -298,6 +320,101 @@ func (m *Manager) fail(stepErr error) {
 	}
 	m.status.finishError(stepErr.Error())
 	m.milestone(context.Background(), "", "pairing_error", "error", stepErr.Error())
+}
+
+// rebindTemplates carries the op-specific text + milestone kind that the
+// otherwise-identical REBIND+VERIFY tail needs. errKind is the milestone kind
+// for the partial-verify warning; partialErr / partialMsg / done are
+// fmt.Sprintf templates taking (verified, total) — partialErr is the
+// PairingStatus.Error, partialMsg the milestone detail, done the finishDone
+// message.
+type rebindTemplates struct {
+	stage      string
+	errKind    string
+	partialErr string
+	partialMsg string
+	done       string
+}
+
+// rebindVerify is the REBIND+VERIFY tail shared by runRekey and
+// runChangeChannel: re-query each serial's short address on the new
+// PAN/channel, persist the bound ones, and report a partial (StageError +
+// errKind milestone) or a done status. It returns the verified count. The
+// op-specific preludes (rekey's prime/commit vs channel's 0x0F hop) stay in
+// the callers. The fleet has already moved by the time this runs, so a partial
+// result is reported, never rolled back.
+func (m *Manager) rebindVerify(ctx context.Context, serials []string, t rebindTemplates) int {
+	m.status.setStage(t.stage, "verify")
+	// Verified short addrs keyed by serial. The first pass runs immediately
+	// (no latency on the happy path); any serials still unverified after
+	// the pass get a short settle and one more attempt — observed live: some
+	// inverters (notably QS1A) take ~5–10 s after the rearm/commit before
+	// they reply to a directed 0x0E, while their 1 Hz BB telemetry already
+	// works. Without the retry the op reported "1/3 verified" when the
+	// fleet was in fact fully converged, confusing the operator.
+	verified := map[string]uint16{}
+	m.verifyPass(ctx, serials, verified)
+
+	const verifyRetries = 2
+	for retry := 0; retry < verifyRetries && len(verified) < len(serials); retry++ {
+		if ctx.Err() != nil {
+			break
+		}
+		select {
+		case <-ctx.Done():
+		case <-time.After(m.verifyRetryDur()):
+		}
+		m.verifyPass(ctx, serials, verified)
+	}
+
+	for _, s := range serials {
+		if _, ok := verified[s]; !ok {
+			m.status.setInverterState(s, "unverified")
+		}
+	}
+
+	if len(verified) < len(serials) {
+		// The move already persisted; we do NOT roll back (the fleet has
+		// moved). Report the partial result so the operator can re-run /
+		// investigate the stragglers.
+		m.status.update(func(st *PairingStatus) {
+			st.Stage = StageError
+			st.Error = fmt.Sprintf(t.partialErr, len(verified), len(serials))
+			st.Done = len(verified)
+		})
+		m.milestone(context.Background(), "", t.errKind, "warn",
+			fmt.Sprintf(t.partialMsg, len(verified), len(serials)))
+		return len(verified)
+	}
+	m.status.finishDone(fmt.Sprintf(t.done, len(verified), len(serials)))
+	return len(verified)
+}
+
+// verifyPass runs one verification round over serials not yet present in
+// verified: per-serial getShortAddr, on success persist + mark verified +
+// record in the map. Failures are silent here — the caller decides whether
+// to retry or accept the partial result. The status update tracks progress
+// across passes so the UI shows the cumulative verified count.
+func (m *Manager) verifyPass(ctx context.Context, serials []string, verified map[string]uint16) {
+	for _, s := range serials {
+		if _, ok := verified[s]; ok {
+			continue
+		}
+		if ctx.Err() != nil {
+			return
+		}
+		m.status.update(func(st *PairingStatus) { st.CurrentSerial = s; st.Substep = "verify " + s; st.Done = len(verified) })
+		sa, err := m.Transport.getShortAddr(ctx, s)
+		if err != nil || sa == 0 {
+			continue
+		}
+		if m.Store != nil {
+			_ = m.Store.SetInverterShortAddr(ctx, s, sa)
+			_ = m.Store.SetInverterPairingState(ctx, s, "bound", 0)
+		}
+		m.status.upsertInverter(PerInverter{Serial: s, ShortAddr: uint32(sa), State: "verified"})
+		verified[s] = sa
+	}
 }
 
 // errResp constructs a failure PairingResponse.

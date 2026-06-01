@@ -154,13 +154,6 @@ export interface EventsQuery {
   limit?: number;
 }
 
-export interface EffectiveSettings {
-  mac?: string;
-  pan?: string; // 4 uppercase hex, e.g. "0DCE"
-  zigbee_type?: string;
-  channel?: number; // resolved ZigBee channel (settings or default 16)
-}
-
 export interface Settings {
   ecu_id: string;
   mac: string;
@@ -168,7 +161,6 @@ export interface Settings {
   zigbee_type: string;
   channel?: number; // ZigBee channel: 0 = derive/default, else 11..26
   inverter_names?: Record<string, string>;
-  effective?: EffectiveSettings;
 }
 
 export interface SettingsResult {
@@ -282,6 +274,7 @@ export type PairingStage =
   | "migrate"
   | "configure"
   | "rekey"
+  | "change_channel"
   | "done"
   | "aborted"
   | "error";
@@ -386,7 +379,6 @@ export const api = {
         zigbee_type: r.zigbee_type,
         channel: r.channel,
         inverter_names: r.inverter_names ?? {},
-        effective: r.effective,
       },
     };
   },
@@ -422,6 +414,8 @@ export const api = {
     postJSONResult<PairingResp>("/api/pairing/replace", { old_uid, new_serial }),
   pairingRekey: (new_pan: string, channel = 0) =>
     postJSONResult<PairingResp>("/api/pairing/rekey", { new_pan, channel }),
+  pairingChangeChannel: (channel: number) =>
+    postJSONResult<PairingResp>("/api/pairing/change-channel", { channel }),
   pairingAbort: () => postJSONResult<PairingResp>("/api/pairing/abort", {}),
   pairingStatus: () => getJSON<PairingResp>("/api/pairing/status"),
 };

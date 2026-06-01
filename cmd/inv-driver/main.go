@@ -418,6 +418,12 @@ func runServe(args []string) error {
 				Backend:      *probeBackend,
 				Interval:     *telemetryPollInterval,
 				SendInterval: *probeInterval,
+				// Share the single process-wide bus guard so a pairing
+				// op or gridprofile broadcast in flight pauses polling
+				// for its duration — a 0xBB query interleaved with a
+				// pairing 0x05/0x0E/0x22 on the modem fd corrupts the
+				// modem's view of the next config-op ack.
+				BusLock: busLock,
 			}
 			go tp.Run(ctx)
 			log.Printf("telemetrypoll: started (interval=%s per-inverter-spacing=%s backend=%q)",
@@ -828,6 +834,15 @@ func (p pairingSettings) PANOverride() string {
 func (p pairingSettings) SetPANOverride(_ context.Context, panHex string) error {
 	s := p.store.Get()
 	s.PANOverride = panHex
+	return p.store.Save(s)
+}
+
+// SetChannel persists the operating RF channel after a successful channel
+// migration. inv-driver does not validate the range — ecu-zb is the radio
+// authority — so the value is stored verbatim.
+func (p pairingSettings) SetChannel(_ context.Context, channel uint32) error {
+	s := p.store.Get()
+	s.Channel = channel
 	return p.store.Save(s)
 }
 

@@ -465,7 +465,19 @@ message PairingRequest {
     FleetRekey      fleet_rekey = 4;  // move whole fleet to a new PAN
     Empty           abort       = 5;  // abort the running op (Safe-Abort)
     Empty           get_status  = 6;  // poll current op status (in-memory)
+    FleetChangeChannel change_channel = 7;  // move whole fleet to a new RF channel
   }
+}
+
+// FleetChangeChannel moves every paired inverter to a new RF channel: each
+// inverter is sent a directed 0x0F (set-inv-pan with the current PAN + new
+// channel) while still reachable on the current channel, then the module
+// follows to the new channel and short addresses are re-queried. Reversible:
+// on failure the state machine restores the old channel. inv-driver does NOT
+// validate the channel range (a ZigBee concern); the bus backend (ecu-zb)
+// rejects an out-of-range channel. Persisted via Settings.channel on success.
+message FleetChangeChannel {
+  uint32 channel = 1;  // target RF channel (backend validates the range)
 }
 
 // ScanStart begins discovery. slow=false → "fast": one 0xD1 report-id
@@ -563,6 +575,7 @@ message PairingCmdResult {
   repeated FoundInverter found = 4;  // report_scan: announcing units
   uint32 short_addr = 5;            // get_short_addr: assigned SA
   uint32 pan = 6;                   // get_module_pan: backend's operating PAN
+  uint32 channel = 7;               // get_module_pan: backend's operating channel
 }
 
 // FoundInverter is one inverter that announced itself (0x1D reply) during

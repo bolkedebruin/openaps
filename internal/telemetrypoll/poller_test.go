@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/bolke/inv-driver/codec"
+	"github.com/bolke/inv-driver/internal/buslock"
 	"github.com/bolke/inv-driver/internal/store"
 	"github.com/bolke/inv-driver/wire"
 )
@@ -226,6 +227,82 @@ func TestPoller_BackendAbsent_SkipsRound(t *testing.T) {
 	}
 	if err := p.poll(ctx); err != nil {
 		t.Fatalf("poll should return nil on backend refusal, got: %v", err)
+	}
+}
+
+// TestPoller_BusLockHeld_SkipsRound verifies that when the shared bus
+// guard is already held (e.g. a pairing op is in flight), the poll round
+// emits zero sends and returns nil — telemetry must not interleave with
+// pairing primitives on the modem fd.
+func TestPoller_BusLockHeld_SkipsRound(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	s := openStore(t)
+	if err := s.UpsertInverterFromTelemetry(ctx, "u1", 0x1234, "", "", 1); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	bl := buslock.New()
+	ok, _ := bl.TryAcquire("test-pairing")
+	if !ok {
+		t.Fatal("failed to pre-acquire bus lock for test")
+	}
+	defer bl.Release()
+
+	fr := &fakeRouter{}
+	p := &Poller{
+		Store:        NewStoreAdapter(s),
+		Server:       fr,
+		Backend:      "test-backend",
+		SendInterval: 1 * time.Millisecond,
+		BusLock:      bl,
+	}
+	if err := p.poll(ctx); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	if got := fr.snap(); len(got) != 0 {
+		t.Fatalf("expected 0 sends while bus lock held, got %d", len(got))
+	}
+	// The lock must still be held by the original owner — the poller
+	// must not have released someone else's lock.
+	held, owner := bl.Held()
+	if !held || owner != "test-pairing" {
+		t.Fatalf("lock state after skipped poll: held=%v owner=%q, want held=true owner=test-pairing", held, owner)
+	}
+}
+
+// TestPoller_BusLockReleasedBetweenRounds verifies that on a successful
+// round the poller acquires the lock, emits its sends, and releases it
+// so a queued pairing op or the next round sees a free bus.
+func TestPoller_BusLockReleasedBetweenRounds(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	s := openStore(t)
+	if err := s.UpsertInverterFromTelemetry(ctx, "u1", 0x1234, "", "", 1); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	bl := buslock.New()
+	fr := &fakeRouter{}
+	p := &Poller{
+		Store:        NewStoreAdapter(s),
+		Server:       fr,
+		Backend:      "test-backend",
+		SendInterval: 1 * time.Millisecond,
+		BusLock:      bl,
+	}
+	if err := p.poll(ctx); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	if got := fr.snap(); len(got) != 1 {
+		t.Fatalf("expected 1 send, got %d", len(got))
+	}
+	if held, owner := bl.Held(); held {
+		t.Fatalf("bus lock still held after poll round: owner=%q", owner)
+	}
+	// And a subsequent TryAcquire by a pairing op must succeed.
+	if ok, _ := bl.TryAcquire("pairing"); !ok {
+		t.Fatal("pairing TryAcquire failed after poll released the lock")
 	}
 }
 

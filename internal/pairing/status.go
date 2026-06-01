@@ -14,6 +14,7 @@ const (
 	StageMigrate   = "migrate"
 	StageConfigure = "configure"
 	StageRekey     = "rekey"
+	StageChannel   = "channel"
 	StageDone      = "done"
 	StageAborted   = "aborted"
 	StageError     = "error"
@@ -25,6 +26,7 @@ const (
 	OpAdd     = "add"
 	OpReplace = "replace"
 	OpRekey   = "rekey"
+	OpChannel = "change_channel"
 )
 
 // PerInverter is one inverter's progress within the current op. State is a

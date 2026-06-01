@@ -112,6 +112,29 @@ func (s *Server) handlePairingReplace(w http.ResponseWriter, r *http.Request) {
 	s.writePairingResp(w, resp, err, http.StatusAccepted)
 }
 
+// dispatchStepUp runs the step-up-gated pairing dispatch shared by the
+// fleet-rekey and change-channel handlers: it requires PairingFn to be wired,
+// enforces a valid single-use step-up (403 otherwise), dispatches req, consumes
+// the step-up flag ONLY on a successful (resp.Ok) dispatch, and writes the
+// standard Accepted wrapper. Each caller just decodes its own body and builds
+// the PairingRequest oneof.
+func (s *Server) dispatchStepUp(w http.ResponseWriter, r *http.Request, req *wire.PairingRequest) {
+	if s.cfg.PairingFn == nil {
+		http.Error(w, "pairing unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if !s.cfg.Auth.StepUpValid(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "step-up required"})
+		return
+	}
+	resp, err := s.cfg.PairingFn(r.Context(), req)
+	if resp != nil && resp.GetOk() {
+		// Single-use: a successful dispatch consumes the step-up flag.
+		s.cfg.Auth.ConsumeStepUp(r)
+	}
+	s.writePairingResp(w, resp, err, http.StatusAccepted)
+}
+
 // handlePairingRekey moves the whole fleet to a new PAN (broadcast 0x22).
 // Gated by step-up like the other PAN-changing path: the operator must POST
 // /api/auth/verify within stepUpTTL first, since this re-PANs the radio and
@@ -128,18 +151,31 @@ func (s *Server) handlePairingRekey(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &body) {
 		return
 	}
-	if !s.cfg.Auth.StepUpValid(r) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "step-up required"})
-		return
-	}
-	resp, err := s.cfg.PairingFn(r.Context(), &wire.PairingRequest{
+	s.dispatchStepUp(w, r, &wire.PairingRequest{
 		Op: &wire.PairingRequest_FleetRekey{FleetRekey: &wire.FleetRekey{
 			NewPan: body.NewPan, Channel: body.Channel}}})
-	if resp != nil && resp.GetOk() {
-		// Single-use: a successful broadcast consumes the step-up flag.
-		s.cfg.Auth.ConsumeStepUp(r)
+}
+
+// handlePairingChangeChannel migrates the whole fleet to a new RF channel via
+// the directed 0x0F primitive (each inverter hops, then the module follows).
+// Gated by step-up like fleet re-key: the operator must POST /api/auth/verify
+// within stepUpTTL first, since this moves the radio and blacks out telemetry
+// while it runs. inv-driver does not validate the channel range — the bus
+// backend (ecu-zb) rejects an out-of-range channel and the error propagates.
+func (s *Server) handlePairingChangeChannel(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.PairingFn == nil {
+		http.Error(w, "pairing unavailable", http.StatusServiceUnavailable)
+		return
 	}
-	s.writePairingResp(w, resp, err, http.StatusAccepted)
+	var body struct {
+		Channel uint32 `json:"channel"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	s.dispatchStepUp(w, r, &wire.PairingRequest{
+		Op: &wire.PairingRequest_ChangeChannel{ChangeChannel: &wire.FleetChangeChannel{
+			Channel: body.Channel}}})
 }
 
 // handlePairingAbort requests a safe abort of the active op.

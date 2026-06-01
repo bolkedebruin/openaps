@@ -1,8 +1,8 @@
-var E4=globalThis,o4=E4.ShadowRoot&&(E4.ShadyCSS===void 0||E4.ShadyCSS.nativeShadow)&&"adoptedStyleSheets"in Document.prototype&&"replace"in CSSStyleSheet.prototype,r4=Symbol(),V3=new WeakMap;class p4{constructor(Q,Y,K){if(this._$cssResult$=!0,K!==r4)throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");this.cssText=Q,this._strings=Y}get styleSheet(){let Q=this._styleSheet,Y=this._strings;if(o4&&Q===void 0){let K=Y!==void 0&&Y.length===1;if(K)Q=V3.get(Y);if(Q===void 0){if((this._styleSheet=Q=new CSSStyleSheet).replaceSync(this.cssText),K)V3.set(Y,Q)}}return Q}toString(){return this.cssText}}var jQ=(Q)=>{if(Q._$cssResult$===!0)return Q.cssText;else if(typeof Q==="number")return Q;else throw Error(`Value passed to 'css' function must be a 'css' function result: ${Q}. Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.`)},$Q=(Q)=>new p4(typeof Q==="string"?Q:String(Q),void 0,r4),L=(Q,...Y)=>{let K=Q.length===1?Q[0]:Y.reduce((X,G,q)=>X+jQ(G)+Q[q+1],Q[0]);return new p4(K,Q,r4)},N3=(Q,Y)=>{if(o4)Q.adoptedStyleSheets=Y.map((K)=>K instanceof CSSStyleSheet?K:K.styleSheet);else for(let K of Y){let X=document.createElement("style"),G=E4.litNonce;if(G!==void 0)X.setAttribute("nonce",G);X.textContent=K.cssText,Q.appendChild(X)}},AQ=(Q)=>{let Y="";for(let K of Q.cssRules)Y+=K.cssText;return $Q(Y)},l4=o4?(Q)=>Q:(Q)=>Q instanceof CSSStyleSheet?AQ(Q):Q;var{is:LQ,defineProperty:DQ,getOwnPropertyDescriptor:O3,getOwnPropertyNames:FQ,getOwnPropertySymbols:IQ,getPrototypeOf:P3}=Object,VQ=!1,R=globalThis;if(VQ)R.customElements??=customElements;var w=!0,k,E3=R.trustedTypes,NQ=E3?E3.emptyScript:"",Z3=w?R.reactiveElementPolyfillSupportDevMode:R.reactiveElementPolyfillSupport;if(w)R.litIssuedWarnings??=new Set,k=(Q,Y)=>{if(Y+=` See https://lit.dev/msg/${Q} for more information.`,!R.litIssuedWarnings.has(Y)&&!R.litIssuedWarnings.has(Q))console.warn(Y),R.litIssuedWarnings.add(Y)},queueMicrotask(()=>{if(k("dev-mode","Lit is in dev mode. Not recommended for production!"),R.ShadyDOM?.inUse&&Z3===void 0)k("polyfill-support-missing","Shadow DOM is being polyfilled via `ShadyDOM` but the `polyfill-support` module has not been loaded.")});var OQ=w?(Q)=>{if(!R.emitLitDebugLogEvents)return;R.dispatchEvent(new CustomEvent("lit-debug",{detail:Q}))}:void 0,s=(Q,Y)=>Q,d4={toAttribute(Q,Y){switch(Y){case Boolean:Q=Q?NQ:null;break;case Object:case Array:Q=Q==null?Q:JSON.stringify(Q);break}return Q},fromAttribute(Q,Y){let K=Q;switch(Y){case Boolean:K=Q!==null;break;case Number:K=Q===null?null:Number(Q);break;case Object:case Array:try{K=JSON.parse(Q)}catch(X){K=null}break}return K}},R3=(Q,Y)=>!LQ(Q,Y),M3={attribute:!0,type:String,converter:d4,reflect:!1,useDefault:!1,hasChanged:R3};Symbol.metadata??=Symbol("metadata");R.litPropertyMetadata??=new WeakMap;class _ extends HTMLElement{static addInitializer(Q){this.__prepare(),(this._initializers??=[]).push(Q)}static get observedAttributes(){return this.finalize(),this.__attributeToPropertyMap&&[...this.__attributeToPropertyMap.keys()]}static createProperty(Q,Y=M3){if(Y.state)Y.attribute=!1;if(this.__prepare(),this.prototype.hasOwnProperty(Q))Y=Object.create(Y),Y.wrapped=!0;if(this.elementProperties.set(Q,Y),!Y.noAccessor){let K=w?Symbol.for(`${String(Q)} (@property() cache)`):Symbol(),X=this.getPropertyDescriptor(Q,K,Y);if(X!==void 0)DQ(this.prototype,Q,X)}}static getPropertyDescriptor(Q,Y,K){let{get:X,set:G}=O3(this.prototype,Q)??{get(){return this[Y]},set(q){this[Y]=q}};if(w&&X==null){if("value"in(O3(this.prototype,Q)??{}))throw Error(`Field ${JSON.stringify(String(Q))} on ${this.name} was declared as a reactive property but it's actually declared as a value on the prototype. Usually this is due to using @property or @state on a method.`);k("reactive-property-without-getter",`Field ${JSON.stringify(String(Q))} on ${this.name} was declared as a reactive property but it does not have a getter. This will be an error in a future version of Lit.`)}return{get:X,set(q){let J=X?.call(this);G?.call(this,q),this.requestUpdate(Q,J,K)},configurable:!0,enumerable:!0}}static getPropertyOptions(Q){return this.elementProperties.get(Q)??M3}static __prepare(){if(this.hasOwnProperty(s("elementProperties",this)))return;let Q=P3(this);if(Q.finalize(),Q._initializers!==void 0)this._initializers=[...Q._initializers];this.elementProperties=new Map(Q.elementProperties)}static finalize(){if(this.hasOwnProperty(s("finalized",this)))return;if(this.finalized=!0,this.__prepare(),this.hasOwnProperty(s("properties",this))){let Y=this.properties,K=[...FQ(Y),...IQ(Y)];for(let X of K)this.createProperty(X,Y[X])}let Q=this[Symbol.metadata];if(Q!==null){let Y=litPropertyMetadata.get(Q);if(Y!==void 0)for(let[K,X]of Y)this.elementProperties.set(K,X)}this.__attributeToPropertyMap=new Map;for(let[Y,K]of this.elementProperties){let X=this.__attributeNameForProperty(Y,K);if(X!==void 0)this.__attributeToPropertyMap.set(X,Y)}if(this.elementStyles=this.finalizeStyles(this.styles),w){if(this.hasOwnProperty("createProperty"))k("no-override-create-property","Overriding ReactiveElement.createProperty() is deprecated. The override will not be called with standard decorators");if(this.hasOwnProperty("getPropertyDescriptor"))k("no-override-get-property-descriptor","Overriding ReactiveElement.getPropertyDescriptor() is deprecated. The override will not be called with standard decorators")}}static finalizeStyles(Q){let Y=[];if(Array.isArray(Q)){let K=new Set(Q.flat(1/0).reverse());for(let X of K)Y.unshift(l4(X))}else if(Q!==void 0)Y.push(l4(Q));return Y}static __attributeNameForProperty(Q,Y){let K=Y.attribute;return K===!1?void 0:typeof K==="string"?K:typeof Q==="string"?Q.toLowerCase():void 0}constructor(){super();this.__instanceProperties=void 0,this.isUpdatePending=!1,this.hasUpdated=!1,this.__reflectingProperty=null,this.__initialize()}__initialize(){this.__updatePromise=new Promise((Q)=>this.enableUpdating=Q),this._$changedProperties=new Map,this.__saveInstanceProperties(),this.requestUpdate(),this.constructor._initializers?.forEach((Q)=>Q(this))}addController(Q){if((this.__controllers??=new Set).add(Q),this.renderRoot!==void 0&&this.isConnected)Q.hostConnected?.()}removeController(Q){this.__controllers?.delete(Q)}__saveInstanceProperties(){let Q=new Map,Y=this.constructor.elementProperties;for(let K of Y.keys())if(this.hasOwnProperty(K))Q.set(K,this[K]),delete this[K];if(Q.size>0)this.__instanceProperties=Q}createRenderRoot(){let Q=this.shadowRoot??this.attachShadow(this.constructor.shadowRootOptions);return N3(Q,this.constructor.elementStyles),Q}connectedCallback(){this.renderRoot??=this.createRenderRoot(),this.enableUpdating(!0),this.__controllers?.forEach((Q)=>Q.hostConnected?.())}enableUpdating(Q){}disconnectedCallback(){this.__controllers?.forEach((Q)=>Q.hostDisconnected?.())}attributeChangedCallback(Q,Y,K){this._$attributeToProperty(Q,K)}__propertyToAttribute(Q,Y){let X=this.constructor.elementProperties.get(Q),G=this.constructor.__attributeNameForProperty(Q,X);if(G!==void 0&&X.reflect===!0){let J=(X.converter?.toAttribute!==void 0?X.converter:d4).toAttribute(Y,X.type);if(w&&this.constructor.enabledWarnings.includes("migration")&&J===void 0)k("undefined-attribute-value",`The attribute value for the ${Q} property is undefined on element ${this.localName}. The attribute will be removed, but in the previous version of \`ReactiveElement\`, the attribute would not have changed.`);if(this.__reflectingProperty=Q,J==null)this.removeAttribute(G);else this.setAttribute(G,J);this.__reflectingProperty=null}}_$attributeToProperty(Q,Y){let K=this.constructor,X=K.__attributeToPropertyMap.get(Q);if(X!==void 0&&this.__reflectingProperty!==X){let G=K.getPropertyOptions(X),q=typeof G.converter==="function"?{fromAttribute:G.converter}:G.converter?.fromAttribute!==void 0?G.converter:d4;this.__reflectingProperty=X;let J=q.fromAttribute(Y,G.type);this[X]=J??this.__defaultValues?.get(X)??J,this.__reflectingProperty=null}}requestUpdate(Q,Y,K,X=!1,G){if(Q!==void 0){if(w&&Q instanceof Event)k("","The requestUpdate() method was called with an Event as the property name. This is probably a mistake caused by binding this.requestUpdate as an event listener. Instead bind a function that will call it with no arguments: () => this.requestUpdate()");let q=this.constructor;if(X===!1)G=this[Q];if(K??=q.getPropertyOptions(Q),(K.hasChanged??R3)(G,Y)||K.useDefault&&K.reflect&&G===this.__defaultValues?.get(Q)&&!this.hasAttribute(q.__attributeNameForProperty(Q,K)))this._$changeProperty(Q,Y,K);else return}if(this.isUpdatePending===!1)this.__updatePromise=this.__enqueueUpdate()}_$changeProperty(Q,Y,{useDefault:K,reflect:X,wrapped:G},q){if(K&&!(this.__defaultValues??=new Map).has(Q)){if(this.__defaultValues.set(Q,q??Y??this[Q]),G!==!0||q!==void 0)return}if(!this._$changedProperties.has(Q)){if(!this.hasUpdated&&!K)Y=void 0;this._$changedProperties.set(Q,Y)}if(X===!0&&this.__reflectingProperty!==Q)(this.__reflectingProperties??=new Set).add(Q)}async __enqueueUpdate(){this.isUpdatePending=!0;try{await this.__updatePromise}catch(Y){Promise.reject(Y)}let Q=this.scheduleUpdate();if(Q!=null)await Q;return!this.isUpdatePending}scheduleUpdate(){let Q=this.performUpdate();if(w&&this.constructor.enabledWarnings.includes("async-perform-update")&&typeof Q?.then==="function")k("async-perform-update",`Element ${this.localName} returned a Promise from performUpdate(). This behavior is deprecated and will be removed in a future version of ReactiveElement.`);return Q}performUpdate(){if(!this.isUpdatePending)return;if(OQ?.({kind:"update"}),!this.hasUpdated){if(this.renderRoot??=this.createRenderRoot(),w){let G=[...this.constructor.elementProperties.keys()].filter((q)=>this.hasOwnProperty(q)&&(q in P3(this)));if(G.length)throw Error(`The following properties on element ${this.localName} will not trigger updates as expected because they are set using class fields: ${G.join(", ")}. Native class fields and some compiled output will overwrite accessors used for detecting changes. See https://lit.dev/msg/class-field-shadowing for more information.`)}if(this.__instanceProperties){for(let[X,G]of this.__instanceProperties)this[X]=G;this.__instanceProperties=void 0}let K=this.constructor.elementProperties;if(K.size>0)for(let[X,G]of K){let{wrapped:q}=G,J=this[X];if(q===!0&&!this._$changedProperties.has(X)&&J!==void 0)this._$changeProperty(X,void 0,G,J)}}let Q=!1,Y=this._$changedProperties;try{if(Q=this.shouldUpdate(Y),Q)this.willUpdate(Y),this.__controllers?.forEach((K)=>K.hostUpdate?.()),this.update(Y);else this.__markUpdated()}catch(K){throw Q=!1,this.__markUpdated(),K}if(Q)this._$didUpdate(Y)}willUpdate(Q){}_$didUpdate(Q){if(this.__controllers?.forEach((Y)=>Y.hostUpdated?.()),!this.hasUpdated)this.hasUpdated=!0,this.firstUpdated(Q);if(this.updated(Q),w&&this.isUpdatePending&&this.constructor.enabledWarnings.includes("change-in-update"))k("change-in-update",`Element ${this.localName} scheduled an update (generally because a property was set) after an update completed, causing a new update to be scheduled. This is inefficient and should be avoided unless the next update can only be scheduled as a side effect of the previous update.`)}__markUpdated(){this._$changedProperties=new Map,this.isUpdatePending=!1}get updateComplete(){return this.getUpdateComplete()}getUpdateComplete(){return this.__updatePromise}shouldUpdate(Q){return!0}update(Q){this.__reflectingProperties&&=this.__reflectingProperties.forEach((Y)=>this.__propertyToAttribute(Y,this[Y])),this.__markUpdated()}updated(Q){}firstUpdated(Q){}}_.elementStyles=[];_.shadowRootOptions={mode:"open"};_[s("elementProperties",_)]=new Map;_[s("finalized",_)]=new Map;Z3?.({ReactiveElement:_});if(w){_.enabledWarnings=["change-in-update","async-perform-update"];let Q=function(Y){if(!Y.hasOwnProperty(s("enabledWarnings",Y)))Y.enabledWarnings=Y.enabledWarnings.slice()};_.enableWarning=function(Y){if(Q(this),!this.enabledWarnings.includes(Y))this.enabledWarnings.push(Y)},_.disableWarning=function(Y){Q(this);let K=this.enabledWarnings.indexOf(Y);if(K>=0)this.enabledWarnings.splice(K,1)}}(R.reactiveElementVersions??=[]).push("2.1.2");if(w&&R.reactiveElementVersions.length>1)queueMicrotask(()=>{k("multiple-versions","Multiple versions of Lit loaded. Loading multiple versions is not recommended.")});var T=globalThis,V=(Q)=>{if(!T.emitLitDebugLogEvents)return;T.dispatchEvent(new CustomEvent("lit-debug",{detail:Q}))},PQ=0,W4;T.litIssuedWarnings??=new Set,W4=(Q,Y)=>{if(Y+=Q?` See https://lit.dev/msg/${Q} for more information.`:"",!T.litIssuedWarnings.has(Y)&&!T.litIssuedWarnings.has(Q))console.warn(Y),T.litIssuedWarnings.add(Y)},queueMicrotask(()=>{W4("dev-mode","Lit is in dev mode. Not recommended for production!")});var C=T.ShadyDOM?.inUse&&T.ShadyDOM?.noPatch===!0?T.ShadyDOM.wrap:(Q)=>Q,M4=T.trustedTypes,w3=M4?M4.createPolicy("lit-html",{createHTML:(Q)=>Q}):void 0,EQ=(Q)=>Q,_4=(Q,Y,K)=>EQ,MQ=(Q)=>{if(d!==_4)throw Error("Attempted to overwrite existing lit-html security policy. setSanitizeDOMValueFactory should be called at most once.");d=Q},ZQ=()=>{d=_4},a4=(Q,Y,K)=>{return d(Q,Y,K)},x3="$lit$",g=`lit$${Math.random().toFixed(9).slice(2)}$`,g3="?"+g,RQ=`<${g3}>`,p=document,U4=()=>p.createComment(""),j4=(Q)=>Q===null||typeof Q!="object"&&typeof Q!="function",e4=Array.isArray,wQ=(Q)=>e4(Q)||typeof Q?.[Symbol.iterator]==="function",n4=`[ 	
-\f\r]`,_Q=`[^ 	
-\f\r"'\`<>=]`,TQ=`[^\\s"'>=/]`,B4=/<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g,_3=1,i4=2,SQ=3,T3=/-->/g,S3=/>/g,f=new RegExp(`>|${n4}(?:(${TQ}+)(${n4}*=${n4}*(?:${_Q}|("|')|))|$)`,"g"),kQ=0,k3=1,CQ=2,C3=3,s4=/'/g,t4=/"/g,v3=/^(?:script|style|textarea|title)$/i,bQ=1,Z4=2,R4=3,Q3=1,w4=2,xQ=3,gQ=4,vQ=5,Y3=6,hQ=7,K3=(Q)=>(Y,...K)=>{if(Y.some((X)=>X===void 0))console.warn(`Some template strings are undefined.
+var E4=globalThis,o4=E4.ShadowRoot&&(E4.ShadyCSS===void 0||E4.ShadyCSS.nativeShadow)&&"adoptedStyleSheets"in Document.prototype&&"replace"in CSSStyleSheet.prototype,r4=Symbol(),V3=new WeakMap;class p4{constructor(Q,Y,K){if(this._$cssResult$=!0,K!==r4)throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");this.cssText=Q,this._strings=Y}get styleSheet(){let Q=this._styleSheet,Y=this._strings;if(o4&&Q===void 0){let K=Y!==void 0&&Y.length===1;if(K)Q=V3.get(Y);if(Q===void 0){if((this._styleSheet=Q=new CSSStyleSheet).replaceSync(this.cssText),K)V3.set(Y,Q)}}return Q}toString(){return this.cssText}}var DQ=(Q)=>{if(Q._$cssResult$===!0)return Q.cssText;else if(typeof Q==="number")return Q;else throw Error(`Value passed to 'css' function must be a 'css' function result: ${Q}. Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.`)},FQ=(Q)=>new p4(typeof Q==="string"?Q:String(Q),void 0,r4),L=(Q,...Y)=>{let K=Q.length===1?Q[0]:Y.reduce((X,G,J)=>X+DQ(G)+Q[J+1],Q[0]);return new p4(K,Q,r4)},N3=(Q,Y)=>{if(o4)Q.adoptedStyleSheets=Y.map((K)=>K instanceof CSSStyleSheet?K:K.styleSheet);else for(let K of Y){let X=document.createElement("style"),G=E4.litNonce;if(G!==void 0)X.setAttribute("nonce",G);X.textContent=K.cssText,Q.appendChild(X)}},IQ=(Q)=>{let Y="";for(let K of Q.cssRules)Y+=K.cssText;return FQ(Y)},l4=o4?(Q)=>Q:(Q)=>Q instanceof CSSStyleSheet?IQ(Q):Q;var{is:VQ,defineProperty:NQ,getOwnPropertyDescriptor:O3,getOwnPropertyNames:OQ,getOwnPropertySymbols:PQ,getPrototypeOf:P3}=Object,EQ=!1,R=globalThis;if(EQ)R.customElements??=customElements;var w=!0,k,E3=R.trustedTypes,MQ=E3?E3.emptyScript:"",Z3=w?R.reactiveElementPolyfillSupportDevMode:R.reactiveElementPolyfillSupport;if(w)R.litIssuedWarnings??=new Set,k=(Q,Y)=>{if(Y+=` See https://lit.dev/msg/${Q} for more information.`,!R.litIssuedWarnings.has(Y)&&!R.litIssuedWarnings.has(Q))console.warn(Y),R.litIssuedWarnings.add(Y)},queueMicrotask(()=>{if(k("dev-mode","Lit is in dev mode. Not recommended for production!"),R.ShadyDOM?.inUse&&Z3===void 0)k("polyfill-support-missing","Shadow DOM is being polyfilled via `ShadyDOM` but the `polyfill-support` module has not been loaded.")});var ZQ=w?(Q)=>{if(!R.emitLitDebugLogEvents)return;R.dispatchEvent(new CustomEvent("lit-debug",{detail:Q}))}:void 0,t=(Q,Y)=>Q,d4={toAttribute(Q,Y){switch(Y){case Boolean:Q=Q?MQ:null;break;case Object:case Array:Q=Q==null?Q:JSON.stringify(Q);break}return Q},fromAttribute(Q,Y){let K=Q;switch(Y){case Boolean:K=Q!==null;break;case Number:K=Q===null?null:Number(Q);break;case Object:case Array:try{K=JSON.parse(Q)}catch(X){K=null}break}return K}},R3=(Q,Y)=>!VQ(Q,Y),M3={attribute:!0,type:String,converter:d4,reflect:!1,useDefault:!1,hasChanged:R3};Symbol.metadata??=Symbol("metadata");R.litPropertyMetadata??=new WeakMap;class _ extends HTMLElement{static addInitializer(Q){this.__prepare(),(this._initializers??=[]).push(Q)}static get observedAttributes(){return this.finalize(),this.__attributeToPropertyMap&&[...this.__attributeToPropertyMap.keys()]}static createProperty(Q,Y=M3){if(Y.state)Y.attribute=!1;if(this.__prepare(),this.prototype.hasOwnProperty(Q))Y=Object.create(Y),Y.wrapped=!0;if(this.elementProperties.set(Q,Y),!Y.noAccessor){let K=w?Symbol.for(`${String(Q)} (@property() cache)`):Symbol(),X=this.getPropertyDescriptor(Q,K,Y);if(X!==void 0)NQ(this.prototype,Q,X)}}static getPropertyDescriptor(Q,Y,K){let{get:X,set:G}=O3(this.prototype,Q)??{get(){return this[Y]},set(J){this[Y]=J}};if(w&&X==null){if("value"in(O3(this.prototype,Q)??{}))throw Error(`Field ${JSON.stringify(String(Q))} on ${this.name} was declared as a reactive property but it's actually declared as a value on the prototype. Usually this is due to using @property or @state on a method.`);k("reactive-property-without-getter",`Field ${JSON.stringify(String(Q))} on ${this.name} was declared as a reactive property but it does not have a getter. This will be an error in a future version of Lit.`)}return{get:X,set(J){let z=X?.call(this);G?.call(this,J),this.requestUpdate(Q,z,K)},configurable:!0,enumerable:!0}}static getPropertyOptions(Q){return this.elementProperties.get(Q)??M3}static __prepare(){if(this.hasOwnProperty(t("elementProperties",this)))return;let Q=P3(this);if(Q.finalize(),Q._initializers!==void 0)this._initializers=[...Q._initializers];this.elementProperties=new Map(Q.elementProperties)}static finalize(){if(this.hasOwnProperty(t("finalized",this)))return;if(this.finalized=!0,this.__prepare(),this.hasOwnProperty(t("properties",this))){let Y=this.properties,K=[...OQ(Y),...PQ(Y)];for(let X of K)this.createProperty(X,Y[X])}let Q=this[Symbol.metadata];if(Q!==null){let Y=litPropertyMetadata.get(Q);if(Y!==void 0)for(let[K,X]of Y)this.elementProperties.set(K,X)}this.__attributeToPropertyMap=new Map;for(let[Y,K]of this.elementProperties){let X=this.__attributeNameForProperty(Y,K);if(X!==void 0)this.__attributeToPropertyMap.set(X,Y)}if(this.elementStyles=this.finalizeStyles(this.styles),w){if(this.hasOwnProperty("createProperty"))k("no-override-create-property","Overriding ReactiveElement.createProperty() is deprecated. The override will not be called with standard decorators");if(this.hasOwnProperty("getPropertyDescriptor"))k("no-override-get-property-descriptor","Overriding ReactiveElement.getPropertyDescriptor() is deprecated. The override will not be called with standard decorators")}}static finalizeStyles(Q){let Y=[];if(Array.isArray(Q)){let K=new Set(Q.flat(1/0).reverse());for(let X of K)Y.unshift(l4(X))}else if(Q!==void 0)Y.push(l4(Q));return Y}static __attributeNameForProperty(Q,Y){let K=Y.attribute;return K===!1?void 0:typeof K==="string"?K:typeof Q==="string"?Q.toLowerCase():void 0}constructor(){super();this.__instanceProperties=void 0,this.isUpdatePending=!1,this.hasUpdated=!1,this.__reflectingProperty=null,this.__initialize()}__initialize(){this.__updatePromise=new Promise((Q)=>this.enableUpdating=Q),this._$changedProperties=new Map,this.__saveInstanceProperties(),this.requestUpdate(),this.constructor._initializers?.forEach((Q)=>Q(this))}addController(Q){if((this.__controllers??=new Set).add(Q),this.renderRoot!==void 0&&this.isConnected)Q.hostConnected?.()}removeController(Q){this.__controllers?.delete(Q)}__saveInstanceProperties(){let Q=new Map,Y=this.constructor.elementProperties;for(let K of Y.keys())if(this.hasOwnProperty(K))Q.set(K,this[K]),delete this[K];if(Q.size>0)this.__instanceProperties=Q}createRenderRoot(){let Q=this.shadowRoot??this.attachShadow(this.constructor.shadowRootOptions);return N3(Q,this.constructor.elementStyles),Q}connectedCallback(){this.renderRoot??=this.createRenderRoot(),this.enableUpdating(!0),this.__controllers?.forEach((Q)=>Q.hostConnected?.())}enableUpdating(Q){}disconnectedCallback(){this.__controllers?.forEach((Q)=>Q.hostDisconnected?.())}attributeChangedCallback(Q,Y,K){this._$attributeToProperty(Q,K)}__propertyToAttribute(Q,Y){let X=this.constructor.elementProperties.get(Q),G=this.constructor.__attributeNameForProperty(Q,X);if(G!==void 0&&X.reflect===!0){let z=(X.converter?.toAttribute!==void 0?X.converter:d4).toAttribute(Y,X.type);if(w&&this.constructor.enabledWarnings.includes("migration")&&z===void 0)k("undefined-attribute-value",`The attribute value for the ${Q} property is undefined on element ${this.localName}. The attribute will be removed, but in the previous version of \`ReactiveElement\`, the attribute would not have changed.`);if(this.__reflectingProperty=Q,z==null)this.removeAttribute(G);else this.setAttribute(G,z);this.__reflectingProperty=null}}_$attributeToProperty(Q,Y){let K=this.constructor,X=K.__attributeToPropertyMap.get(Q);if(X!==void 0&&this.__reflectingProperty!==X){let G=K.getPropertyOptions(X),J=typeof G.converter==="function"?{fromAttribute:G.converter}:G.converter?.fromAttribute!==void 0?G.converter:d4;this.__reflectingProperty=X;let z=J.fromAttribute(Y,G.type);this[X]=z??this.__defaultValues?.get(X)??z,this.__reflectingProperty=null}}requestUpdate(Q,Y,K,X=!1,G){if(Q!==void 0){if(w&&Q instanceof Event)k("","The requestUpdate() method was called with an Event as the property name. This is probably a mistake caused by binding this.requestUpdate as an event listener. Instead bind a function that will call it with no arguments: () => this.requestUpdate()");let J=this.constructor;if(X===!1)G=this[Q];if(K??=J.getPropertyOptions(Q),(K.hasChanged??R3)(G,Y)||K.useDefault&&K.reflect&&G===this.__defaultValues?.get(Q)&&!this.hasAttribute(J.__attributeNameForProperty(Q,K)))this._$changeProperty(Q,Y,K);else return}if(this.isUpdatePending===!1)this.__updatePromise=this.__enqueueUpdate()}_$changeProperty(Q,Y,{useDefault:K,reflect:X,wrapped:G},J){if(K&&!(this.__defaultValues??=new Map).has(Q)){if(this.__defaultValues.set(Q,J??Y??this[Q]),G!==!0||J!==void 0)return}if(!this._$changedProperties.has(Q)){if(!this.hasUpdated&&!K)Y=void 0;this._$changedProperties.set(Q,Y)}if(X===!0&&this.__reflectingProperty!==Q)(this.__reflectingProperties??=new Set).add(Q)}async __enqueueUpdate(){this.isUpdatePending=!0;try{await this.__updatePromise}catch(Y){Promise.reject(Y)}let Q=this.scheduleUpdate();if(Q!=null)await Q;return!this.isUpdatePending}scheduleUpdate(){let Q=this.performUpdate();if(w&&this.constructor.enabledWarnings.includes("async-perform-update")&&typeof Q?.then==="function")k("async-perform-update",`Element ${this.localName} returned a Promise from performUpdate(). This behavior is deprecated and will be removed in a future version of ReactiveElement.`);return Q}performUpdate(){if(!this.isUpdatePending)return;if(ZQ?.({kind:"update"}),!this.hasUpdated){if(this.renderRoot??=this.createRenderRoot(),w){let G=[...this.constructor.elementProperties.keys()].filter((J)=>this.hasOwnProperty(J)&&(J in P3(this)));if(G.length)throw Error(`The following properties on element ${this.localName} will not trigger updates as expected because they are set using class fields: ${G.join(", ")}. Native class fields and some compiled output will overwrite accessors used for detecting changes. See https://lit.dev/msg/class-field-shadowing for more information.`)}if(this.__instanceProperties){for(let[X,G]of this.__instanceProperties)this[X]=G;this.__instanceProperties=void 0}let K=this.constructor.elementProperties;if(K.size>0)for(let[X,G]of K){let{wrapped:J}=G,z=this[X];if(J===!0&&!this._$changedProperties.has(X)&&z!==void 0)this._$changeProperty(X,void 0,G,z)}}let Q=!1,Y=this._$changedProperties;try{if(Q=this.shouldUpdate(Y),Q)this.willUpdate(Y),this.__controllers?.forEach((K)=>K.hostUpdate?.()),this.update(Y);else this.__markUpdated()}catch(K){throw Q=!1,this.__markUpdated(),K}if(Q)this._$didUpdate(Y)}willUpdate(Q){}_$didUpdate(Q){if(this.__controllers?.forEach((Y)=>Y.hostUpdated?.()),!this.hasUpdated)this.hasUpdated=!0,this.firstUpdated(Q);if(this.updated(Q),w&&this.isUpdatePending&&this.constructor.enabledWarnings.includes("change-in-update"))k("change-in-update",`Element ${this.localName} scheduled an update (generally because a property was set) after an update completed, causing a new update to be scheduled. This is inefficient and should be avoided unless the next update can only be scheduled as a side effect of the previous update.`)}__markUpdated(){this._$changedProperties=new Map,this.isUpdatePending=!1}get updateComplete(){return this.getUpdateComplete()}getUpdateComplete(){return this.__updatePromise}shouldUpdate(Q){return!0}update(Q){this.__reflectingProperties&&=this.__reflectingProperties.forEach((Y)=>this.__propertyToAttribute(Y,this[Y])),this.__markUpdated()}updated(Q){}firstUpdated(Q){}}_.elementStyles=[];_.shadowRootOptions={mode:"open"};_[t("elementProperties",_)]=new Map;_[t("finalized",_)]=new Map;Z3?.({ReactiveElement:_});if(w){_.enabledWarnings=["change-in-update","async-perform-update"];let Q=function(Y){if(!Y.hasOwnProperty(t("enabledWarnings",Y)))Y.enabledWarnings=Y.enabledWarnings.slice()};_.enableWarning=function(Y){if(Q(this),!this.enabledWarnings.includes(Y))this.enabledWarnings.push(Y)},_.disableWarning=function(Y){Q(this);let K=this.enabledWarnings.indexOf(Y);if(K>=0)this.enabledWarnings.splice(K,1)}}(R.reactiveElementVersions??=[]).push("2.1.2");if(w&&R.reactiveElementVersions.length>1)queueMicrotask(()=>{k("multiple-versions","Multiple versions of Lit loaded. Loading multiple versions is not recommended.")});var T=globalThis,V=(Q)=>{if(!T.emitLitDebugLogEvents)return;T.dispatchEvent(new CustomEvent("lit-debug",{detail:Q}))},RQ=0,W4;T.litIssuedWarnings??=new Set,W4=(Q,Y)=>{if(Y+=Q?` See https://lit.dev/msg/${Q} for more information.`:"",!T.litIssuedWarnings.has(Y)&&!T.litIssuedWarnings.has(Q))console.warn(Y),T.litIssuedWarnings.add(Y)},queueMicrotask(()=>{W4("dev-mode","Lit is in dev mode. Not recommended for production!")});var b=T.ShadyDOM?.inUse&&T.ShadyDOM?.noPatch===!0?T.ShadyDOM.wrap:(Q)=>Q,M4=T.trustedTypes,w3=M4?M4.createPolicy("lit-html",{createHTML:(Q)=>Q}):void 0,wQ=(Q)=>Q,_4=(Q,Y,K)=>wQ,_Q=(Q)=>{if(n!==_4)throw Error("Attempted to overwrite existing lit-html security policy. setSanitizeDOMValueFactory should be called at most once.");n=Q},TQ=()=>{n=_4},a4=(Q,Y,K)=>{return n(Q,Y,K)},x3="$lit$",c=`lit$${Math.random().toFixed(9).slice(2)}$`,g3="?"+c,SQ=`<${g3}>`,l=document,U4=()=>l.createComment(""),j4=(Q)=>Q===null||typeof Q!="object"&&typeof Q!="function",e4=Array.isArray,kQ=(Q)=>e4(Q)||typeof Q?.[Symbol.iterator]==="function",n4=`[ 	
+\f\r]`,bQ=`[^ 	
+\f\r"'\`<>=]`,CQ=`[^\\s"'>=/]`,B4=/<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g,_3=1,i4=2,xQ=3,T3=/-->/g,S3=/>/g,r=new RegExp(`>|${n4}(?:(${CQ}+)(${n4}*=${n4}*(?:${bQ}|("|')|))|$)`,"g"),gQ=0,k3=1,vQ=2,b3=3,s4=/'/g,t4=/"/g,v3=/^(?:script|style|textarea|title)$/i,hQ=1,Z4=2,R4=3,Q3=1,w4=2,cQ=3,yQ=4,mQ=5,Y3=6,uQ=7,K3=(Q)=>(Y,...K)=>{if(Y.some((X)=>X===void 0))console.warn(`Some template strings are undefined.
 This is probably caused by illegal octal escape sequences.`);if(K.some((X)=>X?._$litStatic$))W4("",`Static values 'literal' or 'unsafeStatic' cannot be used as values to non-static templates.
-Please use the static 'html' tag function. See https://lit.dev/docs/templates/expressions/#static-expressions`);return{["_$litType$"]:Q,strings:Y,values:K}},z=K3(bQ),S=K3(Z4),C8=K3(R4),l=Symbol.for("lit-noChange"),B=Symbol.for("lit-nothing"),b3=new WeakMap,r=p.createTreeWalker(p,129),d=_4;function h3(Q,Y){if(!e4(Q)||!Q.hasOwnProperty("raw")){let K="invalid template strings array";throw K=`
+Please use the static 'html' tag function. See https://lit.dev/docs/templates/expressions/#static-expressions`);return{["_$litType$"]:Q,strings:Y,values:K}},q=K3(hQ),S=K3(Z4),x8=K3(R4),d=Symbol.for("lit-noChange"),B=Symbol.for("lit-nothing"),C3=new WeakMap,p=l.createTreeWalker(l,129),n=_4;function h3(Q,Y){if(!e4(Q)||!Q.hasOwnProperty("raw")){let K="invalid template strings array";throw K=`
           Internal Error: expected template strings to be an array
           with a 'raw' field. Faking a template strings array by
           calling html or svg like an ordinary function is effectively
@@ -13,7 +13,7 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
           https://github.com/lit/lit/issues/new?template=bug_report.md
           and include information about your build tooling, if any.
         `.trim().replace(/\n */g,`
-`),Error(K)}return w3!==void 0?w3.createHTML(Y):Y}var cQ=(Q,Y)=>{let K=Q.length-1,X=[],G=Y===Z4?"<svg>":Y===R4?"<math>":"",q,J=B4;for(let W=0;W<K;W++){let U=Q[W],j=-1,$,F=0,D;while(F<U.length){if(J.lastIndex=F,D=J.exec(U),D===null)break;if(F=J.lastIndex,J===B4){if(D[_3]==="!--")J=T3;else if(D[_3]!==void 0)J=S3;else if(D[i4]!==void 0){if(v3.test(D[i4]))q=new RegExp(`</${D[i4]}`,"g");J=f}else if(D[SQ]!==void 0)throw Error("Bindings in tag names are not supported. Please use static templates instead. See https://lit.dev/docs/templates/expressions/#static-expressions")}else if(J===f)if(D[kQ]===">")J=q??B4,j=-1;else if(D[k3]===void 0)j=-2;else j=J.lastIndex-D[CQ].length,$=D[k3],J=D[C3]===void 0?f:D[C3]==='"'?t4:s4;else if(J===t4||J===s4)J=f;else if(J===T3||J===S3)J=B4;else J=f,q=void 0}console.assert(j===-1||J===f||J===s4||J===t4,"unexpected parse state B");let P=J===f&&Q[W+1].startsWith("/>")?" ":"";G+=J===B4?U+RQ:j>=0?(X.push($),U.slice(0,j)+x3+U.slice(j))+g+P:U+g+(j===-2?W:P)}let H=G+(Q[K]||"<?>")+(Y===Z4?"</svg>":Y===R4?"</math>":"");return[h3(Q,H),X]};class $4{constructor({strings:Q,["_$litType$"]:Y},K){this.parts=[];let X,G=0,q=0,J=Q.length-1,H=this.parts,[W,U]=cQ(Q,Y);if(this.el=$4.createElement(W,K),r.currentNode=this.el.content,Y===Z4||Y===R4){let j=this.el.content.firstChild;j.replaceWith(...j.childNodes)}while((X=r.nextNode())!==null&&H.length<J){if(X.nodeType===1){{let j=X.localName;if(/^(?:textarea|template)$/i.test(j)&&X.innerHTML.includes(g)){let $=`Expressions are not supported inside \`${j}\` elements. See https://lit.dev/msg/expression-in-${j} for more information.`;if(j==="template")throw Error($);else W4("",$)}}if(X.hasAttributes()){for(let j of X.getAttributeNames())if(j.endsWith(x3)){let $=U[q++],D=X.getAttribute(j).split(g),P=/([.?@])?(.*)/.exec($);H.push({type:Q3,index:G,name:P[2],strings:D,ctor:P[1]==="."?y3:P[1]==="?"?m3:P[1]==="@"?u3:L4}),X.removeAttribute(j)}else if(j.startsWith(g))H.push({type:Y3,index:G}),X.removeAttribute(j)}if(v3.test(X.tagName)){let j=X.textContent.split(g),$=j.length-1;if($>0){X.textContent=M4?M4.emptyScript:"";for(let F=0;F<$;F++)X.append(j[F],U4()),r.nextNode(),H.push({type:w4,index:++G});X.append(j[$],U4())}}}else if(X.nodeType===8)if(X.data===g3)H.push({type:w4,index:G});else{let $=-1;while(($=X.data.indexOf(g,$+1))!==-1)H.push({type:hQ,index:G}),$+=g.length-1}G++}if(U.length!==q)throw Error('Detected duplicate attribute bindings. This occurs if your template has duplicate attributes on an element tag. For example "<input ?disabled=${true} ?disabled=${false}>" contains a duplicate "disabled" attribute. The error was detected in the following template: \n`'+Q.join("${...}")+"`");V&&V({kind:"template prep",template:this,clonableTemplate:this.el,parts:this.parts,strings:Q})}static createElement(Q,Y){let K=p.createElement("template");return K.innerHTML=Q,K}}function t(Q,Y,K=Q,X){if(Y===l)return Y;let G=X!==void 0?K.__directives?.[X]:K.__directive,q=j4(Y)?void 0:Y._$litDirective$;if(G?.constructor!==q){if(G?._$notifyDirectiveConnectionChanged?.(!1),q===void 0)G=void 0;else G=new q(Q),G._$initialize(Q,K,X);if(X!==void 0)(K.__directives??=[])[X]=G;else K.__directive=G}if(G!==void 0)Y=t(Q,G._$resolve(Q,Y.values),G,X);return Y}class c3{constructor(Q,Y){this._$parts=[],this._$disconnectableChildren=void 0,this._$template=Q,this._$parent=Y}get parentNode(){return this._$parent.parentNode}get _$isConnected(){return this._$parent._$isConnected}_clone(Q){let{el:{content:Y},parts:K}=this._$template,X=(Q?.creationScope??p).importNode(Y,!0);r.currentNode=X;let G=r.nextNode(),q=0,J=0,H=K[0];while(H!==void 0){if(q===H.index){let W;if(H.type===w4)W=new A4(G,G.nextSibling,this,Q);else if(H.type===Q3)W=new H.ctor(G,H.name,H.strings,this,Q);else if(H.type===Y3)W=new f3(G,this,Q);this._$parts.push(W),H=K[++J]}if(q!==H?.index)G=r.nextNode(),q++}return r.currentNode=p,X}_update(Q){let Y=0;for(let K of this._$parts){if(K!==void 0)if(V&&V({kind:"set part",part:K,value:Q[Y],valueIndex:Y,values:Q,templateInstance:this}),K.strings!==void 0)K._$setValue(Q,K,Y),Y+=K.strings.length-2;else K._$setValue(Q[Y]);Y++}}}class A4{get _$isConnected(){return this._$parent?._$isConnected??this.__isConnected}constructor(Q,Y,K,X){this.type=w4,this._$committedValue=B,this._$disconnectableChildren=void 0,this._$startNode=Q,this._$endNode=Y,this._$parent=K,this.options=X,this.__isConnected=X?.isConnected??!0,this._textSanitizer=void 0}get parentNode(){let Q=C(this._$startNode).parentNode,Y=this._$parent;if(Y!==void 0&&Q?.nodeType===11)Q=Y.parentNode;return Q}get startNode(){return this._$startNode}get endNode(){return this._$endNode}_$setValue(Q,Y=this){if(this.parentNode===null)throw Error("This `ChildPart` has no `parentNode` and therefore cannot accept a value. This likely means the element containing the part was manipulated in an unsupported way outside of Lit's control such that the part's marker nodes were ejected from DOM. For example, setting the element's `innerHTML` or `textContent` can do this.");if(Q=t(this,Q,Y),j4(Q)){if(Q===B||Q==null||Q===""){if(this._$committedValue!==B)V&&V({kind:"commit nothing to child",start:this._$startNode,end:this._$endNode,parent:this._$parent,options:this.options}),this._$clear();this._$committedValue=B}else if(Q!==this._$committedValue&&Q!==l)this._commitText(Q)}else if(Q._$litType$!==void 0)this._commitTemplateResult(Q);else if(Q.nodeType!==void 0){if(this.options?.host===Q){this._commitText("[probable mistake: rendered a template's host in itself (commonly caused by writing ${this} in a template]"),console.warn("Attempted to render the template host",Q,"inside itself. This is almost always a mistake, and in dev mode ","we render some warning text. In production however, we'll ","render it, which will usually result in an error, and sometimes ","in the element disappearing from the DOM.");return}this._commitNode(Q)}else if(wQ(Q))this._commitIterable(Q);else this._commitText(Q)}_insert(Q){return C(C(this._$startNode).parentNode).insertBefore(Q,this._$endNode)}_commitNode(Q){if(this._$committedValue!==Q){if(this._$clear(),d!==_4){let Y=this._$startNode.parentNode?.nodeName;if(Y==="STYLE"||Y==="SCRIPT"){let K="Forbidden";if(Y==="STYLE")K="Lit does not support binding inside style nodes. This is a security risk, as style injection attacks can exfiltrate data and spoof UIs. Consider instead using css`...` literals to compose styles, and do dynamic styling with css custom properties, ::parts, <slot>s, and by mutating the DOM rather than stylesheets.";else K="Lit does not support binding inside script nodes. This is a security risk, as it could allow arbitrary code execution.";throw Error(K)}}V&&V({kind:"commit node",start:this._$startNode,parent:this._$parent,value:Q,options:this.options}),this._$committedValue=this._insert(Q)}}_commitText(Q){if(this._$committedValue!==B&&j4(this._$committedValue)){let Y=C(this._$startNode).nextSibling;if(this._textSanitizer===void 0)this._textSanitizer=a4(Y,"data","property");Q=this._textSanitizer(Q),V&&V({kind:"commit text",node:Y,value:Q,options:this.options}),Y.data=Q}else{let Y=p.createTextNode("");if(this._commitNode(Y),this._textSanitizer===void 0)this._textSanitizer=a4(Y,"data","property");Q=this._textSanitizer(Q),V&&V({kind:"commit text",node:Y,value:Q,options:this.options}),Y.data=Q}this._$committedValue=Q}_commitTemplateResult(Q){let{values:Y,["_$litType$"]:K}=Q,X=typeof K==="number"?this._$getTemplate(Q):(K.el===void 0&&(K.el=$4.createElement(h3(K.h,K.h[0]),this.options)),K);if(this._$committedValue?._$template===X)V&&V({kind:"template updating",template:X,instance:this._$committedValue,parts:this._$committedValue._$parts,options:this.options,values:Y}),this._$committedValue._update(Y);else{let G=new c3(X,this),q=G._clone(this.options);V&&V({kind:"template instantiated",template:X,instance:G,parts:G._$parts,options:this.options,fragment:q,values:Y}),G._update(Y),V&&V({kind:"template instantiated and updated",template:X,instance:G,parts:G._$parts,options:this.options,fragment:q,values:Y}),this._commitNode(q),this._$committedValue=G}}_$getTemplate(Q){let Y=b3.get(Q.strings);if(Y===void 0)b3.set(Q.strings,Y=new $4(Q));return Y}_commitIterable(Q){if(!e4(this._$committedValue))this._$committedValue=[],this._$clear();let Y=this._$committedValue,K=0,X;for(let G of Q){if(K===Y.length)Y.push(X=new A4(this._insert(U4()),this._insert(U4()),this,this.options));else X=Y[K];X._$setValue(G),K++}if(K<Y.length)this._$clear(X&&C(X._$endNode).nextSibling,K),Y.length=K}_$clear(Q=C(this._$startNode).nextSibling,Y){this._$notifyConnectionChanged?.(!1,!0,Y);while(Q!==this._$endNode){let K=C(Q).nextSibling;C(Q).remove(),Q=K}}setConnected(Q){if(this._$parent===void 0)this.__isConnected=Q,this._$notifyConnectionChanged?.(Q);else throw Error("part.setConnected() may only be called on a RootPart returned from render().")}}class L4{get tagName(){return this.element.tagName}get _$isConnected(){return this._$parent._$isConnected}constructor(Q,Y,K,X,G){if(this.type=Q3,this._$committedValue=B,this._$disconnectableChildren=void 0,this.element=Q,this.name=Y,this._$parent=X,this.options=G,K.length>2||K[0]!==""||K[1]!=="")this._$committedValue=Array(K.length-1).fill(new String),this.strings=K;else this._$committedValue=B;this._sanitizer=void 0}_$setValue(Q,Y=this,K,X){let G=this.strings,q=!1;if(G===void 0){if(Q=t(this,Q,Y,0),q=!j4(Q)||Q!==this._$committedValue&&Q!==l,q)this._$committedValue=Q}else{let J=Q;Q=G[0];let H,W;for(H=0;H<G.length-1;H++){if(W=t(this,J[K+H],Y,H),W===l)W=this._$committedValue[H];if(q||=!j4(W)||W!==this._$committedValue[H],W===B)Q=B;else if(Q!==B)Q+=(W??"")+G[H+1];this._$committedValue[H]=W}}if(q&&!X)this._commitValue(Q)}_commitValue(Q){if(Q===B)C(this.element).removeAttribute(this.name);else{if(this._sanitizer===void 0)this._sanitizer=d(this.element,this.name,"attribute");Q=this._sanitizer(Q??""),V&&V({kind:"commit attribute",element:this.element,name:this.name,value:Q,options:this.options}),C(this.element).setAttribute(this.name,Q??"")}}}class y3 extends L4{constructor(){super(...arguments);this.type=xQ}_commitValue(Q){if(this._sanitizer===void 0)this._sanitizer=d(this.element,this.name,"property");Q=this._sanitizer(Q),V&&V({kind:"commit property",element:this.element,name:this.name,value:Q,options:this.options}),this.element[this.name]=Q===B?void 0:Q}}class m3 extends L4{constructor(){super(...arguments);this.type=gQ}_commitValue(Q){V&&V({kind:"commit boolean attribute",element:this.element,name:this.name,value:!!(Q&&Q!==B),options:this.options}),C(this.element).toggleAttribute(this.name,!!Q&&Q!==B)}}class u3 extends L4{constructor(Q,Y,K,X,G){super(Q,Y,K,X,G);if(this.type=vQ,this.strings!==void 0)throw Error(`A \`<${Q.localName}>\` has a \`@${Y}=...\` listener with invalid content. Event listeners in templates must have exactly one expression and no surrounding text.`)}_$setValue(Q,Y=this){if(Q=t(this,Q,Y,0)??B,Q===l)return;let K=this._$committedValue,X=Q===B&&K!==B||Q.capture!==K.capture||Q.once!==K.once||Q.passive!==K.passive,G=Q!==B&&(K===B||X);if(V&&V({kind:"commit event listener",element:this.element,name:this.name,value:Q,options:this.options,removeListener:X,addListener:G,oldListener:K}),X)this.element.removeEventListener(this.name,this,K);if(G)this.element.addEventListener(this.name,this,Q);this._$committedValue=Q}handleEvent(Q){if(typeof this._$committedValue==="function")this._$committedValue.call(this.options?.host??this.element,Q);else this._$committedValue.handleEvent(Q)}}class f3{constructor(Q,Y,K){this.element=Q,this.type=Y3,this._$disconnectableChildren=void 0,this._$parent=Y,this.options=K}get _$isConnected(){return this._$parent._$isConnected}_$setValue(Q){V&&V({kind:"commit to element binding",element:this.element,value:Q,options:this.options}),t(this,Q)}}var yQ=T.litHtmlPolyfillSupportDevMode;yQ?.($4,A4);(T.litHtmlVersions??=[]).push("3.3.3");if(T.litHtmlVersions.length>1)queueMicrotask(()=>{W4("multiple-versions","Multiple versions of Lit loaded. Loading multiple versions is not recommended.")});var H4=(Q,Y,K)=>{if(Y==null)throw TypeError(`The container to render into may not be ${Y}`);let X=PQ++,G=K?.renderBefore??Y,q=G._$litPart$;if(V&&V({kind:"begin render",id:X,value:Q,container:Y,options:K,part:q}),q===void 0){let J=K?.renderBefore??null;G._$litPart$=q=new A4(Y.insertBefore(U4(),J),J,void 0,K??{})}return q._$setValue(Q),V&&V({kind:"end render",id:X,value:Q,container:Y,options:K,part:q}),q};H4.setSanitizer=MQ,H4.createSanitizer=a4,H4._testOnlyClearSanitizerFactoryDoNotCallOrElse=ZQ;var mQ=(Q,Y)=>Q,X3=!0,v=globalThis,o3;if(X3)v.litIssuedWarnings??=new Set,o3=(Q,Y)=>{if(Y+=` See https://lit.dev/msg/${Q} for more information.`,!v.litIssuedWarnings.has(Y)&&!v.litIssuedWarnings.has(Q))console.warn(Y),v.litIssuedWarnings.add(Y)};class A extends _{constructor(){super(...arguments);this.renderOptions={host:this},this.__childPart=void 0}createRenderRoot(){let Q=super.createRenderRoot();return this.renderOptions.renderBefore??=Q.firstChild,Q}update(Q){let Y=this.render();if(!this.hasUpdated)this.renderOptions.isConnected=this.isConnected;super.update(Q),this.__childPart=H4(Y,this.renderRoot,this.renderOptions)}connectedCallback(){super.connectedCallback(),this.__childPart?.setConnected(!0)}disconnectedCallback(){super.disconnectedCallback(),this.__childPart?.setConnected(!1)}render(){return l}}A._$litElement$=!0;A[mQ("finalized",A)]=!0;v.litElementHydrateSupport?.({LitElement:A});var uQ=X3?v.litElementPolyfillSupportDevMode:v.litElementPolyfillSupport;uQ?.({LitElement:A});(v.litElementVersions??=[]).push("4.2.2");if(X3&&v.litElementVersions.length>1)queueMicrotask(()=>{o3("multiple-versions","Multiple versions of Lit loaded. Loading multiple versions is not recommended.")});async function h(Q){let Y=await fetch(Q,{credentials:"same-origin"});if(!Y.ok)throw Error(`${Q}: ${Y.status}`);return await Y.json()}async function T4(Q,Y){let K=await fetch(Q,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(Y)});if(!K.ok){let X=await K.text();throw Error(X.trim()||`${Q}: ${K.status}`)}}async function c(Q,Y){let K=await fetch(Q,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(Y)});if(!K.ok){let X=await K.text();throw Error(X.trim()||`${Q}: ${K.status}`)}return await K.json()}async function r3(Q,Y){let K=await fetch(Q,{method:"PUT",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(Y)});if(!K.ok){let X=await K.text();throw Error(X.trim()||`${Q}: ${K.status}`)}return await K.json()}function a(Q){if(!Q||!Q.op)return!1;return Q.stage!==""&&Q.stage!=="done"&&Q.stage!=="aborted"&&Q.stage!=="error"}async function fQ(Q,Y){let K=await fetch(Q,{method:"DELETE",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(Y)});if(!K.ok){let X=await K.text();throw Error(X.trim()||`${Q}: ${K.status}`)}return await K.json()}var I={authStatus:()=>h("/api/auth/status"),setup:(Q)=>c("/api/auth/setup",{password:Q}),login:(Q)=>T4("/api/auth/login",{password:Q}),logout:()=>T4("/api/auth/logout",{}),recover:(Q,Y)=>c("/api/auth/recover",{recovery_code:Q,password:Y}),changePassword:(Q,Y)=>T4("/api/auth/change-password",{current_password:Q,new_password:Y}),regenerateRecovery:()=>c("/api/auth/recovery",{}),fleet:()=>h("/api/fleet"),system:()=>h("/api/system"),history:()=>h("/api/history"),events:(Q={})=>{let Y=new URLSearchParams;if(Q.since_ms)Y.set("since_ms",String(Q.since_ms));if(Q.kind)Y.set("kind",Q.kind);if(Q.severity)Y.set("severity",Q.severity);if(Q.inverter_uid)Y.set("inverter_uid",Q.inverter_uid);if(Q.limit)Y.set("limit",String(Q.limit));let K=Y.toString();return h("/api/events"+(K?`?${K}`:""))},getSettings:async()=>{let Q=await h("/api/settings");if(Q.error)return{error:Q.error};return{settings:{ecu_id:Q.ecu_id,mac:Q.mac,pan_override:Q.pan_override,zigbee_type:Q.zigbee_type,channel:Q.channel,inverter_names:Q.inverter_names??{},effective:Q.effective}}},saveSettings:(Q)=>r3("/api/settings",Q),verifyPassword:async(Q)=>{let Y=await fetch("/api/auth/verify",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:Q})});if(Y.status===200)return!0;if(Y.status===401)return!1;let K=await Y.text();throw Error(K.trim()||`/api/auth/verify: ${Y.status}`)},setPower:(Q)=>c("/api/power",Q),profiles:()=>h("/api/profiles"),overlays:()=>h("/api/overlays"),selectBase:(Q)=>T4("/api/profiles/base",{id:Q}),saveOverlay:(Q)=>r3("/api/profiles/overlay",Q),deleteOverlay:(Q,Y)=>fQ("/api/profiles/overlay",{id:Q,uids:Y}),pairingScan:(Q={})=>c("/api/pairing/scan",Q),pairingAdd:(Q)=>c("/api/pairing/add",{serial:Q}),pairingReplace:(Q,Y)=>c("/api/pairing/replace",{old_uid:Q,new_serial:Y}),pairingRekey:(Q,Y=0)=>c("/api/pairing/rekey",{new_pan:Q,channel:Y}),pairingAbort:()=>c("/api/pairing/abort",{}),pairingStatus:()=>h("/api/pairing/status")};function p3(Q,Y){let K=new EventSource("/api/stream");return K.addEventListener("fleet",(X)=>{try{Q(JSON.parse(X.data))}catch{}}),K.onerror=()=>Y?.(),()=>K.close()}class l3 extends A{static properties={configured:{type:Boolean},error:{state:!0},busy:{state:!0},recoverMode:{state:!0},savedCode:{state:!0},copied:{state:!0}};constructor(){super();this.configured=!0,this.error="",this.busy=!1,this.recoverMode=!1,this.savedCode="",this.copied=!1}static styles=L`
+`),Error(K)}return w3!==void 0?w3.createHTML(Y):Y}var fQ=(Q,Y)=>{let K=Q.length-1,X=[],G=Y===Z4?"<svg>":Y===R4?"<math>":"",J,z=B4;for(let W=0;W<K;W++){let U=Q[W],j=-1,A,F=0,I;while(F<U.length){if(z.lastIndex=F,I=z.exec(U),I===null)break;if(F=z.lastIndex,z===B4){if(I[_3]==="!--")z=T3;else if(I[_3]!==void 0)z=S3;else if(I[i4]!==void 0){if(v3.test(I[i4]))J=new RegExp(`</${I[i4]}`,"g");z=r}else if(I[xQ]!==void 0)throw Error("Bindings in tag names are not supported. Please use static templates instead. See https://lit.dev/docs/templates/expressions/#static-expressions")}else if(z===r)if(I[gQ]===">")z=J??B4,j=-1;else if(I[k3]===void 0)j=-2;else j=z.lastIndex-I[vQ].length,A=I[k3],z=I[b3]===void 0?r:I[b3]==='"'?t4:s4;else if(z===t4||z===s4)z=r;else if(z===T3||z===S3)z=B4;else z=r,J=void 0}console.assert(j===-1||z===r||z===s4||z===t4,"unexpected parse state B");let P=z===r&&Q[W+1].startsWith("/>")?" ":"";G+=z===B4?U+SQ:j>=0?(X.push(A),U.slice(0,j)+x3+U.slice(j))+c+P:U+c+(j===-2?W:P)}let H=G+(Q[K]||"<?>")+(Y===Z4?"</svg>":Y===R4?"</math>":"");return[h3(Q,H),X]};class $4{constructor({strings:Q,["_$litType$"]:Y},K){this.parts=[];let X,G=0,J=0,z=Q.length-1,H=this.parts,[W,U]=fQ(Q,Y);if(this.el=$4.createElement(W,K),p.currentNode=this.el.content,Y===Z4||Y===R4){let j=this.el.content.firstChild;j.replaceWith(...j.childNodes)}while((X=p.nextNode())!==null&&H.length<z){if(X.nodeType===1){{let j=X.localName;if(/^(?:textarea|template)$/i.test(j)&&X.innerHTML.includes(c)){let A=`Expressions are not supported inside \`${j}\` elements. See https://lit.dev/msg/expression-in-${j} for more information.`;if(j==="template")throw Error(A);else W4("",A)}}if(X.hasAttributes()){for(let j of X.getAttributeNames())if(j.endsWith(x3)){let A=U[J++],I=X.getAttribute(j).split(c),P=/([.?@])?(.*)/.exec(A);H.push({type:Q3,index:G,name:P[2],strings:I,ctor:P[1]==="."?y3:P[1]==="?"?m3:P[1]==="@"?u3:L4}),X.removeAttribute(j)}else if(j.startsWith(c))H.push({type:Y3,index:G}),X.removeAttribute(j)}if(v3.test(X.tagName)){let j=X.textContent.split(c),A=j.length-1;if(A>0){X.textContent=M4?M4.emptyScript:"";for(let F=0;F<A;F++)X.append(j[F],U4()),p.nextNode(),H.push({type:w4,index:++G});X.append(j[A],U4())}}}else if(X.nodeType===8)if(X.data===g3)H.push({type:w4,index:G});else{let A=-1;while((A=X.data.indexOf(c,A+1))!==-1)H.push({type:uQ,index:G}),A+=c.length-1}G++}if(U.length!==J)throw Error('Detected duplicate attribute bindings. This occurs if your template has duplicate attributes on an element tag. For example "<input ?disabled=${true} ?disabled=${false}>" contains a duplicate "disabled" attribute. The error was detected in the following template: \n`'+Q.join("${...}")+"`");V&&V({kind:"template prep",template:this,clonableTemplate:this.el,parts:this.parts,strings:Q})}static createElement(Q,Y){let K=l.createElement("template");return K.innerHTML=Q,K}}function a(Q,Y,K=Q,X){if(Y===d)return Y;let G=X!==void 0?K.__directives?.[X]:K.__directive,J=j4(Y)?void 0:Y._$litDirective$;if(G?.constructor!==J){if(G?._$notifyDirectiveConnectionChanged?.(!1),J===void 0)G=void 0;else G=new J(Q),G._$initialize(Q,K,X);if(X!==void 0)(K.__directives??=[])[X]=G;else K.__directive=G}if(G!==void 0)Y=a(Q,G._$resolve(Q,Y.values),G,X);return Y}class c3{constructor(Q,Y){this._$parts=[],this._$disconnectableChildren=void 0,this._$template=Q,this._$parent=Y}get parentNode(){return this._$parent.parentNode}get _$isConnected(){return this._$parent._$isConnected}_clone(Q){let{el:{content:Y},parts:K}=this._$template,X=(Q?.creationScope??l).importNode(Y,!0);p.currentNode=X;let G=p.nextNode(),J=0,z=0,H=K[0];while(H!==void 0){if(J===H.index){let W;if(H.type===w4)W=new A4(G,G.nextSibling,this,Q);else if(H.type===Q3)W=new H.ctor(G,H.name,H.strings,this,Q);else if(H.type===Y3)W=new f3(G,this,Q);this._$parts.push(W),H=K[++z]}if(J!==H?.index)G=p.nextNode(),J++}return p.currentNode=l,X}_update(Q){let Y=0;for(let K of this._$parts){if(K!==void 0)if(V&&V({kind:"set part",part:K,value:Q[Y],valueIndex:Y,values:Q,templateInstance:this}),K.strings!==void 0)K._$setValue(Q,K,Y),Y+=K.strings.length-2;else K._$setValue(Q[Y]);Y++}}}class A4{get _$isConnected(){return this._$parent?._$isConnected??this.__isConnected}constructor(Q,Y,K,X){this.type=w4,this._$committedValue=B,this._$disconnectableChildren=void 0,this._$startNode=Q,this._$endNode=Y,this._$parent=K,this.options=X,this.__isConnected=X?.isConnected??!0,this._textSanitizer=void 0}get parentNode(){let Q=b(this._$startNode).parentNode,Y=this._$parent;if(Y!==void 0&&Q?.nodeType===11)Q=Y.parentNode;return Q}get startNode(){return this._$startNode}get endNode(){return this._$endNode}_$setValue(Q,Y=this){if(this.parentNode===null)throw Error("This `ChildPart` has no `parentNode` and therefore cannot accept a value. This likely means the element containing the part was manipulated in an unsupported way outside of Lit's control such that the part's marker nodes were ejected from DOM. For example, setting the element's `innerHTML` or `textContent` can do this.");if(Q=a(this,Q,Y),j4(Q)){if(Q===B||Q==null||Q===""){if(this._$committedValue!==B)V&&V({kind:"commit nothing to child",start:this._$startNode,end:this._$endNode,parent:this._$parent,options:this.options}),this._$clear();this._$committedValue=B}else if(Q!==this._$committedValue&&Q!==d)this._commitText(Q)}else if(Q._$litType$!==void 0)this._commitTemplateResult(Q);else if(Q.nodeType!==void 0){if(this.options?.host===Q){this._commitText("[probable mistake: rendered a template's host in itself (commonly caused by writing ${this} in a template]"),console.warn("Attempted to render the template host",Q,"inside itself. This is almost always a mistake, and in dev mode ","we render some warning text. In production however, we'll ","render it, which will usually result in an error, and sometimes ","in the element disappearing from the DOM.");return}this._commitNode(Q)}else if(kQ(Q))this._commitIterable(Q);else this._commitText(Q)}_insert(Q){return b(b(this._$startNode).parentNode).insertBefore(Q,this._$endNode)}_commitNode(Q){if(this._$committedValue!==Q){if(this._$clear(),n!==_4){let Y=this._$startNode.parentNode?.nodeName;if(Y==="STYLE"||Y==="SCRIPT"){let K="Forbidden";if(Y==="STYLE")K="Lit does not support binding inside style nodes. This is a security risk, as style injection attacks can exfiltrate data and spoof UIs. Consider instead using css`...` literals to compose styles, and do dynamic styling with css custom properties, ::parts, <slot>s, and by mutating the DOM rather than stylesheets.";else K="Lit does not support binding inside script nodes. This is a security risk, as it could allow arbitrary code execution.";throw Error(K)}}V&&V({kind:"commit node",start:this._$startNode,parent:this._$parent,value:Q,options:this.options}),this._$committedValue=this._insert(Q)}}_commitText(Q){if(this._$committedValue!==B&&j4(this._$committedValue)){let Y=b(this._$startNode).nextSibling;if(this._textSanitizer===void 0)this._textSanitizer=a4(Y,"data","property");Q=this._textSanitizer(Q),V&&V({kind:"commit text",node:Y,value:Q,options:this.options}),Y.data=Q}else{let Y=l.createTextNode("");if(this._commitNode(Y),this._textSanitizer===void 0)this._textSanitizer=a4(Y,"data","property");Q=this._textSanitizer(Q),V&&V({kind:"commit text",node:Y,value:Q,options:this.options}),Y.data=Q}this._$committedValue=Q}_commitTemplateResult(Q){let{values:Y,["_$litType$"]:K}=Q,X=typeof K==="number"?this._$getTemplate(Q):(K.el===void 0&&(K.el=$4.createElement(h3(K.h,K.h[0]),this.options)),K);if(this._$committedValue?._$template===X)V&&V({kind:"template updating",template:X,instance:this._$committedValue,parts:this._$committedValue._$parts,options:this.options,values:Y}),this._$committedValue._update(Y);else{let G=new c3(X,this),J=G._clone(this.options);V&&V({kind:"template instantiated",template:X,instance:G,parts:G._$parts,options:this.options,fragment:J,values:Y}),G._update(Y),V&&V({kind:"template instantiated and updated",template:X,instance:G,parts:G._$parts,options:this.options,fragment:J,values:Y}),this._commitNode(J),this._$committedValue=G}}_$getTemplate(Q){let Y=C3.get(Q.strings);if(Y===void 0)C3.set(Q.strings,Y=new $4(Q));return Y}_commitIterable(Q){if(!e4(this._$committedValue))this._$committedValue=[],this._$clear();let Y=this._$committedValue,K=0,X;for(let G of Q){if(K===Y.length)Y.push(X=new A4(this._insert(U4()),this._insert(U4()),this,this.options));else X=Y[K];X._$setValue(G),K++}if(K<Y.length)this._$clear(X&&b(X._$endNode).nextSibling,K),Y.length=K}_$clear(Q=b(this._$startNode).nextSibling,Y){this._$notifyConnectionChanged?.(!1,!0,Y);while(Q!==this._$endNode){let K=b(Q).nextSibling;b(Q).remove(),Q=K}}setConnected(Q){if(this._$parent===void 0)this.__isConnected=Q,this._$notifyConnectionChanged?.(Q);else throw Error("part.setConnected() may only be called on a RootPart returned from render().")}}class L4{get tagName(){return this.element.tagName}get _$isConnected(){return this._$parent._$isConnected}constructor(Q,Y,K,X,G){if(this.type=Q3,this._$committedValue=B,this._$disconnectableChildren=void 0,this.element=Q,this.name=Y,this._$parent=X,this.options=G,K.length>2||K[0]!==""||K[1]!=="")this._$committedValue=Array(K.length-1).fill(new String),this.strings=K;else this._$committedValue=B;this._sanitizer=void 0}_$setValue(Q,Y=this,K,X){let G=this.strings,J=!1;if(G===void 0){if(Q=a(this,Q,Y,0),J=!j4(Q)||Q!==this._$committedValue&&Q!==d,J)this._$committedValue=Q}else{let z=Q;Q=G[0];let H,W;for(H=0;H<G.length-1;H++){if(W=a(this,z[K+H],Y,H),W===d)W=this._$committedValue[H];if(J||=!j4(W)||W!==this._$committedValue[H],W===B)Q=B;else if(Q!==B)Q+=(W??"")+G[H+1];this._$committedValue[H]=W}}if(J&&!X)this._commitValue(Q)}_commitValue(Q){if(Q===B)b(this.element).removeAttribute(this.name);else{if(this._sanitizer===void 0)this._sanitizer=n(this.element,this.name,"attribute");Q=this._sanitizer(Q??""),V&&V({kind:"commit attribute",element:this.element,name:this.name,value:Q,options:this.options}),b(this.element).setAttribute(this.name,Q??"")}}}class y3 extends L4{constructor(){super(...arguments);this.type=cQ}_commitValue(Q){if(this._sanitizer===void 0)this._sanitizer=n(this.element,this.name,"property");Q=this._sanitizer(Q),V&&V({kind:"commit property",element:this.element,name:this.name,value:Q,options:this.options}),this.element[this.name]=Q===B?void 0:Q}}class m3 extends L4{constructor(){super(...arguments);this.type=yQ}_commitValue(Q){V&&V({kind:"commit boolean attribute",element:this.element,name:this.name,value:!!(Q&&Q!==B),options:this.options}),b(this.element).toggleAttribute(this.name,!!Q&&Q!==B)}}class u3 extends L4{constructor(Q,Y,K,X,G){super(Q,Y,K,X,G);if(this.type=mQ,this.strings!==void 0)throw Error(`A \`<${Q.localName}>\` has a \`@${Y}=...\` listener with invalid content. Event listeners in templates must have exactly one expression and no surrounding text.`)}_$setValue(Q,Y=this){if(Q=a(this,Q,Y,0)??B,Q===d)return;let K=this._$committedValue,X=Q===B&&K!==B||Q.capture!==K.capture||Q.once!==K.once||Q.passive!==K.passive,G=Q!==B&&(K===B||X);if(V&&V({kind:"commit event listener",element:this.element,name:this.name,value:Q,options:this.options,removeListener:X,addListener:G,oldListener:K}),X)this.element.removeEventListener(this.name,this,K);if(G)this.element.addEventListener(this.name,this,Q);this._$committedValue=Q}handleEvent(Q){if(typeof this._$committedValue==="function")this._$committedValue.call(this.options?.host??this.element,Q);else this._$committedValue.handleEvent(Q)}}class f3{constructor(Q,Y,K){this.element=Q,this.type=Y3,this._$disconnectableChildren=void 0,this._$parent=Y,this.options=K}get _$isConnected(){return this._$parent._$isConnected}_$setValue(Q){V&&V({kind:"commit to element binding",element:this.element,value:Q,options:this.options}),a(this,Q)}}var oQ=T.litHtmlPolyfillSupportDevMode;oQ?.($4,A4);(T.litHtmlVersions??=[]).push("3.3.3");if(T.litHtmlVersions.length>1)queueMicrotask(()=>{W4("multiple-versions","Multiple versions of Lit loaded. Loading multiple versions is not recommended.")});var H4=(Q,Y,K)=>{if(Y==null)throw TypeError(`The container to render into may not be ${Y}`);let X=RQ++,G=K?.renderBefore??Y,J=G._$litPart$;if(V&&V({kind:"begin render",id:X,value:Q,container:Y,options:K,part:J}),J===void 0){let z=K?.renderBefore??null;G._$litPart$=J=new A4(Y.insertBefore(U4(),z),z,void 0,K??{})}return J._$setValue(Q),V&&V({kind:"end render",id:X,value:Q,container:Y,options:K,part:J}),J};H4.setSanitizer=_Q,H4.createSanitizer=a4,H4._testOnlyClearSanitizerFactoryDoNotCallOrElse=TQ;var rQ=(Q,Y)=>Q,X3=!0,y=globalThis,o3;if(X3)y.litIssuedWarnings??=new Set,o3=(Q,Y)=>{if(Y+=` See https://lit.dev/msg/${Q} for more information.`,!y.litIssuedWarnings.has(Y)&&!y.litIssuedWarnings.has(Q))console.warn(Y),y.litIssuedWarnings.add(Y)};class $ extends _{constructor(){super(...arguments);this.renderOptions={host:this},this.__childPart=void 0}createRenderRoot(){let Q=super.createRenderRoot();return this.renderOptions.renderBefore??=Q.firstChild,Q}update(Q){let Y=this.render();if(!this.hasUpdated)this.renderOptions.isConnected=this.isConnected;super.update(Q),this.__childPart=H4(Y,this.renderRoot,this.renderOptions)}connectedCallback(){super.connectedCallback(),this.__childPart?.setConnected(!0)}disconnectedCallback(){super.disconnectedCallback(),this.__childPart?.setConnected(!1)}render(){return d}}$._$litElement$=!0;$[rQ("finalized",$)]=!0;y.litElementHydrateSupport?.({LitElement:$});var pQ=X3?y.litElementPolyfillSupportDevMode:y.litElementPolyfillSupport;pQ?.({LitElement:$});(y.litElementVersions??=[]).push("4.2.2");if(X3&&y.litElementVersions.length>1)queueMicrotask(()=>{o3("multiple-versions","Multiple versions of Lit loaded. Loading multiple versions is not recommended.")});async function m(Q){let Y=await fetch(Q,{credentials:"same-origin"});if(!Y.ok)throw Error(`${Q}: ${Y.status}`);return await Y.json()}async function T4(Q,Y){let K=await fetch(Q,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(Y)});if(!K.ok){let X=await K.text();throw Error(X.trim()||`${Q}: ${K.status}`)}}async function g(Q,Y){let K=await fetch(Q,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(Y)});if(!K.ok){let X=await K.text();throw Error(X.trim()||`${Q}: ${K.status}`)}return await K.json()}async function r3(Q,Y){let K=await fetch(Q,{method:"PUT",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(Y)});if(!K.ok){let X=await K.text();throw Error(X.trim()||`${Q}: ${K.status}`)}return await K.json()}function e(Q){if(!Q||!Q.op)return!1;return Q.stage!==""&&Q.stage!=="done"&&Q.stage!=="aborted"&&Q.stage!=="error"}async function lQ(Q,Y){let K=await fetch(Q,{method:"DELETE",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(Y)});if(!K.ok){let X=await K.text();throw Error(X.trim()||`${Q}: ${K.status}`)}return await K.json()}var D={authStatus:()=>m("/api/auth/status"),setup:(Q)=>g("/api/auth/setup",{password:Q}),login:(Q)=>T4("/api/auth/login",{password:Q}),logout:()=>T4("/api/auth/logout",{}),recover:(Q,Y)=>g("/api/auth/recover",{recovery_code:Q,password:Y}),changePassword:(Q,Y)=>T4("/api/auth/change-password",{current_password:Q,new_password:Y}),regenerateRecovery:()=>g("/api/auth/recovery",{}),fleet:()=>m("/api/fleet"),system:()=>m("/api/system"),history:()=>m("/api/history"),events:(Q={})=>{let Y=new URLSearchParams;if(Q.since_ms)Y.set("since_ms",String(Q.since_ms));if(Q.kind)Y.set("kind",Q.kind);if(Q.severity)Y.set("severity",Q.severity);if(Q.inverter_uid)Y.set("inverter_uid",Q.inverter_uid);if(Q.limit)Y.set("limit",String(Q.limit));let K=Y.toString();return m("/api/events"+(K?`?${K}`:""))},getSettings:async()=>{let Q=await m("/api/settings");if(Q.error)return{error:Q.error};return{settings:{ecu_id:Q.ecu_id,mac:Q.mac,pan_override:Q.pan_override,zigbee_type:Q.zigbee_type,channel:Q.channel,inverter_names:Q.inverter_names??{}}}},saveSettings:(Q)=>r3("/api/settings",Q),verifyPassword:async(Q)=>{let Y=await fetch("/api/auth/verify",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:Q})});if(Y.status===200)return!0;if(Y.status===401)return!1;let K=await Y.text();throw Error(K.trim()||`/api/auth/verify: ${Y.status}`)},setPower:(Q)=>g("/api/power",Q),profiles:()=>m("/api/profiles"),overlays:()=>m("/api/overlays"),selectBase:(Q)=>T4("/api/profiles/base",{id:Q}),saveOverlay:(Q)=>r3("/api/profiles/overlay",Q),deleteOverlay:(Q,Y)=>lQ("/api/profiles/overlay",{id:Q,uids:Y}),pairingScan:(Q={})=>g("/api/pairing/scan",Q),pairingAdd:(Q)=>g("/api/pairing/add",{serial:Q}),pairingReplace:(Q,Y)=>g("/api/pairing/replace",{old_uid:Q,new_serial:Y}),pairingRekey:(Q,Y=0)=>g("/api/pairing/rekey",{new_pan:Q,channel:Y}),pairingChangeChannel:(Q)=>g("/api/pairing/change-channel",{channel:Q}),pairingAbort:()=>g("/api/pairing/abort",{}),pairingStatus:()=>m("/api/pairing/status")};function p3(Q,Y){let K=new EventSource("/api/stream");return K.addEventListener("fleet",(X)=>{try{Q(JSON.parse(X.data))}catch{}}),K.onerror=()=>Y?.(),()=>K.close()}class l3 extends ${static properties={configured:{type:Boolean},error:{state:!0},busy:{state:!0},recoverMode:{state:!0},savedCode:{state:!0},copied:{state:!0}};constructor(){super();this.configured=!0,this.error="",this.busy=!1,this.recoverMode=!1,this.savedCode="",this.copied=!1}static styles=L`
     :host {
       display: grid;
       place-items: center;
@@ -92,12 +92,12 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
       cursor: pointer;
     }
     .copy:hover { color: var(--text); border-color: var(--muted); }
-  `;firstUpdated(){this.focusFirst()}updated(Q){if(Q.has("recoverMode")||Q.has("savedCode"))this.focusFirst()}focusFirst(){this.renderRoot.querySelector("input")?.focus()}val(Q){return this.renderRoot.querySelector(`#${Q}`)?.value??""}async submit(Q){if(Q.preventDefault(),this.busy)return;this.error="";let Y=!this.configured,K=this.configured&&this.recoverMode;if(Y||K){if(this.val("pw")!==this.val("pw2")){this.error="Passwords do not match.";return}}this.busy=!0;try{if(Y){let X=await I.setup(this.val("pw"));this.savedCode=X.recovery_code}else if(K){let X=await I.recover(this.val("code"),this.val("pw"));this.savedCode=X.recovery_code}else await I.login(this.val("pw")),this.done()}catch(X){this.error=X.message||"failed"}finally{this.busy=!1}}done(){this.dispatchEvent(new CustomEvent("authed",{bubbles:!0,composed:!0}))}async copyCode(){try{await navigator.clipboard?.writeText(this.savedCode),this.copied=!0}catch{}}render(){if(this.savedCode)return this.renderSaved();let Q=!this.configured,Y=this.configured&&this.recoverMode,K=Y?"Reset password":"ECU Console",X=Q?"First run — choose an operator password (min 8 characters).":Y?"Enter your recovery code and a new password.":"Enter the operator password.";return z`
+  `;firstUpdated(){this.focusFirst()}updated(Q){if(Q.has("recoverMode")||Q.has("savedCode"))this.focusFirst()}focusFirst(){this.renderRoot.querySelector("input")?.focus()}val(Q){return this.renderRoot.querySelector(`#${Q}`)?.value??""}async submit(Q){if(Q.preventDefault(),this.busy)return;this.error="";let Y=!this.configured,K=this.configured&&this.recoverMode;if(Y||K){if(this.val("pw")!==this.val("pw2")){this.error="Passwords do not match.";return}}this.busy=!0;try{if(Y){let X=await D.setup(this.val("pw"));this.savedCode=X.recovery_code}else if(K){let X=await D.recover(this.val("code"),this.val("pw"));this.savedCode=X.recovery_code}else await D.login(this.val("pw")),this.done()}catch(X){this.error=X.message||"failed"}finally{this.busy=!1}}done(){this.dispatchEvent(new CustomEvent("authed",{bubbles:!0,composed:!0}))}async copyCode(){try{await navigator.clipboard?.writeText(this.savedCode),this.copied=!0}catch{}}render(){if(this.savedCode)return this.renderSaved();let Q=!this.configured,Y=this.configured&&this.recoverMode,K=Y?"Reset password":"ECU Console",X=Q?"First run — choose an operator password (min 8 characters).":Y?"Enter your recovery code and a new password.":"Enter the operator password.";return q`
       <form class="box" @submit=${this.submit}>
-        <h1>${Y?K:z`<span class="brand">ECU</span> Console`}</h1>
+        <h1>${Y?K:q`<span class="brand">ECU</span> Console`}</h1>
         <p>${X}</p>
 
-        ${Y?z`
+        ${Y?q`
               <label for="code">Recovery code</label>
               <input id="code" type="text" autocomplete="off" spellcheck="false"
                 placeholder="XXXX-XXXX-XXXX-XXXX" ?disabled=${this.busy} />
@@ -108,7 +108,7 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
           autocomplete=${Q||Y?"new-password":"current-password"}
           ?disabled=${this.busy} />
 
-        ${Q||Y?z`
+        ${Q||Y?q`
               <label for="pw2">Confirm password</label>
               <input id="pw2" type="password" autocomplete="new-password" ?disabled=${this.busy} />
             `:B}
@@ -118,11 +118,11 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
         </button>
         <div class="err">${this.error}</div>
 
-        ${this.configured?z`<button class="link" type="button" @click=${this.toggleRecover}>
+        ${this.configured?q`<button class="link" type="button" @click=${this.toggleRecover}>
               ${Y?"Back to sign in":"Forgot password?"}
             </button>`:B}
       </form>
-    `}toggleRecover=()=>{this.recoverMode=!this.recoverMode,this.error=""};renderSaved(){return z`
+    `}toggleRecover=()=>{this.recoverMode=!this.recoverMode,this.error=""};renderSaved(){return q`
       <div class="box">
         <h1>Save your recovery code</h1>
         <p class="warn">
@@ -138,7 +138,7 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
           I've saved it — continue
         </button>
       </div>
-    `}}customElements.define("login-view",l3);function Z(Q){if(!Number.isFinite(Q))return"";return String(Number(Q.toFixed(3)))}function M(Q){if(!Number.isFinite(Q))return"—";if(Math.abs(Q)>=1000)return`${(Q/1000).toFixed(2)} kW`;return`${Math.round(Q)} W`}function D4(Q){if(!Number.isFinite(Q))return"—";let Y=Math.abs(Q);if(Y>=1e6)return`${(Q/1e6).toFixed(2)} MWh`;if(Y>=1000)return`${(Q/1000).toFixed(2)} kWh`;return`${Math.round(Q)} Wh`}function e(Q){return Number.isFinite(Q)?`${Q.toFixed(0)}%`:"—"}function F4(Q){return Q>0?`${Q.toFixed(1)} V`:"—"}function S4(Q){return Q>0?`${Q.toFixed(2)} Hz`:"—"}function d3(Q){return Number.isFinite(Q)?`${Q.toFixed(2)} A`:"—"}function k4(Q){if(!(Q>0))return"idle";if(Q<40)return"low";if(Q<85)return"mid";return"high"}function n3(Q){if(!Number.isFinite(Q)||Q<0)return"—";if(Q<60)return`${Math.round(Q)}s ago`;if(Q<3600)return`${Math.round(Q/60)}m ago`;return`${Math.round(Q/3600)}h ago`}function G3(Q){return Q.replace(/_/g," ").replace(/\b\w/g,(Y)=>Y.toUpperCase())}function C4(Q){if(!Q)return[];return Object.keys(Q).filter((Y)=>Q[Y]).map(G3)}function b4(Q){if(!Q)return"—";return new Date(Q).toLocaleString(void 0,{hour12:!1})}function i3(Q){let Y=(Q||"").toLowerCase();if(Y==="error"||Y==="critical"||Y==="crit"||Y==="fault")return"err";if(Y==="warn"||Y==="warning")return"warn";return"info"}function x(Q){return Q.nameplate_w||0}function Q4(Q){return Math.round(x(Q)*20/500)}function Y4(Q){let Y=Q.protection?.DA;if(Y==null)return;return Math.round(Y/500*x(Q))}class s3 extends A{static properties={power:{type:Number},cap:{type:Number}};constructor(){super();this.power=0,this.cap=0}static styles=L`
+    `}}customElements.define("login-view",l3);function Z(Q){if(!Number.isFinite(Q))return"";return String(Number(Q.toFixed(3)))}function M(Q){if(!Number.isFinite(Q))return"—";if(Math.abs(Q)>=1000)return`${(Q/1000).toFixed(2)} kW`;return`${Math.round(Q)} W`}function D4(Q){if(!Number.isFinite(Q))return"—";let Y=Math.abs(Q);if(Y>=1e6)return`${(Q/1e6).toFixed(2)} MWh`;if(Y>=1000)return`${(Q/1000).toFixed(2)} kWh`;return`${Math.round(Q)} Wh`}function Q4(Q){return Number.isFinite(Q)?`${Q.toFixed(0)}%`:"—"}function F4(Q){return Q>0?`${Q.toFixed(1)} V`:"—"}function S4(Q){return Q>0?`${Q.toFixed(2)} Hz`:"—"}function d3(Q){return Number.isFinite(Q)?`${Q.toFixed(2)} A`:"—"}function k4(Q){if(!(Q>0))return"idle";if(Q<40)return"low";if(Q<85)return"mid";return"high"}function n3(Q){if(!Number.isFinite(Q)||Q<0)return"—";if(Q<60)return`${Math.round(Q)}s ago`;if(Q<3600)return`${Math.round(Q/60)}m ago`;return`${Math.round(Q/3600)}h ago`}function G3(Q){return Q.replace(/_/g," ").replace(/\b\w/g,(Y)=>Y.toUpperCase())}function b4(Q){if(!Q)return[];return Object.keys(Q).filter((Y)=>Q[Y]).map(G3)}function C4(Q){if(!Q)return"—";return new Date(Q).toLocaleString(void 0,{hour12:!1})}function i3(Q){let Y=(Q||"").toLowerCase();if(Y==="error"||Y==="critical"||Y==="crit"||Y==="fault")return"err";if(Y==="warn"||Y==="warning")return"warn";return"info"}function v(Q){return Q.nameplate_w||0}function Y4(Q){return Math.round(v(Q)*20/500)}function K4(Q){let Y=Q.protection?.DA;if(Y==null)return;return Math.round(Y/500*v(Q))}class s3 extends ${static properties={power:{type:Number},cap:{type:Number}};constructor(){super();this.power=0,this.cap=0}static styles=L`
     :host { display: block; text-align: center; }
     .wrap { position: relative; width: 220px; margin: 0 auto; }
     svg { width: 100%; height: auto; display: block; }
@@ -156,7 +156,7 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
     }
     .big { font-size: 30px; font-weight: 700; color: var(--text); }
     .sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
-  `;pct(){if(!(this.cap>0))return 0;return Math.max(0,Math.min(100,this.power/this.cap*100))}render(){let Q=this.pct(),Y=k4(Q),K=90,X=Math.PI*90,G=X*(1-Q/100);return z`
+  `;pct(){if(!(this.cap>0))return 0;return Math.max(0,Math.min(100,this.power/this.cap*100))}render(){let Q=this.pct(),Y=k4(Q),K=90,X=Math.PI*90,G=X*(1-Q/100);return q`
       <div class="wrap">
         <svg viewBox="0 0 200 120" role="img" aria-label="fleet output gauge">
           <path
@@ -176,10 +176,10 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
         </svg>
         <div class="center">
           <div class="big">${M(this.power)}</div>
-          <div class="sub">${e(Q)} of ${M(this.cap)}</div>
+          <div class="sub">${Q4(Q)} of ${M(this.cap)}</div>
         </div>
       </div>
-    `}}customElements.define("fleet-gauge",s3);class t3 extends A{static properties={label:{type:String},value:{type:String},sub:{type:String}};constructor(){super();this.label="",this.value="",this.sub=""}static styles=L`
+    `}}customElements.define("fleet-gauge",s3);class t3 extends ${static properties={label:{type:String},value:{type:String},sub:{type:String}};constructor(){super();this.label="",this.value="",this.sub=""}static styles=L`
     :host {
       display: block;
       background: var(--surface);
@@ -204,11 +204,11 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
       color: var(--muted);
       margin-top: 2px;
     }
-  `;render(){return z`
+  `;render(){return q`
       <div class="label">${this.label}</div>
       <div class="value">${this.value}</div>
-      ${this.sub?z`<div class="sub">${this.sub}</div>`:""}
-    `}}customElements.define("stat-card",t3);class a3 extends A{static properties={inverter:{attribute:!1},pendingCap:{state:!0},busy:{state:!0},error:{state:!0}};dragging=!1;constructor(){super();this.pendingCap=null,this.busy=!1,this.error=""}static styles=L`
+      ${this.sub?q`<div class="sub">${this.sub}</div>`:""}
+    `}}customElements.define("stat-card",t3);class a3 extends ${static properties={inverter:{attribute:!1},pendingCap:{state:!0},busy:{state:!0},error:{state:!0}};dragging=!1;constructor(){super();this.pendingCap=null,this.busy=!1,this.error=""}static styles=L`
     :host { display: block; }
     .row { display: flex; align-items: center; gap: 10px; }
     .barwrap { position: relative; height: 20px; flex: 1; min-width: 90px; touch-action: none; cursor: pointer; }
@@ -231,7 +231,7 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
     }
     .capval { color: var(--err); font-size: 13px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
     .caperr { color: var(--err); font-size: 12px; margin-top: 4px; }
-  `;capFromEvent(Q){let Y=this.renderRoot.querySelector(".bar"),K=x(this.inverter);if(!Y)return this.pendingCap??K;let X=Y.getBoundingClientRect(),G=Math.max(0,Math.min(1,(Q.clientX-X.left)/X.width));return Math.min(K,Math.max(Q4(this.inverter),Math.round(G*K)))}onDown=(Q)=>{if(!this.inverter?.online||this.busy)return;Q.preventDefault(),this.dragging=!0;try{Q.currentTarget.setPointerCapture?.(Q.pointerId)}catch{}this.pendingCap=this.capFromEvent(Q)};onMove=(Q)=>{if(this.dragging)this.pendingCap=this.capFromEvent(Q)};onUp=(Q)=>{if(!this.dragging)return;this.dragging=!1;try{Q.currentTarget.releasePointerCapture?.(Q.pointerId)}catch{}this.commitCap()};async commitCap(){let Q=this.pendingCap;if(Q==null)return;this.busy=!0,this.error="";try{let K=(await I.setPower({uid:this.inverter.uid,watts:Q})).results?.[0];if(K&&!K.ok)this.error=K.error||"failed";else if(K)this.pendingCap=K.applied_watts}catch(Y){this.error=Y.message||"failed"}finally{this.busy=!1}}render(){let Q=this.inverter;if(!Q)return B;let Y=k4(Q.load_pct),K=Math.max(0,Math.min(100,Q.load_pct)),X=x(Q);if(X<=0)return z`<div class="bar"><div class="fill ${Y}" style="width:${K}%"></div></div>`;let G=this.pendingCap??Y4(Q)??X,q=Math.max(0,Math.min(100,G/X*100));return z`
+  `;capFromEvent(Q){let Y=this.renderRoot.querySelector(".bar"),K=v(this.inverter);if(!Y)return this.pendingCap??K;let X=Y.getBoundingClientRect(),G=Math.max(0,Math.min(1,(Q.clientX-X.left)/X.width));return Math.min(K,Math.max(Y4(this.inverter),Math.round(G*K)))}onDown=(Q)=>{if(!this.inverter?.online||this.busy)return;Q.preventDefault(),this.dragging=!0;try{Q.currentTarget.setPointerCapture?.(Q.pointerId)}catch{}this.pendingCap=this.capFromEvent(Q)};onMove=(Q)=>{if(this.dragging)this.pendingCap=this.capFromEvent(Q)};onUp=(Q)=>{if(!this.dragging)return;this.dragging=!1;try{Q.currentTarget.releasePointerCapture?.(Q.pointerId)}catch{}this.commitCap()};async commitCap(){let Q=this.pendingCap;if(Q==null)return;this.busy=!0,this.error="";try{let K=(await D.setPower({uid:this.inverter.uid,watts:Q})).results?.[0];if(K&&!K.ok)this.error=K.error||"failed";else if(K)this.pendingCap=K.applied_watts}catch(Y){this.error=Y.message||"failed"}finally{this.busy=!1}}render(){let Q=this.inverter;if(!Q)return B;let Y=k4(Q.load_pct),K=Math.max(0,Math.min(100,Q.load_pct)),X=v(Q);if(X<=0)return q`<div class="bar"><div class="fill ${Y}" style="width:${K}%"></div></div>`;let G=this.pendingCap??K4(Q)??X,J=Math.max(0,Math.min(100,G/X*100));return q`
       <div class="row">
         <div
           class="barwrap ${Q.online?"":"off"}"
@@ -241,13 +241,13 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
           title="drag to set the output cap"
         >
           <div class="bar"><div class="fill ${Y}" style="width:${K}%"></div></div>
-          <div class="capline" style="left:${q}%"></div>
-          <div class="caret" style="left:${q}%"></div>
+          <div class="capline" style="left:${J}%"></div>
+          <div class="caret" style="left:${J}%"></div>
         </div>
         <span class="capval" title="output cap">▼ ${M(G)}</span>
       </div>
-      ${this.error?z`<div class="caperr">⚠ ${this.error}</div>`:B}
-    `}}customElements.define("cap-bar",a3);class e3 extends A{static properties={inverter:{attribute:!1},name:{type:String},profile:{type:String}};constructor(){super();this.name="",this.profile=""}static styles=L`
+      ${this.error?q`<div class="caperr">⚠ ${this.error}</div>`:B}
+    `}}customElements.define("cap-bar",a3);class e3 extends ${static properties={inverter:{attribute:!1},name:{type:String},profile:{type:String}};constructor(){super();this.name="",this.profile=""}static styles=L`
     :host {
       display: block;
       background: var(--surface);
@@ -300,12 +300,12 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
       padding: 2px 8px;
       font-size: 11px;
     }
-  `;render(){let Q=this.inverter;if(!Q)return B;let Y=C4(Q.faults);return z`
+  `;render(){let Q=this.inverter;if(!Q)return B;let Y=b4(Q.faults);return q`
       <div class="head">
         <div>
           <div class="model">${this.name||Q.model||"unknown"}</div>
           <div class="uid">${this.name?`${Q.model} · ${Q.uid}`:Q.uid}</div>
-          ${this.profile?z`<div class="profile" title="Local Site profile active">⚙ ${this.profile}</div>`:B}
+          ${this.profile?q`<div class="profile" title="Local Site profile active">⚙ ${this.profile}</div>`:B}
         </div>
         <div class="state">
           <span class="dot ${Q.online?"on":"off"}"></span>
@@ -315,7 +315,7 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
 
       <div class="power">
         <span class="pw">${M(Q.active_power_w)}</span>
-        <span class="cap">/ ${M(Q.nameplate_w)} · ${e(Q.load_pct)}</span>
+        <span class="cap">/ ${M(Q.nameplate_w)} · ${Q4(Q.load_pct)}</span>
       </div>
       <cap-bar .inverter=${Q}></cap-bar>
 
@@ -325,18 +325,18 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
         <div class="metric"><div class="k">RSSI / LQI</div><div class="v">${Q.rssi} / ${Q.lqi}</div></div>
       </div>
 
-      ${Q.panels?.length?z`<div class="panels">
-            ${Q.panels.map((K)=>z`<div class="panel">
+      ${Q.panels?.length?q`<div class="panels">
+            ${Q.panels.map((K)=>q`<div class="panel">
                 <div class="pi">DC ${K.index+1}</div>
                 <div class="pw">${M(K.w)}</div>
                 <div>${F4(K.dc_v)} · ${d3(K.dc_a)}</div>
               </div>`)}
           </div>`:B}
 
-      ${Y.length?z`<div class="chips">
-            ${Y.map((K)=>z`<span class="chip">${K}</span>`)}
+      ${Y.length?q`<div class="chips">
+            ${Y.map((K)=>q`<span class="chip">${K}</span>`)}
           </div>`:B}
-    `}}customElements.define("inverter-card",e3);class Q9 extends A{static properties={system:{attribute:!1}};constructor(){super();this.system=null}static styles=L`
+    `}}customElements.define("inverter-card",e3);class Q9 extends ${static properties={system:{attribute:!1}};constructor(){super();this.system=null}static styles=L`
     :host { display: block; }
     .id {
       display: grid;
@@ -368,24 +368,24 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
     .ver { color: var(--muted); font-size: 11px; font-family: var(--mono); min-width: 0; }
     .warn { color: var(--warn); font-size: 12px; margin-top: 10px; }
     .empty { color: var(--muted); font-size: 13px; }
-  `;idRow(Q,Y){return Y?z`<div class="k">${Q}</div><div class="v">${Y}</div>`:B}clients(){let Q=new Map;for(let Y of this.system?.peers??[]){let K=Q.get(Y.backend)??{backend:Y.backend,version:Y.version,controller:!1,conns:0};if(K.conns++,K.controller=K.controller||Y.controller,Y.version)K.version=Y.version;Q.set(Y.backend,K)}return[...Q.values()].sort((Y,K)=>Y.backend.localeCompare(K.backend))}render(){let Q=this.system,Y=Q?.ecu,K=this.clients(),X=!!(Y&&(Y.ecu_id||Y.hostname));return z`
-      ${X?z`<div class="id">
+  `;idRow(Q,Y){return Y?q`<div class="k">${Q}</div><div class="v">${Y}</div>`:B}clients(){let Q=new Map;for(let Y of this.system?.peers??[]){let K=Q.get(Y.backend)??{backend:Y.backend,version:Y.version,controller:!1,conns:0};if(K.conns++,K.controller=K.controller||Y.controller,Y.version)K.version=Y.version;Q.set(Y.backend,K)}return[...Q.values()].sort((Y,K)=>Y.backend.localeCompare(K.backend))}render(){let Q=this.system,Y=Q?.ecu,K=this.clients(),X=!!(Y&&(Y.ecu_id||Y.hostname));return q`
+      ${X?q`<div class="id">
             ${this.idRow("ECU ID",Y.ecu_id)}
             ${this.idRow("Host",Y.hostname)}
           </div>`:B}
 
       <div class="peers">
-        ${K.length?K.map((G)=>z`<div class="peer">
+        ${K.length?K.map((G)=>q`<div class="peer">
                 <span class="dot on"></span>
                 <span class="name">${G.backend||"(unnamed)"}</span>
-                ${G.controller?z`<span class="role ctl">ctrl</span>`:B}
-                ${G.conns>1?z`<span class="role">${G.conns} conns</span>`:B}
+                ${G.controller?q`<span class="role ctl">ctrl</span>`:B}
+                ${G.conns>1?q`<span class="role">${G.conns} conns</span>`:B}
                 <span class="ver">${G.version||""}</span>
-              </div>`):z`<div class="empty">No peers connected.</div>`}
+              </div>`):q`<div class="empty">No peers connected.</div>`}
       </div>
 
-      ${Q?.status_error?z`<div class="warn">⚠ ${Q.status_error}</div>`:B}
-    `}}customElements.define("ecu-clients-card",Q9);function oQ(Q,Y,K){if(Q.length<2)return{line:"",area:"",max:0};let X=Q[0].t,G=Math.max(1,Q[Q.length-1].t-X),q=Math.max(1,...Q.map(($)=>$.w)),J=($)=>[($.t-X)/G*Y,K-$.w/q*K],H="";for(let $=0;$<Q.length;$++){let[F,D]=J(Q[$]);H+=`${$===0?"M":"L"}${F.toFixed(1)} ${D.toFixed(1)} `}let[W]=J(Q[0]),[U]=J(Q[Q.length-1]),j=`${H}L${U.toFixed(1)} ${K} L${W.toFixed(1)} ${K} Z`;return{line:H.trim(),area:j,max:q}}var x4=600,I4=160;class Y9 extends A{static properties={points:{attribute:!1},hoverIdx:{state:!0}};constructor(){super();this.points=[],this.hoverIdx=-1}static styles=L`
+      ${Q?.status_error?q`<div class="warn">⚠ ${Q.status_error}</div>`:B}
+    `}}customElements.define("ecu-clients-card",Q9);function dQ(Q,Y,K){if(Q.length<2)return{line:"",area:"",max:0};let X=Q[0].t,G=Math.max(1,Q[Q.length-1].t-X),J=Math.max(1,...Q.map((A)=>A.w)),z=(A)=>[(A.t-X)/G*Y,K-A.w/J*K],H="";for(let A=0;A<Q.length;A++){let[F,I]=z(Q[A]);H+=`${A===0?"M":"L"}${F.toFixed(1)} ${I.toFixed(1)} `}let[W]=z(Q[0]),[U]=z(Q[Q.length-1]),j=`${H}L${U.toFixed(1)} ${K} L${W.toFixed(1)} ${K} Z`;return{line:H.trim(),area:j,max:J}}var x4=600,I4=160;class Y9 extends ${static properties={points:{attribute:!1},hoverIdx:{state:!0}};constructor(){super();this.points=[],this.hoverIdx=-1}static styles=L`
     :host { display: block; }
     .empty { color: var(--muted); text-align: center; padding: 48px 0; font-size: 13px; }
     .wrap { position: relative; }
@@ -411,7 +411,7 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
     .tip .w { font-weight: 600; }
     .labels { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 6px; }
     .cur { color: var(--text); font-weight: 600; }
-  `;onMove=(Q)=>{let Y=this.points.length;if(Y<2)return;let X=Q.currentTarget.clientWidth||1,G=Math.min(1,Math.max(0,Q.offsetX/X));this.hoverIdx=Math.round(G*(Y-1))};onLeave=()=>{this.hoverIdx=-1};render(){let Q=this.points??[];if(Q.length<2)return z`<div class="empty">Collecting power history…</div>`;let{line:Y,area:K,max:X}=oQ(Q,x4,I4),G=Q[Q.length-1].w,q=this.hoverIdx,J=q>=0&&q<Q.length,H=Q[0].t,W=Math.max(1,Q[Q.length-1].t-H),U=J?(Q[q].t-H)/W*x4:0,j=J?I4-Q[q].w/X*I4:0;return z`
+  `;onMove=(Q)=>{let Y=this.points.length;if(Y<2)return;let X=Q.currentTarget.clientWidth||1,G=Math.min(1,Math.max(0,Q.offsetX/X));this.hoverIdx=Math.round(G*(Y-1))};onLeave=()=>{this.hoverIdx=-1};render(){let Q=this.points??[];if(Q.length<2)return q`<div class="empty">Collecting power history…</div>`;let{line:Y,area:K,max:X}=dQ(Q,x4,I4),G=Q[Q.length-1].w,J=this.hoverIdx,z=J>=0&&J<Q.length,H=Q[0].t,W=Math.max(1,Q[Q.length-1].t-H),U=z?(Q[J].t-H)/W*x4:0,j=z?I4-Q[J].w/X*I4:0;return q`
       <div class="wrap">
         <svg
           viewBox="0 0 ${x4} ${I4}"
@@ -429,18 +429,18 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
           </defs>
           ${S`<path class="area" d=${K} />`}
           ${S`<path class="line" d=${Y} />`}
-          ${J?S`<line class="cross" x1=${U} y1="0" x2=${U} y2=${I4} /><circle class="cursor" cx=${U} cy=${j} r="3.5" />`:B}
+          ${z?S`<line class="cross" x1=${U} y1="0" x2=${U} y2=${I4} /><circle class="cursor" cx=${U} cy=${j} r="3.5" />`:B}
         </svg>
-        ${J?z`<div class="tip" style="left:${U/x4*100}%; top:${j}px">
-              <span class="w">${M(Q[q].w)}</span>
-              <span class="t">· ${b4(Q[q].t)}</span>
+        ${z?q`<div class="tip" style="left:${U/x4*100}%; top:${j}px">
+              <span class="w">${M(Q[J].w)}</span>
+              <span class="t">· ${C4(Q[J].t)}</span>
             </div>`:B}
       </div>
       <div class="labels">
         <span>now <span class="cur">${M(G)}</span></span>
         <span>peak ${M(X)}</span>
       </div>
-    `}}customElements.define("power-chart",Y9);class K9 extends A{static properties={fleet:{attribute:!1},system:{attribute:!1},names:{attribute:!1},profiles:{attribute:!1},history:{state:!0},arrayPendingCap:{state:!0},arrayBusy:{state:!0},arrayError:{state:!0}};timer=null;constructor(){super();this.fleet=null,this.system=null,this.names={},this.profiles={},this.history=[],this.arrayPendingCap=null,this.arrayBusy=!1,this.arrayError=""}setArrayCap=async(Q)=>{let Y=Math.round(Number(Q.target.value));if(!Number.isFinite(Y)||Y<=0)return;this.arrayPendingCap=Y,this.arrayBusy=!0,this.arrayError="";try{let K=await I.setPower({array:!0,watts:Y}),X=(K.results??[]).filter((G)=>!G.ok);if(X.length)this.arrayError=`${X.length} inverter(s) failed`;else{let G=(K.results??[]).reduce((q,J)=>q+J.applied_watts,0);if(G)this.arrayPendingCap=G}}catch(K){this.arrayError=K.message||"failed"}finally{this.arrayBusy=!1}};connectedCallback(){super.connectedCallback(),this.loadHistory(),this.timer=setInterval(()=>void this.loadHistory(),60000)}disconnectedCallback(){if(super.disconnectedCallback(),this.timer)clearInterval(this.timer);this.timer=null}async loadHistory(){try{this.history=await I.history()}catch{}}chartPoints(){if(!this.fleet)return this.history;return[...this.history,{t:Date.now(),w:this.fleet.active_power_w}]}static styles=L`
+    `}}customElements.define("power-chart",Y9);class K9 extends ${static properties={fleet:{attribute:!1},system:{attribute:!1},names:{attribute:!1},profiles:{attribute:!1},history:{state:!0},arrayPendingCap:{state:!0},arrayBusy:{state:!0},arrayError:{state:!0}};timer=null;constructor(){super();this.fleet=null,this.system=null,this.names={},this.profiles={},this.history=[],this.arrayPendingCap=null,this.arrayBusy=!1,this.arrayError=""}setArrayCap=async(Q)=>{let Y=Math.round(Number(Q.target.value));if(!Number.isFinite(Y)||Y<=0)return;this.arrayPendingCap=Y,this.arrayBusy=!0,this.arrayError="";try{let K=await D.setPower({array:!0,watts:Y}),X=(K.results??[]).filter((G)=>!G.ok);if(X.length)this.arrayError=`${X.length} inverter(s) failed`;else{let G=(K.results??[]).reduce((J,z)=>J+z.applied_watts,0);if(G)this.arrayPendingCap=G}}catch(K){this.arrayError=K.message||"failed"}finally{this.arrayBusy=!1}};connectedCallback(){super.connectedCallback(),this.loadHistory(),this.timer=setInterval(()=>void this.loadHistory(),60000)}disconnectedCallback(){if(super.disconnectedCallback(),this.timer)clearInterval(this.timer);this.timer=null}async loadHistory(){try{this.history=await D.history()}catch{}}chartPoints(){if(!this.fleet)return this.history;return[...this.history,{t:Date.now(),w:this.fleet.active_power_w}]}static styles=L`
     :host { display: block; }
     .grid {
       display: grid;
@@ -477,13 +477,13 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
     .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
     .empty { color: var(--muted); padding: 32px; text-align: center; }
     @media (max-width: 720px) { .grid, .stats { grid-template-columns: 1fr; } }
-  `;render(){let Q=this.fleet;if(!Q)return z`<div class="empty">Waiting for inv-driver…</div>`;let Y=Q.inverters.reduce((q,J)=>q+x(J),0),K=Q.inverters.reduce((q,J)=>q+Q4(J),0),X=Q.inverters.reduce((q,J)=>q+(Y4(J)??x(J)),0),G=this.arrayPendingCap??X;return z`
+  `;render(){let Q=this.fleet;if(!Q)return q`<div class="empty">Waiting for inv-driver…</div>`;let Y=Q.inverters.reduce((J,z)=>J+v(z),0),K=Q.inverters.reduce((J,z)=>J+Y4(z),0),X=Q.inverters.reduce((J,z)=>J+(K4(z)??v(z)),0),G=this.arrayPendingCap??X;return q`
       <div class="grid">
         <div class="panel">
           <h2>Array output</h2>
           <fleet-gauge .power=${Q.active_power_w} .cap=${Q.nameplate_total_w}></fleet-gauge>
           <div class="online">${Q.online_count} / ${Q.inverter_count} inverters online</div>
-          ${Y>0?z`<div class="arrcap">
+          ${Y>0?q`<div class="arrcap">
                 <label for="arrcap">Total output cap</label>
                 <div class="arrcap-row">
                   <input
@@ -498,7 +498,7 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
                   />
                   <span class="arrcap-max">W / ${M(Y)}</span>
                 </div>
-                ${this.arrayError?z`<div class="caperr">⚠ ${this.arrayError}</div>`:B}
+                ${this.arrayError?q`<div class="caperr">⚠ ${this.arrayError}</div>`:B}
               </div>`:B}
         </div>
         <div class="panel">
@@ -520,15 +520,15 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
       </div>
 
       <h2>Inverters</h2>
-      ${Q.inverters.length?z`<div class="cards">
-            ${Q.inverters.map((q)=>z`<inverter-card
-                .inverter=${q}
-                .name=${this.names?.[q.uid]??""}
-                .profile=${this.profiles?.[q.uid]??""}
+      ${Q.inverters.length?q`<div class="cards">
+            ${Q.inverters.map((J)=>q`<inverter-card
+                .inverter=${J}
+                .name=${this.names?.[J.uid]??""}
+                .profile=${this.profiles?.[J.uid]??""}
               ></inverter-card>`)}
-          </div>`:z`<div class="empty">No inverters discovered yet.</div>`}
+          </div>`:q`<div class="empty">No inverters discovered yet.</div>`}
       ${B}
-    `}}customElements.define("dashboard-view",K9);class X9 extends A{static properties={inverter:{attribute:!1},pendingCap:{state:!0},busy:{state:!0},error:{state:!0}};constructor(){super();this.pendingCap=null,this.busy=!1,this.error=""}static styles=L`
+    `}}customElements.define("dashboard-view",K9);class X9 extends ${static properties={inverter:{attribute:!1},pendingCap:{state:!0},busy:{state:!0},error:{state:!0}};constructor(){super();this.pendingCap=null,this.busy=!1,this.error=""}static styles=L`
     :host { display: inline-block; }
     .row { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
     input {
@@ -547,11 +547,11 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
     input:disabled { opacity: 0.6; }
     .max { color: var(--muted); font-variant-numeric: tabular-nums; }
     .err { color: var(--err); }
-  `;commit=async(Q)=>{let Y=Math.round(Number(Q.target.value));if(!Number.isFinite(Y)||Y<=0)return;this.pendingCap=Y,this.busy=!0,this.error="";try{let X=(await I.setPower({uid:this.inverter.uid,watts:Y})).results?.[0];if(X&&!X.ok)this.error=X.error||"failed";else if(X)this.pendingCap=X.applied_watts}catch(K){this.error=K.message||"failed"}finally{this.busy=!1}};render(){let Q=this.inverter;if(!Q)return B;let Y=x(Q);if(Y<=0)return z`<span class="max">—</span>`;let K=this.pendingCap??Y4(Q)??Y;return z`
+  `;commit=async(Q)=>{let Y=Math.round(Number(Q.target.value));if(!Number.isFinite(Y)||Y<=0)return;this.pendingCap=Y,this.busy=!0,this.error="";try{let X=(await D.setPower({uid:this.inverter.uid,watts:Y})).results?.[0];if(X&&!X.ok)this.error=X.error||"failed";else if(X)this.pendingCap=X.applied_watts}catch(K){this.error=K.message||"failed"}finally{this.busy=!1}};render(){let Q=this.inverter;if(!Q)return B;let Y=v(Q);if(Y<=0)return q`<span class="max">—</span>`;let K=this.pendingCap??K4(Q)??Y;return q`
       <div class="row">
         <input
           type="number"
-          min=${Q4(Q)}
+          min=${Y4(Q)}
           max=${Y}
           step="10"
           .value=${String(Math.round(K))}
@@ -560,9 +560,9 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
           title="output cap, watts"
         />
         <span class="max">/ ${Math.round(Y)} W</span>
-        ${this.error?z`<span class="err" title=${this.error}>⚠</span>`:B}
+        ${this.error?q`<span class="err" title=${this.error}>⚠</span>`:B}
       </div>
-    `}}customElements.define("cap-input",X9);class G9 extends A{static properties={busy:{attribute:!1},slow:{state:!0},serial:{state:!0}};constructor(){super();this.busy=!1,this.slow=!1,this.serial=""}static styles=L`
+    `}}customElements.define("cap-input",X9);class G9 extends ${static properties={busy:{attribute:!1},slow:{state:!0},serial:{state:!0}};constructor(){super();this.busy=!1,this.slow=!1,this.serial=""}static styles=L`
     :host { display: block; }
     .panel { display: grid; gap: 16px; max-width: 520px; }
     fieldset { border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin: 0; }
@@ -592,7 +592,7 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
     button.go:hover:not(:disabled) { filter: brightness(1.08); }
     button.go:disabled { opacity: 0.45; cursor: not-allowed; }
     .hint { font-size: 12px; color: var(--muted); }
-  `;startScan=()=>{if(this.busy)return;this.dispatchEvent(new CustomEvent("scan",{detail:{slow:this.slow},bubbles:!0,composed:!0}))};onSerialInput=(Q)=>{this.serial=Q.target.value.replace(/\D/g,"").slice(0,12)};addById=()=>{if(this.busy||this.serial.length!==12)return;this.dispatchEvent(new CustomEvent("add",{detail:{serial:this.serial},bubbles:!0,composed:!0})),this.serial=""};render(){let Q=this.serial.length===12;return z`
+  `;startScan=()=>{if(this.busy)return;this.dispatchEvent(new CustomEvent("scan",{detail:{slow:this.slow},bubbles:!0,composed:!0}))};onSerialInput=(Q)=>{this.serial=Q.target.value.replace(/\D/g,"").slice(0,12)};addById=()=>{if(this.busy||this.serial.length!==12)return;this.dispatchEvent(new CustomEvent("add",{detail:{serial:this.serial},bubbles:!0,composed:!0})),this.serial=""};render(){let Q=this.serial.length===12;return q`
       <div class="panel">
         <fieldset>
           <legend>Scan for inverters</legend>
@@ -615,11 +615,11 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
               ${this.busy?"Scanning…":"Scan"}
             </button>
           </div>
-          ${this.slow?z`<p class="warn" role="alert">
+          ${this.slow?q`<p class="warn" role="alert">
                 Slow scan sweeps the radio across ZigBee channels 11–26 on PAN 0xFFFF.
                 This pauses telemetry for ~30 seconds while the module is off the
                 operating PAN. Use for commissioning only.
-              </p>`:z`<p class="hint">
+              </p>`:q`<p class="hint">
                 Fast scan solicits new inverters on PAN 0xFFFF on the current channel.
                 Telemetry briefly pauses while the radio is parked for discovery.
               </p>`}
@@ -639,10 +639,10 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
             />
             <button class="go" ?disabled=${this.busy||!Q} @click=${this.addById}>Add</button>
           </div>
-          ${this.serial.length>0&&!Q?z`<p class="hint">Serial must be exactly 12 digits (${this.serial.length}/12).</p>`:B}
+          ${this.serial.length>0&&!Q?q`<p class="hint">Serial must be exactly 12 digits (${this.serial.length}/12).</p>`:B}
         </fieldset>
       </div>
-    `}}customElements.define("pairing-scan-panel",G9);var q3=["scan","bind","migrate","configure","rekey"],q9={scan:"Scan",bind:"Bind",migrate:"Migrate",configure:"Configure",rekey:"Re-key",done:"Done",aborted:"Aborted",error:"Error"};class J9 extends A{static properties={open:{attribute:!1},status:{attribute:!1},aborting:{attribute:!1}};constructor(){super();this.open=!1,this.status=null,this.aborting=!1}static styles=L`
+    `}}customElements.define("pairing-scan-panel",G9);var q3=["scan","bind","migrate","configure","rekey"],q9={scan:"Scan",bind:"Bind",migrate:"Migrate",configure:"Configure",rekey:"Re-key",done:"Done",aborted:"Aborted",error:"Error"};class J9 extends ${static properties={open:{attribute:!1},status:{attribute:!1},aborting:{attribute:!1}};constructor(){super();this.open=!1,this.status=null,this.aborting=!1}static styles=L`
     :host { display: block; }
     .scrim {
       position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45);
@@ -696,43 +696,43 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
     button.abort:disabled { opacity: 0.4; cursor: not-allowed; }
     .empty { color: var(--muted); font-size: 13px; }
     @media (max-width: 480px) { .drawer { width: 100vw; } }
-  `;abort=()=>{this.dispatchEvent(new CustomEvent("abort",{bubbles:!0,composed:!0}))};close=()=>{this.dispatchEvent(new CustomEvent("close",{bubbles:!0,composed:!0}))};stageClass(Q,Y){if(Q===Y)return"stage active";let K=q3.indexOf(Q);if(q3.indexOf(Y)>K&&K>=0)return"stage done";return"stage"}render(){let Q=this.status,Y=a(Q),K=Q?.stage??"",X=Q?.total??0,G=Q?.done??0,q=X>0?Math.min(100,Math.round(G/X*100)):Y?0:0;return z`
-      <div class="scrim ${this.open?"open":""}" @click=${(J)=>{if(J.target===J.currentTarget&&!Y)this.close()}}>
+  `;abort=()=>{this.dispatchEvent(new CustomEvent("abort",{bubbles:!0,composed:!0}))};close=()=>{this.dispatchEvent(new CustomEvent("close",{bubbles:!0,composed:!0}))};stageClass(Q,Y){if(Q===Y)return"stage active";let K=q3.indexOf(Q);if(q3.indexOf(Y)>K&&K>=0)return"stage done";return"stage"}render(){let Q=this.status,Y=e(Q),K=Q?.stage??"",X=Q?.total??0,G=Q?.done??0,J=X>0?Math.min(100,Math.round(G/X*100)):Y?0:0;return q`
+      <div class="scrim ${this.open?"open":""}" @click=${(z)=>{if(z.target===z.currentTarget&&!Y)this.close()}}>
         <aside class="drawer" role="dialog" aria-label="Pairing progress" aria-modal="true">
           <header>
             <h2>${Q?.op?`Pairing: ${Q.op}`:"Pairing"}</h2>
             <button class="x" aria-label="Close" ?disabled=${Y} @click=${this.close}>✕</button>
           </header>
           <div class="body">
-            ${!Q||!Q.op?z`<p class="empty">No pairing operation running.</p>`:z`
+            ${!Q||!Q.op?q`<p class="empty">No pairing operation running.</p>`:q`
                   <div class="stages">
-                    ${q3.map((J)=>z`<span class=${this.stageClass(J,K)}>${q9[J]}</span>`)}
+                    ${q3.map((z)=>q`<span class=${this.stageClass(z,K)}>${q9[z]}</span>`)}
                   </div>
 
-                  ${X>0?z`<div class="bar"><i style="width:${q}%"></i></div>
+                  ${X>0?q`<div class="bar"><i style="width:${J}%"></i></div>
                         <div class="meta"><span class="muted">${G} / ${X} inverters</span></div>`:B}
 
                   <div class="meta">
                     <div><span class="muted">Stage:</span> ${q9[K]??K??"—"}</div>
-                    ${Q.current_serial?z`<div><span class="muted">Current:</span> ${Q.current_serial}</div>`:B}
-                    ${Q.substep?z`<div><span class="muted">Step:</span> ${Q.substep}</div>`:B}
-                    ${Q.message?z`<div class="muted">${Q.message}</div>`:B}
+                    ${Q.current_serial?q`<div><span class="muted">Current:</span> ${Q.current_serial}</div>`:B}
+                    ${Q.substep?q`<div><span class="muted">Step:</span> ${Q.substep}</div>`:B}
+                    ${Q.message?q`<div class="muted">${Q.message}</div>`:B}
                   </div>
 
-                  ${Q.sweep?z`<div class="sweep">Channel ${Q.sweep.chan} (sweep ${Q.sweep.chan_lo}–${Q.sweep.chan_hi}) — telemetry paused</div>`:B}
+                  ${Q.sweep?q`<div class="sweep">Channel ${Q.sweep.chan} (sweep ${Q.sweep.chan_lo}–${Q.sweep.chan_hi}) — telemetry paused</div>`:B}
 
-                  ${Q.error?z`<div class="err">Error: ${Q.error}</div>`:B}
-                  ${K==="done"?z`<div class="ok">Completed.</div>`:B}
-                  ${K==="aborted"?z`<div class="muted">Aborted.</div>`:B}
+                  ${Q.error?q`<div class="err">Error: ${Q.error}</div>`:B}
+                  ${K==="done"?q`<div class="ok">Completed.</div>`:B}
+                  ${K==="aborted"?q`<div class="muted">Aborted.</div>`:B}
 
-                  ${Q.per_inverter&&Q.per_inverter.length>0?z`<table>
+                  ${Q.per_inverter&&Q.per_inverter.length>0?q`<table>
                         <thead><tr><th>Serial</th><th>Addr</th><th>State</th><th>Link</th></tr></thead>
                         <tbody>
-                          ${Q.per_inverter.map((J)=>z`<tr>
-                              <td class="mono">${J.serial}</td>
-                              <td class="mono">${J.short_addr?J.short_addr.toString(16):"—"}</td>
-                              <td>${J.state}</td>
-                              <td>${J.encrypted===!0?"\uD83D\uDD12":J.encrypted===!1?"⚠":"—"}</td>
+                          ${Q.per_inverter.map((z)=>q`<tr>
+                              <td class="mono">${z.serial}</td>
+                              <td class="mono">${z.short_addr?z.short_addr.toString(16):"—"}</td>
+                              <td>${z.state}</td>
+                              <td>${z.encrypted===!0?"\uD83D\uDD12":z.encrypted===!1?"⚠":"—"}</td>
                             </tr>`)}
                         </tbody>
                       </table>`:B}
@@ -745,11 +745,176 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
           </div>
         </aside>
       </div>
-    `}}customElements.define("pairing-progress-drawer",J9);class z9 extends A{static properties={fleet:{attribute:!1},names:{attribute:!1},status:{state:!0},drawerOpen:{state:!0},busy:{state:!0},aborting:{state:!0},notice:{state:!0}};pollTimer=null;constructor(){super();this.fleet=null,this.names={},this.status=null,this.drawerOpen=!1,this.busy=!1,this.aborting=!1,this.notice=""}connectedCallback(){super.connectedCallback(),this.fetchStatus()}disconnectedCallback(){super.disconnectedCallback(),this.stopPoll()}rename(Q,Y){let K=Y.target.value;this.dispatchEvent(new CustomEvent("rename",{detail:{uid:Q,name:K},bubbles:!0,composed:!0}))}encBadge(Q){if(Q===!0)return z`<span class="enc enc-ok" title="AES-encrypted link">🔒 AES</span>`;if(Q===!1)return z`<span class="enc enc-warn" title="Plaintext link — misconfigured or foreign unit">⚠ plaintext</span>`;return z`<span class="enc enc-unknown" title="Encryption state unknown">—</span>`}async fetchStatus(){try{let Q=await I.pairingStatus();if(this.status=Q.status??null,a(this.status))this.drawerOpen=!0,this.startPoll();else this.stopPoll()}catch{}}startPoll(){if(this.pollTimer)return;this.pollTimer=setInterval(()=>void this.fetchStatus(),1000)}stopPoll(){if(this.pollTimer)clearInterval(this.pollTimer);this.pollTimer=null}applyResp(Q){if(this.status=Q??null,this.drawerOpen=!0,a(this.status))this.startPoll()}onScan=async(Q)=>{let{slow:Y}=Q.detail;if(Y&&!confirm("Slow scan sweeps ZigBee channels 11–26 on PAN 0xFFFF and pauses fleet "+"telemetry for ~30 seconds. Continue?"))return;this.busy=!0,this.notice="";try{let K=await I.pairingScan({slow:Y});if(!K.ok)throw Error(K.error||"scan rejected");this.applyResp(K.status)}catch(K){this.notice=String(K.message||K)}finally{this.busy=!1}};onAdd=async(Q)=>{let{serial:Y}=Q.detail;this.busy=!0,this.notice="";try{let K=await I.pairingAdd(Y);if(!K.ok)throw Error(K.error||"add rejected");this.applyResp(K.status)}catch(K){this.notice=String(K.message||K)}finally{this.busy=!1}};onReplace=async(Q)=>{let Y=prompt(`Replace inverter ${Q}.
+    `}}customElements.define("pairing-progress-drawer",J9);class z9 extends ${static properties={kind:{attribute:!0},busy:{attribute:!1},actionError:{attribute:!1},value:{state:!0},password:{state:!0},pwdError:{state:!0},valueError:{state:!0},pwdBusy:{state:!0}};constructor(){super();this.kind="rekey",this.busy=!1,this.actionError="",this.value="",this.password="",this.pwdError="",this.valueError="",this.pwdBusy=!1}static styles=L`
+    :host { display: contents; }
+    .backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000;
+    }
+    .dialog {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 22px;
+      max-width: 460px;
+      width: 92%;
+      color: var(--text);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+      box-sizing: border-box;
+    }
+    .dialog h3 { margin: 0 0 10px; font-size: 15px; }
+    .dialog p {
+      margin: 0 0 14px; font-size: 13px; color: var(--muted); line-height: 1.45;
+    }
+    .dialog p.warn {
+      color: var(--text);
+      border: 1px solid var(--accent);
+      background: color-mix(in srgb, var(--accent) 10%, transparent);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      margin: 0 0 12px;
+    }
+    .dialog label {
+      display: block; font-size: 12px; color: var(--muted);
+      margin: 8px 0 6px;
+    }
+    .dialog input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 9px 11px;
+      background: var(--bar-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font: inherit;
+    }
+    .dialog .err {
+      color: var(--err);
+      border: 1px solid var(--err);
+      background: color-mix(in srgb, var(--err) 12%, transparent);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      margin-top: 10px;
+    }
+    .dialog .err-inline {
+      color: var(--err); font-size: 12px; margin-top: 6px;
+    }
+    .dialog .row {
+      display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px;
+    }
+    .dialog button {
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .dialog button.primary {
+      background: var(--accent); color: #04121a; border: none;
+    }
+    .dialog button.secondary {
+      background: transparent; color: var(--muted); border: 1px solid var(--border);
+    }
+    .dialog button:disabled { opacity: 0.6; cursor: default; }
+    @media (max-width: 480px) {
+      .dialog { width: 96%; padding: 18px 16px; }
+    }
+  `;firstUpdated(){queueMicrotask(()=>{this.shadowRoot?.querySelector("#pcd_value")?.focus()})}validateValue(Q){let Y=Q.trim();if(this.kind==="rekey"){if(!/^[0-9a-fA-F]{1,4}$/.test(Y))return"PAN must be 1–4 hexadecimal digits.";return""}let K=Number(Y);if(!Number.isInteger(K)||K<11||K>26)return"Channel must be an integer 11–26.";return""}onValueInput=(Q)=>{if(this.value=Q.target.value,this.valueError)this.valueError=""};onPasswordInput=(Q)=>{if(this.password=Q.target.value,this.pwdError)this.pwdError=""};onKey=(Q)=>{if(Q.key==="Enter")Q.preventDefault(),this.submit();else if(Q.key==="Escape")Q.preventDefault(),this.cancel()};async submit(){if(this.pwdBusy||this.busy)return;let Q=this.validateValue(this.value);if(Q){this.valueError=Q,this.shadowRoot?.querySelector("#pcd_value")?.focus();return}if(!this.password){this.pwdError="Password required.",this.shadowRoot?.querySelector("#pcd_pwd")?.focus();return}this.pwdBusy=!0,this.pwdError="";try{if(!await D.verifyPassword(this.password)){this.pwdError="Password is wrong.",this.shadowRoot?.querySelector("#pcd_pwd")?.focus();return}let K={value:this.value.trim()};this.dispatchEvent(new CustomEvent("confirm",{detail:K,bubbles:!0,composed:!0}))}catch(Y){this.pwdError=Y.message||"Verification failed."}finally{this.pwdBusy=!1}}cancel=()=>{if(this.pwdBusy||this.busy)return;this.dispatchEvent(new CustomEvent("cancel",{bubbles:!0,composed:!0}))};onBackdrop=(Q)=>{if(Q.target===Q.currentTarget)this.cancel()};stop=(Q)=>Q.stopPropagation();renderRekey(){return q`
+      <h3>Fleet re-key</h3>
+      <p>
+        Broadcasts a new PAN to every inverter (opcode 0x22) and moves the
+        radio onto it. Telemetry pauses while the broadcast runs; on failure
+        the old PAN is restored.
+      </p>
+      <p class="warn">
+        Privileged action — your password is required to confirm.
+      </p>
+      <label for="pcd_value">New PAN (1–4 hex digits, e.g. 0DCE)</label>
+      <input
+        id="pcd_value"
+        type="text"
+        autocomplete="off"
+        spellcheck="false"
+        maxlength="4"
+        placeholder="0DCE"
+        .value=${this.value}
+        @input=${this.onValueInput}
+        @keydown=${this.onKey}
+        ?disabled=${this.pwdBusy||this.busy}
+      />
+      ${this.valueError?q`<div class="err-inline">${this.valueError}</div>`:B}
+    `}renderChannel(){return q`
+      <h3>Change ZigBee channel</h3>
+      <p>
+        Migrates the whole fleet to a new RF channel: each inverter is hopped
+        to the new channel, then the radio follows. Telemetry pauses while the
+        radio moves.
+      </p>
+      <p class="warn">
+        Not atomic — an inverter hops the instant it gets the command, so a
+        partway failure can split the fleet across the old and new channels
+        (the module rolls back, but already-hopped units stay on the new one).
+        Re-running this same change-channel toward the new channel converges
+        them. Privileged action — your password is required to confirm.
+      </p>
+      <label for="pcd_value">New channel (11–26)</label>
+      <input
+        id="pcd_value"
+        type="number"
+        min="11"
+        max="26"
+        step="1"
+        inputmode="numeric"
+        placeholder="20"
+        .value=${this.value}
+        @input=${this.onValueInput}
+        @keydown=${this.onKey}
+        ?disabled=${this.pwdBusy||this.busy}
+      />
+      ${this.valueError?q`<div class="err-inline">${this.valueError}</div>`:B}
+    `}render(){let Q=this.kind==="rekey"?"Re-key fleet":"Change channel";return q`
+      <div class="backdrop" @click=${this.onBackdrop}>
+        <div class="dialog" role="dialog" aria-modal="true" @click=${this.stop}>
+          ${this.kind==="rekey"?this.renderRekey():this.renderChannel()}
+          <label for="pcd_pwd">Password</label>
+          <input
+            id="pcd_pwd"
+            type="password"
+            autocomplete="current-password"
+            .value=${this.password}
+            @input=${this.onPasswordInput}
+            @keydown=${this.onKey}
+            ?disabled=${this.pwdBusy||this.busy}
+          />
+          ${this.pwdError?q`<div class="err">${this.pwdError}</div>`:B}
+          ${this.actionError&&!this.pwdError?q`<div class="err">${this.actionError}</div>`:B}
+          <div class="row">
+            <button
+              class="secondary"
+              type="button"
+              @click=${this.cancel}
+              ?disabled=${this.pwdBusy||this.busy}
+            >
+              Cancel
+            </button>
+            <button
+              class="primary"
+              type="button"
+              @click=${()=>void this.submit()}
+              ?disabled=${this.pwdBusy||this.busy}
+            >
+              ${this.pwdBusy?"Verifying…":this.busy?"Working…":Q}
+            </button>
+          </div>
+        </div>
+      </div>
+    `}}customElements.define("password-confirm-dialog",z9);class B9 extends ${static properties={fleet:{attribute:!1},names:{attribute:!1},status:{state:!0},drawerOpen:{state:!0},busy:{state:!0},aborting:{state:!0},notice:{state:!0},privilegedDialog:{state:!0},privilegedError:{state:!0}};pollTimer=null;constructor(){super();this.fleet=null,this.names={},this.status=null,this.drawerOpen=!1,this.busy=!1,this.aborting=!1,this.notice="",this.privilegedDialog="",this.privilegedError=""}connectedCallback(){super.connectedCallback(),this.fetchStatus()}disconnectedCallback(){super.disconnectedCallback(),this.stopPoll()}rename(Q,Y){let K=Y.target.value;this.dispatchEvent(new CustomEvent("rename",{detail:{uid:Q,name:K},bubbles:!0,composed:!0}))}encBadge(Q){if(Q===!0)return q`<span class="enc enc-ok" title="AES-encrypted link">🔒 AES</span>`;if(Q===!1)return q`<span class="enc enc-warn" title="Plaintext link — misconfigured or foreign unit">⚠ plaintext</span>`;return q`<span class="enc enc-unknown" title="Encryption state unknown">—</span>`}async fetchStatus(){try{let Q=await D.pairingStatus();if(this.status=Q.status??null,e(this.status))this.drawerOpen=!0,this.startPoll();else this.stopPoll()}catch{}}startPoll(){if(this.pollTimer)return;this.pollTimer=setInterval(()=>void this.fetchStatus(),1000)}stopPoll(){if(this.pollTimer)clearInterval(this.pollTimer);this.pollTimer=null}applyResp(Q){if(this.status=Q??null,this.drawerOpen=!0,e(this.status))this.startPoll()}onScan=async(Q)=>{let{slow:Y}=Q.detail;if(Y&&!confirm("Slow scan sweeps ZigBee channels 11–26 on PAN 0xFFFF and pauses fleet "+"telemetry for ~30 seconds. Continue?"))return;this.busy=!0,this.notice="";try{let K=await D.pairingScan({slow:Y});if(!K.ok)throw Error(K.error||"scan rejected");this.applyResp(K.status)}catch(K){this.notice=String(K.message||K)}finally{this.busy=!1}};onAdd=async(Q)=>{let{serial:Y}=Q.detail;this.busy=!0,this.notice="";try{let K=await D.pairingAdd(Y);if(!K.ok)throw Error(K.error||"add rejected");this.applyResp(K.status)}catch(K){this.notice=String(K.message||K)}finally{this.busy=!1}};onReplace=async(Q)=>{let Y=prompt(`Replace inverter ${Q}.
 
-Enter the replacement's 12-digit serial, or leave blank to scan for it. The new unit inherits this one's grid profile, power cap and array slot.`);if(Y===null)return;let K=Y.replace(/\D/g,"");if(K!==""&&K.length!==12){this.notice="Replacement serial must be 12 digits (or blank to scan).";return}this.busy=!0,this.notice="";try{let X=await I.pairingReplace(Q,K);if(!X.ok)throw Error(X.error||"replace rejected");this.applyResp(X.status)}catch(X){this.notice=String(X.message||X)}finally{this.busy=!1}};onRekey=async()=>{let Q=prompt("Fleet re-key BROADCASTS a new PAN to every inverter (0x22) and moves the radio to it. Telemetry pauses while it runs; on failure the old "+`PAN is restored.
-
-Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.trim();if(!/^[0-9a-fA-F]{1,4}$/.test(Y)){this.notice="PAN must be 1–4 hexadecimal digits.";return}this.busy=!0,this.notice="";try{let K=await I.pairingRekey(Y,0);if(!K.ok)throw Error(K.error||"re-key rejected");this.applyResp(K.status)}catch(K){let X=String(K.message||K);this.notice=/step-up/i.test(X)?"Re-key needs a password confirm. Confirm your password (Settings) then retry.":X}finally{this.busy=!1}};onAbort=async()=>{this.aborting=!0;try{let Q=await I.pairingAbort();this.status=Q.status??this.status}catch(Q){this.notice=String(Q.message||Q)}finally{this.aborting=!1,this.fetchStatus()}};onCloseDrawer=()=>{if(a(this.status))return;this.drawerOpen=!1};static styles=L`
+Enter the replacement's 12-digit serial, or leave blank to scan for it. The new unit inherits this one's grid profile, power cap and array slot.`);if(Y===null)return;let K=Y.replace(/\D/g,"");if(K!==""&&K.length!==12){this.notice="Replacement serial must be 12 digits (or blank to scan).";return}this.busy=!0,this.notice="";try{let X=await D.pairingReplace(Q,K);if(!X.ok)throw Error(X.error||"replace rejected");this.applyResp(X.status)}catch(X){this.notice=String(X.message||X)}finally{this.busy=!1}};onRekey=()=>{this.notice="",this.privilegedError="",this.privilegedDialog="rekey"};onChangeChannel=()=>{this.notice="",this.privilegedError="",this.privilegedDialog="channel"};onPrivilegedCancel=()=>{if(this.busy)return;this.privilegedDialog="",this.privilegedError=""};onPrivilegedConfirm=async(Q)=>{let Y=this.privilegedDialog;if(!Y)return;let{value:K}=Q.detail;this.busy=!0,this.privilegedError="",this.notice="";try{let X=Y==="rekey"?await D.pairingRekey(K,0):await D.pairingChangeChannel(Number(K));if(!X.ok){let G=X.error||(Y==="rekey"?"re-key rejected":"channel change rejected");throw Error(G)}this.privilegedDialog="",this.privilegedError="",this.applyResp(X.status)}catch(X){this.privilegedError=String(X.message||X)}finally{this.busy=!1}};onAbort=async()=>{this.aborting=!0;try{let Q=await D.pairingAbort();this.status=Q.status??this.status}catch(Q){this.notice=String(Q.message||Q)}finally{this.aborting=!1,this.fetchStatus()}};onCloseDrawer=()=>{if(e(this.status))return;this.drawerOpen=!1};static styles=L`
     :host { display: block; }
     .controls {
       display: flex; align-items: flex-start; justify-content: space-between;
@@ -811,7 +976,7 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
       white-space: nowrap;
     }
     button.replace:hover { color: var(--text); border-color: var(--muted); }
-  `;renderTable(){let Q=this.fleet;if(!Q||Q.inverters.length===0)return z`<div class="empty">No inverters discovered yet.</div>`;return z`
+  `;renderTable(){let Q=this.fleet;if(!Q||Q.inverters.length===0)return q`<div class="empty">No inverters discovered yet.</div>`;return q`
       <div class="table-wrap">
         <table>
           <thead>
@@ -824,7 +989,7 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
             </tr>
           </thead>
           <tbody>
-            ${Q.inverters.map((Y)=>{let K=Y.faults?Object.values(Y.faults).filter(Boolean).length:0;return z`<tr>
+            ${Q.inverters.map((Y)=>{let K=Y.faults?Object.values(Y.faults).filter(Boolean).length:0;return q`<tr>
                 <td class="uid">${Y.uid}</td>
                 <td>
                   <input
@@ -841,7 +1006,7 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
                 </td>
                 <td>${this.encBadge(Y.encrypted)}</td>
                 <td class="num">${M(Y.active_power_w)} / ${M(Y.nameplate_w)}</td>
-                <td class="num">${e(Y.load_pct)}</td>
+                <td class="num">${Q4(Y.load_pct)}</td>
                 <td class="capcell"><cap-input .inverter=${Y}></cap-input></td>
                 <td class="num">${F4(Y.grid_v)}</td>
                 <td class="num">${S4(Y.freq_hz)}</td>
@@ -856,7 +1021,7 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
           </tbody>
         </table>
       </div>
-    `}render(){return z`
+    `}render(){return q`
       <div class="controls">
         <pairing-scan-panel
           .busy=${this.busy}
@@ -866,10 +1031,12 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
         <div class="rekey">
           <button class="rekey-btn" ?disabled=${this.busy} @click=${this.onRekey}>Fleet re-key…</button>
           <span class="hint">Broadcasts a new PAN to the whole fleet. Confirmation required.</span>
+          <button class="rekey-btn" ?disabled=${this.busy} @click=${this.onChangeChannel}>Change ZigBee channel…</button>
+          <span class="hint">Migrates the whole fleet to a new RF channel. Confirmation required.</span>
         </div>
       </div>
 
-      ${this.notice?z`<div class="notice" role="alert">${this.notice}</div>`:B}
+      ${this.notice?q`<div class="notice" role="alert">${this.notice}</div>`:B}
 
       ${this.renderTable()}
 
@@ -880,7 +1047,15 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
         @abort=${this.onAbort}
         @close=${this.onCloseDrawer}
       ></pairing-progress-drawer>
-    `}}customElements.define("inverters-view",z9);class B9 extends A{static properties={events:{attribute:!1}};constructor(){super();this.events=[]}static styles=L`
+
+      ${this.privilegedDialog?q`<password-confirm-dialog
+            .kind=${this.privilegedDialog}
+            .busy=${this.busy}
+            .actionError=${this.privilegedError}
+            @confirm=${this.onPrivilegedConfirm}
+            @cancel=${this.onPrivilegedCancel}
+          ></password-confirm-dialog>`:B}
+    `}}customElements.define("inverters-view",B9);class H9 extends ${static properties={events:{attribute:!1}};constructor(){super();this.events=[]}static styles=L`
     :host { display: block; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
@@ -902,14 +1077,14 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
     .sev.warn { color: var(--warn); border-color: var(--warn); }
     .sev.err { color: var(--err); border-color: var(--err); }
     .empty { color: var(--muted); padding: 32px; text-align: center; }
-  `;render(){if(!this.events||this.events.length===0)return z`<div class="empty">No events recorded.</div>`;return z`
+  `;render(){if(!this.events||this.events.length===0)return q`<div class="empty">No events recorded.</div>`;return q`
       <table>
         <thead>
           <tr><th>Time</th><th>Severity</th><th>Event</th><th>By</th><th>Inverter</th><th>Detail</th></tr>
         </thead>
         <tbody>
-          ${this.events.map((Q)=>z`<tr>
-              <td class="time">${b4(Q.ts_ms)}</td>
+          ${this.events.map((Q)=>q`<tr>
+              <td class="time">${C4(Q.ts_ms)}</td>
               <td><span class="sev ${i3(Q.severity)}">${Q.severity}</span></td>
               <td>${G3(Q.kind)}</td>
               <td class="by">${Q.by||"—"}</td>
@@ -918,7 +1093,7 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
             </tr>`)}
         </tbody>
       </table>
-    `}}customElements.define("events-table",B9);var rQ=30000,pQ=86400000,lQ=100;class H9 extends A{static properties={fleet:{attribute:!1},recent:{state:!0},recentLoading:{state:!0},recentError:{state:!0}};timer=null;constructor(){super();this.fleet=null,this.recent=[],this.recentLoading=!1,this.recentError=""}static styles=L`
+    `}}customElements.define("events-table",H9);var nQ=30000,iQ=86400000,sQ=100;class W9 extends ${static properties={fleet:{attribute:!1},recent:{state:!0},recentLoading:{state:!0},recentError:{state:!0}};timer=null;constructor(){super();this.fleet=null,this.recent=[],this.recentLoading=!1,this.recentError=""}static styles=L`
     :host { display: block; }
     .row {
       display: flex;
@@ -958,17 +1133,17 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
     .section .err { color: var(--muted); font-size: 12px; margin: 0 2px 8px; }
     .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
     .empty { color: var(--muted); padding: 24px; text-align: center; font-size: 13px; }
-  `;connectedCallback(){super.connectedCallback(),this.loadRecent(),this.timer=setInterval(()=>void this.loadRecent(),rQ)}disconnectedCallback(){if(super.disconnectedCallback(),this.timer)clearInterval(this.timer),this.timer=null}updated(Q){if(Q.has("fleet"))this.loadRecent()}async loadRecent(){this.recentLoading=!0;try{let Q=await I.events({kind:"fault_raised",since_ms:Date.now()-pQ,limit:lQ});this.recent=Q.events??[],this.recentError=Q.error??""}catch(Q){this.recentError=Q.message||"failed to load events"}finally{this.recentLoading=!1}}alarms(){let Q=[];for(let Y of this.fleet?.inverters??[]){for(let K of C4(Y.faults))Q.push({uid:Y.uid,model:Y.model,label:K,severity:"fault"});if(!Y.online)Q.push({uid:Y.uid,model:Y.model,label:"Inverter offline",severity:"warning"})}return Q}renderLive(){let Q=this.alarms();if(Q.length===0)return z`<div class="ok"><div class="big">✓ No active alarms</div><div>All inverters reporting healthy.</div></div>`;return z`${Q.map((Y)=>z`<div class="row ${Y.severity}">
+  `;connectedCallback(){super.connectedCallback(),this.loadRecent(),this.timer=setInterval(()=>void this.loadRecent(),nQ)}disconnectedCallback(){if(super.disconnectedCallback(),this.timer)clearInterval(this.timer),this.timer=null}updated(Q){if(Q.has("fleet"))this.loadRecent()}async loadRecent(){this.recentLoading=!0;try{let Q=await D.events({kind:"fault_raised",since_ms:Date.now()-iQ,limit:sQ});this.recent=Q.events??[],this.recentError=Q.error??""}catch(Q){this.recentError=Q.message||"failed to load events"}finally{this.recentLoading=!1}}alarms(){let Q=[];for(let Y of this.fleet?.inverters??[]){for(let K of b4(Y.faults))Q.push({uid:Y.uid,model:Y.model,label:K,severity:"fault"});if(!Y.online)Q.push({uid:Y.uid,model:Y.model,label:"Inverter offline",severity:"warning"})}return Q}renderLive(){let Q=this.alarms();if(Q.length===0)return q`<div class="ok"><div class="big">✓ No active alarms</div><div>All inverters reporting healthy.</div></div>`;return q`${Q.map((Y)=>q`<div class="row ${Y.severity}">
         <span class="sev">${Y.severity}</span>
         <span class="label">${Y.label} <span style="color:var(--muted)">· ${Y.model||"?"}</span></span>
         <span class="uid">${Y.uid}</span>
-      </div>`)}`}renderRecent(){return z`
+      </div>`)}`}renderRecent(){return q`
       <section class="section">
         <h3>Recent (24h)</h3>
-        ${this.recentError?z`<div class="err">⚠ ${this.recentError}</div>`:B}
-        ${this.recent.length===0?z`<div class="panel"><div class="empty">No fault events in the last 24h.</div></div>`:z`<div class="panel"><events-table .events=${this.recent}></events-table></div>`}
+        ${this.recentError?q`<div class="err">⚠ ${this.recentError}</div>`:B}
+        ${this.recent.length===0?q`<div class="panel"><div class="empty">No fault events in the last 24h.</div></div>`:q`<div class="panel"><events-table .events=${this.recent}></events-table></div>`}
       </section>
-    `}render(){return z`${this.renderLive()}${this.renderRecent()}`}}customElements.define("alarms-view",H9);class W9 extends A{static properties={events:{state:!0},error:{state:!0},loading:{state:!0}};timer=null;constructor(){super();this.events=[],this.error="",this.loading=!1}static styles=L`
+    `}render(){return q`${this.renderLive()}${this.renderRecent()}`}}customElements.define("alarms-view",W9);class U9 extends ${static properties={events:{state:!0},error:{state:!0},loading:{state:!0}};timer=null;constructor(){super();this.events=[],this.error="",this.loading=!1}static styles=L`
     :host { display: block; }
     .bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
     .count { color: var(--muted); font-size: 13px; }
@@ -984,14 +1159,14 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
     button:hover { color: var(--text); border-color: var(--muted); }
     .err { color: var(--err); font-size: 13px; margin-bottom: 12px; }
     .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-  `;connectedCallback(){super.connectedCallback(),this.load(),this.timer=setInterval(()=>void this.load(),15000)}disconnectedCallback(){if(super.disconnectedCallback(),this.timer)clearInterval(this.timer);this.timer=null}async load(){this.loading=!0;try{let Q=await I.events({limit:200});this.events=Q.events??[],this.error=Q.error??""}catch(Q){this.error=Q.message}finally{this.loading=!1}}render(){return z`
+  `;connectedCallback(){super.connectedCallback(),this.load(),this.timer=setInterval(()=>void this.load(),15000)}disconnectedCallback(){if(super.disconnectedCallback(),this.timer)clearInterval(this.timer);this.timer=null}async load(){this.loading=!0;try{let Q=await D.events({limit:200});this.events=Q.events??[],this.error=Q.error??""}catch(Q){this.error=Q.message}finally{this.loading=!1}}render(){return q`
       <div class="bar">
         <span class="count">${this.events.length} event(s)${this.loading?" · refreshing…":""}</span>
         <button @click=${()=>void this.load()}>Refresh</button>
       </div>
-      ${this.error?z`<div class="err">⚠ ${this.error}</div>`:B}
+      ${this.error?q`<div class="err">⚠ ${this.error}</div>`:B}
       <div class="panel"><events-table .events=${this.events}></events-table></div>
-    `}}customElements.define("events-view",W9);var U9;function O(Q,Y,K){function X(H,W){if(!H._zod)Object.defineProperty(H,"_zod",{value:{def:W,constr:J,traits:new Set},enumerable:!1});if(H._zod.traits.has(Q))return;H._zod.traits.add(Q),Y(H,W);let U=J.prototype,j=Object.keys(U);for(let $=0;$<j.length;$++){let F=j[$];if(!(F in H))H[F]=U[F].bind(H)}}let G=K?.Parent??Object;class q extends G{}Object.defineProperty(q,"name",{value:Q});function J(H){var W;let U=K?.Parent?new q:this;X(U,H),(W=U._zod).deferred??(W.deferred=[]);for(let j of U._zod.deferred)j();return U}return Object.defineProperty(J,"init",{value:X}),Object.defineProperty(J,Symbol.hasInstance,{value:(H)=>{if(K?.Parent&&H instanceof K.Parent)return!0;return H?._zod?.traits?.has(Q)}}),Object.defineProperty(J,"name",{value:Q}),J}var Q6=Symbol("zod_brand");class y extends Error{constructor(){super("Encountered Promise during synchronous parse. Use .parseAsync() instead.")}}class z3 extends Error{constructor(Q){super(`Encountered unidirectional transform during encode: ${Q}`);this.name="ZodEncodeError"}}(U9=globalThis).__zod_globalConfig??(U9.__zod_globalConfig={});var J3=globalThis.__zod_globalConfig;function K4(Q){if(Q)Object.assign(J3,Q);return J3}function $9(Q,Y){if(typeof Y==="bigint")return Y.toString();return Y}function A9(Q){return{get value(){{let K=Q();return Object.defineProperty(this,"value",{value:K}),K}throw Error("cached value already set")}}}function L9(Q){return Q===null||Q===void 0}function D9(Q){let Y=Q.startsWith("^")?1:0,K=Q.endsWith("$")?Q.length-1:Q.length;return Q.slice(Y,K)}var j9=Symbol("evaluating");function b(Q,Y,K){let X=void 0;Object.defineProperty(Q,Y,{get(){if(X===j9)return;if(X===void 0)X=j9,X=K();return X},set(G){Object.defineProperty(Q,Y,{value:G})},configurable:!0})}var H3="captureStackTrace"in Error?Error.captureStackTrace:(...Q)=>{};function F9(Q){return typeof Q==="object"&&Q!==null&&!Array.isArray(Q)}function W3(Q,Y,K){let X=new Q._zod.constr(Y??Q._zod.def);if(!Y||K?.parent)X._zod.parent=Q;return X}function m(Q){let Y=Q;if(!Y)return{};if(typeof Y==="string")return{error:()=>Y};if(Y?.message!==void 0){if(Y?.error!==void 0)throw Error("Cannot specify both `message` and `error` params");Y.error=Y.message}if(delete Y.message,typeof Y.error==="string")return{...Y,error:()=>Y.error};return Y}function I9(Q){return Object.keys(Q).filter((Y)=>{return Q[Y]._zod.optin==="optional"&&Q[Y]._zod.optout==="optional"})}var dQ={safeint:[Number.MIN_SAFE_INTEGER,Number.MAX_SAFE_INTEGER],int32:[-2147483648,2147483647],uint32:[0,4294967295],float32:[-340282346638528860000000000000000000000,340282346638528860000000000000000000000],float64:[-Number.MAX_VALUE,Number.MAX_VALUE]};function V4(Q,Y=0){if(Q.aborted===!0)return!0;for(let K=Y;K<Q.issues.length;K++)if(Q.issues[K]?.continue!==!0)return!0;return!1}function V9(Q,Y=0){if(Q.aborted===!0)return!0;for(let K=Y;K<Q.issues.length;K++)if(Q.issues[K]?.continue===!1)return!0;return!1}function v4(Q,Y){return Y.map((K)=>{var X;return(X=K).path??(X.path=[]),K.path.unshift(Q),K})}function g4(Q){return typeof Q==="string"?Q:Q?.message}function X4(Q,Y,K){let X=Q.message?Q.message:g4(Q.inst?._zod.def?.error?.(Q))??g4(Y?.error?.(Q))??g4(K.customError?.(Q))??g4(K.localeError?.(Q))??"Invalid input",{inst:G,continue:q,input:J,...H}=Q;if(H.path??(H.path=[]),H.message=X,Y?.reportInput)H.input=J;return H}function N9(Q){if(Array.isArray(Q))return"array";if(typeof Q==="string")return"string";return"unknown"}var O9=(Q,Y)=>{Q.name="$ZodError",Object.defineProperty(Q,"_zod",{value:Q._zod,enumerable:!1}),Object.defineProperty(Q,"issues",{value:Y,enumerable:!1}),Q.message=JSON.stringify(Y,$9,2),Object.defineProperty(Q,"toString",{value:()=>Q.message,enumerable:!1})},P9=O("$ZodError",O9),N4=O("$ZodError",O9,{Parent:Error});var iQ=(Q)=>(Y,K,X,G)=>{let q=X?{...X,async:!1}:{async:!1},J=Y._zod.run({value:K,issues:[]},q);if(J instanceof Promise)throw new y;if(J.issues.length){let H=new(G?.Err??Q)(J.issues.map((W)=>X4(W,q,K4())));throw H3(H,G?.callee),H}return J.value},h4=iQ(N4),sQ=(Q)=>async(Y,K,X,G)=>{let q=X?{...X,async:!0}:{async:!0},J=Y._zod.run({value:K,issues:[]},q);if(J instanceof Promise)J=await J;if(J.issues.length){let H=new(G?.Err??Q)(J.issues.map((W)=>X4(W,q,K4())));throw H3(H,G?.callee),H}return J.value},c4=sQ(N4),tQ=(Q)=>(Y,K,X)=>{let G=X?{...X,async:!1}:{async:!1},q=Y._zod.run({value:K,issues:[]},G);if(q instanceof Promise)throw new y;return q.issues.length?{success:!1,error:new(Q??P9)(q.issues.map((J)=>X4(J,G,K4())))}:{success:!0,data:q.value}},n=tQ(N4),aQ=(Q)=>async(Y,K,X)=>{let G=X?{...X,async:!0}:{async:!0},q=Y._zod.run({value:K,issues:[]},G);if(q instanceof Promise)q=await q;return q.issues.length?{success:!1,error:new Q(q.issues.map((J)=>X4(J,G,K4())))}:{success:!0,data:q.value}},O4=aQ(N4);var eQ="(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))",Q8=new RegExp(`^${eQ}$`);var E9=(Q)=>{let Y=Q?`[\\s\\S]{${Q?.minimum??0},${Q?.maximum??""}}`:"[\\s\\S]*";return new RegExp(`^${Y}$`)};var M9=/^-?\d+(?:\.\d+)?$/;var q4=O("$ZodCheck",(Q,Y)=>{var K;Q._zod??(Q._zod={}),Q._zod.def=Y,(K=Q._zod).onattach??(K.onattach=[])});var R9=O("$ZodCheckMinLength",(Q,Y)=>{var K;q4.init(Q,Y),(K=Q._zod.def).when??(K.when=(X)=>{let G=X.value;return!L9(G)&&G.length!==void 0}),Q._zod.onattach.push((X)=>{let G=X._zod.bag.minimum??Number.NEGATIVE_INFINITY;if(Y.minimum>G)X._zod.bag.minimum=Y.minimum}),Q._zod.check=(X)=>{let G=X.value;if(G.length>=Y.minimum)return;let J=N9(G);X.issues.push({origin:J,code:"too_small",minimum:Y.minimum,inclusive:!0,input:G,inst:Q,continue:!Y.abort})}});var K8=O("$ZodCheckStringFormat",(Q,Y)=>{var K,X;if(q4.init(Q,Y),Q._zod.onattach.push((G)=>{let q=G._zod.bag;if(q.format=Y.format,Y.pattern)q.patterns??(q.patterns=new Set),q.patterns.add(Y.pattern)}),Y.pattern)(K=Q._zod).check??(K.check=(G)=>{if(Y.pattern.lastIndex=0,Y.pattern.test(G.value))return;G.issues.push({origin:"string",code:"invalid_format",format:Y.format,input:G.value,...Y.pattern?{pattern:Y.pattern.toString()}:{},inst:Q,continue:!Y.abort})});else(X=Q._zod).check??(X.check=()=>{})}),w9=O("$ZodCheckRegex",(Q,Y)=>{K8.init(Q,Y),Q._zod.check=(K)=>{if(Y.pattern.lastIndex=0,Y.pattern.test(K.value))return;K.issues.push({origin:"string",code:"invalid_format",format:"regex",input:K.value,pattern:Y.pattern.toString(),inst:Q,continue:!Y.abort})}});var _9=O("$ZodCheckOverwrite",(Q,Y)=>{q4.init(Q,Y),Q._zod.check=(K)=>{K.value=Y.tx(K.value)}});var T9={major:4,minor:4,patch:3};var u=O("$ZodType",(Q,Y)=>{var K;Q??(Q={}),Q._zod.def=Y,Q._zod.bag=Q._zod.bag||{},Q._zod.version=T9;let X=[...Q._zod.def.checks??[]];if(Q._zod.traits.has("$ZodCheck"))X.unshift(Q);for(let G of X)for(let q of G._zod.onattach)q(Q);if(X.length===0)(K=Q._zod).deferred??(K.deferred=[]),Q._zod.deferred?.push(()=>{Q._zod.run=Q._zod.parse});else{let G=(J,H,W)=>{let U=V4(J),j;for(let $ of H){if($._zod.def.when){if(V9(J))continue;if(!$._zod.def.when(J))continue}else if(U)continue;let F=J.issues.length,D=$._zod.check(J);if(D instanceof Promise&&W?.async===!1)throw new y;if(j||D instanceof Promise)j=(j??Promise.resolve()).then(async()=>{if(await D,J.issues.length===F)return;if(!U)U=V4(J,F)});else{if(J.issues.length===F)continue;if(!U)U=V4(J,F)}}if(j)return j.then(()=>{return J});return J},q=(J,H,W)=>{if(V4(J))return J.aborted=!0,J;let U=G(H,X,W);if(U instanceof Promise){if(W.async===!1)throw new y;return U.then((j)=>Q._zod.parse(j,W))}return Q._zod.parse(U,W)};Q._zod.run=(J,H)=>{if(H.skipChecks)return Q._zod.parse(J,H);if(H.direction==="backward"){let U=Q._zod.parse({value:J.value,issues:[]},{...H,skipChecks:!0});if(U instanceof Promise)return U.then((j)=>{return q(j,J,H)});return q(U,J,H)}let W=Q._zod.parse(J,H);if(W instanceof Promise){if(H.async===!1)throw new y;return W.then((U)=>G(U,X,H))}return G(W,X,H)}}b(Q,"~standard",()=>({validate:(G)=>{try{let q=n(Q,G);return q.success?{value:q.data}:{issues:q.error?.issues}}catch(q){return O4(Q,G).then((J)=>J.success?{value:J.data}:{issues:J.error?.issues})}},vendor:"zod",version:1}))}),C9=O("$ZodString",(Q,Y)=>{u.init(Q,Y),Q._zod.pattern=[...Q?._zod.bag?.patterns??[]].pop()??E9(Q._zod.bag),Q._zod.parse=(K,X)=>{if(Y.coerce)try{K.value=String(K.value)}catch(G){}if(typeof K.value==="string")return K;return K.issues.push({expected:"string",code:"invalid_type",input:K.value,inst:Q}),K}});var b9=O("$ZodNumber",(Q,Y)=>{u.init(Q,Y),Q._zod.pattern=Q._zod.bag.pattern??M9,Q._zod.parse=(K,X)=>{if(Y.coerce)try{K.value=Number(K.value)}catch(J){}let G=K.value;if(typeof G==="number"&&!Number.isNaN(G)&&Number.isFinite(G))return K;let q=typeof G==="number"?Number.isNaN(G)?"NaN":!Number.isFinite(G)?"Infinity":void 0:void 0;return K.issues.push({expected:"number",code:"invalid_type",input:G,inst:Q,...q?{received:q}:{}}),K}});function S9(Q,Y,K){if(Q.issues.length)Y.issues.push(...v4(K,Q.issues));Y.value[K]=Q.value}var x9=O("$ZodArray",(Q,Y)=>{u.init(Q,Y),Q._zod.parse=(K,X)=>{let G=K.value;if(!Array.isArray(G))return K.issues.push({expected:"array",code:"invalid_type",input:G,inst:Q}),K;K.value=Array(G.length);let q=[];for(let J=0;J<G.length;J++){let H=G[J],W=Y.element._zod.run({value:H,issues:[]},X);if(W instanceof Promise)q.push(W.then((U)=>S9(U,K,J)));else S9(W,K,J)}if(q.length)return Promise.all(q).then(()=>K);return K}});function m4(Q,Y,K,X,G,q){let J=K in X;if(Q.issues.length){if(G&&q&&!J)return;Y.issues.push(...v4(K,Q.issues))}if(!J&&!G){if(!Q.issues.length)Y.issues.push({code:"invalid_type",expected:"nonoptional",input:void 0,path:[K]});return}if(Q.value===void 0){if(J)Y.value[K]=void 0}else Y.value[K]=Q.value}function q8(Q){let Y=Object.keys(Q.shape);for(let X of Y)if(!Q.shape?.[X]?._zod?.traits?.has("$ZodType"))throw Error(`Invalid element at key "${X}": expected a Zod schema`);let K=I9(Q.shape);return{...Q,keys:Y,keySet:new Set(Y),numKeys:Y.length,optionalKeys:new Set(K)}}function J8(Q,Y,K,X,G,q){let J=[],H=G.keySet,W=G.catchall._zod,U=W.def.type,j=W.optin==="optional",$=W.optout==="optional";for(let F in Y){if(F==="__proto__")continue;if(H.has(F))continue;if(U==="never"){J.push(F);continue}let D=W.run({value:Y[F],issues:[]},X);if(D instanceof Promise)Q.push(D.then((P)=>m4(P,K,F,Y,j,$)));else m4(D,K,F,Y,j,$)}if(J.length)K.issues.push({code:"unrecognized_keys",keys:J,input:Y,inst:q});if(!Q.length)return K;return Promise.all(Q).then(()=>{return K})}var g9=O("$ZodObject",(Q,Y)=>{if(u.init(Q,Y),!Object.getOwnPropertyDescriptor(Y,"shape")?.get){let H=Y.shape;Object.defineProperty(Y,"shape",{get:()=>{let W={...H};return Object.defineProperty(Y,"shape",{value:W}),W}})}let X=A9(()=>q8(Y));b(Q._zod,"propValues",()=>{let H=Y.shape,W={};for(let U in H){let j=H[U]._zod;if(j.values){W[U]??(W[U]=new Set);for(let $ of j.values)W[U].add($)}}return W});let G=F9,q=Y.catchall,J;Q._zod.parse=(H,W)=>{J??(J=X.value);let U=H.value;if(!G(U))return H.issues.push({expected:"object",code:"invalid_type",input:U,inst:Q}),H;H.value={};let j=[],$=J.shape;for(let F of J.keys){let D=$[F],P=D._zod.optin==="optional",N=D._zod.optout==="optional",o=D._zod.run({value:U[F],issues:[]},W);if(o instanceof Promise)j.push(o.then((z4)=>m4(z4,H,F,U,P,N)));else m4(o,H,F,U,P,N)}if(!q)return j.length?Promise.all(j).then(()=>H):H;return J8(j,U,H,W,X.value,Q)}});var v9=O("$ZodTransform",(Q,Y)=>{u.init(Q,Y),Q._zod.optin="optional",Q._zod.parse=(K,X)=>{if(X.direction==="backward")throw new z3(Q.constructor.name);let G=Y.transform(K.value,K);if(X.async)return(G instanceof Promise?G:Promise.resolve(G)).then((J)=>{return K.value=J,K.fallback=!0,K});if(G instanceof Promise)throw new y;return K.value=G,K.fallback=!0,K}});function k9(Q,Y){if(Y===void 0&&(Q.issues.length||Q.fallback))return{issues:[],value:void 0};return Q}var h9=O("$ZodOptional",(Q,Y)=>{u.init(Q,Y),Q._zod.optin="optional",Q._zod.optout="optional",b(Q._zod,"values",()=>{return Y.innerType._zod.values?new Set([...Y.innerType._zod.values,void 0]):void 0}),b(Q._zod,"pattern",()=>{let K=Y.innerType._zod.pattern;return K?new RegExp(`^(${D9(K.source)})?$`):void 0}),Q._zod.parse=(K,X)=>{if(Y.innerType._zod.optin==="optional"){let G=K.value,q=Y.innerType._zod.run(K,X);if(q instanceof Promise)return q.then((J)=>k9(J,G));return k9(q,G)}if(K.value===void 0)return K;return Y.innerType._zod.run(K,X)}});var c9=O("$ZodPipe",(Q,Y)=>{u.init(Q,Y),b(Q._zod,"values",()=>Y.in._zod.values),b(Q._zod,"optin",()=>Y.in._zod.optin),b(Q._zod,"optout",()=>Y.out._zod.optout),b(Q._zod,"propValues",()=>Y.in._zod.propValues),Q._zod.parse=(K,X)=>{if(X.direction==="backward"){let q=Y.out._zod.run(K,X);if(q instanceof Promise)return q.then((J)=>y4(J,Y.in,X));return y4(q,Y.in,X)}let G=Y.in._zod.run(K,X);if(G instanceof Promise)return G.then((q)=>y4(q,Y.out,X));return y4(G,Y.out,X)}});function y4(Q,Y,K){if(Q.issues.length)return Q.aborted=!0,Q;return Y._zod.run({value:Q.value,issues:Q.issues,fallback:Q.fallback},K)}function y9(Q,Y){return new Q({type:"string",...m(Y)})}function m9(Q,Y){return new Q({type:"number",checks:[],...m(Y)})}function P4(Q,Y){return new R9({check:"min_length",...m(Y),minimum:Q})}function u4(Q,Y){return new w9({check:"string_format",format:"regex",...m(Y),pattern:Q})}function u9(Q){return new _9({check:"overwrite",tx:Q})}function U3(){return u9((Q)=>Q.trim())}var i=O("ZodMiniType",(Q,Y)=>{if(!Q._zod)throw Error("Uninitialized schema in ZodMiniType.");u.init(Q,Y),Q.def=Y,Q.type=Y.type,Q.parse=(K,X)=>h4(Q,K,X,{callee:Q.parse}),Q.safeParse=(K,X)=>n(Q,K,X),Q.parseAsync=async(K,X)=>c4(Q,K,X,{callee:Q.parseAsync}),Q.safeParseAsync=async(K,X)=>O4(Q,K,X),Q.check=(...K)=>{return Q.clone({...Y,checks:[...Y.checks??[],...K.map((X)=>typeof X==="function"?{_zod:{check:X,def:{check:"custom"},onattach:[]}}:X)]},{parent:!0})},Q.with=Q.check,Q.clone=(K,X)=>W3(Q,K,X),Q.brand=()=>Q,Q.register=(K,X)=>{return K.add(Q,X),Q},Q.apply=(K)=>K(Q)}),H8=O("ZodMiniString",(Q,Y)=>{C9.init(Q,Y),i.init(Q,Y)});function J4(Q){return y9(H8,Q)}var W8=O("ZodMiniNumber",(Q,Y)=>{b9.init(Q,Y),i.init(Q,Y)});function f9(Q){return m9(W8,Q)}var U8=O("ZodMiniArray",(Q,Y)=>{x9.init(Q,Y),i.init(Q,Y)});function j3(Q,Y){return new U8({type:"array",element:Q,...m(Y)})}var j8=O("ZodMiniObject",(Q,Y)=>{g9.init(Q,Y),i.init(Q,Y),b(Q,"shape",()=>Y.shape)});function $3(Q,Y){let K={type:"object",shape:Q??{},...m(Y)};return new j8(K)}var $8=O("ZodMiniTransform",(Q,Y)=>{v9.init(Q,Y),i.init(Q,Y)});function o9(Q){return new $8({type:"transform",transform:Q})}var A8=O("ZodMiniOptional",(Q,Y)=>{h9.init(Q,Y),i.init(Q,Y)});function A3(Q){return new A8({type:"optional",innerType:Q})}var L8=O("ZodMiniPipe",(Q,Y)=>{c9.init(Q,Y),i.init(Q,Y)});function r9(Q,Y){return new L8({type:"pipe",in:Q,out:Y})}function p9(Q,Y){let K=new q4({check:"custom",...m(Y)});return K._zod.check=Q,K}var l9="invdriver.gridprofile/v1",I8=J4().check(u4(/^[A-Z]{2}$/,"must match ^[A-Z]{2}$")),V8=J4().check(u4(/^[0-9A-Fa-f]{12}$/,"must be 12 hex characters")),N8=r9(o9((Q)=>{if(Q&&typeof Q==="object"){let Y=Q,K="aps_code"in Y||"value"in Y,X="apply"in Y||"native"in Y;if(K)return{aps_code:Y.aps_code,value:Y.value,unit:Y.unit};if(X){let G=Y.apply??{},q=Y.native??{};return{aps_code:G.aps_code,value:q.value,unit:q.unit}}}return Q}),$3({aps_code:I8,value:f9(),unit:A3(J4())})),O8=$3({schema:A3(J4()),id:J4().check(U3(),P4(1,"must be a non-empty string")),uids:j3(V8).check(P4(1,"must contain at least one inverter UID")),points:j3(N8).check(P4(1,"must contain at least one parameter override"))}),P8=O8.check(p9((Q)=>{let Y=Q.value,K=new Map;for(let G=0;G<Y.points.length;G++){let q=Y.points[G].aps_code,J=K.get(q);if(J!==void 0)Q.issues.push({code:"custom",path:["points",G,"aps_code"],message:`duplicate aps_code "${q}" (also at points[${J}])`,input:Y});else K.set(q,G)}let X=new Map;for(let G=0;G<Y.uids.length;G++){let q=Y.uids[G].toLowerCase(),J=X.get(q);if(J!==void 0)Q.issues.push({code:"custom",path:["uids",G],message:`duplicate uid "${Y.uids[G]}" (also at uids[${J}])`,input:Y});else X.set(q,G)}}));function E8(Q){let Y="";for(let K of Q)if(typeof K==="number")Y+=`[${K}]`;else Y+=Y?`.${String(K)}`:String(K);return Y||"(root)"}function d9(Q){let Y=n(P8,Q);if(!Y.success)return{ok:!1,errors:Y.error.issues.map((J)=>`${E8(J.path)}: ${J.message}`)};let K=[];if(Y.data.schema!==void 0&&Y.data.schema!==l9)K.push(`schema tag "${Y.data.schema}" does not match expected "${l9}"`);let X=Y.data.points.map((q)=>{let J={aps_code:q.aps_code,value:q.value};if(q.unit!==void 0&&q.unit!=="")J.unit=q.unit;return J});return{ok:!0,profile:{id:Y.data.id.trim(),uids:Y.data.uids,points:X},warnings:K}}class n9 extends A{static properties={profiles:{attribute:!1},activeBase:{attribute:!1},reconcilerReady:{attribute:!1},busy:{attribute:!1},selected:{state:!0}};constructor(){super();this.profiles=[],this.activeBase="",this.reconcilerReady=!0,this.busy=!1,this.selected=""}static styles=L`
+    `}}customElements.define("events-view",U9);var j9;function O(Q,Y,K){function X(H,W){if(!H._zod)Object.defineProperty(H,"_zod",{value:{def:W,constr:z,traits:new Set},enumerable:!1});if(H._zod.traits.has(Q))return;H._zod.traits.add(Q),Y(H,W);let U=z.prototype,j=Object.keys(U);for(let A=0;A<j.length;A++){let F=j[A];if(!(F in H))H[F]=U[F].bind(H)}}let G=K?.Parent??Object;class J extends G{}Object.defineProperty(J,"name",{value:Q});function z(H){var W;let U=K?.Parent?new J:this;X(U,H),(W=U._zod).deferred??(W.deferred=[]);for(let j of U._zod.deferred)j();return U}return Object.defineProperty(z,"init",{value:X}),Object.defineProperty(z,Symbol.hasInstance,{value:(H)=>{if(K?.Parent&&H instanceof K.Parent)return!0;return H?._zod?.traits?.has(Q)}}),Object.defineProperty(z,"name",{value:Q}),z}var J6=Symbol("zod_brand");class u extends Error{constructor(){super("Encountered Promise during synchronous parse. Use .parseAsync() instead.")}}class z3 extends Error{constructor(Q){super(`Encountered unidirectional transform during encode: ${Q}`);this.name="ZodEncodeError"}}(j9=globalThis).__zod_globalConfig??(j9.__zod_globalConfig={});var J3=globalThis.__zod_globalConfig;function X4(Q){if(Q)Object.assign(J3,Q);return J3}function A9(Q,Y){if(typeof Y==="bigint")return Y.toString();return Y}function L9(Q){return{get value(){{let K=Q();return Object.defineProperty(this,"value",{value:K}),K}throw Error("cached value already set")}}}function D9(Q){return Q===null||Q===void 0}function F9(Q){let Y=Q.startsWith("^")?1:0,K=Q.endsWith("$")?Q.length-1:Q.length;return Q.slice(Y,K)}var $9=Symbol("evaluating");function C(Q,Y,K){let X=void 0;Object.defineProperty(Q,Y,{get(){if(X===$9)return;if(X===void 0)X=$9,X=K();return X},set(G){Object.defineProperty(Q,Y,{value:G})},configurable:!0})}var H3="captureStackTrace"in Error?Error.captureStackTrace:(...Q)=>{};function I9(Q){return typeof Q==="object"&&Q!==null&&!Array.isArray(Q)}function W3(Q,Y,K){let X=new Q._zod.constr(Y??Q._zod.def);if(!Y||K?.parent)X._zod.parent=Q;return X}function f(Q){let Y=Q;if(!Y)return{};if(typeof Y==="string")return{error:()=>Y};if(Y?.message!==void 0){if(Y?.error!==void 0)throw Error("Cannot specify both `message` and `error` params");Y.error=Y.message}if(delete Y.message,typeof Y.error==="string")return{...Y,error:()=>Y.error};return Y}function V9(Q){return Object.keys(Q).filter((Y)=>{return Q[Y]._zod.optin==="optional"&&Q[Y]._zod.optout==="optional"})}var tQ={safeint:[Number.MIN_SAFE_INTEGER,Number.MAX_SAFE_INTEGER],int32:[-2147483648,2147483647],uint32:[0,4294967295],float32:[-340282346638528860000000000000000000000,340282346638528860000000000000000000000],float64:[-Number.MAX_VALUE,Number.MAX_VALUE]};function V4(Q,Y=0){if(Q.aborted===!0)return!0;for(let K=Y;K<Q.issues.length;K++)if(Q.issues[K]?.continue!==!0)return!0;return!1}function N9(Q,Y=0){if(Q.aborted===!0)return!0;for(let K=Y;K<Q.issues.length;K++)if(Q.issues[K]?.continue===!1)return!0;return!1}function v4(Q,Y){return Y.map((K)=>{var X;return(X=K).path??(X.path=[]),K.path.unshift(Q),K})}function g4(Q){return typeof Q==="string"?Q:Q?.message}function G4(Q,Y,K){let X=Q.message?Q.message:g4(Q.inst?._zod.def?.error?.(Q))??g4(Y?.error?.(Q))??g4(K.customError?.(Q))??g4(K.localeError?.(Q))??"Invalid input",{inst:G,continue:J,input:z,...H}=Q;if(H.path??(H.path=[]),H.message=X,Y?.reportInput)H.input=z;return H}function O9(Q){if(Array.isArray(Q))return"array";if(typeof Q==="string")return"string";return"unknown"}var P9=(Q,Y)=>{Q.name="$ZodError",Object.defineProperty(Q,"_zod",{value:Q._zod,enumerable:!1}),Object.defineProperty(Q,"issues",{value:Y,enumerable:!1}),Q.message=JSON.stringify(Y,A9,2),Object.defineProperty(Q,"toString",{value:()=>Q.message,enumerable:!1})},E9=O("$ZodError",P9),N4=O("$ZodError",P9,{Parent:Error});var eQ=(Q)=>(Y,K,X,G)=>{let J=X?{...X,async:!1}:{async:!1},z=Y._zod.run({value:K,issues:[]},J);if(z instanceof Promise)throw new u;if(z.issues.length){let H=new(G?.Err??Q)(z.issues.map((W)=>G4(W,J,X4())));throw H3(H,G?.callee),H}return z.value},h4=eQ(N4),Q8=(Q)=>async(Y,K,X,G)=>{let J=X?{...X,async:!0}:{async:!0},z=Y._zod.run({value:K,issues:[]},J);if(z instanceof Promise)z=await z;if(z.issues.length){let H=new(G?.Err??Q)(z.issues.map((W)=>G4(W,J,X4())));throw H3(H,G?.callee),H}return z.value},c4=Q8(N4),Y8=(Q)=>(Y,K,X)=>{let G=X?{...X,async:!1}:{async:!1},J=Y._zod.run({value:K,issues:[]},G);if(J instanceof Promise)throw new u;return J.issues.length?{success:!1,error:new(Q??E9)(J.issues.map((z)=>G4(z,G,X4())))}:{success:!0,data:J.value}},i=Y8(N4),K8=(Q)=>async(Y,K,X)=>{let G=X?{...X,async:!0}:{async:!0},J=Y._zod.run({value:K,issues:[]},G);if(J instanceof Promise)J=await J;return J.issues.length?{success:!1,error:new Q(J.issues.map((z)=>G4(z,G,X4())))}:{success:!0,data:J.value}},O4=K8(N4);var X8="(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))",G8=new RegExp(`^${X8}$`);var M9=(Q)=>{let Y=Q?`[\\s\\S]{${Q?.minimum??0},${Q?.maximum??""}}`:"[\\s\\S]*";return new RegExp(`^${Y}$`)};var Z9=/^-?\d+(?:\.\d+)?$/;var J4=O("$ZodCheck",(Q,Y)=>{var K;Q._zod??(Q._zod={}),Q._zod.def=Y,(K=Q._zod).onattach??(K.onattach=[])});var w9=O("$ZodCheckMinLength",(Q,Y)=>{var K;J4.init(Q,Y),(K=Q._zod.def).when??(K.when=(X)=>{let G=X.value;return!D9(G)&&G.length!==void 0}),Q._zod.onattach.push((X)=>{let G=X._zod.bag.minimum??Number.NEGATIVE_INFINITY;if(Y.minimum>G)X._zod.bag.minimum=Y.minimum}),Q._zod.check=(X)=>{let G=X.value;if(G.length>=Y.minimum)return;let z=O9(G);X.issues.push({origin:z,code:"too_small",minimum:Y.minimum,inclusive:!0,input:G,inst:Q,continue:!Y.abort})}});var J8=O("$ZodCheckStringFormat",(Q,Y)=>{var K,X;if(J4.init(Q,Y),Q._zod.onattach.push((G)=>{let J=G._zod.bag;if(J.format=Y.format,Y.pattern)J.patterns??(J.patterns=new Set),J.patterns.add(Y.pattern)}),Y.pattern)(K=Q._zod).check??(K.check=(G)=>{if(Y.pattern.lastIndex=0,Y.pattern.test(G.value))return;G.issues.push({origin:"string",code:"invalid_format",format:Y.format,input:G.value,...Y.pattern?{pattern:Y.pattern.toString()}:{},inst:Q,continue:!Y.abort})});else(X=Q._zod).check??(X.check=()=>{})}),_9=O("$ZodCheckRegex",(Q,Y)=>{J8.init(Q,Y),Q._zod.check=(K)=>{if(Y.pattern.lastIndex=0,Y.pattern.test(K.value))return;K.issues.push({origin:"string",code:"invalid_format",format:"regex",input:K.value,pattern:Y.pattern.toString(),inst:Q,continue:!Y.abort})}});var T9=O("$ZodCheckOverwrite",(Q,Y)=>{J4.init(Q,Y),Q._zod.check=(K)=>{K.value=Y.tx(K.value)}});var S9={major:4,minor:4,patch:3};var o=O("$ZodType",(Q,Y)=>{var K;Q??(Q={}),Q._zod.def=Y,Q._zod.bag=Q._zod.bag||{},Q._zod.version=S9;let X=[...Q._zod.def.checks??[]];if(Q._zod.traits.has("$ZodCheck"))X.unshift(Q);for(let G of X)for(let J of G._zod.onattach)J(Q);if(X.length===0)(K=Q._zod).deferred??(K.deferred=[]),Q._zod.deferred?.push(()=>{Q._zod.run=Q._zod.parse});else{let G=(z,H,W)=>{let U=V4(z),j;for(let A of H){if(A._zod.def.when){if(N9(z))continue;if(!A._zod.def.when(z))continue}else if(U)continue;let F=z.issues.length,I=A._zod.check(z);if(I instanceof Promise&&W?.async===!1)throw new u;if(j||I instanceof Promise)j=(j??Promise.resolve()).then(async()=>{if(await I,z.issues.length===F)return;if(!U)U=V4(z,F)});else{if(z.issues.length===F)continue;if(!U)U=V4(z,F)}}if(j)return j.then(()=>{return z});return z},J=(z,H,W)=>{if(V4(z))return z.aborted=!0,z;let U=G(H,X,W);if(U instanceof Promise){if(W.async===!1)throw new u;return U.then((j)=>Q._zod.parse(j,W))}return Q._zod.parse(U,W)};Q._zod.run=(z,H)=>{if(H.skipChecks)return Q._zod.parse(z,H);if(H.direction==="backward"){let U=Q._zod.parse({value:z.value,issues:[]},{...H,skipChecks:!0});if(U instanceof Promise)return U.then((j)=>{return J(j,z,H)});return J(U,z,H)}let W=Q._zod.parse(z,H);if(W instanceof Promise){if(H.async===!1)throw new u;return W.then((U)=>G(U,X,H))}return G(W,X,H)}}C(Q,"~standard",()=>({validate:(G)=>{try{let J=i(Q,G);return J.success?{value:J.data}:{issues:J.error?.issues}}catch(J){return O4(Q,G).then((z)=>z.success?{value:z.data}:{issues:z.error?.issues})}},vendor:"zod",version:1}))}),C9=O("$ZodString",(Q,Y)=>{o.init(Q,Y),Q._zod.pattern=[...Q?._zod.bag?.patterns??[]].pop()??M9(Q._zod.bag),Q._zod.parse=(K,X)=>{if(Y.coerce)try{K.value=String(K.value)}catch(G){}if(typeof K.value==="string")return K;return K.issues.push({expected:"string",code:"invalid_type",input:K.value,inst:Q}),K}});var x9=O("$ZodNumber",(Q,Y)=>{o.init(Q,Y),Q._zod.pattern=Q._zod.bag.pattern??Z9,Q._zod.parse=(K,X)=>{if(Y.coerce)try{K.value=Number(K.value)}catch(z){}let G=K.value;if(typeof G==="number"&&!Number.isNaN(G)&&Number.isFinite(G))return K;let J=typeof G==="number"?Number.isNaN(G)?"NaN":!Number.isFinite(G)?"Infinity":void 0:void 0;return K.issues.push({expected:"number",code:"invalid_type",input:G,inst:Q,...J?{received:J}:{}}),K}});function k9(Q,Y,K){if(Q.issues.length)Y.issues.push(...v4(K,Q.issues));Y.value[K]=Q.value}var g9=O("$ZodArray",(Q,Y)=>{o.init(Q,Y),Q._zod.parse=(K,X)=>{let G=K.value;if(!Array.isArray(G))return K.issues.push({expected:"array",code:"invalid_type",input:G,inst:Q}),K;K.value=Array(G.length);let J=[];for(let z=0;z<G.length;z++){let H=G[z],W=Y.element._zod.run({value:H,issues:[]},X);if(W instanceof Promise)J.push(W.then((U)=>k9(U,K,z)));else k9(W,K,z)}if(J.length)return Promise.all(J).then(()=>K);return K}});function m4(Q,Y,K,X,G,J){let z=K in X;if(Q.issues.length){if(G&&J&&!z)return;Y.issues.push(...v4(K,Q.issues))}if(!z&&!G){if(!Q.issues.length)Y.issues.push({code:"invalid_type",expected:"nonoptional",input:void 0,path:[K]});return}if(Q.value===void 0){if(z)Y.value[K]=void 0}else Y.value[K]=Q.value}function H8(Q){let Y=Object.keys(Q.shape);for(let X of Y)if(!Q.shape?.[X]?._zod?.traits?.has("$ZodType"))throw Error(`Invalid element at key "${X}": expected a Zod schema`);let K=V9(Q.shape);return{...Q,keys:Y,keySet:new Set(Y),numKeys:Y.length,optionalKeys:new Set(K)}}function W8(Q,Y,K,X,G,J){let z=[],H=G.keySet,W=G.catchall._zod,U=W.def.type,j=W.optin==="optional",A=W.optout==="optional";for(let F in Y){if(F==="__proto__")continue;if(H.has(F))continue;if(U==="never"){z.push(F);continue}let I=W.run({value:Y[F],issues:[]},X);if(I instanceof Promise)Q.push(I.then((P)=>m4(P,K,F,Y,j,A)));else m4(I,K,F,Y,j,A)}if(z.length)K.issues.push({code:"unrecognized_keys",keys:z,input:Y,inst:J});if(!Q.length)return K;return Promise.all(Q).then(()=>{return K})}var v9=O("$ZodObject",(Q,Y)=>{if(o.init(Q,Y),!Object.getOwnPropertyDescriptor(Y,"shape")?.get){let H=Y.shape;Object.defineProperty(Y,"shape",{get:()=>{let W={...H};return Object.defineProperty(Y,"shape",{value:W}),W}})}let X=L9(()=>H8(Y));C(Q._zod,"propValues",()=>{let H=Y.shape,W={};for(let U in H){let j=H[U]._zod;if(j.values){W[U]??(W[U]=new Set);for(let A of j.values)W[U].add(A)}}return W});let G=I9,J=Y.catchall,z;Q._zod.parse=(H,W)=>{z??(z=X.value);let U=H.value;if(!G(U))return H.issues.push({expected:"object",code:"invalid_type",input:U,inst:Q}),H;H.value={};let j=[],A=z.shape;for(let F of z.keys){let I=A[F],P=I._zod.optin==="optional",N=I._zod.optout==="optional",h=I._zod.run({value:U[F],issues:[]},W);if(h instanceof Promise)j.push(h.then((x)=>m4(x,H,F,U,P,N)));else m4(h,H,F,U,P,N)}if(!J)return j.length?Promise.all(j).then(()=>H):H;return W8(j,U,H,W,X.value,Q)}});var h9=O("$ZodTransform",(Q,Y)=>{o.init(Q,Y),Q._zod.optin="optional",Q._zod.parse=(K,X)=>{if(X.direction==="backward")throw new z3(Q.constructor.name);let G=Y.transform(K.value,K);if(X.async)return(G instanceof Promise?G:Promise.resolve(G)).then((z)=>{return K.value=z,K.fallback=!0,K});if(G instanceof Promise)throw new u;return K.value=G,K.fallback=!0,K}});function b9(Q,Y){if(Y===void 0&&(Q.issues.length||Q.fallback))return{issues:[],value:void 0};return Q}var c9=O("$ZodOptional",(Q,Y)=>{o.init(Q,Y),Q._zod.optin="optional",Q._zod.optout="optional",C(Q._zod,"values",()=>{return Y.innerType._zod.values?new Set([...Y.innerType._zod.values,void 0]):void 0}),C(Q._zod,"pattern",()=>{let K=Y.innerType._zod.pattern;return K?new RegExp(`^(${F9(K.source)})?$`):void 0}),Q._zod.parse=(K,X)=>{if(Y.innerType._zod.optin==="optional"){let G=K.value,J=Y.innerType._zod.run(K,X);if(J instanceof Promise)return J.then((z)=>b9(z,G));return b9(J,G)}if(K.value===void 0)return K;return Y.innerType._zod.run(K,X)}});var y9=O("$ZodPipe",(Q,Y)=>{o.init(Q,Y),C(Q._zod,"values",()=>Y.in._zod.values),C(Q._zod,"optin",()=>Y.in._zod.optin),C(Q._zod,"optout",()=>Y.out._zod.optout),C(Q._zod,"propValues",()=>Y.in._zod.propValues),Q._zod.parse=(K,X)=>{if(X.direction==="backward"){let J=Y.out._zod.run(K,X);if(J instanceof Promise)return J.then((z)=>y4(z,Y.in,X));return y4(J,Y.in,X)}let G=Y.in._zod.run(K,X);if(G instanceof Promise)return G.then((J)=>y4(J,Y.out,X));return y4(G,Y.out,X)}});function y4(Q,Y,K){if(Q.issues.length)return Q.aborted=!0,Q;return Y._zod.run({value:Q.value,issues:Q.issues,fallback:Q.fallback},K)}function m9(Q,Y){return new Q({type:"string",...f(Y)})}function u9(Q,Y){return new Q({type:"number",checks:[],...f(Y)})}function P4(Q,Y){return new w9({check:"min_length",...f(Y),minimum:Q})}function u4(Q,Y){return new _9({check:"string_format",format:"regex",...f(Y),pattern:Q})}function f9(Q){return new T9({check:"overwrite",tx:Q})}function U3(){return f9((Q)=>Q.trim())}var s=O("ZodMiniType",(Q,Y)=>{if(!Q._zod)throw Error("Uninitialized schema in ZodMiniType.");o.init(Q,Y),Q.def=Y,Q.type=Y.type,Q.parse=(K,X)=>h4(Q,K,X,{callee:Q.parse}),Q.safeParse=(K,X)=>i(Q,K,X),Q.parseAsync=async(K,X)=>c4(Q,K,X,{callee:Q.parseAsync}),Q.safeParseAsync=async(K,X)=>O4(Q,K,X),Q.check=(...K)=>{return Q.clone({...Y,checks:[...Y.checks??[],...K.map((X)=>typeof X==="function"?{_zod:{check:X,def:{check:"custom"},onattach:[]}}:X)]},{parent:!0})},Q.with=Q.check,Q.clone=(K,X)=>W3(Q,K,X),Q.brand=()=>Q,Q.register=(K,X)=>{return K.add(Q,X),Q},Q.apply=(K)=>K(Q)}),$8=O("ZodMiniString",(Q,Y)=>{C9.init(Q,Y),s.init(Q,Y)});function z4(Q){return m9($8,Q)}var A8=O("ZodMiniNumber",(Q,Y)=>{x9.init(Q,Y),s.init(Q,Y)});function o9(Q){return u9(A8,Q)}var L8=O("ZodMiniArray",(Q,Y)=>{g9.init(Q,Y),s.init(Q,Y)});function j3(Q,Y){return new L8({type:"array",element:Q,...f(Y)})}var D8=O("ZodMiniObject",(Q,Y)=>{v9.init(Q,Y),s.init(Q,Y),C(Q,"shape",()=>Y.shape)});function $3(Q,Y){let K={type:"object",shape:Q??{},...f(Y)};return new D8(K)}var F8=O("ZodMiniTransform",(Q,Y)=>{h9.init(Q,Y),s.init(Q,Y)});function r9(Q){return new F8({type:"transform",transform:Q})}var I8=O("ZodMiniOptional",(Q,Y)=>{c9.init(Q,Y),s.init(Q,Y)});function A3(Q){return new I8({type:"optional",innerType:Q})}var V8=O("ZodMiniPipe",(Q,Y)=>{y9.init(Q,Y),s.init(Q,Y)});function p9(Q,Y){return new V8({type:"pipe",in:Q,out:Y})}function l9(Q,Y){let K=new J4({check:"custom",...f(Y)});return K._zod.check=Q,K}var d9="invdriver.gridprofile/v1",P8=z4().check(u4(/^[A-Z]{2}$/,"must match ^[A-Z]{2}$")),E8=z4().check(u4(/^[0-9A-Fa-f]{12}$/,"must be 12 hex characters")),M8=p9(r9((Q)=>{if(Q&&typeof Q==="object"){let Y=Q,K="aps_code"in Y||"value"in Y,X="apply"in Y||"native"in Y;if(K)return{aps_code:Y.aps_code,value:Y.value,unit:Y.unit};if(X){let G=Y.apply??{},J=Y.native??{};return{aps_code:G.aps_code,value:J.value,unit:J.unit}}}return Q}),$3({aps_code:P8,value:o9(),unit:A3(z4())})),Z8=$3({schema:A3(z4()),id:z4().check(U3(),P4(1,"must be a non-empty string")),uids:j3(E8).check(P4(1,"must contain at least one inverter UID")),points:j3(M8).check(P4(1,"must contain at least one parameter override"))}),R8=Z8.check(l9((Q)=>{let Y=Q.value,K=new Map;for(let G=0;G<Y.points.length;G++){let J=Y.points[G].aps_code,z=K.get(J);if(z!==void 0)Q.issues.push({code:"custom",path:["points",G,"aps_code"],message:`duplicate aps_code "${J}" (also at points[${z}])`,input:Y});else K.set(J,G)}let X=new Map;for(let G=0;G<Y.uids.length;G++){let J=Y.uids[G].toLowerCase(),z=X.get(J);if(z!==void 0)Q.issues.push({code:"custom",path:["uids",G],message:`duplicate uid "${Y.uids[G]}" (also at uids[${z}])`,input:Y});else X.set(J,G)}}));function w8(Q){let Y="";for(let K of Q)if(typeof K==="number")Y+=`[${K}]`;else Y+=Y?`.${String(K)}`:String(K);return Y||"(root)"}function n9(Q){let Y=i(R8,Q);if(!Y.success)return{ok:!1,errors:Y.error.issues.map((z)=>`${w8(z.path)}: ${z.message}`)};let K=[];if(Y.data.schema!==void 0&&Y.data.schema!==d9)K.push(`schema tag "${Y.data.schema}" does not match expected "${d9}"`);let X=Y.data.points.map((J)=>{let z={aps_code:J.aps_code,value:J.value};if(J.unit!==void 0&&J.unit!=="")z.unit=J.unit;return z});return{ok:!0,profile:{id:Y.data.id.trim(),uids:Y.data.uids,points:X},warnings:K}}class i9 extends ${static properties={profiles:{attribute:!1},activeBase:{attribute:!1},reconcilerReady:{attribute:!1},busy:{attribute:!1},selected:{state:!0}};constructor(){super();this.profiles=[],this.activeBase="",this.reconcilerReady=!0,this.busy=!1,this.selected=""}static styles=L`
     :host { display: block; }
     .grid { display: grid; gap: 16px; max-width: 460px; }
     .active { font-size: 14px; color: var(--text); }
@@ -1025,18 +1200,18 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
     button.apply:hover:not(:disabled) { filter: brightness(1.08); }
     button.apply:disabled { opacity: 0.45; cursor: not-allowed; }
     .hint { font-size: 12px; color: var(--muted); }
-  `;onChange=(Q)=>{this.selected=Q.target.value};apply=()=>{let Q=this.effectiveSelected();if(!Q||Q===this.activeBase)return;this.dispatchEvent(new CustomEvent("apply",{detail:Q,bubbles:!0,composed:!0}))};effectiveSelected(){return this.selected||this.activeBase}labelFor(Q){let Y=[`${Q.vnom_v} V`];if(Q.source_ref)Y.push(Q.source_ref);return Y.push(`${Q.point_count} pts`),`${Q.id} — ${Y.join(" · ")}`}render(){let Q=this.effectiveSelected(),Y=this.profiles.find((X)=>X.id===this.activeBase),K=!this.busy&&this.reconcilerReady&&Q!==""&&Q!==this.activeBase;return z`
+  `;onChange=(Q)=>{this.selected=Q.target.value};apply=()=>{let Q=this.effectiveSelected();if(!Q||Q===this.activeBase)return;this.dispatchEvent(new CustomEvent("apply",{detail:Q,bubbles:!0,composed:!0}))};effectiveSelected(){return this.selected||this.activeBase}labelFor(Q){let Y=[`${Q.vnom_v} V`];if(Q.source_ref)Y.push(Q.source_ref);return Y.push(`${Q.point_count} pts`),`${Q.id} — ${Y.join(" · ")}`}render(){let Q=this.effectiveSelected(),Y=this.profiles.find((X)=>X.id===this.activeBase),K=!this.busy&&this.reconcilerReady&&Q!==""&&Q!==this.activeBase;return q`
       <div class="grid">
         <div class="active">
           <span class="muted">Active profile:</span>
-          ${this.activeBase?z` <strong>${this.activeBase}</strong>${Y?z` <span class="muted">(${Y.vnom_v} V · ${Y.point_count} pts)</span>`:B}`:z` <span class="none">none selected</span>`}
+          ${this.activeBase?q` <strong>${this.activeBase}</strong>${Y?q` <span class="muted">(${Y.vnom_v} V · ${Y.point_count} pts)</span>`:B}`:q` <span class="none">none selected</span>`}
         </div>
 
         <label>
           Base profile
           <select id="profile" .value=${Q} @change=${this.onChange} ?disabled=${this.busy}>
-            ${this.activeBase?B:z`<option value="" disabled selected>Select a profile…</option>`}
-            ${this.profiles.map((X)=>z`<option value=${X.id} ?selected=${X.id===Q}>${this.labelFor(X)}</option>`)}
+            ${this.activeBase?B:q`<option value="" disabled selected>Select a profile…</option>`}
+            ${this.profiles.map((X)=>q`<option value=${X.id} ?selected=${X.id===Q}>${this.labelFor(X)}</option>`)}
           </select>
         </label>
 
@@ -1044,10 +1219,10 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
           <button class="apply" @click=${this.apply} ?disabled=${!K}>
             ${this.busy?"Applying…":"Apply"}
           </button>
-          ${!this.reconcilerReady?z`<span class="hint">reconciler not ready</span>`:Q&&Q!==this.activeBase?z`<span class="hint">applies to all inverters</span>`:B}
+          ${!this.reconcilerReady?q`<span class="hint">reconciler not ready</span>`:Q&&Q!==this.activeBase?q`<span class="hint">applies to all inverters</span>`:B}
         </div>
       </div>
-    `}}customElements.define("grid-profile-form",n9);var i9={AC:{label:"Undervoltage trip — stage 2",desc:"Disconnect when AC voltage drops to this lower-stage level."},AQ:{label:"Undervoltage trip — deep",desc:"Disconnect quickly when voltage falls this far below nominal."},AH:{label:"Undervoltage trip — fast",desc:"Fast disconnect on a severe undervoltage."},AD:{label:"Overvoltage trip — slow",desc:"Disconnect when AC voltage rises above this (slower stage)."},AY:{label:"Overvoltage trip — slow (stage 2)",desc:"Second slower overvoltage disconnect threshold."},AB:{label:"10-minute mean overvoltage",desc:"Trips if the 10-minute average voltage exceeds this (EN 50549 sustained-overvoltage limit)."},AI:{label:"Overvoltage trip — fast",desc:"Fast disconnect on a severe overvoltage."},AE:{label:"Underfrequency trip — slow",desc:"Disconnect when grid frequency falls below this (slower stage)."},AJ:{label:"Underfrequency trip — fast",desc:"Fast disconnect on a severe underfrequency."},AF:{label:"Overfrequency trip — slow",desc:"Disconnect when grid frequency rises above this (slower stage)."},AK:{label:"Overfrequency trip — fast",desc:"Fast disconnect on a severe overfrequency."},BB:{label:"Undervoltage 1 — clearance time",desc:"How long the undervoltage condition must persist before tripping."},BD:{label:"Undervoltage 2 — clearance time",desc:"Clearance delay for the second undervoltage stage."},BC:{label:"Overvoltage 1 — clearance time",desc:"How long the overvoltage condition must persist before tripping."},BE:{label:"Overvoltage 2 — clearance time",desc:"Clearance delay for the second overvoltage stage."},BH:{label:"Underfrequency 1 — clearance time",desc:"Clearance delay for the first underfrequency stage."},BJ:{label:"Underfrequency 2 — clearance time",desc:"Clearance delay for the second underfrequency stage."},BI:{label:"Overfrequency 1 — clearance time",desc:"Clearance delay for the first overfrequency stage."},BK:{label:"Overfrequency 2 — clearance time",desc:"Clearance delay for the second overfrequency stage."},BN:{label:"Enter-service voltage — lower",desc:"Voltage must be above this before the inverter reconnects."},BO:{label:"Enter-service voltage — upper",desc:"Voltage must be below this before the inverter reconnects."},BP:{label:"Enter-service frequency — lower",desc:"Frequency must be above this before the inverter reconnects."},BQ:{label:"Enter-service frequency — upper",desc:"Frequency must be below this before the inverter reconnects."},AG:{label:"Grid-recovery delay",desc:"Wait time after the grid is healthy before reconnecting."},AS:{label:"Power ramp time",desc:"Time taken to ramp output back up after reconnecting."},CV:{label:"Curtailment enable (droop)",desc:"Enables the over-frequency droop power reduction (0 = off, 1 = on)."},CA:{label:"Curtailment start (droop deadband)",desc:"Over-frequency droop: power reduction begins at this frequency (deadband end)."},DD:{label:"Curtailment slope (droop)",desc:"Over-frequency droop gradient: % of rated power reduced per Hz above the start."},CG:{label:"Curtailment response time (droop)",desc:"Filter/response time of the droop control loop."},DH:{label:"Under-freq curve — low",desc:"Legacy frequency-Watt curve: lower frequency point of the under-frequency response."},DI:{label:"Under-freq curve — high",desc:"Legacy frequency-Watt curve: upper frequency point of the under-frequency response."},CB:{label:"Over-freq curve — start",desc:"Legacy frequency-Watt curve: over-frequency power reduction begins at this frequency."},CC:{label:"Over-freq curve — end",desc:"Legacy frequency-Watt curve: over-frequency reduction reaches its limit at this frequency."}},s9={DERFreqDroop:{label:"Frequency-Watt droop",tip:"Linearly reduces active power as frequency rises above a deadband — over-frequency curtailment (SunSpec DERFreqDroop, model 711)."},CrvSet:{label:"Frequency-Watt curve",tip:"Legacy point-based power-versus-frequency response curve (model 134)."},MustTrip:{label:"Trip thresholds",tip:"Voltage and frequency limits that disconnect the inverter from the grid when crossed (protection trips)."},DEREnterService:{label:"Enter service",tip:"The voltage/frequency window and timing the inverter must satisfy before (re)connecting after a trip."}},L3=["DERFreqDroop","CrvSet","MustTrip","DEREnterService"],t9=new Set(["MustTrip","DEREnterService"]);function M8(Q,Y){if(!Q)return Y;return Q.replace(/_/g," ").replace(/\b\w/g,(K)=>K.toUpperCase())}function a9(Q,Y){return i9[Q]?.label??M8(Y??"",Q)}function e9(Q){return i9[Q]?.desc??""}function D3(Q,Y){let K=[];for(let X of Q){let G=Y(X.left),q=Y(X.right);if(G!==void 0&&q!==void 0&&!(G<q))K.push(X.message)}return K}class QQ extends A{static properties={deadband:{type:Number},slope:{type:Number},trip:{type:Number},nominal:{type:Number}};constructor(){super();this.nominal=50}static styles=L`
+    `}}customElements.define("grid-profile-form",i9);var s9={AC:{label:"Undervoltage trip — stage 2",desc:"Disconnect when AC voltage drops to this lower-stage level."},AQ:{label:"Undervoltage trip — deep",desc:"Disconnect quickly when voltage falls this far below nominal."},AH:{label:"Undervoltage trip — fast",desc:"Fast disconnect on a severe undervoltage."},AD:{label:"Overvoltage trip — slow",desc:"Disconnect when AC voltage rises above this (slower stage)."},AY:{label:"Overvoltage trip — slow (stage 2)",desc:"Second slower overvoltage disconnect threshold."},AB:{label:"10-minute mean overvoltage",desc:"Trips if the 10-minute average voltage exceeds this (EN 50549 sustained-overvoltage limit)."},AI:{label:"Overvoltage trip — fast",desc:"Fast disconnect on a severe overvoltage."},AE:{label:"Underfrequency trip — slow",desc:"Disconnect when grid frequency falls below this (slower stage)."},AJ:{label:"Underfrequency trip — fast",desc:"Fast disconnect on a severe underfrequency."},AF:{label:"Overfrequency trip — slow",desc:"Disconnect when grid frequency rises above this (slower stage)."},AK:{label:"Overfrequency trip — fast",desc:"Fast disconnect on a severe overfrequency."},BB:{label:"Undervoltage 1 — clearance time",desc:"How long the undervoltage condition must persist before tripping."},BD:{label:"Undervoltage 2 — clearance time",desc:"Clearance delay for the second undervoltage stage."},BC:{label:"Overvoltage 1 — clearance time",desc:"How long the overvoltage condition must persist before tripping."},BE:{label:"Overvoltage 2 — clearance time",desc:"Clearance delay for the second overvoltage stage."},BH:{label:"Underfrequency 1 — clearance time",desc:"Clearance delay for the first underfrequency stage."},BJ:{label:"Underfrequency 2 — clearance time",desc:"Clearance delay for the second underfrequency stage."},BI:{label:"Overfrequency 1 — clearance time",desc:"Clearance delay for the first overfrequency stage."},BK:{label:"Overfrequency 2 — clearance time",desc:"Clearance delay for the second overfrequency stage."},BN:{label:"Enter-service voltage — lower",desc:"Voltage must be above this before the inverter reconnects."},BO:{label:"Enter-service voltage — upper",desc:"Voltage must be below this before the inverter reconnects."},BP:{label:"Enter-service frequency — lower",desc:"Frequency must be above this before the inverter reconnects."},BQ:{label:"Enter-service frequency — upper",desc:"Frequency must be below this before the inverter reconnects."},AG:{label:"Grid-recovery delay",desc:"Wait time after the grid is healthy before reconnecting."},AS:{label:"Power ramp time",desc:"Time taken to ramp output back up after reconnecting."},CV:{label:"Curtailment enable (droop)",desc:"Enables the over-frequency droop power reduction (0 = off, 1 = on)."},CA:{label:"Curtailment start (droop deadband)",desc:"Over-frequency droop: power reduction begins at this frequency (deadband end)."},DD:{label:"Curtailment slope (droop)",desc:"Over-frequency droop gradient: % of rated power reduced per Hz above the start."},CG:{label:"Curtailment response time (droop)",desc:"Filter/response time of the droop control loop."},DH:{label:"Under-freq curve — low",desc:"Legacy frequency-Watt curve: lower frequency point of the under-frequency response."},DI:{label:"Under-freq curve — high",desc:"Legacy frequency-Watt curve: upper frequency point of the under-frequency response."},CB:{label:"Over-freq curve — start",desc:"Legacy frequency-Watt curve: over-frequency power reduction begins at this frequency."},CC:{label:"Over-freq curve — end",desc:"Legacy frequency-Watt curve: over-frequency reduction reaches its limit at this frequency."}},t9={DERFreqDroop:{label:"Frequency-Watt droop",tip:"Linearly reduces active power as frequency rises above a deadband — over-frequency curtailment (SunSpec DERFreqDroop, model 711)."},CrvSet:{label:"Frequency-Watt curve",tip:"Legacy point-based power-versus-frequency response curve (model 134)."},MustTrip:{label:"Trip thresholds",tip:"Voltage and frequency limits that disconnect the inverter from the grid when crossed (protection trips)."},DEREnterService:{label:"Enter service",tip:"The voltage/frequency window and timing the inverter must satisfy before (re)connecting after a trip."}},L3=["DERFreqDroop","CrvSet","MustTrip","DEREnterService"],a9=new Set(["MustTrip","DEREnterService"]);function _8(Q,Y){if(!Q)return Y;return Q.replace(/_/g," ").replace(/\b\w/g,(K)=>K.toUpperCase())}function e9(Q,Y){return s9[Q]?.label??_8(Y??"",Q)}function QQ(Q){return s9[Q]?.desc??""}function D3(Q,Y){let K=[];for(let X of Q){let G=Y(X.left),J=Y(X.right);if(G!==void 0&&J!==void 0&&!(G<J))K.push(X.message)}return K}class YQ extends ${static properties={deadband:{type:Number},slope:{type:Number},trip:{type:Number},nominal:{type:Number}};constructor(){super();this.nominal=50}static styles=L`
     :host { display: block; }
     svg { width: 100%; height: auto; }
     .frame { stroke: var(--border); fill: none; }
@@ -1058,23 +1233,23 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
     text { fill: var(--muted); font-size: 9px; }
     .lbl { fill: var(--text); }
     .empty { color: var(--muted); font-size: 12px; padding: 8px 0; }
-  `;render(){let Q=this.deadband,Y=this.slope,K=this.trip,X=this.nominal;if(Q===void 0||Y===void 0||Y<=0)return z`<div class="empty">Set the curtailment start frequency and slope to preview the curve.</div>`;let G=Q+100/Y,q=X-0.3,J=Math.max(K??0,G,Q+1.5,X+1.5)+0.2,H=480,W=170,U=36,j=12,$=10,F=24,D=(E)=>U+(E-q)/(J-q)*(H-U-j),P=(E)=>$+(100-E)/100*(W-$-F),N=Math.min(G,J),o=Math.max(0,100-Y*(N-Q)),z4=[[q,100],[Q,100],[N,o],...G<J?[[J,0]]:[]].map(([E,UQ])=>`${D(E).toFixed(1)},${P(UQ).toFixed(1)}`).join(" "),f4=[];for(let E=Math.ceil(q*2)/2;E<=J;E+=0.5)f4.push(E);return z`
+  `;render(){let Q=this.deadband,Y=this.slope,K=this.trip,X=this.nominal;if(Q===void 0||Y===void 0||Y<=0)return q`<div class="empty">Set the curtailment start frequency and slope to preview the curve.</div>`;let G=Q+100/Y,J=X-0.3,z=Math.max(K??0,G,Q+1.5,X+1.5)+0.2,H=480,W=170,U=36,j=12,A=10,F=24,I=(E)=>U+(E-J)/(z-J)*(H-U-j),P=(E)=>A+(100-E)/100*(W-A-F),N=Math.min(G,z),h=Math.max(0,100-Y*(N-Q)),x=[[J,100],[Q,100],[N,h],...G<z?[[z,0]]:[]].map(([E,LQ])=>`${I(E).toFixed(1)},${P(LQ).toFixed(1)}`).join(" "),f4=[];for(let E=Math.ceil(J*2)/2;E<=z;E+=0.5)f4.push(E);return q`
       <svg viewBox="0 0 ${H} ${W}" role="img" aria-label="Frequency-Watt curtailment curve">
         ${[0,50,100].map((E)=>S`<line class="grid" x1=${U} y1=${P(E)} x2=${H-j} y2=${P(E)} />
             <text x=${U-4} y=${P(E)+3} text-anchor="end">${E}%</text>`)}
-        ${f4.map((E)=>S`<text x=${D(E)} y=${W-F+12} text-anchor="middle">${E.toFixed(1)}</text>`)}
-        <line class="frame" x1=${U} y1=${$} x2=${U} y2=${W-F} />
+        ${f4.map((E)=>S`<text x=${I(E)} y=${W-F+12} text-anchor="middle">${E.toFixed(1)}</text>`)}
+        <line class="frame" x1=${U} y1=${A} x2=${U} y2=${W-F} />
         <line class="frame" x1=${U} y1=${W-F} x2=${H-j} y2=${W-F} />
-        <line class="dead" x1=${D(Q)} y1=${$} x2=${D(Q)} y2=${W-F} />
-        <text class="lbl" x=${D(Q)} y=${$+8} text-anchor="middle">start ${Z(Q)} Hz</text>
-        ${G<=J?S`<line class="dead" x1=${D(G)} y1=${$} x2=${D(G)} y2=${W-F} />
-              <text class="lbl" x=${D(G)} y=${$+8} text-anchor="middle">0% at ${Z(G)} Hz</text>`:B}
-        ${K!==void 0&&K>=q&&K<=J?S`<line class="trip" x1=${D(K)} y1=${$} x2=${D(K)} y2=${W-F} />
-              <text x=${D(K)} y=${W-F-4} text-anchor="middle" fill="var(--err)">trip ${Z(K)} Hz</text>`:B}
-        <polyline class="curve" points=${z4} />
+        <line class="dead" x1=${I(Q)} y1=${A} x2=${I(Q)} y2=${W-F} />
+        <text class="lbl" x=${I(Q)} y=${A+8} text-anchor="middle">start ${Z(Q)} Hz</text>
+        ${G<=z?S`<line class="dead" x1=${I(G)} y1=${A} x2=${I(G)} y2=${W-F} />
+              <text class="lbl" x=${I(G)} y=${A+8} text-anchor="middle">0% at ${Z(G)} Hz</text>`:B}
+        ${K!==void 0&&K>=J&&K<=z?S`<line class="trip" x1=${I(K)} y1=${A} x2=${I(K)} y2=${W-F} />
+              <text x=${I(K)} y=${W-F-4} text-anchor="middle" fill="var(--err)">trip ${Z(K)} Hz</text>`:B}
+        <polyline class="curve" points=${x} />
         <text x=${H/2} y=${W-2} text-anchor="middle">Power vs frequency · slope ${Z(Y)} %Pref/Hz</text>
       </svg>
-    `}}customElements.define("freq-watt-chart",QQ);class YQ extends A{static properties={unit:{type:String},nominal:{type:Number},markers:{attribute:!1}};constructor(){super();this.unit="",this.markers=[]}static styles=L`
+    `}}customElements.define("freq-watt-chart",YQ);class KQ extends ${static properties={unit:{type:String},nominal:{type:Number},markers:{attribute:!1}};constructor(){super();this.unit="",this.markers=[]}static styles=L`
     :host { display: block; }
     svg { width: 100%; height: auto; }
     .axis { stroke: var(--border); }
@@ -1085,16 +1260,16 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
     .nom { stroke: var(--ok); }
     text { font-size: 9px; fill: var(--muted); }
     .empty { color: var(--muted); font-size: 12px; padding: 6px 0; }
-  `;render(){let Q=(this.markers??[]).filter((N)=>Number.isFinite(N.value));if(!Q.length)return z`<div class="empty">No thresholds set.</div>`;let Y=Q.map((N)=>N.value).concat(this.nominal!==void 0?[this.nominal]:[]),K=Math.min(...Y),X=Math.max(...Y),G=(X-K)*0.14||1;K-=G,X+=G;let q=480,J=70,H=10,W=10,U=34,j=(N)=>H+(N-K)/(X-K)*(q-H-W),$=Q.filter((N)=>N.kind==="under").map((N)=>N.value),F=Q.filter((N)=>N.kind==="over").map((N)=>N.value),D=$.length?Math.max(...$):K,P=F.length?Math.min(...F):X;return z`
-      <svg viewBox="0 0 ${q} ${J}" role="img" aria-label="Trip thresholds">
-        ${P>D?S`<rect class="band" x=${j(D)} y=${U-8} width=${j(P)-j(D)} height=16 />`:B}
-        <line class="axis" x1=${H} y1=${U} x2=${q-W} y2=${U} />
+  `;render(){let Q=(this.markers??[]).filter((N)=>Number.isFinite(N.value));if(!Q.length)return q`<div class="empty">No thresholds set.</div>`;let Y=Q.map((N)=>N.value).concat(this.nominal!==void 0?[this.nominal]:[]),K=Math.min(...Y),X=Math.max(...Y),G=(X-K)*0.14||1;K-=G,X+=G;let J=480,z=70,H=10,W=10,U=34,j=(N)=>H+(N-K)/(X-K)*(J-H-W),A=Q.filter((N)=>N.kind==="under").map((N)=>N.value),F=Q.filter((N)=>N.kind==="over").map((N)=>N.value),I=A.length?Math.max(...A):K,P=F.length?Math.min(...F):X;return q`
+      <svg viewBox="0 0 ${J} ${z}" role="img" aria-label="Trip thresholds">
+        ${P>I?S`<rect class="band" x=${j(I)} y=${U-8} width=${j(P)-j(I)} height=16 />`:B}
+        <line class="axis" x1=${H} y1=${U} x2=${J-W} y2=${U} />
         ${this.nominal!==void 0?S`<line class="nom" x1=${j(this.nominal)} y1=${U-9} x2=${j(this.nominal)} y2=${U+9} />
               <text x=${j(this.nominal)} y=${U+20} text-anchor="middle" fill="var(--ok)">${Z(this.nominal)} ${this.unit}</text>`:B}
-        ${Q.map((N,o)=>{let z4=N.kind,E=o%2===0?U-12:U+22;return S`<line class=${z4} x1=${j(N.value)} y1=${U-7} x2=${j(N.value)} y2=${U+7} />
+        ${Q.map((N,h)=>{let x=N.kind,E=h%2===0?U-12:U+22;return S`<line class=${x} x1=${j(N.value)} y1=${U-7} x2=${j(N.value)} y2=${U+7} />
             <text x=${j(N.value)} y=${E} text-anchor="middle">${N.label} ${Z(N.value)}</text>`})}
       </svg>
-    `}}customElements.define("trip-line",YQ);class KQ extends A{static properties={params:{attribute:!1},inverters:{attribute:!1},defaults:{attribute:!1},rules:{attribute:!1},profile:{attribute:!1},names:{attribute:!1},busy:{attribute:!1},editing:{attribute:!1},name:{state:!0},selectedUids:{state:!0},values:{state:!0},localError:{state:!0}};constructor(){super();this.params=[],this.inverters=[],this.defaults={},this.rules=[],this.profile=null,this.names={},this.busy=!1,this.editing=!1,this.name="",this.selectedUids=[],this.values={},this.localError=""}static styles=L`
+    `}}customElements.define("trip-line",KQ);class XQ extends ${static properties={params:{attribute:!1},inverters:{attribute:!1},defaults:{attribute:!1},rules:{attribute:!1},profile:{attribute:!1},names:{attribute:!1},busy:{attribute:!1},editing:{attribute:!1},name:{state:!0},selectedUids:{state:!0},values:{state:!0},localError:{state:!0}};constructor(){super();this.params=[],this.inverters=[],this.defaults={},this.rules=[],this.profile=null,this.names={},this.busy=!1,this.editing=!1,this.name="",this.selectedUids=[],this.values={},this.localError=""}static styles=L`
     :host { display: block; }
     .grid { display: grid; gap: 18px; }
     label.field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
@@ -1158,26 +1333,26 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
     button:disabled { opacity: 0.45; cursor: not-allowed; }
     .err { color: var(--err); font-size: 13px; }
     .hint { color: var(--muted); font-size: 12px; }
-  `;willUpdate(Q){if(Q.has("profile")){let Y=this.profile;this.name=Y?.id??"",this.selectedUids=[...Y?.uids??[]];let K={};for(let X of Y?.points??[])K[X.aps_code]=String(X.value);this.values=K,this.localError=""}}effectiveWritable(){if(!this.selectedUids.length)return new Set;let Q=this.selectedUids.map((K)=>new Set(this.inverters.find((X)=>X.uid===K)?.writable_codes??[])),Y=Q[0];for(let K of Q.slice(1))Y=new Set([...Y].filter((X)=>K.has(X)));return Y}targetDefault(Q){let Y=this.defaults[Q];if(Y)return{value:Y.value,source:"base"};if(!this.selectedUids.length)return;let K;for(let X of this.selectedUids){let G=this.inverters.find((q)=>q.uid===X)?.current?.[Q];if(G===void 0)return;if(K===void 0)K=G;else if(Math.abs(G-K)>0.000001)return}return K===void 0?void 0:{value:K,source:"inverter"}}effectiveValue(Q){let Y=(this.values[Q]??"").trim();if(Y!==""&&!Number.isNaN(Number(Y)))return Number(Y);return this.targetDefault(Q)?.value}isOverride(Q){let Y=(this.values[Q]??"").trim();if(Y===""||Number.isNaN(Number(Y)))return!1;let K=this.targetDefault(Q);return!K||Number(Y)!==K.value}prefill(Q){if((this.values[Q]??"").trim()!=="")return;let Y=this.targetDefault(Q);if(Y)this.setValue(Q,Z(Y.value))}outOfRange(Q){let Y=(this.values[Q]??"").trim();if(Y===""||Number.isNaN(Number(Y)))return!1;let K=this.defaults[Q];if(!K)return!1;let X=Number(Y);return K.min!==void 0&&X<K.min||K.max!==void 0&&X>K.max}label(Q){return this.names[Q.uid]||Q.model||Q.uid}toggleTarget(Q,Y){this.selectedUids=Y?[...this.selectedUids,Q]:this.selectedUids.filter((K)=>K!==Q)}setValue(Q,Y){this.values={...this.values,[Q]:Y}}groups(){let Q={};for(let K of this.params)(Q[K.group]??=[]).push(K);return[...L3,...Object.keys(Q).filter((K)=>!L3.includes(K))].filter((K)=>Q[K]?.length).map((K)=>[K,Q[K]])}save=()=>{let Q=this.effectiveWritable(),Y=this.params.filter((X)=>Q.has(X.aps_code)&&this.isOverride(X.aps_code)).map((X)=>({aps_code:X.aps_code,value:Number(this.values[X.aps_code])}));if(!this.name.trim())return void(this.localError="Profile name is required.");if(!this.selectedUids.length)return void(this.localError="Select at least one target inverter.");if(!Y.length)return void(this.localError="Change at least one parameter from its default.");if(D3(this.rules,(X)=>this.effectiveValue(X)).length)return void(this.localError="Resolve the conflicts before saving.");this.localError="";let K={id:this.name.trim(),uids:this.selectedUids,points:Y};this.dispatchEvent(new CustomEvent("save",{detail:K,bubbles:!0,composed:!0}))};cancel=()=>this.dispatchEvent(new CustomEvent("cancel",{bubbles:!0,composed:!0}));markers(Q,Y){let K=[];for(let X of this.params){if(X.group!==Q||X.unit!==Y)continue;if(X.polarity!=="under"&&X.polarity!=="over")continue;let G=this.effectiveValue(X.aps_code);if(G!==void 0)K.push({value:G,label:X.aps_code,kind:X.polarity})}return K}vizFor(Q){if(Q==="DERFreqDroop")return z`<freq-watt-chart
+  `;willUpdate(Q){if(Q.has("profile")){let Y=this.profile;this.name=Y?.id??"",this.selectedUids=[...Y?.uids??[]];let K={};for(let X of Y?.points??[])K[X.aps_code]=String(X.value);this.values=K,this.localError=""}}effectiveWritable(){if(!this.selectedUids.length)return new Set;let Q=this.selectedUids.map((K)=>new Set(this.inverters.find((X)=>X.uid===K)?.writable_codes??[])),Y=Q[0];for(let K of Q.slice(1))Y=new Set([...Y].filter((X)=>K.has(X)));return Y}targetDefault(Q){let Y=this.defaults[Q];if(Y)return{value:Y.value,source:"base"};if(!this.selectedUids.length)return;let K;for(let X of this.selectedUids){let G=this.inverters.find((J)=>J.uid===X)?.current?.[Q];if(G===void 0)return;if(K===void 0)K=G;else if(Math.abs(G-K)>0.000001)return}return K===void 0?void 0:{value:K,source:"inverter"}}effectiveValue(Q){let Y=(this.values[Q]??"").trim();if(Y!==""&&!Number.isNaN(Number(Y)))return Number(Y);return this.targetDefault(Q)?.value}isOverride(Q){let Y=(this.values[Q]??"").trim();if(Y===""||Number.isNaN(Number(Y)))return!1;let K=this.targetDefault(Q);return!K||Number(Y)!==K.value}prefill(Q){if((this.values[Q]??"").trim()!=="")return;let Y=this.targetDefault(Q);if(Y)this.setValue(Q,Z(Y.value))}outOfRange(Q){let Y=(this.values[Q]??"").trim();if(Y===""||Number.isNaN(Number(Y)))return!1;let K=this.defaults[Q];if(!K)return!1;let X=Number(Y);return K.min!==void 0&&X<K.min||K.max!==void 0&&X>K.max}label(Q){return this.names[Q.uid]||Q.model||Q.uid}toggleTarget(Q,Y){this.selectedUids=Y?[...this.selectedUids,Q]:this.selectedUids.filter((K)=>K!==Q)}setValue(Q,Y){this.values={...this.values,[Q]:Y}}groups(){let Q={};for(let K of this.params)(Q[K.group]??=[]).push(K);return[...L3,...Object.keys(Q).filter((K)=>!L3.includes(K))].filter((K)=>Q[K]?.length).map((K)=>[K,Q[K]])}save=()=>{let Q=this.effectiveWritable(),Y=this.params.filter((X)=>Q.has(X.aps_code)&&this.isOverride(X.aps_code)).map((X)=>({aps_code:X.aps_code,value:Number(this.values[X.aps_code])}));if(!this.name.trim())return void(this.localError="Profile name is required.");if(!this.selectedUids.length)return void(this.localError="Select at least one target inverter.");if(!Y.length)return void(this.localError="Change at least one parameter from its default.");if(D3(this.rules,(X)=>this.effectiveValue(X)).length)return void(this.localError="Resolve the conflicts before saving.");this.localError="";let K={id:this.name.trim(),uids:this.selectedUids,points:Y};this.dispatchEvent(new CustomEvent("save",{detail:K,bubbles:!0,composed:!0}))};cancel=()=>this.dispatchEvent(new CustomEvent("cancel",{bubbles:!0,composed:!0}));markers(Q,Y){let K=[];for(let X of this.params){if(X.group!==Q||X.unit!==Y)continue;if(X.polarity!=="under"&&X.polarity!=="over")continue;let G=this.effectiveValue(X.aps_code);if(G!==void 0)K.push({value:G,label:X.aps_code,kind:X.polarity})}return K}vizFor(Q){if(Q==="DERFreqDroop")return q`<freq-watt-chart
         .deadband=${this.effectiveValue("CA")}
         .slope=${this.effectiveValue("DD")}
         .trip=${this.effectiveValue("AF")}
         .nominal=${50}
-      ></freq-watt-chart>`;if(Q==="CrvSet"){let Y=this.markers(Q,"Hz");return Y.length?z`<trip-line unit="Hz" .nominal=${50} .markers=${Y}></trip-line>`:B}if(Q==="MustTrip"){let Y=this.markers(Q,"V"),K=this.markers(Q,"Hz");return z`
-        ${Y.length?z`<trip-line unit="V" .nominal=${230} .markers=${Y}></trip-line>`:B}
-        ${K.length?z`<trip-line unit="Hz" .nominal=${50} .markers=${K}></trip-line>`:B}
-      `}return B}renderRow(Q,Y){let K=Y.has(Q.aps_code),X=this.targetDefault(Q.aps_code),G=this.defaults[Q.aps_code],q=(this.values[Q.aps_code]??"").trim(),J=this.isOverride(Q.aps_code),H=K&&this.outOfRange(Q.aps_code),W=K?this.values[Q.aps_code]??"":X?Z(X.value):"";return z`<tr class="${K?"":"off"} ${J?"over":""}">
+      ></freq-watt-chart>`;if(Q==="CrvSet"){let Y=this.markers(Q,"Hz");return Y.length?q`<trip-line unit="Hz" .nominal=${50} .markers=${Y}></trip-line>`:B}if(Q==="MustTrip"){let Y=this.markers(Q,"V"),K=this.markers(Q,"Hz");return q`
+        ${Y.length?q`<trip-line unit="V" .nominal=${230} .markers=${Y}></trip-line>`:B}
+        ${K.length?q`<trip-line unit="Hz" .nominal=${50} .markers=${K}></trip-line>`:B}
+      `}return B}renderRow(Q,Y){let K=Y.has(Q.aps_code),X=this.targetDefault(Q.aps_code),G=this.defaults[Q.aps_code],J=(this.values[Q.aps_code]??"").trim(),z=this.isOverride(Q.aps_code),H=K&&this.outOfRange(Q.aps_code),W=K?this.values[Q.aps_code]??"":X?Z(X.value):"";return q`<tr class="${K?"":"off"} ${z?"over":""}">
       <td>
         <div class="plabel">
-          ${a9(Q.aps_code,Q.long_name)}
-          ${J?z`<span class="otag">overridden</span>`:B}
-          ${!K&&X?z`<span class="rotag">read-only</span>`:B}
+          ${e9(Q.aps_code,Q.long_name)}
+          ${z?q`<span class="otag">overridden</span>`:B}
+          ${!K&&X?q`<span class="rotag">read-only</span>`:B}
         </div>
-        <div class="pdesc">${e9(Q.aps_code)}</div>
+        <div class="pdesc">${QQ(Q.aps_code)}</div>
       </td>
       <td class="pcode">${Q.aps_code}</td>
       <td class="def">
-        ${X?z`${Z(X.value)} ${Q.unit}${X.source==="inverter"?z` <span class="src" title="from the inverter's current value">inv</span>`:B}`:"—"}
+        ${X?q`${Z(X.value)} ${Q.unit}${X.source==="inverter"?q` <span class="src" title="from the inverter's current value">inv</span>`:B}`:"—"}
       </td>
       <td class="val">
         <input
@@ -1188,10 +1363,10 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
           @input=${(U)=>this.setValue(Q.aps_code,U.target.value)}
         />
         <span class="unit">${Q.unit}</span>
-        ${K&&q!==""?z`<button class="clear" title="Clear override" @click=${()=>this.setValue(Q.aps_code,"")}>↺</button>`:B}
-        ${H?z`<span class="warn">⚠ outside base range${G?.min!==void 0?` (${Z(G.min)}–${Z(G.max)} ${Q.unit})`:""}</span>`:B}
+        ${K&&J!==""?q`<button class="clear" title="Clear override" @click=${()=>this.setValue(Q.aps_code,"")}>↺</button>`:B}
+        ${H?q`<span class="warn">⚠ outside base range${G?.min!==void 0?` (${Z(G.min)}–${Z(G.max)} ${Q.unit})`:""}</span>`:B}
       </td>
-    </tr>`}render(){let Q=this.effectiveWritable(),Y=this.selectedUids.length>0,K=Y?D3(this.rules,(X)=>this.effectiveValue(X)):[];return z`
+    </tr>`}render(){let Q=this.effectiveWritable(),Y=this.selectedUids.length>0,K=Y?D3(this.rules,(X)=>this.effectiveValue(X)):[];return q`
       <div class="grid">
         <label class="field">
           Profile name
@@ -1202,7 +1377,7 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
         <fieldset>
           <legend>Target inverters</legend>
           <div class="targets">
-            ${this.inverters.length===0?z`<span class="hint">No inverters seen yet.</span>`:this.inverters.map((X)=>z`<label class="target">
+            ${this.inverters.length===0?q`<span class="hint">No inverters seen yet.</span>`:this.inverters.map((X)=>q`<label class="target">
                     <input type="checkbox" .checked=${this.selectedUids.includes(X.uid)}
                       @change=${(G)=>this.toggleTarget(X.uid,G.target.checked)} />
                     ${this.label(X)} <span class="pcode">${X.model}</span>
@@ -1210,28 +1385,28 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
           </div>
         </fieldset>
 
-        ${!Y?z`<span class="hint">Select a target to choose editable parameters.</span>`:z`
-              ${K.length?z`<div class="conflicts">⚠ Conflicting settings — resolve to save:
-                    <ul>${K.map((X)=>z`<li>${X}</li>`)}</ul>
+        ${!Y?q`<span class="hint">Select a target to choose editable parameters.</span>`:q`
+              ${K.length?q`<div class="conflicts">⚠ Conflicting settings — resolve to save:
+                    <ul>${K.map((X)=>q`<li>${X}</li>`)}</ul>
                   </div>`:B}
 
-              ${this.groups().map(([X,G])=>{let q=s9[X];return z`<details class="group" ?open=${!t9.has(X)}>
+              ${this.groups().map(([X,G])=>{let J=t9[X];return q`<details class="group" ?open=${!a9.has(X)}>
                   <summary>
-                    <span class="gname">${q?.label??X}</span>
+                    <span class="gname">${J?.label??X}</span>
                     <span class="gcount">${G.length} setting${G.length===1?"":"s"}</span>
                   </summary>
-                  ${q?.tip?z`<div class="gdesc">${q.tip}</div>`:B}
+                  ${J?.tip?q`<div class="gdesc">${J.tip}</div>`:B}
                   <div class="viz">${this.vizFor(X)}</div>
                   <table>
                     <thead><tr><th>Setting</th><th>Code</th><th>Default</th><th>Override</th></tr></thead>
-                    <tbody>${G.map((J)=>this.renderRow(J,Q))}</tbody>
+                    <tbody>${G.map((z)=>this.renderRow(z,Q))}</tbody>
                   </table>
                 </details>`})}
 
-              ${this.selectedUids.length>1?z`<div class="hint">Greyed rows are not writable on every selected target.</div>`:B}
+              ${this.selectedUids.length>1?q`<div class="hint">Greyed rows are not writable on every selected target.</div>`:B}
             `}
 
-        ${this.localError?z`<div class="err">⚠ ${this.localError}</div>`:B}
+        ${this.localError?q`<div class="err">⚠ ${this.localError}</div>`:B}
 
         <div class="actions">
           <button class="save" @click=${this.save} ?disabled=${this.busy||K.length>0}>
@@ -1241,7 +1416,7 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
           <span class="hint">${K.length?"resolve conflicts to save":"applies to the selected inverters"}</span>
         </div>
       </div>
-    `}}customElements.define("local-site-profile-form",KQ);class XQ extends A{static properties={data:{state:!0},names:{state:!0},error:{state:!0},notice:{state:!0},baseBusy:{state:!0},overlayBusy:{state:!0},editing:{state:!0},editingExisting:{state:!0}};constructor(){super();this.data=null,this.names={},this.error="",this.notice="",this.baseBusy=!1,this.overlayBusy=!1,this.editing=null,this.editingExisting=!1}static styles=L`
+    `}}customElements.define("local-site-profile-form",XQ);class GQ extends ${static properties={data:{state:!0},names:{state:!0},error:{state:!0},notice:{state:!0},baseBusy:{state:!0},overlayBusy:{state:!0},editing:{state:!0},editingExisting:{state:!0}};constructor(){super();this.data=null,this.names={},this.error="",this.notice="",this.baseBusy=!1,this.overlayBusy=!1,this.editing=null,this.editingExisting=!1}static styles=L`
     :host { display: block; }
     .cols {
       display: grid;
@@ -1280,7 +1455,7 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
     .cardactions button { font-size: 12px; border-radius: 6px; padding: 5px 12px; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--text); }
     .cardactions button.del { color: var(--err); border-color: color-mix(in srgb, var(--err) 50%, var(--border)); }
     .empty { color: var(--muted); font-size: 13px; }
-  `;connectedCallback(){super.connectedCallback(),this.load()}async load(){try{let[Q,Y]=await Promise.all([I.profiles(),I.getSettings()]);this.data=Q,this.error=Q.error??"",this.names=Y.settings?.inverter_names??{}}catch(Q){this.error=Q.message}}invName(Q){if(this.names[Q])return this.names[Q];return this.data?.inverters.find((K)=>K.uid===Q)?.model||Q}onSelectBase=async(Q)=>{let Y=Q.detail;if(!window.confirm(`Apply base grid profile "${Y}" to every inverter? This writes grid-protection settings across the whole fleet.`))return;this.baseBusy=!0,this.notice="",this.error="";try{await I.selectBase(Y),await this.load(),this.notice=`Base profile "${Y}" applied.`}catch(K){this.error=K.message}finally{this.baseBusy=!1}};newProfile(){this.editing={id:"",uids:[],points:[]},this.editingExisting=!1,this.notice="",this.error=""}editProfile(Q){this.editing=Q,this.editingExisting=!0,this.notice="",this.error=""}onCancelEdit=()=>{this.editing=null};exportProfile(Q){let Y={id:Q.id,uids:Q.uids,points:Q.points.map((q)=>({aps_code:q.aps_code,value:q.value}))},K=new Blob([JSON.stringify(Y,null,2)],{type:"application/json"}),X=URL.createObjectURL(K),G=document.createElement("a");G.href=X,G.download=`${Q.id||"profile"}.json`,G.click(),URL.revokeObjectURL(X)}triggerImport=()=>{this.shadowRoot?.querySelector("#importfile")?.click()};onImportFile=async(Q)=>{let Y=Q.target,K=Y.files?.[0];if(Y.value="",!K)return;let X;try{X=JSON.parse(await K.text())}catch(H){this.error="Import failed: "+H.message;return}let G=d9(X);if(!G.ok){let H=G.errors.slice(0,3).join("; "),W=G.errors.length>3?` (+${G.errors.length-3} more)`:"";this.error="Import failed: "+H+W;return}this.editing=G.profile,this.editingExisting=!1,this.error="";let q=`Imported "${G.profile.id}" — review the targets and values, then Save.`,J=G.warnings.length>0?` — Note: ${G.warnings.join("; ")}`:"";this.notice=q+J};onSaveOverlay=async(Q)=>{let Y=Q.detail;if(!window.confirm(`Apply Local Site profile "${Y.id}" to ${Y.uids.length} inverter(s)? This writes grid-protection parameters to each.`))return;this.overlayBusy=!0,this.notice="",this.error="";try{let K=await I.saveOverlay(Y);this.editing=null,await this.load();let X=K.uids.length;this.notice=`Overlay "${K.id}" queued for ${X} inverter${X===1?"":"s"} — see Events for application results.`}catch(K){this.error=K.message}finally{this.overlayBusy=!1}};deleteProfile=async(Q)=>{if(!window.confirm(`Delete Local Site profile "${Q.id}" and clear it from ${Q.uids.length} inverter(s)?`))return;this.overlayBusy=!0,this.notice="",this.error="";try{let Y=await I.deleteOverlay(Q.id,Q.uids);if(this.editing?.id===Q.id)this.editing=null;await this.load(),this.reportResults(Q.id,Y.results,"cleared")}catch(Y){this.error=Y.message}finally{this.overlayBusy=!1}};reportResults(Q,Y,K="applied"){let X=Y.filter((G)=>!G.ok);if(X.length===0)this.notice=`Profile "${Q}" ${K} to ${Y.length} inverter(s).`;else{let G=K==="cleared"?"Clearing":"Applying",q=X.map((J)=>`${this.invName(J.uid)}: ${J.error||"unconfirmed"}`).join("; ");this.notice=`Profile "${Q}" saved. ${G} not confirmed on ${X.length} of ${Y.length} inverter(s) now — it is stored as the desired state and applied automatically when each inverter is next reached. ${q}`}}renderBase(){let Q=this.data?.base;return z`
+  `;connectedCallback(){super.connectedCallback(),this.load()}async load(){try{let[Q,Y]=await Promise.all([D.profiles(),D.getSettings()]);this.data=Q,this.error=Q.error??"",this.names=Y.settings?.inverter_names??{}}catch(Q){this.error=Q.message}}invName(Q){if(this.names[Q])return this.names[Q];return this.data?.inverters.find((K)=>K.uid===Q)?.model||Q}onSelectBase=async(Q)=>{let Y=Q.detail;if(!window.confirm(`Apply base grid profile "${Y}" to every inverter? This writes grid-protection settings across the whole fleet.`))return;this.baseBusy=!0,this.notice="",this.error="";try{await D.selectBase(Y),await this.load(),this.notice=`Base profile "${Y}" applied.`}catch(K){this.error=K.message}finally{this.baseBusy=!1}};newProfile(){this.editing={id:"",uids:[],points:[]},this.editingExisting=!1,this.notice="",this.error=""}editProfile(Q){this.editing=Q,this.editingExisting=!0,this.notice="",this.error=""}onCancelEdit=()=>{this.editing=null};exportProfile(Q){let Y={id:Q.id,uids:Q.uids,points:Q.points.map((J)=>({aps_code:J.aps_code,value:J.value}))},K=new Blob([JSON.stringify(Y,null,2)],{type:"application/json"}),X=URL.createObjectURL(K),G=document.createElement("a");G.href=X,G.download=`${Q.id||"profile"}.json`,G.click(),URL.revokeObjectURL(X)}triggerImport=()=>{this.shadowRoot?.querySelector("#importfile")?.click()};onImportFile=async(Q)=>{let Y=Q.target,K=Y.files?.[0];if(Y.value="",!K)return;let X;try{X=JSON.parse(await K.text())}catch(H){this.error="Import failed: "+H.message;return}let G=n9(X);if(!G.ok){let H=G.errors.slice(0,3).join("; "),W=G.errors.length>3?` (+${G.errors.length-3} more)`:"";this.error="Import failed: "+H+W;return}this.editing=G.profile,this.editingExisting=!1,this.error="";let J=`Imported "${G.profile.id}" — review the targets and values, then Save.`,z=G.warnings.length>0?` — Note: ${G.warnings.join("; ")}`:"";this.notice=J+z};onSaveOverlay=async(Q)=>{let Y=Q.detail;if(!window.confirm(`Apply Local Site profile "${Y.id}" to ${Y.uids.length} inverter(s)? This writes grid-protection parameters to each.`))return;this.overlayBusy=!0,this.notice="",this.error="";try{let K=await D.saveOverlay(Y);this.editing=null,await this.load();let X=K.uids.length;this.notice=`Overlay "${K.id}" queued for ${X} inverter${X===1?"":"s"} — see Events for application results.`}catch(K){this.error=K.message}finally{this.overlayBusy=!1}};deleteProfile=async(Q)=>{if(!window.confirm(`Delete Local Site profile "${Q.id}" and clear it from ${Q.uids.length} inverter(s)?`))return;this.overlayBusy=!0,this.notice="",this.error="";try{let Y=await D.deleteOverlay(Q.id,Q.uids);if(this.editing?.id===Q.id)this.editing=null;await this.load(),this.reportResults(Q.id,Y.results,"cleared")}catch(Y){this.error=Y.message}finally{this.overlayBusy=!1}};reportResults(Q,Y,K="applied"){let X=Y.filter((G)=>!G.ok);if(X.length===0)this.notice=`Profile "${Q}" ${K} to ${Y.length} inverter(s).`;else{let G=K==="cleared"?"Clearing":"Applying",J=X.map((z)=>`${this.invName(z.uid)}: ${z.error||"unconfirmed"}`).join("; ");this.notice=`Profile "${Q}" saved. ${G} not confirmed on ${X.length} of ${Y.length} inverter(s) now — it is stored as the desired state and applied automatically when each inverter is next reached. ${J}`}}renderBase(){let Q=this.data?.base;return q`
       <div class="panel">
         <h2>Base grid profile</h2>
         <grid-profile-form
@@ -1291,18 +1466,18 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
           @apply=${this.onSelectBase}
         ></grid-profile-form>
       </div>
-    `}renderLocalSite(){let Q=this.data;return z`
+    `}renderLocalSite(){let Q=this.data;return q`
       <div class="panel">
         <div class="row">
           <h2 style="margin:0">Local Site profiles</h2>
-          ${this.editing===null?z`<div class="hdr-actions">
+          ${this.editing===null?q`<div class="hdr-actions">
                 <button class="ghost" @click=${this.triggerImport}>Import</button>
                 <button class="primary" @click=${()=>this.newProfile()}>+ New profile</button>
               </div>`:B}
         </div>
         <input id="importfile" type="file" accept=".json,application/json" hidden @change=${this.onImportFile} />
 
-        ${this.editing!==null?z`<local-site-profile-form
+        ${this.editing!==null?q`<local-site-profile-form
               .params=${Q?.params??[]}
               .inverters=${Q?.inverters??[]}
               .defaults=${Q?.base_defaults??{}}
@@ -1315,12 +1490,12 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
               @cancel=${this.onCancelEdit}
             ></local-site-profile-form>`:this.renderCards()}
       </div>
-    `}renderCards(){let Q=this.data?.overlays??[];if(Q.length===0)return z`<div class="empty">No Local Site profiles yet. Create one to override grid-protection parameters on specific inverters.</div>`;return z`<div class="cards">
-      ${Q.map((Y)=>z`<div class="card">
+    `}renderCards(){let Q=this.data?.overlays??[];if(Q.length===0)return q`<div class="empty">No Local Site profiles yet. Create one to override grid-protection parameters on specific inverters.</div>`;return q`<div class="cards">
+      ${Q.map((Y)=>q`<div class="card">
           <div class="title">${Y.id}</div>
           <div class="meta">Targets: ${Y.uids.map((K)=>this.invName(K)).join(", ")||"none"}</div>
           <div class="chips">
-            ${Y.points.map((K)=>z`<span class="chip">${K.aps_code} = ${Z(K.value)}${K.unit?` ${K.unit}`:""}</span>`)}
+            ${Y.points.map((K)=>q`<span class="chip">${K.aps_code} = ${Z(K.value)}${K.unit?` ${K.unit}`:""}</span>`)}
           </div>
           <div class="cardactions">
             <button @click=${()=>this.editProfile(Y)}>Edit</button>
@@ -1328,14 +1503,14 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
             <button class="del" @click=${()=>this.deleteProfile(Y)}>Delete</button>
           </div>
         </div>`)}
-    </div>`}render(){return z`
-      ${this.notice?z`<div class="banner ok">${this.notice}</div>`:B}
-      ${this.error?z`<div class="banner err">⚠ ${this.error}</div>`:B}
-      ${this.data===null?z`<div class="panel"><div class="loading">Loading…</div></div>`:z`<div class="cols">
+    </div>`}render(){return q`
+      ${this.notice?q`<div class="banner ok">${this.notice}</div>`:B}
+      ${this.error?q`<div class="banner err">⚠ ${this.error}</div>`:B}
+      ${this.data===null?q`<div class="panel"><div class="loading">Loading…</div></div>`:q`<div class="cols">
             <div>${this.renderLocalSite()}</div>
             <div>${this.renderBase()}</div>
           </div>`}
-    `}}customElements.define("profiles-view",XQ);class JQ extends A{static properties={settings:{attribute:!1},hostname:{attribute:!1},confirming:{state:!0},pendingDetail:{state:!0},pwdError:{state:!0},pwdBusy:{state:!0},typedMac:{state:!0},typedPan:{state:!0},typedChannel:{state:!0}};constructor(){super();this.settings={ecu_id:"",mac:"",pan_override:"",zigbee_type:"apsystems"},this.hostname="",this.confirming=!1,this.pendingDetail=null,this.pwdError="",this.pwdBusy=!1,this.typedMac="",this.typedPan="",this.typedChannel=""}willUpdate(Q){if(Q.has("settings"))this.typedMac=this.settings.mac??"",this.typedPan=this.settings.pan_override??"",this.typedChannel=GQ(this.settings.channel)}static styles=L`
+    `}}customElements.define("profiles-view",GQ);var qQ=16;class WQ extends ${static properties={settings:{attribute:!1},hostname:{attribute:!1},confirming:{state:!0},pendingDetail:{state:!0},pwdError:{state:!0},pwdBusy:{state:!0},typedMac:{state:!0},typedPan:{state:!0},typedChannel:{state:!0}};constructor(){super();this.settings={ecu_id:"",mac:"",pan_override:"",zigbee_type:"apsystems"},this.hostname="",this.confirming=!1,this.pendingDetail=null,this.pwdError="",this.pwdBusy=!1,this.typedMac="",this.typedPan="",this.typedChannel=""}willUpdate(Q){if(Q.has("settings"))this.typedMac=this.settings.mac??"",this.typedPan=this.settings.pan_override??"",this.typedChannel=BQ(this.settings.channel)}static styles=L`
     :host { display: block; }
     .grid { display: grid; gap: 18px; max-width: 460px; }
     label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
@@ -1446,7 +1621,7 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
     .dialog button.primary { background: var(--accent); color: #04121a; border: none; }
     .dialog button.secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); }
     .dialog button:disabled { opacity: 0.6; cursor: default; }
-  `;currentDetail(){let Q=this.shadowRoot,Y=(K)=>(Q?.querySelector(`#${K}`)?.value??"").trim();return{ecu_id:Y("ecu_id"),mac:Y("mac"),pan_override:Y("pan_override"),zigbee_type:Y("zigbee_type"),channel:w8(Y("channel"))}}computeEffectivePAN(Q){let Y=Z8(Q.pan_override);if(Y)return Y;let K=Q.mac||this.settings.effective?.mac||"";return R8(K)}sensitiveChange(Q){return Q.mac!==(this.settings.mac??"")||Q.pan_override!==(this.settings.pan_override??"")}macInputInvalid(Q){if(Q.mac===(this.settings.mac??""))return!1;return Q.mac!==""&&!F3(Q.mac)}save=()=>{if(qQ(this.typedChannel))return;let Q=this.currentDetail(),Y=this.sensitiveChange(Q);if(Y&&this.macInputInvalid(Q))return;let K=(this.settings.effective?.pan??"").toUpperCase();if(Y&&!K)return;let X=this.computeEffectivePAN(Q);if(K&&X&&X!==K){this.pendingDetail=Q,this.pwdError="",this.confirming=!0,queueMicrotask(()=>{this.shadowRoot?.querySelector("#confirm_pwd")?.focus()});return}this.dispatchSave(Q)};dispatchSave(Q){this.dispatchEvent(new CustomEvent("save",{detail:Q,bubbles:!0,composed:!0}))}confirmCancel=()=>{this.confirming=!1,this.pendingDetail=null,this.pwdError="",this.pwdBusy=!1};confirmSubmit=async()=>{if(this.pwdBusy)return;let Y=this.shadowRoot?.querySelector("#confirm_pwd")?.value??"";if(!Y){this.pwdError="Password required.";return}this.pwdBusy=!0,this.pwdError="";try{if(!await I.verifyPassword(Y)){this.pwdError="Wrong password.";return}let X=this.pendingDetail;if(this.confirming=!1,this.pendingDetail=null,X)this.dispatchSave(X)}catch(K){this.pwdError=K.message||"Verification failed."}finally{this.pwdBusy=!1}};onPwdKey=(Q)=>{if(Q.key==="Enter")Q.preventDefault(),this.confirmSubmit()};render(){let Q=this.settings,Y=Q.effective??{},K="e.g. the serial on the device label",X=Q.ecu_id||this.hostname||"",G=Y.mac?`effective: ${Y.mac}`:"",q=Q.pan_override?Y.pan?`effective: ${Y.pan}`:"":Y.pan?`effective: ${Y.pan} (from MAC)`:"",J=Q.zigbee_type?"":"effective: apsystems (default)",H=Y.channel?`effective: ${Y.channel}`:"",W=this.typedMac!==(Q.mac??""),U=this.typedPan!==(Q.pan_override??""),j=W||U,$=W&&this.typedMac!==""&&!F3(this.typedMac),F=!(Y.pan??""),D=qQ(this.typedChannel),P=D||j&&($||F),N="";if($)N="MAC must be 6 colon-separated hex octets (e.g. 80:97:1b:03:0d:ce).";else if(j&&F)N="Cannot resolve effective PAN; refusing to save MAC / PAN-override changes.";return z`
+  `;currentDetail(){let Q=this.shadowRoot,Y=(K)=>(Q?.querySelector(`#${K}`)?.value??"").trim();return{ecu_id:Y("ecu_id"),mac:Y("mac"),pan_override:Y("pan_override"),zigbee_type:Y("zigbee_type"),channel:T8(Y("channel"))}}computeEffectivePAN(Q){let Y=JQ(Q.pan_override);if(Y)return Y;return zQ(Q.mac||"")}effectivePAN(){return this.computeEffectivePAN(this.settings)}effectiveChannel(){let Q=this.settings.channel;return Q&&Q>0?Q:qQ}sensitiveChange(Q){return Q.mac!==(this.settings.mac??"")||Q.pan_override!==(this.settings.pan_override??"")}macInputInvalid(Q){if(Q.mac===(this.settings.mac??""))return!1;return Q.mac!==""&&!F3(Q.mac)}save=()=>{if(HQ(this.typedChannel))return;let Q=this.currentDetail(),Y=this.sensitiveChange(Q);if(Y&&this.macInputInvalid(Q))return;let K=this.effectivePAN(),X=this.computeEffectivePAN(Q);if(Y&&!X)return;if(K&&X&&X!==K){this.pendingDetail=Q,this.pwdError="",this.confirming=!0,queueMicrotask(()=>{this.shadowRoot?.querySelector("#confirm_pwd")?.focus()});return}this.dispatchSave(Q)};dispatchSave(Q){this.dispatchEvent(new CustomEvent("save",{detail:Q,bubbles:!0,composed:!0}))}confirmCancel=()=>{this.confirming=!1,this.pendingDetail=null,this.pwdError="",this.pwdBusy=!1};confirmSubmit=async()=>{if(this.pwdBusy)return;let Y=this.shadowRoot?.querySelector("#confirm_pwd")?.value??"";if(!Y){this.pwdError="Password required.";return}this.pwdBusy=!0,this.pwdError="";try{if(!await D.verifyPassword(Y)){this.pwdError="Wrong password.";return}let X=this.pendingDetail;if(this.confirming=!1,this.pendingDetail=null,X)this.dispatchSave(X)}catch(K){this.pwdError=K.message||"Verification failed."}finally{this.pwdBusy=!1}};onPwdKey=(Q)=>{if(Q.key==="Enter")Q.preventDefault(),this.confirmSubmit()};render(){let Q=this.settings,Y="e.g. the serial on the device label",K=Q.ecu_id||this.hostname||"",X=this.effectivePAN(),G=this.effectiveChannel(),J=Q.mac?`effective PAN source: ${Q.mac}`:"",z=Q.pan_override?X?`effective: ${X}`:"":X?`effective: ${X} (from MAC)`:"",H=Q.zigbee_type?"":"effective: apsystems (default)",W=`effective: ${G}`,U=this.typedMac!==(Q.mac??""),j=this.typedPan!==(Q.pan_override??""),A=U||j,F=U&&this.typedMac!==""&&!F3(this.typedMac),I=!!JQ(this.typedPan)||!!zQ(this.typedMac),P=A&&!I,N=HQ(this.typedChannel),h=N||A&&(F||P),x="";if(F)x="MAC must be 6 colon-separated hex octets (e.g. 80:97:1b:03:0d:ce).";else if(A&&P)x="Cannot resolve effective PAN; refusing to save MAC / PAN-override changes.";return q`
       <div class="grid">
         <label>
           ECU ID
@@ -1454,9 +1629,9 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
             id="ecu_id"
             type="text"
             placeholder=${"e.g. the serial on the device label"}
-            .value=${X}
+            .value=${K}
           />
-          ${!Q.ecu_id?z`<div class="hint">Recommended: use the serial on the device label.</div>`:B}
+          ${!Q.ecu_id?q`<div class="hint">Recommended: use the serial on the device label.</div>`:B}
         </label>
         <label>
           MAC
@@ -1468,8 +1643,8 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
             .value=${Q.mac??""}
             @input=${this.onMacInput}
           />
-          ${G?z`<div class="hint">${G}</div>`:B}
-          ${$?z`<div class="err-inline">Use colon-separated hex (e.g. 80:97:1b:03:0d:ce).</div>`:B}
+          ${J?q`<div class="hint">${J}</div>`:B}
+          ${F?q`<div class="err-inline">Use colon-separated hex (e.g. 80:97:1b:03:0d:ce).</div>`:B}
         </label>
         <label>
           PAN override
@@ -1480,7 +1655,7 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
             .value=${Q.pan_override??""}
             @input=${this.onPanInput}
           />
-          ${q?z`<div class="hint">${q}</div>`:B}
+          ${z?q`<div class="hint">${z}</div>`:B}
         </label>
         <label>
           ZigBee channel
@@ -1490,12 +1665,12 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
             min="11"
             max="26"
             step="1"
-            placeholder="auto (16)"
-            .value=${GQ(Q.channel)}
+            placeholder=${`auto (${qQ})`}
+            .value=${BQ(Q.channel)}
             @input=${this.onChannelInput}
           />
-          ${H?z`<div class="hint">${H}</div>`:B}
-          ${D?z`<div class="err-inline">Channel must be empty (auto) or an integer 11–26.</div>`:B}
+          ${W?q`<div class="hint">${W}</div>`:B}
+          ${N?q`<div class="err-inline">Channel must be empty (auto) or an integer 11–26.</div>`:B}
         </label>
         <label>
           ZigBee type
@@ -1503,17 +1678,17 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
             <option value="apsystems">apsystems</option>
             <option value="general">general</option>
           </select>
-          ${J?z`<div class="hint">${J}</div>`:B}
+          ${H?q`<div class="hint">${H}</div>`:B}
         </label>
-        ${N?z`<div class="banner err">${N}</div>`:B}
+        ${x?q`<div class="banner err">${x}</div>`:B}
         <div class="actions">
-          <button class="save" ?disabled=${P} @click=${this.save}>
+          <button class="save" ?disabled=${h} @click=${this.save}>
             Save
           </button>
         </div>
       </div>
       ${this.confirming?this.renderDialog():B}
-    `}onMacInput=(Q)=>{this.typedMac=Q.target.value.trim()};onPanInput=(Q)=>{this.typedPan=Q.target.value.trim()};onChannelInput=(Q)=>{this.typedChannel=Q.target.value.trim()};renderDialog(){let Q=(this.settings.effective?.pan??"").toUpperCase(),Y=this.pendingDetail?this.computeEffectivePAN(this.pendingDetail):"",K=!!this.pendingDetail&&(this.pendingDetail.mac??"")!==(this.settings.mac??"");return z`
+    `}onMacInput=(Q)=>{this.typedMac=Q.target.value.trim()};onPanInput=(Q)=>{this.typedPan=Q.target.value.trim()};onChannelInput=(Q)=>{this.typedChannel=Q.target.value.trim()};renderDialog(){let Q=this.effectivePAN(),Y=this.pendingDetail?this.computeEffectivePAN(this.pendingDetail):"",K=!!this.pendingDetail&&(this.pendingDetail.mac??"")!==(this.settings.mac??"");return q`
       <div class="backdrop" @click=${this.onBackdropClick}>
         <div class="dialog" role="dialog" aria-modal="true" @click=${this.stop}>
           <h3>Confirm PAN change</h3>
@@ -1521,7 +1696,7 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
             Effective PAN ${Q||"—"} → ${Y||"—"}. Inverters bonded to
             ${Q||"the current PAN"} may stop responding.
           </p>
-          ${K?z`<p class="warn">
+          ${K?q`<p class="warn">
                 Applying a new MAC drops the network for a few seconds, up to
                 ~15 s if the kernel is slow. Your browser may reconnect
                 automatically; if not, refresh.
@@ -1534,7 +1709,7 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
             @keydown=${this.onPwdKey}
             ?disabled=${this.pwdBusy}
           />
-          ${this.pwdError?z`<div class="err">${this.pwdError}</div>`:B}
+          ${this.pwdError?q`<div class="err">${this.pwdError}</div>`:B}
           <div class="row">
             <button class="secondary" @click=${this.confirmCancel} ?disabled=${this.pwdBusy}>
               Cancel
@@ -1545,7 +1720,7 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
           </div>
         </div>
       </div>
-    `}onBackdropClick=()=>this.confirmCancel();stop=(Q)=>Q.stopPropagation()}function Z8(Q){let Y=(Q||"").trim().replace(/^0x/i,"");if(!Y)return"";if(!/^[0-9a-fA-F]{1,4}$/.test(Y))return"";return Y.toUpperCase().padStart(4,"0")}function R8(Q){let Y=(Q||"").trim();if(!Y||!F3(Y))return"";return Y.replace(/:/g,"").slice(-4).toUpperCase()}function F3(Q){return/^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$/.test(Q)}function GQ(Q){return Q&&Q>0?String(Q):""}function w8(Q){let Y=(Q||"").trim();if(!Y)return 0;let K=Number(Y);return Number.isInteger(K)?K:0}function qQ(Q){let Y=(Q||"").trim();if(!Y)return!1;let K=Number(Y);if(!Number.isInteger(K))return!0;return K<11||K>26}customElements.define("settings-form",JQ);class zQ extends A{static properties={pwError:{state:!0},pwNotice:{state:!0},pwBusy:{state:!0},recError:{state:!0},recBusy:{state:!0},newCode:{state:!0}};constructor(){super();this.pwError="",this.pwNotice="",this.pwBusy=!1,this.recError="",this.recBusy=!1,this.newCode=""}static styles=L`
+    `}onBackdropClick=()=>this.confirmCancel();stop=(Q)=>Q.stopPropagation()}function JQ(Q){let Y=(Q||"").trim().replace(/^0x/i,"");if(!Y)return"";if(!/^[0-9a-fA-F]{1,4}$/.test(Y))return"";return Y.toUpperCase().padStart(4,"0")}function zQ(Q){let Y=(Q||"").trim();if(!Y||!F3(Y))return"";return Y.replace(/:/g,"").slice(-4).toUpperCase()}function F3(Q){return/^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$/.test(Q)}function BQ(Q){return Q&&Q>0?String(Q):""}function T8(Q){let Y=(Q||"").trim();if(!Y)return 0;let K=Number(Y);return Number.isInteger(K)?K:0}function HQ(Q){let Y=(Q||"").trim();if(!Y)return!1;let K=Number(Y);if(!Number.isInteger(K))return!0;return K<11||K>26}customElements.define("settings-form",WQ);class UQ extends ${static properties={pwError:{state:!0},pwNotice:{state:!0},pwBusy:{state:!0},recError:{state:!0},recBusy:{state:!0},newCode:{state:!0}};constructor(){super();this.pwError="",this.pwNotice="",this.pwBusy=!1,this.recError="",this.recBusy=!1,this.newCode=""}static styles=L`
     :host { display: block; }
     h3 { font-size: 13px; margin: 0 0 12px; color: var(--text); }
     .section + .section { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
@@ -1590,7 +1765,7 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
       user-select: all;
       margin-top: 12px;
     }
-  `;val(Q){return this.renderRoot.querySelector(`#${Q}`)?.value??""}clear(Q){let Y=this.renderRoot.querySelector(`#${Q}`);if(Y)Y.value=""}changePassword=async(Q)=>{if(Q.preventDefault(),this.pwBusy)return;if(this.pwError="",this.pwNotice="",this.val("new")!==this.val("new2")){this.pwError="New passwords do not match.";return}this.pwBusy=!0;try{await I.changePassword(this.val("cur"),this.val("new")),this.pwNotice="Password changed.",this.clear("cur"),this.clear("new"),this.clear("new2")}catch(Y){this.pwError=Y.message||"failed"}finally{this.pwBusy=!1}};regenerate=async()=>{if(this.recBusy)return;this.recError="",this.newCode="",this.recBusy=!0;try{let Q=await I.regenerateRecovery();this.newCode=Q.recovery_code}catch(Q){this.recError=Q.message||"failed"}finally{this.recBusy=!1}};render(){return z`
+  `;val(Q){return this.renderRoot.querySelector(`#${Q}`)?.value??""}clear(Q){let Y=this.renderRoot.querySelector(`#${Q}`);if(Y)Y.value=""}changePassword=async(Q)=>{if(Q.preventDefault(),this.pwBusy)return;if(this.pwError="",this.pwNotice="",this.val("new")!==this.val("new2")){this.pwError="New passwords do not match.";return}this.pwBusy=!0;try{await D.changePassword(this.val("cur"),this.val("new")),this.pwNotice="Password changed.",this.clear("cur"),this.clear("new"),this.clear("new2")}catch(Y){this.pwError=Y.message||"failed"}finally{this.pwBusy=!1}};regenerate=async()=>{if(this.recBusy)return;this.recError="",this.newCode="",this.recBusy=!0;try{let Q=await D.regenerateRecovery();this.newCode=Q.recovery_code}catch(Q){this.recError=Q.message||"failed"}finally{this.recBusy=!1}};render(){return q`
       <div class="section">
         <h3>Change password</h3>
         <form @submit=${this.changePassword}>
@@ -1603,8 +1778,8 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
           <button class="primary" type="submit" ?disabled=${this.pwBusy}>
             ${this.pwBusy?"…":"Change password"}
           </button>
-          ${this.pwNotice?z`<div class="banner ok">${this.pwNotice}</div>`:B}
-          ${this.pwError?z`<div class="banner err">⚠ ${this.pwError}</div>`:B}
+          ${this.pwNotice?q`<div class="banner ok">${this.pwNotice}</div>`:B}
+          ${this.pwError?q`<div class="banner err">⚠ ${this.pwError}</div>`:B}
         </form>
       </div>
 
@@ -1617,11 +1792,11 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
         <button class="secondary" type="button" @click=${this.regenerate} ?disabled=${this.recBusy}>
           ${this.recBusy?"…":"Generate new recovery code"}
         </button>
-        ${this.newCode?z`<div class="code">${this.newCode}</div>
+        ${this.newCode?q`<div class="code">${this.newCode}</div>
               <p class="muted" style="margin-top:8px">Write this down now — it won't be shown again.</p>`:B}
-        ${this.recError?z`<div class="banner err">⚠ ${this.recError}</div>`:B}
+        ${this.recError?q`<div class="banner err">⚠ ${this.recError}</div>`:B}
       </div>
-    `}}customElements.define("account-security-form",zQ);class BQ extends A{static properties={settings:{state:!0},hostname:{state:!0},error:{state:!0},notice:{state:!0},loading:{state:!0},saving:{state:!0}};constructor(){super();this.settings=null,this.hostname="",this.error="",this.notice="",this.loading=!1,this.saving=!1}static styles=L`
+    `}}customElements.define("account-security-form",UQ);class jQ extends ${static properties={settings:{state:!0},hostname:{state:!0},error:{state:!0},notice:{state:!0},loading:{state:!0},saving:{state:!0}};constructor(){super();this.settings=null,this.hostname="",this.error="",this.notice="",this.loading=!1,this.saving=!1}static styles=L`
     :host { display: block; }
     .panel {
       background: var(--surface);
@@ -1636,12 +1811,12 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
     .banner.ok { color: var(--ok); border: 1px solid var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
     .banner.err { color: var(--err); border: 1px solid var(--err); background: color-mix(in srgb, var(--err) 12%, transparent); }
     .loading { color: var(--muted); font-size: 13px; }
-  `;connectedCallback(){super.connectedCallback(),this.load(),this.loadHostname()}async load(){this.loading=!0;try{let Q=await I.getSettings();this.settings=Q.settings??null,this.error=Q.error??""}catch(Q){this.error=Q.message}finally{this.loading=!1}}async loadHostname(){try{let Q=await I.system();this.hostname=Q?.ecu?.hostname??""}catch{this.hostname=""}}onSave=async(Q)=>{this.saving=!0,this.notice="",this.error="";try{this.settings=await I.saveSettings(Q.detail),this.notice="Settings saved."}catch(Y){this.error=Y.message}finally{this.saving=!1,await this.load()}};render(){return z`
+  `;connectedCallback(){super.connectedCallback(),this.load(),this.loadHostname()}async load(){this.loading=!0;try{let Q=await D.getSettings();this.settings=Q.settings??null,this.error=Q.error??""}catch(Q){this.error=Q.message}finally{this.loading=!1}}async loadHostname(){try{let Q=await D.system();this.hostname=Q?.ecu?.hostname??""}catch{this.hostname=""}}onSave=async(Q)=>{this.saving=!0,this.notice="",this.error="";try{this.settings=await D.saveSettings(Q.detail),this.notice="Settings saved."}catch(Y){this.error=Y.message}finally{this.saving=!1,await this.load()}};render(){return q`
       <div class="panel">
         <h2>ECU settings</h2>
-        ${this.notice?z`<div class="banner ok">${this.notice}</div>`:B}
-        ${this.error?z`<div class="banner err">⚠ ${this.error}</div>`:B}
-        ${this.loading&&!this.settings?z`<div class="loading">Loading…</div>`:z`<settings-form
+        ${this.notice?q`<div class="banner ok">${this.notice}</div>`:B}
+        ${this.error?q`<div class="banner err">⚠ ${this.error}</div>`:B}
+        ${this.loading&&!this.settings?q`<div class="loading">Loading…</div>`:q`<settings-form
               .settings=${this.settings??{ecu_id:"",mac:"",pan_override:"",zigbee_type:"apsystems"}}
               .hostname=${this.hostname}
               @save=${this.onSave}
@@ -1651,7 +1826,7 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
         <h2>Account &amp; security</h2>
         <account-security-form></account-security-form>
       </div>
-    `}}customElements.define("settings-view",BQ);class HQ extends A{static properties={items:{attribute:!1},route:{type:String},open:{type:Boolean}};constructor(){super();this.items=[],this.route="dashboard",this.open=!1}close=()=>{this.dispatchEvent(new CustomEvent("close",{bubbles:!0,composed:!0}))};static styles=L`
+    `}}customElements.define("settings-view",jQ);class $Q extends ${static properties={items:{attribute:!1},route:{type:String},open:{type:Boolean}};constructor(){super();this.items=[],this.route="dashboard",this.open=!1}close=()=>{this.dispatchEvent(new CustomEvent("close",{bubbles:!0,composed:!0}))};static styles=L`
     :host { display: block; height: 100%; }
     nav {
       height: 100%;
@@ -1698,17 +1873,17 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
       nav.open { transform: translateX(0); box-shadow: 4px 0 32px rgba(0, 0, 0, 0.5); }
       .scrim { display: block; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); z-index: 20; }
     }
-  `;render(){return z`
+  `;render(){return q`
       <nav class=${this.open?"open":""}>
         <div class="brand">ECU CONSOLE</div>
-        ${this.items.map((Q)=>z`<a
+        ${this.items.map((Q)=>q`<a
             class="item ${this.route===Q.id?"active":""}"
             href="#/${Q.id}"
             @click=${this.close}
           ><span class="ic">${Q.icon}</span>${Q.label}</a>`)}
       </nav>
-      ${this.open?z`<div class="scrim" @click=${this.close}></div>`:B}
-    `}}customElements.define("app-nav",HQ);var I3=[{id:"dashboard",label:"Dashboard",icon:"▮▮"},{id:"inverters",label:"Inverters",icon:"⌁"},{id:"alarms",label:"Alarms",icon:"!"},{id:"events",label:"Events",icon:"≣"},{id:"profiles",label:"Profiles",icon:"⛭"},{id:"settings",label:"Settings",icon:"⚙"}];class WQ extends A{static properties={ready:{state:!0},authed:{state:!0},configured:{state:!0},route:{state:!0},fleet:{state:!0},system:{state:!0},names:{state:!0},customProfiles:{state:!0},navOpen:{state:!0}};closeSSE=null;sysTimer=null;settingsCache=null;constructor(){super();this.ready=!1,this.authed=!1,this.configured=!0,this.route="dashboard",this.fleet=null,this.system=null,this.names={},this.customProfiles={},this.navOpen=!1}static styles=L`
+      ${this.open?q`<div class="scrim" @click=${this.close}></div>`:B}
+    `}}customElements.define("app-nav",$Q);var I3=[{id:"dashboard",label:"Dashboard",icon:"▮▮"},{id:"inverters",label:"Inverters",icon:"⌁"},{id:"alarms",label:"Alarms",icon:"!"},{id:"events",label:"Events",icon:"≣"},{id:"profiles",label:"Profiles",icon:"⛭"},{id:"settings",label:"Settings",icon:"⚙"}];class AQ extends ${static properties={ready:{state:!0},authed:{state:!0},configured:{state:!0},route:{state:!0},fleet:{state:!0},system:{state:!0},names:{state:!0},customProfiles:{state:!0},navOpen:{state:!0}};closeSSE=null;sysTimer=null;settingsCache=null;constructor(){super();this.ready=!1,this.authed=!1,this.configured=!0,this.route="dashboard",this.fleet=null,this.system=null,this.names={},this.customProfiles={},this.navOpen=!1}static styles=L`
     :host { display: block; }
     .layout { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
     main { padding: 24px 28px; }
@@ -1760,16 +1935,16 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
       button.hamburger { display: inline-flex; }
       main { padding: 18px 16px; }
     }
-  `;connectedCallback(){super.connectedCallback(),window.addEventListener("hashchange",this.onHash),this.onHash(),this.init()}disconnectedCallback(){super.disconnectedCallback(),window.removeEventListener("hashchange",this.onHash),this.stopStreams()}onHash=()=>{let Q=(location.hash.replace(/^#\/?/,"")||"dashboard").split("/")[0];if(this.route=I3.some((Y)=>Y.id===Q)?Q:"dashboard",this.navOpen=!1,this.route==="dashboard"&&this.authed)this.fetchOverlays()};async init(){try{let Q=await I.authStatus();if(this.configured=Q.configured,this.authed=Q.authenticated,this.authed)this.startStreams()}catch{}finally{this.ready=!0}}onAuthed=async()=>{this.authed=!0,this.configured=!0,this.startStreams()};logout=async()=>{try{await I.logout()}catch{}this.authed=!1,this.stopStreams(),this.fleet=null,this.system=null};startStreams(){this.stopStreams(),this.closeSSE=p3((Y)=>{this.fleet=Y});let Q=()=>I.system().then((Y)=>this.system=Y).catch(()=>{});Q(),this.sysTimer=setInterval(Q,5000),this.fetchSettings(),this.fetchOverlays()}async fetchSettings(){try{let Q=await I.getSettings();if(Q.settings)this.settingsCache=Q.settings,this.names=Q.settings.inverter_names??{}}catch{}}async fetchOverlays(){try{let Q=await I.overlays(),Y={};for(let K of Q)for(let X of K.uids)Y[X]=K.id;this.customProfiles=Y}catch{}}onRename=async(Q)=>{let{uid:Y,name:K}=Q.detail,X=this.settingsCache??{ecu_id:"",mac:"",pan_override:"",zigbee_type:""},G={...X.inverter_names??{}};if(K.trim())G[Y]=K.trim();else delete G[Y];let q={...X,inverter_names:G};try{await I.saveSettings(q),this.settingsCache=q,this.names=G}catch{}};stopStreams(){if(this.closeSSE?.(),this.closeSSE=null,this.sysTimer)clearInterval(this.sysTimer);this.sysTimer=null}activeView(){switch(this.route){case"inverters":return z`<inverters-view
+  `;connectedCallback(){super.connectedCallback(),window.addEventListener("hashchange",this.onHash),this.onHash(),this.init()}disconnectedCallback(){super.disconnectedCallback(),window.removeEventListener("hashchange",this.onHash),this.stopStreams()}onHash=()=>{let Q=(location.hash.replace(/^#\/?/,"")||"dashboard").split("/")[0];if(this.route=I3.some((Y)=>Y.id===Q)?Q:"dashboard",this.navOpen=!1,this.route==="dashboard"&&this.authed)this.fetchOverlays()};async init(){try{let Q=await D.authStatus();if(this.configured=Q.configured,this.authed=Q.authenticated,this.authed)this.startStreams()}catch{}finally{this.ready=!0}}onAuthed=async()=>{this.authed=!0,this.configured=!0,this.startStreams()};logout=async()=>{try{await D.logout()}catch{}this.authed=!1,this.stopStreams(),this.fleet=null,this.system=null};startStreams(){this.stopStreams(),this.closeSSE=p3((Y)=>{this.fleet=Y});let Q=()=>D.system().then((Y)=>this.system=Y).catch(()=>{});Q(),this.sysTimer=setInterval(Q,5000),this.fetchSettings(),this.fetchOverlays()}async fetchSettings(){try{let Q=await D.getSettings();if(Q.settings)this.settingsCache=Q.settings,this.names=Q.settings.inverter_names??{}}catch{}}async fetchOverlays(){try{let Q=await D.overlays(),Y={};for(let K of Q)for(let X of K.uids)Y[X]=K.id;this.customProfiles=Y}catch{}}onRename=async(Q)=>{let{uid:Y,name:K}=Q.detail,X=this.settingsCache??{ecu_id:"",mac:"",pan_override:"",zigbee_type:""},G={...X.inverter_names??{}};if(K.trim())G[Y]=K.trim();else delete G[Y];let J={...X,inverter_names:G};try{await D.saveSettings(J),this.settingsCache=J,this.names=G}catch{}};stopStreams(){if(this.closeSSE?.(),this.closeSSE=null,this.sysTimer)clearInterval(this.sysTimer);this.sysTimer=null}activeView(){switch(this.route){case"inverters":return q`<inverters-view
           .fleet=${this.fleet}
           .names=${this.names}
           @rename=${this.onRename}
-        ></inverters-view>`;case"alarms":return z`<alarms-view .fleet=${this.fleet}></alarms-view>`;case"events":return z`<events-view></events-view>`;case"profiles":return z`<profiles-view></profiles-view>`;case"settings":return z`<settings-view></settings-view>`;default:return z`<dashboard-view
+        ></inverters-view>`;case"alarms":return q`<alarms-view .fleet=${this.fleet}></alarms-view>`;case"events":return q`<events-view></events-view>`;case"profiles":return q`<profiles-view></profiles-view>`;case"settings":return q`<settings-view></settings-view>`;default:return q`<dashboard-view
           .fleet=${this.fleet}
           .system=${this.system}
           .names=${this.names}
           .profiles=${this.customProfiles}
-        ></dashboard-view>`}}render(){if(!this.ready)return B;if(!this.authed)return z`<login-view .configured=${this.configured} @authed=${this.onAuthed}></login-view>`;let Q=I3.find((K)=>K.id===this.route)?.label??"Dashboard",Y=this.system?.invdriver_connected??!1;return z`
+        ></dashboard-view>`}}render(){if(!this.ready)return B;if(!this.authed)return q`<login-view .configured=${this.configured} @authed=${this.onAuthed}></login-view>`;let Q=I3.find((K)=>K.id===this.route)?.label??"Dashboard",Y=this.system?.invdriver_connected??!1;return q`
       <div class="layout">
         <app-nav
           .items=${I3}
@@ -1794,4 +1969,4 @@ Enter the new PAN (1–4 hex digits, e.g. 0DCE):`);if(Q===null)return;let Y=Q.tr
           ${this.activeView()}
         </main>
       </div>
-    `}}customElements.define("ecu-app",WQ);
+    `}}customElements.define("ecu-app",AQ);

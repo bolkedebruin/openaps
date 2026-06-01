@@ -16,9 +16,6 @@ import (
 // 80:97:1b:03:0d:ce); case-insensitive.
 var macPattern = regexp.MustCompile(`^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$`)
 
-// panPattern matches 1-4 hex digits (a 16-bit PAN id, e.g. "0DCE").
-var panPattern = regexp.MustCompile(`^[0-9a-fA-F]{1,4}$`)
-
 // maxEcuIDLen bounds the operator's free-form ECU identifier;
 // maxNameLen bounds each inverter label.
 const (
@@ -142,15 +139,17 @@ func (h *Handler) applier() func(ctx context.Context, mac string) error {
 	return ApplyMAC
 }
 
-// respond builds a SettingsResponse carrying the current settings plus the
-// effective values resolved against the live system.
+// respond builds a SettingsResponse carrying the current settings. The
+// radio-effective values (mac->pan derivation, channel default, zigbee_type
+// default) are NOT computed here: ecu-zb owns radio validation and the UI
+// computes the displayed effective values client-side. SettingsResponse no
+// longer carries radio Effective fields.
 func (h *Handler) respond(ok bool, errMsg string) *wire.SettingsResponse {
 	cur := h.Store.Get()
 	return &wire.SettingsResponse{
-		Ok:        ok,
-		Error:     errMsg,
-		Settings:  toWire(cur),
-		Effective: effectiveToWire(Resolve(cur, h.liveMACReader())),
+		Ok:       ok,
+		Error:    errMsg,
+		Settings: toWire(cur),
 	}
 }
 
@@ -160,16 +159,6 @@ func (h *Handler) liveMACReader() func() string {
 		return h.LiveMAC
 	}
 	return ReadEth0MAC
-}
-
-// effectiveToWire maps an Effective into its wire form.
-func effectiveToWire(e Effective) *wire.EffectiveSettings {
-	return &wire.EffectiveSettings{
-		Mac:        e.MAC,
-		Pan:        e.PAN,
-		ZigbeeType: e.ZigbeeType,
-		Channel:    e.Channel,
-	}
 }
 
 // macClassReject reports a non-empty reason when mac (already matching
@@ -197,18 +186,13 @@ func macClassReject(mac string) string {
 }
 
 // validate checks the operator-supplied settings against the field rules.
+// The ZigBee radio fields (zigbee_type, pan_override, channel) are NOT
+// validated here: ecu-zb is the radio-config authority and rejects an
+// out-of-range channel / invalid PAN at the wire (the error propagates back
+// to the operator). inv-driver stores these values verbatim. The MAC is
+// validated because it gates an actual eth0 reconfigure (ApplyMAC), which is
+// a network-interface concern, not a radio field.
 func validate(s Settings) error {
-	switch s.ZigbeeType {
-	case "", "apsystems", "general":
-	default:
-		return fmt.Errorf("zigbee_type %q invalid: want \"\", \"apsystems\" or \"general\"", s.ZigbeeType)
-	}
-	if s.PANOverride != "" && !panPattern.MatchString(s.PANOverride) {
-		return fmt.Errorf("pan_override %q invalid: want 1-4 hex digits", s.PANOverride)
-	}
-	if s.Channel != 0 && (s.Channel < 11 || s.Channel > 26) {
-		return fmt.Errorf("channel %d invalid: want 0 (unset) or 11-26", s.Channel)
-	}
 	if s.MAC != "" {
 		if !macPattern.MatchString(s.MAC) {
 			return fmt.Errorf("mac %q invalid: want 6 colon-separated hex octets (e.g. 80:97:1b:03:0d:ce)", s.MAC)

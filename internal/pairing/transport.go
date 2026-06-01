@@ -206,14 +206,22 @@ func (t *Transport) bindQuiet(ctx context.Context, shortAddr uint16) error {
 // the single source of truth and the driver never re-derives the PAN from
 // settings.
 func (t *Transport) getModulePan(ctx context.Context) (uint32, error) {
+	pan, _, err := t.getModuleConfig(ctx)
+	return pan, err
+}
+
+// getModuleConfig reads the backend's operating PAN and channel. The channel
+// is 0 if the backend doesn't report one (older backend); callers that need
+// it should fall back. The PAN is validated as above.
+func (t *Transport) getModuleConfig(ctx context.Context) (pan uint32, channel uint32, err error) {
 	res, err := t.do(ctx, &wire.PairingCmd{Op: &wire.PairingCmd_GetModulePan{
 		GetModulePan: &wire.Empty{}}})
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	pan := res.GetPan()
+	pan = res.GetPan()
 	if pan == 0 || pan > 0xFFFF {
-		return 0, fmt.Errorf("get_module_pan: backend reported no/invalid operating PAN (0x%X)", pan)
+		return 0, 0, fmt.Errorf("get_module_pan: backend reported no/invalid operating PAN (0x%X)", pan)
 	}
-	return pan, nil
+	return pan, res.GetChannel(), nil
 }

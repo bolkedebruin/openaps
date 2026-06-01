@@ -98,10 +98,11 @@ func opName(c *wire.PairingCmd) string {
 	return "?"
 }
 
-// stubSettings is a pairing.Settings with an in-memory PAN.
+// stubSettings is a pairing.Settings with an in-memory PAN + channel.
 type stubSettings struct {
-	mu  sync.Mutex
-	pan string
+	mu      sync.Mutex
+	pan     string
+	channel uint32
 }
 
 func (s *stubSettings) PANOverride() string {
@@ -115,6 +116,19 @@ func (s *stubSettings) SetPANOverride(_ context.Context, panHex string) error {
 	defer s.mu.Unlock()
 	s.pan = panHex
 	return nil
+}
+
+func (s *stubSettings) SetChannel(_ context.Context, channel uint32) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.channel = channel
+	return nil
+}
+
+func (s *stubSettings) Channel() uint32 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.channel
 }
 
 // recordingEvents captures milestone kinds.
@@ -191,7 +205,7 @@ func TestAdd_BindOnPAN(t *testing.T) {
 	m := &Manager{
 		Store: st, Transport: tr, Lock: buslock.New(), Events: ev,
 		Settings: &stubSettings{pan: "0DCE"}, CurrentChannel: func() uint32 { return 16 },
-		CommitSettle: 10 * time.Millisecond,
+		CommitSettle: 10 * time.Millisecond, VerifyRetrySleep: 5 * time.Millisecond,
 	}
 
 	resp := m.Handle(context.Background(), "ecu-web", &wire.PairingRequest{
@@ -242,7 +256,7 @@ func TestAdd_MigrateWhenOffPAN(t *testing.T) {
 		Store: newTestStore(t), Transport: tr, Lock: buslock.New(),
 		Events:   &recordingEvents{},
 		Settings: &stubSettings{pan: "0DCE"}, CurrentChannel: func() uint32 { return 16 },
-		CommitSettle: 10 * time.Millisecond,
+		CommitSettle: 10 * time.Millisecond, VerifyRetrySleep: 5 * time.Millisecond,
 	}
 	// Shorten the post-commit settle for the test.
 	resp := m.Handle(context.Background(), "ecu-web", &wire.PairingRequest{
@@ -289,7 +303,7 @@ func TestRekey_CommitAndVerify(t *testing.T) {
 	m := &Manager{
 		Store: st, Transport: tr, Lock: buslock.New(), Events: ev,
 		Settings: settings, CurrentChannel: func() uint32 { return 16 },
-		CommitSettle: 10 * time.Millisecond,
+		CommitSettle: 10 * time.Millisecond, VerifyRetrySleep: 5 * time.Millisecond,
 	}
 	resp := m.Handle(ctx, "ecu-web", &wire.PairingRequest{
 		Op: &wire.PairingRequest_FleetRekey{FleetRekey: &wire.FleetRekey{NewPan: "1A2B", Channel: 20}}})
@@ -335,7 +349,7 @@ func TestRekey_RollbackOnPrimeFailure(t *testing.T) {
 	m := &Manager{
 		Store: st, Transport: tr, Lock: buslock.New(), Events: &recordingEvents{},
 		Settings: settings, CurrentChannel: func() uint32 { return 16 },
-		CommitSettle: 10 * time.Millisecond,
+		CommitSettle: 10 * time.Millisecond, VerifyRetrySleep: 5 * time.Millisecond,
 	}
 	resp := m.Handle(ctx, "ecu-web", &wire.PairingRequest{
 		Op: &wire.PairingRequest_FleetRekey{FleetRekey: &wire.FleetRekey{NewPan: "1A2B"}}})
@@ -378,7 +392,7 @@ func TestLock_MutualExclusion(t *testing.T) {
 	m := &Manager{
 		Store: newTestStore(t), Transport: tr, Lock: lock, Events: &recordingEvents{},
 		Settings: &stubSettings{pan: "0DCE"}, CurrentChannel: func() uint32 { return 16 },
-		CommitSettle: 10 * time.Millisecond,
+		CommitSettle: 10 * time.Millisecond, VerifyRetrySleep: 5 * time.Millisecond,
 	}
 	// Simulate the grid-profile broadcast holding the lock.
 	if ok, _ := lock.TryAcquire("gridprofile-broadcast"); !ok {
@@ -411,7 +425,7 @@ func TestConcurrentStatusAndAbort(t *testing.T) {
 		Store: newTestStore(t), Transport: tr, Lock: buslock.New(),
 		Events:   &recordingEvents{},
 		Settings: &stubSettings{pan: "0DCE"}, CurrentChannel: func() uint32 { return 16 },
-		CommitSettle: time.Millisecond,
+		CommitSettle: time.Millisecond, VerifyRetrySleep: time.Millisecond,
 	}
 	resp := m.Handle(context.Background(), "ecu-web", &wire.PairingRequest{
 		Op: &wire.PairingRequest_AddById{AddById: &wire.AddById{Serial: "806000042582"}}})
