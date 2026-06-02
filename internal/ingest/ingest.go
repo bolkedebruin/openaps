@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
-	"strings"
 	"sync"
 	"time"
 
@@ -887,23 +886,10 @@ func truncHex(b []byte) string {
 	return hex.EncodeToString(b)
 }
 
-// familyFromModel maps the human Model string to the lowercase family
-// key the eventual capability table will use. "unknown(0xNN)" → "".
+// familyFromModel maps the human Model string from a telemetry frame
+// to the lowercase family key stored in the inverters table. It is a
+// thin shim over codec.FamilyForModelString so the canonical parsing
+// lives in one place; "unknown(0xNN)" / "" map to "".
 func familyFromModel(model string) string {
-	switch {
-	case strings.HasPrefix(model, "QS1A"):
-		return "qs1a"
-	case strings.HasPrefix(model, "QS1"):
-		return "qs1"
-	case strings.HasPrefix(model, "DS3"):
-		return "ds3"
-	case strings.HasPrefix(model, "DSP"):
-		return "dsp"
-	case strings.HasPrefix(model, "YC600"):
-		return "yc600"
-	case strings.HasPrefix(model, "YC1000"):
-		return "yc1000"
-	default:
-		return ""
-	}
+	return codec.FamilyForModelString(model).String()
 }

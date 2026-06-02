@@ -268,8 +268,8 @@ func TestHandle_Telemetry_QS1A(t *testing.T) {
 	if err := in.S.DB().QueryRow(`SELECT family FROM inverters WHERE uid='806000042582'`).Scan(&family); err != nil {
 		t.Fatalf("inverter: %v", err)
 	}
-	if !family.Valid || family.String != "qs1a" {
-		t.Fatalf("family: got %v want qs1a", family)
+	if !family.Valid || family.String != "qs1" {
+		t.Fatalf("family: got %v want qs1", family)
 	}
 
 	var acW, acV, freq, busV float64
@@ -687,13 +687,16 @@ func TestFamilyFromModel(t *testing.T) {
 		model string
 		want  string
 	}{
-		{"QS1A", "qs1a"},
-		{"QS1A-something", "qs1a"},
+		// Family keys are the codec.Family.String() identifiers. QS1A and
+		// QS1 share the QS1 wire family; DSP is grouped with DS3 per the
+		// codec dispatch.
+		{"QS1A", "qs1"},
+		{"QS1A-something", "qs1"},
 		{"QS1", "qs1"},
 		{"QS1-X", "qs1"},
 		{"DS3", "ds3"},
 		{"DS3-L", "ds3"},
-		{"DSP1", "dsp"},
+		{"DSP1", "ds3"},
 		{"YC600", "yc600"},
 		{"YC1000", "yc1000"},
 		{"unknown(0xAB)", ""},

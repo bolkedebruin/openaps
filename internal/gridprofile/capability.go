@@ -7,23 +7,11 @@ import (
 	"github.com/bolke/inv-driver/codec"
 )
 
-// modelFamilies maps each inverter model code to its protection family. Adding
-// a new inverter family is a data edit here (plus its codec encoder), not new
-// branching scattered through the package.
-var modelFamilies = map[uint8]string{
-	codec.ModelDS3:  "DS3",
-	codec.ModelDS3H: "DS3",
-	codec.ModelDS3L: "DS3",
-	codec.ModelExt36: "DS3",
-	codec.ModelQS1:  "QS1",
-	codec.ModelQS1A: "QS1",
-}
-
 // familyHardRejects lists, per family, the codes the firmware silently no-ops on
 // every write path even though the codec can encode them (confirmed by live
 // probe; rejected at the device level, not the protocol level).
-var familyHardRejects = map[string]map[string]bool{
-	"QS1": {
+var familyHardRejects = map[codec.Family]map[string]bool{
+	codec.FamilyQS1: {
 		"CA": true, // Over_frequency_Watt_Start_set (canonical DbOf write)
 		"DC": true, // decode-only DbOf alias (same physical param as CA)
 		"CG": true, // Over_frequency_Watt_Delay_Time_set
@@ -31,11 +19,22 @@ var familyHardRejects = map[string]map[string]bool{
 	},
 }
 
-// family returns the protection family for a model code, or "" if unknown.
-func family(modelCode uint8) string { return modelFamilies[modelCode] }
+// family returns the protection family for a model code, expressed as
+// the legacy string key ("DS3" / "QS1" / "") so existing log strings
+// and error messages stay stable. The classification is delegated to
+// codec.FamilyOf so adding a model code is a single-line edit in codec.
+func family(modelCode uint8) string {
+	switch codec.FamilyOf(modelCode) {
+	case codec.FamilyDS3:
+		return "DS3"
+	case codec.FamilyQS1:
+		return "QS1"
+	}
+	return ""
+}
 
-func isDS3Family(modelCode uint8) bool { return family(modelCode) == "DS3" }
-func isQS1Family(modelCode uint8) bool { return family(modelCode) == "QS1" }
+func isDS3Family(modelCode uint8) bool { return codec.FamilyOf(modelCode) == codec.FamilyDS3 }
+func isQS1Family(modelCode uint8) bool { return codec.FamilyOf(modelCode) == codec.FamilyQS1 }
 
 // unsupportedReason returns a human-readable explanation for why a code is
 // not writable for the given model, or "" if it is writable.
@@ -49,15 +48,15 @@ func unsupportedReason(modelCode uint8, apsCode string) string {
 		return fmt.Sprintf("aps_code %q has no firmware encoder (LongName empty)", apsCode)
 	}
 
-	// 2. Only known families have a protection encoder.
-	fam := family(modelCode)
-	if fam == "" {
+	// 2. Only families with a protection encoder are dispatchable.
+	fam := codec.FamilyOf(modelCode)
+	if fam != codec.FamilyDS3 && fam != codec.FamilyQS1 {
 		return fmt.Sprintf("model 0x%02X has no protection encoder", modelCode)
 	}
 
 	// 3. Family firmware hard-rejects (device-level no-op the codec can't detect).
 	if familyHardRejects[fam][apsCode] {
-		return fmt.Sprintf("aps_code %q rejected by %s firmware on all write paths", apsCode, fam)
+		return fmt.Sprintf("aps_code %q rejected by %s firmware on all write paths", apsCode, family(modelCode))
 	}
 
 	// 4. CA is rejected on QS1A via qs1aHardRejects (above); for DS3 the

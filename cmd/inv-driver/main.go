@@ -21,6 +21,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/bolke/inv-driver/codec"
 	"github.com/bolke/inv-driver/internal/buslock"
 	"github.com/bolke/inv-driver/internal/eventlog"
 	"github.com/bolke/inv-driver/internal/events"
@@ -285,10 +286,11 @@ func runServe(args []string) error {
 		OverlaysDir: overlaysDir,
 		BusLock:     busLock,
 		// Broadcast path defaults off; enable with -gridprofile-broadcast.
-		// Targets DS3 and QS1A families (the two families the codec handles).
+		// Targets every model code with a broadcast protection encoder
+		// (codec.BroadcastModelCodes is the authority).
 		BroadcastEnabled:    *gridProfileBroadcast,
 		BroadcastSender:     gpBroadcaster,
-		BroadcastModelCodes: []uint8{0x20, 0x18}, // ModelDS3=0x20, ModelQS1A=0x18
+		BroadcastModelCodes: codec.BroadcastModelCodes(),
 		// Async overlay applier: events route to the audit log under
 		// by="inv-driver"; the apply parent context is the daemon lifecycle
 		// so applies survive the IPC request but stop at shutdown.
