@@ -1,16 +1,27 @@
 # Installing OpenAPS v1.0.0 on an APsystems ECU
 
 OpenAPS v1.0.0 ships as a single brownfield installer tarball that lands on
-a stock APsystems ECU-R / ECU-R-Pro via the device's own firmware-update
+a stock APsystems **ECU-R-Pro** or **ECU-C** via the device's own firmware-update
 endpoint. The installer DISABLES the stock supervisor processes (no
 sleeper stubs), removes the CodeIgniter web UI, and starts the Go-based
 OpenAPS stack on :443.
 
 Pi / .deb support is **v2**. v1.0.0 supports only brownfield ECU install.
 
+## Hardware compatibility
+
+| Model | Serial prefix | Userspace | OpenAPS |
+|---|---|---|:--:|
+| **ECU-R-Pro** | `2162…` | Linux ARMv7 (BusyBox) | ✅ supported |
+| **ECU-C** | `215…` | Linux ARMv7 (BusyBox) | ✅ supported |
+| ECU-R / ECU-R-M3 | `2160…` | RT-Thread RTOS (no Linux userspace) | ❌ — cannot install |
+| ECU-B | `2163…` | RT-Thread RTOS (no Linux userspace) | ❌ — cannot install |
+
+Check your serial prefix on the device label or via the stock web UI before downloading the tarball. If you're on an RTOS-based ECU-R / ECU-B there is no install path — the binaries OpenAPS ships are ARMv7 Linux ELFs and won't run.
+
 ## What you need
 
-- An APsystems ECU-R or ECU-R-Pro on your LAN, reachable on port 80.
+- An APsystems **ECU-R-Pro** or **ECU-C** on your LAN, reachable on port 80.
 - The ECU's IP address. (`arp -a | grep -i apsystems` from a host on the
   same VLAN usually finds it.)
 - `openaps-v1.0.0-ecu.tar.bz2` from the GitHub release.

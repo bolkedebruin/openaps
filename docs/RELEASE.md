@@ -1,10 +1,12 @@
 # OpenAPS v1.0.0
 
-OpenAPS is a clean-room replacement firmware for the APsystems ECU-R /
-ECU-R-Pro. v1.0.0 is the first cut: it lands on the brownfield ECU via
-the device's own firmware-update endpoint, disables the stock
-supervisors, removes the CodeIgniter web UI, and ships a Go stack with a
-modern web console.
+OpenAPS is a clean-room replacement firmware for the APsystems
+**ECU-R-Pro** (`2162…`) and **ECU-C** (`215…`) — the Linux-userspace
+gateways. The RTOS-based ECU-R (`2160…`) and ECU-B (`2163…`) cannot run
+OpenAPS. v1.0.0 is the first cut: it lands on the brownfield ECU via the
+device's own firmware-update endpoint, disables the stock supervisors,
+removes the CodeIgniter web UI, and ships a Go stack with a modern web
+console.
 
 ## What's in v1.0.0
 

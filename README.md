@@ -16,7 +16,7 @@
 
 OpenAPS replaces the stock firmware on APsystems ECU gateways with a clean Go stack that keeps the fleet running entirely on your LAN: no cloud uplink, no unauthenticated web admin, no firmware OTAs you don't control. You read live telemetry, push grid-protection profiles, cap output power, expose data over SunSpec/Modbus, and audit every change — locally.
 
-It runs today on the APsystems ECU-R / ECU-R-Pro that you already own. A Raspberry Pi target is on the roadmap.
+**Supported hardware:** APsystems **ECU-R-Pro** (serial prefix `2162…`) and **ECU-C** (`215…`) — both run a BusyBox Linux userspace on ARMv7. **Not supported:** the original RTOS-based ECU-R (`2160…`, also sold as ECU-R-M3) and ECU-B (`2163…`) — they have no Linux userspace, so OpenAPS cannot be installed. A Raspberry Pi target is on the roadmap.
 
 ## Compatibility
 
@@ -61,7 +61,7 @@ It runs today on the APsystems ECU-R / ECU-R-Pro that you already own. A Raspber
 
 ## Install
 
-> v1.0 supports brownfield migration of an existing APsystems ECU-R / ECU-R-Pro. Pi support is on the roadmap.
+> v1.0 supports brownfield migration of an existing APsystems **ECU-R-Pro** or **ECU-C**. The RTOS-based ECU-R / ECU-B are NOT compatible (no Linux userspace). Pi support is on the roadmap.
 
 **1. Download the installer tarball** from the [latest release](https://github.com/bolkedebruin/openaps/releases/latest):
 
