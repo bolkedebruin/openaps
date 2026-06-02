@@ -101,7 +101,7 @@ func TestBuildDesired_OverlayRangeIntersect_NoWiden(t *testing.T) {
 				Point:  "Hz3",
 				SF:     -2,
 				Native: NativeValue{Value: 53.0, Unit: "Hz"}, // out of base range
-				Range:  &Range{Min: 49.0, Max: 54.0},          // wider than base
+				Range:  &Range{Min: 49.0, Max: 54.0},         // wider than base
 				Apply:  Apply{ApsCode: "CB"},
 			},
 		},
@@ -144,11 +144,11 @@ func TestBuildDesired_OverlayRangeIntersect_NoWiden(t *testing.T) {
 
 func TestIntersectRanges(t *testing.T) {
 	cases := []struct {
-		name     string
-		base     *Range
-		overlay  *Range
-		wantMin  float64
-		wantMax  float64
+		name    string
+		base    *Range
+		overlay *Range
+		wantMin float64
+		wantMax float64
 	}{
 		{"nil base returns overlay", nil, &Range{Min: 1, Max: 5}, 1, 5},
 		{"nil overlay returns base", &Range{Min: 1, Max: 5}, nil, 1, 5},
@@ -324,7 +324,6 @@ func TestGetEffective_ClampedMatchesApplied(t *testing.T) {
 // ---------------------------------------------------------------------------
 // Manager Ok=false on unconfirmed points
 // ---------------------------------------------------------------------------
-
 
 func TestManager_OkFalse_OnUnconfirmed(t *testing.T) {
 	db, done := openTestDB(t)

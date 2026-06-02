@@ -125,7 +125,7 @@ type mapEntry struct {
 	// SunSpec location
 	Model int
 	Group string
-	Index int    // repeating-group / curve-point index (0-based)
+	Index int // repeating-group / curve-point index (0-based)
 	Point string
 	SFRef *string // nil for unscaled points (e.g. ESDlyTms)
 	SF    int     // exponent: sunspec_value = round(native / 10^sf)

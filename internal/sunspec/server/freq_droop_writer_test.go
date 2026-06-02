@@ -5,8 +5,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/bolkedebruin/openaps/internal/sunspec/source"
 	"github.com/bolkedebruin/openaps/codec"
+	"github.com/bolkedebruin/openaps/internal/sunspec/source"
 )
 
 // newFreqDroopWriterFixture builds a writer pinned to the DS3 family

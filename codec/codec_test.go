@@ -244,10 +244,10 @@ func TestDecodeReply_DS3_StatusFlagsBitMap(t *testing.T) {
 			}
 			want := InverterStatus{
 				DCBusFault: tc.dcBus,
-				FaultA:      tc.faultA,
-				FaultB:      tc.faultB,
-				WarningA:    tc.warnA,
-				WarningB:    tc.warnB,
+				FaultA:     tc.faultA,
+				FaultB:     tc.faultB,
+				WarningA:   tc.warnA,
+				WarningB:   tc.warnB,
 			}
 			if r.Status != want {
 				t.Errorf("Status: got %+v want %+v", r.Status, want)
@@ -324,10 +324,10 @@ func TestDecodeReply_QS1A_StatusFlagsBitMap(t *testing.T) {
 			}
 			want := InverterStatus{
 				DCBusFault: tc.dcBus,
-				FaultA:      tc.faultA,
-				FaultB:      tc.faultB,
-				WarningA:    tc.warnA,
-				WarningB:    tc.warnB,
+				FaultA:     tc.faultA,
+				FaultB:     tc.faultB,
+				WarningA:   tc.warnA,
+				WarningB:   tc.warnB,
 			}
 			if r.Status != want {
 				t.Errorf("Status: got %+v want %+v", r.Status, want)

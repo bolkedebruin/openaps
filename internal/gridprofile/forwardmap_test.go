@@ -138,11 +138,11 @@ func TestEncodeSunSpec_RoundTrip(t *testing.T) {
 		sf     int
 		want   float64
 	}{
-		{16.7, -1, 167},      // DD droop slope (K_SF=-1, per freq_droop.go)
-		{50.2, -2, 5020},     // frequency Hz
-		{80.87, -2, 8087},    // %VNom for a voltage trip
-		{20.0, 0, 20},        // seconds, unscaled (AG/CG/AS)
-		{51.5, -2, 5150},     // AK threshold
+		{16.7, -1, 167},   // DD droop slope (K_SF=-1, per freq_droop.go)
+		{50.2, -2, 5020},  // frequency Hz
+		{80.87, -2, 8087}, // %VNom for a voltage trip
+		{20.0, 0, 20},     // seconds, unscaled (AG/CG/AS)
+		{51.5, -2, 5150},  // AK threshold
 	}
 	for _, tc := range cases {
 		got := EncodeSunSpec(tc.native, tc.sf)
@@ -166,9 +166,9 @@ func TestSFPinnedValues(t *testing.T) {
 		wantSF    int
 		wantSFRef *string // nil means unscaled
 	}{
-		{"DD", -1, sfRefStr("K_SF")},        // K_SF=-1 per freq_droop.go
-		{"CG", 0, nil},                       // RspTms_SF=0 (whole seconds) per freq_droop.go
-		{"AS", 0, nil},                        // ESRmpTms unscaled per enter_service.go
+		{"DD", -1, sfRefStr("K_SF")}, // K_SF=-1 per freq_droop.go
+		{"CG", 0, nil},               // RspTms_SF=0 (whole seconds) per freq_droop.go
+		{"AS", 0, nil},               // ESRmpTms unscaled per enter_service.go
 	}
 	for _, tc := range cases {
 		e, ok := Lookup(tc.code)

@@ -17,7 +17,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version-file: go.mod
           cache: true
 
       - name: gofmt
@@ -35,10 +35,28 @@ jobs:
         run: go vet ./...
 
       - name: go test
-        run: go test -race -timeout 90s ./...
+        run: go test -race -timeout 120s ./...
 
-      - name: cross-compile ECU (linux/arm/v7)
-        run: make ecu
+      - name: cross-compile all binaries (linux/arm/v7)
+        run: make build-all-arm
 
-      - name: build sidecar (linux/amd64)
-        run: make sidecar
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: bun install
+        working-directory: cmd/ecu-web/web
+        run: bun install --frozen-lockfile
+
+      - name: bun test
+        working-directory: cmd/ecu-web/web
+        run: bun test
+
+      - name: bun build
+        working-directory: cmd/ecu-web/web
+        run: bun run build

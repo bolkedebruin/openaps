@@ -5,8 +5,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/bolkedebruin/openaps/internal/sunspec/source"
 	"github.com/bolkedebruin/openaps/codec"
+	"github.com/bolkedebruin/openaps/internal/sunspec/source"
 )
 
 func newEnterServiceWriterFixture(t *testing.T, uid uint8, invUIDs ...string) (*EnterServiceWriter, *fakeSender) {

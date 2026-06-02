@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bolkedebruin/openaps/internal/sunspec/source/invdriver"
 	"github.com/bolkedebruin/openaps/codec"
+	"github.com/bolkedebruin/openaps/internal/sunspec/source/invdriver"
 	"github.com/bolkedebruin/openaps/wire"
 )
 

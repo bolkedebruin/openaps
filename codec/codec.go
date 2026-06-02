@@ -44,19 +44,19 @@ func (e L1Envelope) PeerUIDString() string {
 //
 //	FB FB <type> <cmd> <body...> <chk hi> <chk lo> FE FE
 type L2Frame struct {
-	Type byte
-	Cmd  byte
-	Body []byte // bytes after Cmd up to (but excluding) checksum
+	Type         byte
+	Cmd          byte
+	Body         []byte // bytes after Cmd up to (but excluding) checksum
 	ChkHi, ChkLo byte
 }
 
 var (
-	ErrShortFrame  = errors.New("frame too short")
-	ErrBadL1SOF    = errors.New("L1: missing FC FC SOF")
-	ErrBadL2SOF    = errors.New("L2: missing FB FB SOF")
-	ErrBadL2EOF    = errors.New("L2: missing FE FE EOF")
-	ErrEncrypted   = errors.New("L1 ciphertext (AES decryption not implemented in v1)")
-	ErrUnknownCmd  = errors.New("unknown reply cmd")
+	ErrShortFrame = errors.New("frame too short")
+	ErrBadL1SOF   = errors.New("L1: missing FC FC SOF")
+	ErrBadL2SOF   = errors.New("L2: missing FB FB SOF")
+	ErrBadL2EOF   = errors.New("L2: missing FE FE EOF")
+	ErrEncrypted  = errors.New("L1 ciphertext (AES decryption not implemented in v1)")
+	ErrUnknownCmd = errors.New("unknown reply cmd")
 )
 
 // ParseL1 extracts the L1 envelope. raw is the reassembled inbound
@@ -128,7 +128,7 @@ type Reply struct {
 	GridV         float64
 	BusV          float64 // QS1A internal DC link
 	FreqHz        float64
-	ReportSec     uint32  // inverter's internal counter at poll time
+	ReportSec     uint32 // inverter's internal counter at poll time
 	Panels        []Panel
 	ActivePowerW  float64
 	ReactivePower float64
@@ -169,17 +169,17 @@ type InverterStatus struct {
 // zero in Evt1 — they would otherwise come from other resolvers
 // (RCD / DSP-event subsystems) that the codec doesn't see.
 type modbusStatusInputs struct {
-	GridRelay      bool
-	DCContactor    bool
-	DCGround       bool
-	IsoAny         bool
-	CommFault      bool
-	ZBLink         bool
+	GridRelay       bool
+	DCContactor     bool
+	DCGround        bool
+	IsoAny          bool
+	CommFault       bool
+	ZBLink          bool
 	OverTemperature bool
-	ACOverVoltAny  bool
-	ACUnderVoltAny bool
-	OverFreqAny    bool
-	UnderFreqAny   bool
+	ACOverVoltAny   bool
+	ACUnderVoltAny  bool
+	OverFreqAny     bool
+	UnderFreqAny    bool
 }
 
 // packModbusStatus returns (St, Evt1) as the SunSpec Model 103 16-bit

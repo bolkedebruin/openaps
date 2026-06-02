@@ -951,10 +951,10 @@ func TestSetSettingsStepUpExpires(t *testing.T) {
 		EcuId: "x", Mac: "80971b000000", PanOverride: "0DCE", ZigbeeType: "apsystems",
 	}}
 	srv := New(Config{
-		StateDir: t.TempDir(),
-		Assets:   fstest.MapFS{"index.html": {Data: []byte("x")}},
-		Snap:     snapshot.New(nil),
-		Auth:     authMgr,
+		StateDir:    t.TempDir(),
+		Assets:      fstest.MapFS{"index.html": {Data: []byte("x")}},
+		Snap:        snapshot.New(nil),
+		Auth:        authMgr,
 		SettingsGet: func(context.Context) (*wire.SettingsResponse, error) { return current, nil },
 		SettingsSet: func(_ context.Context, s *wire.Settings) (*wire.SettingsResponse, error) {
 			return &wire.SettingsResponse{Ok: true, Settings: s}, nil

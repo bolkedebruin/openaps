@@ -112,12 +112,12 @@ func TestFamilyForModelString(t *testing.T) {
 func TestBroadcastModelCodes(t *testing.T) {
 	got := BroadcastModelCodes()
 	want := []uint8{
-		ModelQS1,    // 0x08
-		ModelQS1A,   // 0x18
-		ModelDS3,    // 0x20
-		ModelDS3H,   // 0x21
-		ModelDS3L,   // 0x22
-		ModelExt36,  // 0x36
+		ModelQS1,   // 0x08
+		ModelQS1A,  // 0x18
+		ModelDS3,   // 0x20
+		ModelDS3H,  // 0x21
+		ModelDS3L,  // 0x22
+		ModelExt36, // 0x36
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("BroadcastModelCodes() = %v, want %v", got, want)

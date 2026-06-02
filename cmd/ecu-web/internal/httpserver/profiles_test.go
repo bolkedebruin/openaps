@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bolkedebruin/openaps/codec"
 	"github.com/bolkedebruin/openaps/cmd/ecu-web/internal/snapshot"
+	"github.com/bolkedebruin/openaps/codec"
 	"github.com/bolkedebruin/openaps/internal/gridprofile"
 	"github.com/bolkedebruin/openaps/wire"
 )
@@ -249,7 +249,7 @@ func TestPutOverlayValidation(t *testing.T) {
 	for _, body := range []string{
 		`{"id":"","uids":["999900000001"],"points":[{"aps_code":"CB","value":1}]}`, // no id
 		`{"id":"x","uids":[],"points":[{"aps_code":"CB","value":1}]}`,              // no targets
-		`{"id":"x","uids":["999900000001"],"points":[]}`,                          // no points
+		`{"id":"x","uids":["999900000001"],"points":[]}`,                           // no points
 	} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, withCookies(jsonReq("PUT", "/api/profiles/overlay", body), cookies))

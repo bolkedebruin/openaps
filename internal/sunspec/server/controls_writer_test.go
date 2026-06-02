@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bolkedebruin/openaps/codec"
 	"github.com/bolkedebruin/openaps/internal/sunspec/config"
 	"github.com/bolkedebruin/openaps/internal/sunspec/source"
 	"github.com/bolkedebruin/openaps/internal/sunspec/sunspec"
-	"github.com/bolkedebruin/openaps/codec"
 	"github.com/simonvetter/modbus"
 )
 

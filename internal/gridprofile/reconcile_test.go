@@ -117,8 +117,8 @@ func fastOpts() Options {
 	}
 }
 
-func modelDS3(_ string) (uint8, bool) { return codec.ModelDS3, true }
-func modelQS1A(_ string) (uint8, bool) { return codec.ModelQS1A, true }
+func modelDS3(_ string) (uint8, bool)     { return codec.ModelDS3, true }
+func modelQS1A(_ string) (uint8, bool)    { return codec.ModelQS1A, true }
 func modelUnknown(_ string) (uint8, bool) { return 0, false }
 
 // ---------------------------------------------------------------------------

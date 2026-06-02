@@ -335,4 +335,3 @@ func mustOverlay(t *testing.T, id string, uids []string) Overlay {
 		Points: []PointEntry{pe},
 	}
 }
-

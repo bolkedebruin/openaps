@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bolkedebruin/openaps/internal/zigbee/busmgr"
 	"github.com/bolkedebruin/openaps/codec"
+	"github.com/bolkedebruin/openaps/internal/zigbee/busmgr"
 )
 
 // BuildBBQueryFrame returns the 28-byte L0+L2 BB query frame for the

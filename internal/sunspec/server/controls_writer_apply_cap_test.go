@@ -5,9 +5,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/bolkedebruin/openaps/codec"
 	"github.com/bolkedebruin/openaps/internal/sunspec/source"
 	"github.com/bolkedebruin/openaps/internal/sunspec/sunspec"
-	"github.com/bolkedebruin/openaps/codec"
 )
 
 // applyCapCase exercises ControlsWriter.applyCap in isolation, verifying

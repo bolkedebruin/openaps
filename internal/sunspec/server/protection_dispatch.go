@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/bolkedebruin/openaps/internal/sunspec/source"
 	"github.com/bolkedebruin/openaps/codec"
+	"github.com/bolkedebruin/openaps/internal/sunspec/source"
 )
 
 // dispatchProtection routes one grid-protection parameter write for an

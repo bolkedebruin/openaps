@@ -5,9 +5,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/bolkedebruin/openaps/codec"
 	"github.com/bolkedebruin/openaps/internal/sunspec/source"
 	"github.com/bolkedebruin/openaps/internal/sunspec/sunspec"
-	"github.com/bolkedebruin/openaps/codec"
 )
 
 func newFreqWattCurveWriterFixture(t *testing.T, uid uint8, model int, prot source.ProtectionParams, invUIDs ...string) (*FreqWattCurveWriter, *fakeSender) {

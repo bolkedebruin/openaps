@@ -102,4 +102,3 @@ func SchemaBytes() []byte {
 	copy(cp, v1SchemaJSON)
 	return cp
 }
-

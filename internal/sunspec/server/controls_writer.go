@@ -6,9 +6,9 @@ import (
 	"log"
 	"time"
 
+	"github.com/bolkedebruin/openaps/codec"
 	"github.com/bolkedebruin/openaps/internal/sunspec/source"
 	"github.com/bolkedebruin/openaps/internal/sunspec/sunspec"
-	"github.com/bolkedebruin/openaps/codec"
 )
 
 // frameSender dispatches one L2 frame to an inverter by UID. Satisfied by

@@ -133,32 +133,32 @@ func FaultsToSunSpecEvt1(faults *wire.InverterFaults) uint32 {
 //
 // Bits 26-31 reserved.
 const (
-	EvtVnd1GridRelayFault      uint32 = 1 << 0
-	EvtVnd1DCContactorFault    uint32 = 1 << 1
-	EvtVnd1DCBusFault          uint32 = 1 << 2
-	EvtVnd1DCGroundFault       uint32 = 1 << 3
-	EvtVnd1CommFault           uint32 = 1 << 4
-	EvtVnd1OverTemperature     uint32 = 1 << 5
-	EvtVnd1IsoFaultA           uint32 = 1 << 6
-	EvtVnd1IsoFaultB           uint32 = 1 << 7
-	EvtVnd1IsoFaultC           uint32 = 1 << 8
-	EvtVnd1IsoFaultD           uint32 = 1 << 9
-	EvtVnd1ACOverVoltPrimary   uint32 = 1 << 10
-	EvtVnd1ACOverVoltSecondary uint32 = 1 << 11
-	EvtVnd1ACUnderVoltPrimary  uint32 = 1 << 12
+	EvtVnd1GridRelayFault       uint32 = 1 << 0
+	EvtVnd1DCContactorFault     uint32 = 1 << 1
+	EvtVnd1DCBusFault           uint32 = 1 << 2
+	EvtVnd1DCGroundFault        uint32 = 1 << 3
+	EvtVnd1CommFault            uint32 = 1 << 4
+	EvtVnd1OverTemperature      uint32 = 1 << 5
+	EvtVnd1IsoFaultA            uint32 = 1 << 6
+	EvtVnd1IsoFaultB            uint32 = 1 << 7
+	EvtVnd1IsoFaultC            uint32 = 1 << 8
+	EvtVnd1IsoFaultD            uint32 = 1 << 9
+	EvtVnd1ACOverVoltPrimary    uint32 = 1 << 10
+	EvtVnd1ACOverVoltSecondary  uint32 = 1 << 11
+	EvtVnd1ACUnderVoltPrimary   uint32 = 1 << 12
 	EvtVnd1ACUnderVoltSecondary uint32 = 1 << 13
-	EvtVnd1OverFreqPrimary     uint32 = 1 << 14
-	EvtVnd1OverFreqSecondary   uint32 = 1 << 15
-	EvtVnd1OverFreqTertiary    uint32 = 1 << 16
-	EvtVnd1OverFreqExtra       uint32 = 1 << 17
-	EvtVnd1OverFreqRMS         uint32 = 1 << 18
-	EvtVnd1UnderFreqPrimary    uint32 = 1 << 19
-	EvtVnd1UnderFreqSecondary  uint32 = 1 << 20
-	EvtVnd1UnderFreqTertiary   uint32 = 1 << 21
-	EvtVnd1UnderFreqExtra      uint32 = 1 << 22
-	EvtVnd1UnderFreqRMS        uint32 = 1 << 23
-	EvtVnd1ZBLinkA             uint32 = 1 << 24
-	EvtVnd1ZBLinkB             uint32 = 1 << 25
+	EvtVnd1OverFreqPrimary      uint32 = 1 << 14
+	EvtVnd1OverFreqSecondary    uint32 = 1 << 15
+	EvtVnd1OverFreqTertiary     uint32 = 1 << 16
+	EvtVnd1OverFreqExtra        uint32 = 1 << 17
+	EvtVnd1OverFreqRMS          uint32 = 1 << 18
+	EvtVnd1UnderFreqPrimary     uint32 = 1 << 19
+	EvtVnd1UnderFreqSecondary   uint32 = 1 << 20
+	EvtVnd1UnderFreqTertiary    uint32 = 1 << 21
+	EvtVnd1UnderFreqExtra       uint32 = 1 << 22
+	EvtVnd1UnderFreqRMS         uint32 = 1 << 23
+	EvtVnd1ZBLinkA              uint32 = 1 << 24
+	EvtVnd1ZBLinkB              uint32 = 1 << 25
 )
 
 // FaultsToEvtVnd1 projects typed faults onto the new EvtVnd1 layout.

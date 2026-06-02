@@ -42,10 +42,10 @@ func TestQS1ReadPageA_CapturedFrame_GoldenDecode(t *testing.T) {
 	// land on integral hundredths).
 	exact := map[string]float64{
 		"AT": 3, "AU": 3, "AV": 3, "AW": 1, // enum nibbles of p+0x01 = 0xFF
-		"AX": 448, // p+0x03 = 0x01C0, identity
+		"AX": 448,                                                        // p+0x03 = 0x01C0, identity
 		"AQ": 184, "AD": 264, "AC": 183, "AY": 253, "AZ": 183, "BA": 253, // slow volt trips
 		"AG": 60, "AS": 60, // recovery / start-ramp (raw 6000 ÷100)
-		"BK": 0.3, // p+0x2f raw 30 ÷100
+		"BK": 0.3,             // p+0x2f raw 30 ÷100
 		"BF": 1.2, "BG": 0.04, // p+0x25 raw 120, p+0x27 raw 4 (firmware default slots)
 		"BL": 0.12, "BM": 0.12, // p+0x39/0x3b raw 12 ÷100
 		// Clear-time / fast-volt slots are at firmware defaults (zero) in this

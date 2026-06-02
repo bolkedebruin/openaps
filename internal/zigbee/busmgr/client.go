@@ -20,8 +20,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/bolkedebruin/openaps/internal/zigbee/inventory"
 	"github.com/bolkedebruin/openaps/codec"
+	"github.com/bolkedebruin/openaps/internal/zigbee/inventory"
 	"github.com/bolkedebruin/openaps/wire"
 )
 
@@ -86,6 +86,7 @@ var allowedL2Cmds = map[byte]struct{}{
 //     verified against a real broadcast capture.
 //   - 0x2C protection broadcast: verified by apply-then-read against
 //     the 0xDB page-A read-back.
+//
 // Broadcast protection apply stays opt-in behind inv-driver's
 // -gridprofile-broadcast flag (default off); the unicast-only yc600 cmds are
 // rejected on the broadcast path in dispatchBroadcast regardless of this gate.

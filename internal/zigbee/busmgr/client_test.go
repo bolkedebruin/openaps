@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bolkedebruin/openaps/internal/zigbee/inventory"
 	"github.com/bolkedebruin/openaps/codec"
+	"github.com/bolkedebruin/openaps/internal/zigbee/inventory"
 	"github.com/bolkedebruin/openaps/wire"
 )
 

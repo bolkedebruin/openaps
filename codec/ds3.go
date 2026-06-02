@@ -82,11 +82,11 @@ var ds3ProtParams = map[string]ds3ProtParam{
 
 	// Voltage trip thresholds (over/under_voltage_fast/slow/slow_90/stage_2_90)
 	// Scale: int(V/0.268), 16-bit.
-	"over_voltage_fast":      {0x01, ds3ScaleVolt}, // AI — golden: 264 V → 985
-	"under_voltage_fast":     {0x02, ds3ScaleVolt}, // AH — golden: 196 V → 731
-	"over_voltage_slow":      {0x03, ds3ScaleVolt}, // AD — golden: 264 V → 985
-	"under_voltage_stage_2":  {0x04, ds3ScaleVolt}, // AQ — golden: 184 V → 686
-	"over_voltage_slow_90":   {0x05, ds3ScaleVolt}, // AY — golden: 253 V → 944
+	"over_voltage_fast":        {0x01, ds3ScaleVolt}, // AI — golden: 264 V → 985
+	"under_voltage_fast":       {0x02, ds3ScaleVolt}, // AH — golden: 196 V → 731
+	"over_voltage_slow":        {0x03, ds3ScaleVolt}, // AD — golden: 264 V → 985
+	"under_voltage_stage_2":    {0x04, ds3ScaleVolt}, // AQ — golden: 184 V → 686
+	"over_voltage_slow_90":     {0x05, ds3ScaleVolt}, // AY — golden: 253 V → 944
 	"under_voltage_stage_2_90": {0x06, ds3ScaleVolt}, // AC — golden: 196 V → 731
 
 	// Frequency trip thresholds (over/under_frequency_fast/slow)

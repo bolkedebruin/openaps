@@ -47,27 +47,27 @@ type Apply struct {
 // described in SunSpec terms and cross-referenced to the APsystems firmware
 // parameter name.
 type PointEntry struct {
-	Model   int          `json:"model"`
-	Group   string       `json:"group"`
-	Index   int          `json:"index,omitempty"`
-	Point   string       `json:"point"`
-	SFRef   *string      `json:"sf_ref,omitempty"`
-	SF      int          `json:"sf,omitempty"`
-	Native  NativeValue  `json:"native"`
+	Model   int           `json:"model"`
+	Group   string        `json:"group"`
+	Index   int           `json:"index,omitempty"`
+	Point   string        `json:"point"`
+	SFRef   *string       `json:"sf_ref,omitempty"`
+	SF      int           `json:"sf,omitempty"`
+	Native  NativeValue   `json:"native"`
 	SunSpec *SunSpecValue `json:"sunspec,omitempty"`
-	Range   *Range       `json:"range,omitempty"`
-	Apply   Apply        `json:"apply"`
+	Range   *Range        `json:"range,omitempty"`
+	Apply   Apply         `json:"apply"`
 }
 
 // Profile is a complete base grid-protection profile.  id is a human-readable
 // name that is also the filename stem (profiles/<id>.json); vnom_v is the
 // nominal AC voltage used to convert absolute-volt thresholds to %VNom.
 type Profile struct {
-	Schema  string  `json:"schema"`
-	ID      string  `json:"id"`
-	VNomV   float64 `json:"vnom_v"`
-	Source  Source  `json:"source"`
-	Points  []PointEntry `json:"points"`
+	Schema string       `json:"schema"`
+	ID     string       `json:"id"`
+	VNomV  float64      `json:"vnom_v"`
+	Source Source       `json:"source"`
+	Points []PointEntry `json:"points"`
 }
 
 // Overlay is a sparse per-inverter override on top of a base profile.
@@ -75,10 +75,10 @@ type Profile struct {
 // the base value.  uids lists the inverter UIDs this overlay applies to
 // (all must match ^[0-9A-Fa-f]{12}$).
 type Overlay struct {
-	Schema string  `json:"schema"`
-	ID     string  `json:"id"`
-	VNomV  float64 `json:"vnom_v,omitempty"`
-	UIDs   []string `json:"uids"`
+	Schema string       `json:"schema"`
+	ID     string       `json:"id"`
+	VNomV  float64      `json:"vnom_v,omitempty"`
+	UIDs   []string     `json:"uids"`
 	Points []PointEntry `json:"points"`
 }
 

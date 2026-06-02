@@ -14,54 +14,51 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Need full history + tags so `git describe --tags` in the Makefile
+          # Full history + tags so `git describe --tags` in the Makefile
           # returns the tag name as VERSION (otherwise it falls back to a
           # short SHA and the artifact filenames don't match the tag).
           fetch-depth: 0
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version-file: go.mod
           cache: true
 
-      - name: test
-        run: go test -timeout 90s ./...
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
 
-      - name: build cross-compiled binaries
+      - name: bun install + build (ecu-web SPA)
+        working-directory: cmd/ecu-web/web
         run: |
-          make ecu
-          make sidecar
+          bun install --frozen-lockfile
+          bun run build
 
-      - name: build install package (without dropbear)
-        run: make package
+      - name: go test
+        run: go test -timeout 120s ./...
 
-      - name: fetch dropbear and build bundled package
+      - name: build all ARMv7 binaries
+        run: make build-all-arm
+
+      - name: build OpenAPS installer tarball
+        run: make package-openaps
+
+      - name: build per-binary tarballs
         run: |
-          make fetch-dropbear
-          make package-with-dropbear DROPBEAR_DIR=dist/dropbear-armv7
-
-      - name: list artifacts
-        run: ls -lh dist/
+          make package-zb
+          make package-sunspec
 
       - name: generate SHA256SUMS
-        # Pinned algorithm + sorted file list = reproducible checksum file.
-        # Verify on the install side with: sha256sum -c SHA256SUMS
-        working-directory: dist
+        working-directory: build
         run: |
-          sha256sum \
-            apsystems-sunspec-*.tar.bz2 \
-            ecu-sunspec-linux-armv7 \
-            ecu-sunspec-linux-amd64 \
-            | sort -k 2 > SHA256SUMS
+          sha256sum openaps-v*-ecu.tar.bz2 | sort -k 2 > SHA256SUMS
           cat SHA256SUMS
 
-      - name: create release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/apsystems-sunspec-*.tar.bz2
-            dist/ecu-sunspec-linux-armv7
-            dist/ecu-sunspec-linux-amd64
-            dist/SHA256SUMS
-          generate_release_notes: true
-          fail_on_unmatched_files: true
+      - name: upload release artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" \
+            build/openaps-v*-ecu.tar.bz2 \
+            build/SHA256SUMS \
+            --clobber

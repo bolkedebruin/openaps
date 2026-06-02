@@ -99,8 +99,8 @@ func TestParsePAN(t *testing.T) {
 	cases := map[string]uint16{
 		"00:11:22:33:44:55": 0x4455,
 		"001122334455":      0x4455,
-		"AA:BB:CC:DD:EE:FF":  0xEEFF,
-		"aabbccddeeff\n":     0xEEFF,
+		"AA:BB:CC:DD:EE:FF": 0xEEFF,
+		"aabbccddeeff\n":    0xEEFF,
 	}
 	for in, want := range cases {
 		got, err := parsePAN(in)

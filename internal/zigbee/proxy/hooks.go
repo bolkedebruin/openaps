@@ -29,12 +29,13 @@ func (d FrameDirection) String() string {
 // Altered != nil  → forward Altered instead of the original
 // Drop == true    → do not forward to the other side
 // Mine == true    → this chunk belongs to the hook's injection cycle
-//                   (its own query or the matching response). The
-//                   tap publishes it on IfaceInject so it shows up on
-//                   the "zb-inj0" interface in Wireshark instead of
-//                   the wire "zb0" interface — easy filter and clear
-//                   provenance even when the bytes are identical to
-//                   host-originated polling.
+//
+//	(its own query or the matching response). The
+//	tap publishes it on IfaceInject so it shows up on
+//	the "zb-inj0" interface in Wireshark instead of
+//	the wire "zb0" interface — easy filter and clear
+//	provenance even when the bytes are identical to
+//	host-originated polling.
 type ChunkAction struct {
 	Altered []byte
 	Drop    bool

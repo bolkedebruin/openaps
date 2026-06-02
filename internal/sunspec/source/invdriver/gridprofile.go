@@ -18,7 +18,7 @@ import (
 // emits: id, vnom_v, source, and point_count. The full points array is never
 // sent over the wire, so PointCount is read directly from the JSON field.
 type ProfileSummary struct {
-	ID     string `json:"id"`
+	ID     string  `json:"id"`
 	VNomV  float64 `json:"vnom_v,omitempty"`
 	Source struct {
 		System  string `json:"system,omitempty"`

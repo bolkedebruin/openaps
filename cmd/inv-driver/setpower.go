@@ -216,4 +216,3 @@ func sendEnvelopeOverUDS(socketPath string, env *wire.Envelope) error {
 	}
 	return nil
 }
-
