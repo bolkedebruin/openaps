@@ -124,8 +124,14 @@ func runServe(args []string) error {
 		"enable periodic 0xBB telemetry queries originated by inv-driver (default true; disable only for diagnostics)")
 	telemetryPollInterval := fs.Duration("telemetry-poll-interval", 1*time.Second,
 		"cadence between 0xBB poll rounds; per-inverter Sends are spaced by -probe-interval within the round")
+	enableAESL1 := fs.Bool("enable-aes-l1", false,
+		"EXPERIMENTAL: enable L1 OTA AES-128 decrypt of inbound encrypted frames (per-frame key derivation per docs/AES-DESIGN.md; no on-wire test vectors)")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *enableAESL1 {
+		codec.SetAESEnabled(true)
+		log.Printf("L1 AES enabled (EXPERIMENTAL: no on-wire test vectors)")
 	}
 	controllers := splitTrim(*controllerBackends)
 	uids, err := parseUIDList(*controllerUIDs)

@@ -267,7 +267,14 @@ func DecodeReply(raw []byte) (Reply, error) {
 // reply, pair frames, ...) parse L1 once and reuse the envelope.
 func DecodeReplyFromEnvelope(env L1Envelope) (Reply, error) {
 	if env.Encrypted {
-		return Reply{}, ErrEncrypted
+		if !AESEnabled() {
+			return Reply{}, ErrEncrypted
+		}
+		dec, err := decryptEnvelopeInPlace(env)
+		if err != nil {
+			return Reply{}, fmt.Errorf("L1 AES: %w", err)
+		}
+		env = dec
 	}
 	l2, err := ParseL2(env.L2Frame)
 	if err != nil {

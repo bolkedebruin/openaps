@@ -54,6 +54,7 @@ OpenAPS replaces the stock firmware on APsystems ECU gateways with a clean Go st
 - SunSpec / Modbus TCP (port `502`, the IANA-standard Modbus port) — models 101/103/111/113/123/711 etc., consumed cleanly by Home Assistant and other EMS
 - HTTPS operator console on `:443` with operator-password auth + single-use recovery code + change-password
 - Encryption badge per inverter (AES vs plaintext frame detection)
+- L1 OTA AES-128 codec ⚠️ experimental, opt-in via `-enable-aes-l1` (decrypt + encrypt primitive implemented per [`docs/AES-DESIGN.md`](docs/AES-DESIGN.md); no on-wire test vectors available on the maintainer's fleet — see the design doc's validation-gap note)
 - Audit event log with `by` attribution for every settings/profile/power-cap change
 - Rollback CLI restores the original stock firmware from a backup snapshot
 

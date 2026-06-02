@@ -136,6 +136,17 @@ ssh root@<ECU-IP> /usr/local/bin/openaps-rollback --backup /home/openaps-backup-
   CC2530 vs stock TI ZNP on off-the-shelf dongles) is the actual blocker.
   v2 unblocks generic radios via a `bus-mgr ti-znp-zb` backend in
   `ecu-zb`.
+- **L1 OTA AES is experimental and opt-in.** The codec implements the
+  per-frame-keyed AES-128-ECB scheme reverse-engineered from
+  APsystems main.exe (see [`docs/AES-DESIGN.md`](AES-DESIGN.md)), but
+  no real on-wire ciphertext capture exists on the maintainer's fleet
+  to validate byte-for-byte wire compatibility. Pass `-enable-aes-l1`
+  to `inv-driver serve` to enable decrypt of inbound encrypted frames
+  (frames where the L1 gate byte is `< 0xF0`). Without the flag, the
+  daemon rejects encrypted frames with `ErrEncrypted`, matching the
+  pre-v1.0 behaviour. The TX encrypt primitive (`codec.EncryptTX`) is
+  shipped but not yet wired into the live `ecu-zb` send path; that
+  wire-up lands in a follow-up once an on-wire vector is available.
 - **Unsigned tarball.** v1.0.0 ships an UNSIGNED installer. The
   installer plumbs `release.pub` to `/etc/openaps/release.pub` so v1.0.1
   can verify signed OTAs — but v1.0.0 itself does not check the
