@@ -164,7 +164,7 @@ func TestSetOverlay_AcceptsAllUidsInFleet(t *testing.T) {
 func TestReconcileAllOverlays_EnqueuesEachPersistedOverlay(t *testing.T) {
 	a := "999900000001"
 	b := "999900000003"
-	c := "999900000005" // in fleet, not targeted by ov1 — avoids supersession race
+	c := "999900000005"    // in fleet, not targeted by ov1 — avoids supersession race
 	gone := "ffffffffffff" // persisted overlay row but not in fleet anymore
 
 	modelOf := func(uid string) (uint8, bool) {
