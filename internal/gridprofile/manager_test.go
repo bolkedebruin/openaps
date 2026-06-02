@@ -132,6 +132,13 @@ func TestSetOverlay_AcceptsAllUidsInFleet(t *testing.T) {
 	m, cleanup := newManagerForTest(t, modelOf)
 	defer cleanup()
 
+	// Pre-construct the applier with a no-op stub runner so the async
+	// kickoff doesn't race with t.TempDir() cleanup writing into the
+	// real Reconciler -> Store path after the test returns.
+	noopRunner := &stubRunner{report: ReconcileReport{}}
+	m.applierInst = newApplier(noopRunner, &recordingSink{})
+	m.applierOnce.Do(func() {})
+
 	ctx := context.Background()
 	body := validOverlayJSON(t, "victron-shift", []string{a, b})
 
@@ -143,6 +150,9 @@ func TestSetOverlay_AcceptsAllUidsInFleet(t *testing.T) {
 	if _, err := m.Store.GetOverlay(ctx, a); err != nil {
 		t.Errorf("overlay should be persisted: %v", err)
 	}
+	// Drain the async apply goroutine before returning so t.TempDir()
+	// cleanup doesn't fight a live DB writer.
+	waitForCalls(t, noopRunner, 1, 2*time.Second)
 }
 
 // TestReconcileAllOverlays_EnqueuesEachPersistedOverlay verifies that on
@@ -154,10 +164,11 @@ func TestSetOverlay_AcceptsAllUidsInFleet(t *testing.T) {
 func TestReconcileAllOverlays_EnqueuesEachPersistedOverlay(t *testing.T) {
 	a := "999900000001"
 	b := "999900000003"
+	c := "999900000005" // in fleet, not targeted by ov1 — avoids supersession race
 	gone := "ffffffffffff" // persisted overlay row but not in fleet anymore
 
 	modelOf := func(uid string) (uint8, bool) {
-		if uid == a || uid == b {
+		if uid == a || uid == b || uid == c {
 			return 0x20, true
 		}
 		return 0, false
@@ -166,11 +177,13 @@ func TestReconcileAllOverlays_EnqueuesEachPersistedOverlay(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	// Seed two distinct overlays directly via the store (bypassing the
-	// fleet-membership gate so we can also exercise the in-fleet-only skip
-	// for "gone").
+	// Seed two distinct overlays with DISJOINT uid targets so the per-uid
+	// supersession path doesn't fire — if both overlays targeted the same
+	// uid, the second enqueue would supersede the first and the in-fleet
+	// count would non-deterministically be 2 or 3 depending on which path
+	// the first goroutine took before being cancelled.
 	ov1 := mustOverlay(t, "ov1", []string{a, b})
-	ov2 := mustOverlay(t, "ov2", []string{a, gone})
+	ov2 := mustOverlay(t, "ov2", []string{c, gone})
 	if err := m.Store.UpsertOverlay(ctx, a, ov1); err != nil {
 		t.Fatalf("seed a: %v", err)
 	}
@@ -178,7 +191,7 @@ func TestReconcileAllOverlays_EnqueuesEachPersistedOverlay(t *testing.T) {
 		t.Fatalf("seed b: %v", err)
 	}
 	// One overlay row persisted under "gone" too (typical post-decommission
-	// state). The pass should not enqueue against gone but SHOULD against a.
+	// state). The pass should not enqueue against gone but SHOULD against c.
 	if err := m.Store.UpsertOverlay(ctx, gone, ov2); err != nil {
 		t.Fatalf("seed gone: %v", err)
 	}
@@ -200,15 +213,15 @@ func TestReconcileAllOverlays_EnqueuesEachPersistedOverlay(t *testing.T) {
 	// Expected in-fleet enqueues:
 	//   - (a, ov1) [ov1 targets a,b → a in-fleet]
 	//   - (b, ov1) [b in-fleet]
-	//   - (a, ov2) [ov2 targets a,gone → a in-fleet]
+	//   - (c, ov2) [ov2 targets c,gone → c in-fleet]
 	// Excluded:
 	//   - (gone, *) — not in fleet, skipped.
-	// Note: ListOverlays groups by id (DISTINCT id), so each overlay
-	// contributes len(in-fleet uids).
+	// uid targets are disjoint between ov1 and ov2 so no per-uid
+	// supersession kicks in — the count is deterministic.
 	got := waitForCalls(t, noopRunner, 3, 2*time.Second)
 	// ListOverlays + GROUP BY id returns each overlay once with its body
 	// (which includes the full uids list). For ov1: uids=[a,b], both
-	// in-fleet → 2 enqueues. For ov2: uids=[a,gone], one in-fleet → 1.
+	// in-fleet → 2 enqueues. For ov2: uids=[c,gone], one in-fleet → 1.
 	// Total expected = 3.
 	if got != 3 {
 		t.Errorf("expected 3 enqueues (in-fleet uids across both overlays); got %d", got)
