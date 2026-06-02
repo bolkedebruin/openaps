@@ -47,12 +47,12 @@ func (in *Ingestor) markSeen(uid string, tsMs int64) {
 }
 
 func (in *Ingestor) ensureOnline() {
-	if in.online == nil {
+	in.onlineOnce.Do(func() {
 		in.online = &onlineTracker{
 			lastSeen: make(map[string]int64),
 			state:    make(map[string]*invOnline),
 		}
-	}
+	})
 }
 
 // StartOnlineSweep launches the periodic sweep that emits online/offline

@@ -118,7 +118,9 @@ type Ingestor struct {
 	// online tracker maintains per-uid online/offline transitions (debounced
 	// for offline so radio flaps don't spam the events log) and fleet-level
 	// sunrise/sundown. See online_events.go. Started by StartOnlineSweep.
-	online *onlineTracker
+	// Initialised exactly once via onlineOnce.
+	onlineOnce sync.Once
+	online     *onlineTracker
 
 	// faults tracker maintains per-uid fault-bit transitions and emits
 	// fault_raised / fault_cleared events into the store with the live

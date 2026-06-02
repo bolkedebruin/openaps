@@ -183,7 +183,7 @@ func TestReconcileAllOverlays_EnqueuesEachPersistedOverlay(t *testing.T) {
 	// Give the goroutines a moment to drain (each just runs the noop runner).
 	time.Sleep(150 * time.Millisecond)
 
-	// noopRunner.calls counts each ReconcileUID invocation, which equals one
+	// noopRunner.calls.Load() counts each ReconcileUID invocation, which equals one
 	// enqueue per (uid, overlay) pair that passed the fleet gate.
 	// Expected in-fleet enqueues:
 	//   - (a, ov1) [ov1 targets a,b → a in-fleet]
@@ -193,7 +193,7 @@ func TestReconcileAllOverlays_EnqueuesEachPersistedOverlay(t *testing.T) {
 	//   - (gone, *) — not in fleet, skipped.
 	// Note: ListOverlays groups by id (DISTINCT id), so each overlay
 	// contributes len(in-fleet uids).
-	got := noopRunner.calls
+	got := noopRunner.calls.Load()
 	// ListOverlays + GROUP BY id returns each overlay once with its body
 	// (which includes the full uids list). For ov1: uids=[a,b], both
 	// in-fleet → 2 enqueues. For ov2: uids=[a,gone], one in-fleet → 1.
@@ -229,8 +229,8 @@ func TestReconcileOverlaysForUID_NoOverlay(t *testing.T) {
 	}
 	// Give any (incorrect) goroutine a chance to fire.
 	time.Sleep(50 * time.Millisecond)
-	if noopRunner.calls != 0 {
-		t.Errorf("expected 0 enqueues for uid with no overlay; got %d", noopRunner.calls)
+	if noopRunner.calls.Load() != 0 {
+		t.Errorf("expected 0 enqueues for uid with no overlay; got %d", noopRunner.calls.Load())
 	}
 }
 
@@ -267,8 +267,8 @@ func TestReconcileOverlaysForUID_EnqueuesOverlay(t *testing.T) {
 	// Drain the goroutine.
 	time.Sleep(150 * time.Millisecond)
 
-	if noopRunner.calls != 1 {
-		t.Errorf("expected 1 enqueue; got %d", noopRunner.calls)
+	if noopRunner.calls.Load() != 1 {
+		t.Errorf("expected 1 enqueue; got %d", noopRunner.calls.Load())
 	}
 
 	// Verify the started event has the overlay's id.
@@ -316,8 +316,8 @@ func TestReconcileOverlaysForUID_SkipsUidNotInFleet(t *testing.T) {
 		t.Fatalf("ReconcileOverlaysForUID: %v", err)
 	}
 	time.Sleep(50 * time.Millisecond)
-	if noopRunner.calls != 0 {
-		t.Errorf("expected 0 enqueues when uid is not in fleet; got %d", noopRunner.calls)
+	if noopRunner.calls.Load() != 0 {
+		t.Errorf("expected 0 enqueues when uid is not in fleet; got %d", noopRunner.calls.Load())
 	}
 }
 

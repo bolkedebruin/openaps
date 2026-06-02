@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -51,17 +52,14 @@ func (r *recordingSink) kinds() []string {
 // stubRunner simulates a reconciler. ReconcileUID blocks for delay, then
 // returns the configured report or error. Cancelling ctx aborts immediately.
 type stubRunner struct {
-	mu     sync.Mutex
-	calls  int
+	calls  atomic.Int64
 	delay  time.Duration
 	report ReconcileReport
 	err    error
 }
 
 func (s *stubRunner) ReconcileUID(ctx context.Context, uid string) (ReconcileReport, error) {
-	s.mu.Lock()
-	s.calls++
-	s.mu.Unlock()
+	s.calls.Add(1)
 	if s.delay > 0 {
 		select {
 		case <-time.After(s.delay):
@@ -253,29 +251,24 @@ func TestOverlayApply_EmitsParamFailedOnTopLevelError(t *testing.T) {
 // uid; the second cancels the first mid-way, the first emits nothing after
 // the supersession, and the second runs to completion.
 func TestOverlayApply_Supersedes(t *testing.T) {
-	// First runner blocks long enough that we can launch a second apply
-	// before it completes.
-	slowRunner := &stubRunner{
-		delay: 2 * time.Second,
+	// One runner with a short delay long enough that we can launch a second
+	// apply before the first completes. Both applies use the same runner so
+	// there is no mid-flight write to applier.rec (which would race with the
+	// first goroutine's read).
+	runner := &stubRunner{
+		delay: 250 * time.Millisecond,
 		report: ReconcileReport{
 			Points: []PointResult{{ApsCode: "BP", Intended: 49.3, Result: "applied"}},
 		},
 	}
-	a, sink := newTestApplier(t, slowRunner)
+	a, sink := newTestApplier(t, runner)
 
 	uid := "999900000001"
 	d1 := a.enqueue(context.Background(), uid, "old", 1)
 
 	// Wait a beat so the started event lands and the first goroutine is
-	// inside ReconcileUID.
-	time.Sleep(100 * time.Millisecond)
-
-	// Swap the runner for a fast one and supersede.
-	a.rec = &stubRunner{
-		report: ReconcileReport{
-			Points: []PointResult{{ApsCode: "BQ", Intended: 50.5, Result: "applied"}},
-		},
-	}
+	// inside ReconcileUID. Then enqueue the supersede.
+	time.Sleep(50 * time.Millisecond)
 	d2 := a.enqueue(context.Background(), uid, "new", 1)
 
 	// First goroutine should exit promptly via its cancelled context.
