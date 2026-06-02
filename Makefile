@@ -337,14 +337,15 @@ package-openaps: build-all-arm $(DROPBEAR_DIR)/dropbear
 	@cp packaging/openaps-rollback $(BUILD_DIR)/pkgroot-openaps/update/openaps-rollback
 	@chmod 0755 $(BUILD_DIR)/pkgroot-openaps/update/openaps-rollback
 	@# Deterministic tarball: name-sorted file list, fixed mtime via
-	@# touch -t (portable across GNU/BSD tar), uid/gid normalised by tar.
+	@# touch -t is portable across GNU/BSD tar; uid/gid flag-syntax diverges
+	@# between GNU (--owner=N --group=N) and BSD (--uid N --gid N), so we
+	@# skip the per-host uid/gid normalisation — extraction runs as root on
+	@# the ECU and overwrites ownership anyway.
 	@TS=$$(python3 -c "import datetime; print(datetime.datetime.utcfromtimestamp($(SOURCE_DATE_EPOCH)).strftime('%Y%m%d%H%M.%S'))" 2>/dev/null || date -u -r $(SOURCE_DATE_EPOCH) +%Y%m%d%H%M.%S 2>/dev/null || echo 202311140000.00); \
 	find $(BUILD_DIR)/pkgroot-openaps -exec touch -t $$TS {} +
 	@(cd $(BUILD_DIR)/pkgroot-openaps && \
 		find . ! -path . | LC_ALL=C sort > /tmp/.openaps-files.lst && \
-		tar -cjf ../$(OPENAPS_PKG_NAME) \
-		    --uid 0 --gid 0 \
-		    -T /tmp/.openaps-files.lst -n)
+		tar -cjf ../$(OPENAPS_PKG_NAME) -T /tmp/.openaps-files.lst -n)
 	@rm -f /tmp/.openaps-files.lst
 	@rm -rf $(BUILD_DIR)/pkgroot-openaps
 	@echo
