@@ -42,10 +42,16 @@ var (
 	// positive multiple of 16, or when the decrypted length prefix is
 	// inconsistent with the remaining plaintext.
 	ErrAESLengthInvalid = errors.New("L1 AES: frame length invalid")
-	// ErrAESDecryptFailed is returned for cipher-level failures (the only
-	// way crypto/aes.NewCipher returns an error is a non-16-byte key,
-	// which our derivation cannot produce — but kept for completeness).
+	// ErrAESDecryptFailed is returned for cipher-level failures on the
+	// decrypt path (the only way crypto/aes.NewCipher returns an error
+	// is a non-16-byte key, which our derivation cannot produce — but
+	// kept for completeness).
 	ErrAESDecryptFailed = errors.New("L1 AES: decrypt failed")
+	// ErrAESEncryptFailed is returned for failures originating in
+	// EncryptTX — currently only a crypto/rand read error while
+	// generating the per-frame nonce, plus the cipher-construction
+	// guard symmetric with ErrAESDecryptFailed.
+	ErrAESEncryptFailed = errors.New("L1 AES: encrypt failed")
 	// ErrAESInverterID is returned when an inverter ID is not the
 	// expected 12-character ASCII form.
 	ErrAESInverterID = errors.New("L1 AES: inverter id must be 12 ASCII chars")
@@ -101,6 +107,38 @@ func idToBCD(id string) ([6]byte, error) {
 	return out, nil
 }
 
+// decryptCiphertext runs AES-128-ECB on `ct` with the per-frame key,
+// then parses the recovered [len_u8][body][zero-pad to 16] plaintext
+// envelope and returns the body slice. ct must be a positive multiple
+// of 16. The returned body is a fresh allocation owned by the caller.
+//
+// Errors are wrapped with the "ciphertext: …" prefix to mark them as
+// originating in the cipher/envelope layer; the per-direction callers
+// (DecryptRX, decryptEnvelopeInPlace) use the "frame: …" prefix for
+// errors about their outer frame shape.
+func decryptCiphertext(key [16]byte, ct []byte) ([]byte, error) {
+	if len(ct) <= 0 || len(ct)%16 != 0 {
+		return nil, fmt.Errorf("%w: ciphertext len %d not positive multiple of 16",
+			ErrAESLengthInvalid, len(ct))
+	}
+	block, cErr := aes.NewCipher(key[:])
+	if cErr != nil {
+		return nil, fmt.Errorf("%w: %v", ErrAESDecryptFailed, cErr)
+	}
+	pt := make([]byte, len(ct))
+	for off := 0; off < len(ct); off += 16 {
+		block.Decrypt(pt[off:off+16], ct[off:off+16])
+	}
+	bodyLen := int(pt[0])
+	if 1+bodyLen > len(pt) {
+		return nil, fmt.Errorf("%w: ciphertext decoded body length %d exceeds plaintext %d",
+			ErrAESLengthInvalid, bodyLen, len(pt)-1)
+	}
+	body := make([]byte, bodyLen)
+	copy(body, pt[1:1+bodyLen])
+	return body, nil
+}
+
 // DecryptRX decrypts an inbound L1 AES frame. raw is the full inbound
 // L1 frame as parsed by the modem splice:
 //
@@ -121,34 +159,15 @@ func idToBCD(id string) ([6]byte, error) {
 // it is equal to raw[6:12].
 func DecryptRX(raw []byte) (plaintext []byte, ieee [6]byte, err error) {
 	if len(raw) < 0x12 || raw[0] != L1ReplySOF || raw[1] != L1ReplySOF {
-		return nil, ieee, fmt.Errorf("%w: malformed L1 frame (len=%d)", ErrAESLengthInvalid, len(raw))
+		return nil, ieee, fmt.Errorf("%w: frame malformed L1 (len=%d)", ErrAESLengthInvalid, len(raw))
 	}
 	copy(ieee[:], raw[6:12])
 
-	ctLen := len(raw) - 18
-	if ctLen <= 0 || ctLen%16 != 0 {
-		return nil, ieee, fmt.Errorf("%w: ciphertext len %d not positive multiple of 16",
-			ErrAESLengthInvalid, ctLen)
-	}
-
 	key := deriveFrameKey(raw[12:18], raw[6:12])
-	block, cErr := aes.NewCipher(key[:])
-	if cErr != nil {
-		return nil, ieee, fmt.Errorf("%w: %v", ErrAESDecryptFailed, cErr)
+	body, dErr := decryptCiphertext(key, raw[18:])
+	if dErr != nil {
+		return nil, ieee, dErr
 	}
-
-	pt := make([]byte, ctLen)
-	for off := 0; off < ctLen; off += 16 {
-		block.Decrypt(pt[off:off+16], raw[18+off:18+off+16])
-	}
-
-	bodyLen := int(pt[0])
-	if 1+bodyLen > len(pt) {
-		return nil, ieee, fmt.Errorf("%w: decoded body length %d exceeds plaintext %d",
-			ErrAESLengthInvalid, bodyLen, len(pt)-1)
-	}
-	body := make([]byte, bodyLen)
-	copy(body, pt[1:1+bodyLen])
 	return body, ieee, nil
 }
 
@@ -191,32 +210,16 @@ func DecryptRXIntoEnvelope(raw []byte) (L1Envelope, error) {
 func decryptEnvelopeInPlace(env L1Envelope) (L1Envelope, error) {
 	tail := env.L2Frame
 	if len(tail) < 6+16 {
-		return L1Envelope{}, fmt.Errorf("%w: encrypted L2 tail %d < 22 bytes",
+		return L1Envelope{}, fmt.Errorf("%w: frame encrypted L2 tail %d < 22 bytes",
 			ErrAESLengthInvalid, len(tail))
-	}
-	ctLen := len(tail) - 6
-	if ctLen <= 0 || ctLen%16 != 0 {
-		return L1Envelope{}, fmt.Errorf("%w: ciphertext len %d not positive multiple of 16",
-			ErrAESLengthInvalid, ctLen)
 	}
 	nonce := tail[0:6]
 	ct := tail[6:]
 	key := deriveFrameKey(nonce, env.PeerUID[:])
-	block, cErr := aes.NewCipher(key[:])
-	if cErr != nil {
-		return L1Envelope{}, fmt.Errorf("%w: %v", ErrAESDecryptFailed, cErr)
+	body, err := decryptCiphertext(key, ct)
+	if err != nil {
+		return L1Envelope{}, err
 	}
-	pt := make([]byte, ctLen)
-	for off := 0; off < ctLen; off += 16 {
-		block.Decrypt(pt[off:off+16], ct[off:off+16])
-	}
-	bodyLen := int(pt[0])
-	if 1+bodyLen > len(pt) {
-		return L1Envelope{}, fmt.Errorf("%w: decoded body length %d exceeds plaintext %d",
-			ErrAESLengthInvalid, bodyLen, len(pt)-1)
-	}
-	body := make([]byte, bodyLen)
-	copy(body, pt[1:1+bodyLen])
 	out := env
 	out.L2Frame = body
 	return out, nil
@@ -258,7 +261,7 @@ func EncryptTX(opcode byte, shortAddr uint16, id string, body []byte, nonce6 []b
 	var nonce [6]byte
 	if nonce6 == nil {
 		if _, err := rand.Read(nonce[:]); err != nil {
-			return nil, fmt.Errorf("%w: nonce: %v", ErrAESDecryptFailed, err)
+			return nil, fmt.Errorf("%w: nonce: %v", ErrAESEncryptFailed, err)
 		}
 	} else {
 		if len(nonce6) != 6 {
@@ -280,7 +283,7 @@ func EncryptTX(opcode byte, shortAddr uint16, id string, body []byte, nonce6 []b
 	key := deriveFrameKey(nonce[:], ieee[:])
 	block, cErr := aes.NewCipher(key[:])
 	if cErr != nil {
-		return nil, fmt.Errorf("%w: %v", ErrAESDecryptFailed, cErr)
+		return nil, fmt.Errorf("%w: %v", ErrAESEncryptFailed, cErr)
 	}
 	ct := make([]byte, n)
 	for off := 0; off < n; off += 16 {

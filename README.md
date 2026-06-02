@@ -54,9 +54,37 @@ OpenAPS replaces the stock firmware on APsystems ECU gateways with a clean Go st
 - SunSpec / Modbus TCP (port `502`, the IANA-standard Modbus port) — models 101/103/111/113/123/711 etc., consumed cleanly by Home Assistant and other EMS
 - HTTPS operator console on `:443` with operator-password auth + single-use recovery code + change-password
 - Encryption badge per inverter (AES vs plaintext frame detection)
-- L1 OTA AES-128 codec ⚠️ experimental, opt-in via `-enable-aes-l1` (decrypt + encrypt primitive implemented per [`docs/AES-DESIGN.md`](docs/AES-DESIGN.md); no on-wire test vectors available on the maintainer's fleet — see the design doc's validation-gap note)
+- L1 OTA AES-128 codec ⚠️ experimental, opt-in via `-enable-aes-l1` (decrypt + encrypt primitive implemented per [`docs/AES-DESIGN.md`](docs/AES-DESIGN.md); no on-wire test vectors available on the maintainer's fleet — see the design doc's validation-gap note, and the AES threat model below)
 - Audit event log with `by` attribution for every settings/profile/power-cap change
 - Rollback CLI restores the original stock firmware from a backup snapshot
+
+### AES L1 Encryption (EXPERIMENTAL)
+
+`inv-driver` supports AES-128-ECB L1 over-the-air decryption for encrypted
+inverter telemetry frames (opt-in via `-enable-aes-l1`). This cipher is
+reverse-engineered from APsystems firmware and **is not a new security
+boundary**:
+
+- The cipher **mode and key derivation are wire-mandated** by the inverter
+  firmware (`AES_flag_ALL=1` at runtime). We do not control the algorithm
+  choice.
+- The per-frame **random nonce is sourced from `crypto/rand`** for each
+  transmitted frame; no static key is involved on the L1 OTA path.
+- **No integrity protection** (MAC/HMAC) exists on encrypted frames; an
+  attacker on the LAN can inject or modify ciphertext. The firmware itself
+  relies only on the L2 frame structure (`FB FB ... FE FE`) as a sanity
+  check, which this codec mirrors.
+- **Gate-byte collision:** approximately 6.25% of random nonces occupy the
+  plaintext indicator band (`[0xF0, 0xFF]`) and would be mis-classified as
+  plaintext on reception. These frames fail L2 parse downstream and are
+  dropped safely (not a security issue, graceful degradation).
+- **Operator trust assumption:** the LAN is assumed trusted. AES-ECB
+  without a MAC is susceptible to known-plaintext and chosen-ciphertext
+  attacks if an attacker can inject frames or observe responses.
+
+**Do NOT enable `-enable-aes-l1` on untrusted networks.** It is suitable
+only for closed local networks (home solar arrays, building networks)
+where RF eavesdropping is the only realistic threat.
 
 **Deliberately not included (and not going to be):**
 
