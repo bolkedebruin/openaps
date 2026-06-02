@@ -1,0 +1,54 @@
+#!/bin/sh
+#
+# S99-sunspec — start/stop the apsystems-sunspec Modbus TCP adapter.
+#
+# Stock APsystems firmware uses BusyBox-style init.d scripts; everything
+# under /etc/init.d/S* is run on boot in lexical order. S99 puts us last,
+# after main.exe and friends have settled.
+#
+# ecu-sunspec subscribes to inv-driver over UDS for per-inverter
+# telemetry (5s cadence). The SQLite reader against /home/database.db
+# still supplies event bits, signal strength, per-inverter limit, and
+# windowed energy aggregates.
+
+BIN=/home/applications/ecu-sunspec
+PIDOF="pidof ecu-sunspec"
+LOG=/home/ecu-sunspec.log
+ARGS="--bind tcp://0.0.0.0:1502 --invdriver-sock /var/run/inv-driver.sock --log-file $LOG --log-max-size 5 --log-max-backups 3"
+
+start() {
+    if $PIDOF >/dev/null 2>&1; then
+        echo "ecu-sunspec already running"
+        return 0
+    fi
+    [ -x "$BIN" ] || { echo "$BIN missing or not executable"; return 1; }
+    nohup $BIN $ARGS > /dev/null 2>&1 &
+    echo "ecu-sunspec started"
+}
+
+stop() {
+    if $PIDOF >/dev/null 2>&1; then
+        killall -q ecu-sunspec
+        sleep 1
+        killall -q -9 ecu-sunspec 2>/dev/null
+        echo "ecu-sunspec stopped"
+    fi
+}
+
+case "$1" in
+    start)   start ;;
+    stop)    stop ;;
+    restart) stop; sleep 1; start ;;
+    status)
+        if $PIDOF >/dev/null 2>&1; then
+            echo "running (pid $($PIDOF))"
+        else
+            echo "stopped"
+            exit 1
+        fi
+        ;;
+    *)
+        echo "usage: $0 {start|stop|restart|status}"
+        exit 2
+        ;;
+esac

@@ -1,0 +1,159 @@
+{
+    "id": 64202,
+    "group": {
+        "name": "apsystems_ecu",
+        "label": "APsystems ECU vendor extras",
+        "desc": "Vendor model emitted by ecu-sunspec. System-wide energy aggregates, ECU info, and per-inverter metadata that don't fit standard SunSpec fields.",
+        "type": "group",
+        "points": [
+            {
+                "name": "ID",
+                "value": 64202,
+                "desc": "Model identifier",
+                "label": "Model ID",
+                "mandatory": "M",
+                "static": "S",
+                "size": 1,
+                "type": "uint16"
+            },
+            {
+                "name": "L",
+                "desc": "Model length",
+                "label": "Model Length",
+                "mandatory": "M",
+                "static": "S",
+                "size": 1,
+                "type": "uint16"
+            },
+            {
+                "name": "PollingS",
+                "type": "uint16",
+                "size": 1,
+                "label": "Polling Interval",
+                "desc": "ECU radio polling cadence (seconds).",
+                "units": "Secs"
+            },
+            {
+                "name": "EcuFwVer",
+                "type": "string",
+                "size": 8,
+                "label": "ECU Firmware Version",
+                "desc": "/etc/yuneng/version.conf"
+            },
+            {
+                "name": "TodayWh",
+                "type": "acc32",
+                "size": 2,
+                "label": "Today Energy",
+                "desc": "Energy produced since midnight, derived from historical_data.db.daily_energy.",
+                "units": "Wh"
+            },
+            {
+                "name": "MonthWh",
+                "type": "acc32",
+                "size": 2,
+                "label": "Month Energy",
+                "desc": "Energy produced this calendar month.",
+                "units": "Wh"
+            },
+            {
+                "name": "YearWh",
+                "type": "acc32",
+                "size": 2,
+                "label": "Year Energy",
+                "desc": "Energy produced this calendar year.",
+                "units": "Wh"
+            },
+            {
+                "name": "N",
+                "type": "uint16",
+                "size": 1,
+                "label": "Inverter Count",
+                "desc": "Number of inverter rows in the repeating block."
+            }
+        ],
+        "groups": [
+            {
+                "name": "inverter",
+                "type": "group",
+                "count": "N",
+                "points": [
+                    {
+                        "name": "Idx",
+                        "type": "uint16",
+                        "size": 1,
+                        "label": "Index",
+                        "desc": "1-based inverter row index."
+                    },
+                    {
+                        "name": "RSSI",
+                        "type": "uint16",
+                        "size": 1,
+                        "label": "Signal Strength",
+                        "desc": "Raw signal_strength.signal_strength (0..255)."
+                    },
+                    {
+                        "name": "LimitedW",
+                        "type": "uint16",
+                        "size": 1,
+                        "label": "Limited Power",
+                        "desc": "Per-panel curtailment cap from power.limitedpower.",
+                        "units": "W"
+                    },
+                    {
+                        "name": "Phase",
+                        "type": "uint16",
+                        "size": 1,
+                        "label": "Phase",
+                        "desc": "id.phase: 0=unset, 1=L1, 2=L2, 3=L3."
+                    },
+                    {
+                        "name": "Model",
+                        "type": "uint16",
+                        "size": 1,
+                        "label": "Model Code",
+                        "desc": "id.model — APsystems internal type code."
+                    },
+                    {
+                        "name": "SoftwareVer",
+                        "type": "uint16",
+                        "size": 1,
+                        "label": "Software Version",
+                        "desc": "id.software_version reported by the inverter over ZigBee."
+                    },
+                    {
+                        "name": "PanelCnt",
+                        "type": "uint16",
+                        "size": 1,
+                        "label": "Panel Count",
+                        "desc": "Number of PV input channels for this inverter type (DS3=2, DS3-L=4)."
+                    },
+                    {
+                        "name": "NameplateW",
+                        "type": "uint16",
+                        "size": 1,
+                        "label": "Nameplate Power",
+                        "desc": "Rated AC output for this inverter type.",
+                        "units": "W"
+                    },
+                    {
+                        "name": "Online",
+                        "type": "uint16",
+                        "size": 1,
+                        "label": "Online",
+                        "desc": "1 = online, 0 = offline.",
+                        "symbols": [
+                            {"name": "OFF", "value": 0},
+                            {"name": "ON",  "value": 1}
+                        ]
+                    },
+                    {
+                        "name": "Pad",
+                        "type": "pad",
+                        "size": 1
+                    }
+                ]
+            }
+        ]
+    }
+}

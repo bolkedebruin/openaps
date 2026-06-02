@@ -1,0 +1,7 @@
+{
+    "writes": {
+        "enabled": true,
+        "allow_local_network": true,
+        "allow_list": []
+    }
+}
