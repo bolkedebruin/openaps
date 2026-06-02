@@ -8,8 +8,7 @@ package codec
 // Fleet sums are useful for SunSpec Model 120 (Nameplate Ratings).
 //
 // Authoritative entries are pinned to APsystems' own model→watts
-// table (the same one main.exe writes into /tmp/powerALL.conf at
-// boot). Defaults for the rest are derived from product datasheets
+// table. Defaults for the rest are derived from product datasheets
 // and may need adjustment for region-specific submodels.
 func NameplateWattsForModel(modelCode uint8) uint32 {
 	switch modelCode {

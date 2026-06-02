@@ -73,9 +73,8 @@ var qs1ProtFreqSubs = map[string]byte{
 	"Over_frequency_Watt_High_set":  0x65, // CC
 	"Under_Frequency_Watt_Low_set":  0xA1, // DH
 	"Under_Frequency_Watt_High_set": 0xA4, // DI
-	// Reconnect-frequency thresholds (main.exe: Reconnection_over/under_frequency).
-	// Source: set_paraName_paraValue_inverter @ 0x69bdc — QS1A (model 0x18/8) dispatches
-	// to set_protection_new_one with sub 0x4e (BQ) / 0x51 (BP), scale int(50e6/Hz),
+	// Reconnect-frequency thresholds (Reconnection_over/under_frequency).
+	// QS1A dispatch: sub 0x4e (BQ) / 0x51 (BP), scale int(50e6/Hz),
 	// byte_count 3 (same family as CA/CB/CC/DH/DI).
 	"Reconnection_over_frequency":  0x4e, // BQ
 	"Reconnection_under_frequency": 0x51, // BP
@@ -196,7 +195,6 @@ func qsDroop(raw int) float64 { return float64(raw) * qsProtDroopScale }
 
 // qsMaxPower is the rated/limited output cap (DA), per panel: raw16 × 256/7395
 // — the inverse of EncodeSetPowerQS1A's (W × 0x1CE3) >> 8.
-// (main.exe resolve_protection60_paras_YC600, key "DA".)
 func qsMaxPower(raw int) float64 { return float64(raw) * 256.0 / 7395.0 }
 
 // qsModeFromPageB decodes the QS1 over-frequency-watt mode (CV), a nibble
@@ -221,8 +219,8 @@ func qsModeFromPageB(f []byte, base int) (float64, bool) {
 
 // qs1PageAEnum builds an fn that extracts an enum field packed into the
 // page-A flags byte at base+0x01 (reply byte right after the 0xDB cmd).
-// main.exe (resolve_protection60_paras_YC600 @ 0x4f968) unpacks four enums
-// from this single byte: AT=b>>6, AU=(b>>4)&3, AV=(b>>1)&3, AW=b&1.
+// Four enums are packed into this single byte:
+// AT=b>>6, AU=(b>>4)&3, AV=(b>>1)&3, AW=b&1.
 func qs1PageAEnum(shift, mask byte) func(f []byte, base int) (float64, bool) {
 	return func(f []byte, base int) (float64, bool) {
 		i := base + 0x01
@@ -235,12 +233,9 @@ func qs1PageAEnum(shift, mask byte) func(f []byte, base int) (float64, bool) {
 
 var (
 	// qs1ReadPageA decodes the QS1/QS1A page-A protection reply (L2 cmd
-	// 0xDB). Offsets are relative to base = reply[3] (the 0xDB cmd byte),
-	// matching get_parameters_from_inverter @ 0x6462c, which passes
-	// &reply[3] as param_2 to resolve_protection60_paras_YC600 @ 0x4f968.
+	// 0xDB). Offsets are relative to base = reply[3] (the 0xDB cmd byte).
 	//
-	// Field map (param_2+offset → code → scale), from the @0x4f968
-	// param_5%2==1 block:
+	// Field map (base+offset → code → scale):
 	//   +0x01 byte → AT/AU/AV/AW enum nibbles
 	//   +0x03 → AX (raw 16-bit, no scale)
 	//   +0x05/07/09/0b/0d/0f → AQ/AD/AC/AY/AZ/BA volts (raw/1.332/4, %.0f)
@@ -250,8 +245,8 @@ var (
 	//   +0x35/37 → AH/AI volts (raw/1.332/4)
 	//   +0x39/3b → BL/BM volts (raw/100; transtemp-window times)
 	// The DW..EE columns the firmware also writes are hardcoded float
-	// constants (not reply bytes) — decoded only as defaults by main.exe,
-	// so they are intentionally omitted here.
+	// constants (not reply bytes) — used only as defaults, so they are
+	// intentionally omitted here.
 	qs1ReadPageA = []protReadField{
 		{code: "AT", fn: qs1PageAEnum(6, 3)}, {code: "AU", fn: qs1PageAEnum(4, 3)},
 		{code: "AV", fn: qs1PageAEnum(1, 3)}, {code: "AW", fn: qs1PageAEnum(0, 1)},
@@ -412,7 +407,7 @@ func encodeProtectionQS1A(paramName string, value float64, opcode byte) ([][]byt
 }
 
 // qs1ModeFrames builds the QS1 over-frequency-watt mode enum sequence
-// (Over_frequency_Watt_set, sub 0x5F + 0x99), replicating main.exe's
+// (Over_frequency_Watt_set, sub 0x5F + 0x99), replicating the firmware
 // branch+remap: 0xF (disabled) → 5F=0x30, 5F=0x0F, 99=0; {3,4,0xD}
 // (AS/NZS, 0xD→4) → 5F=0x10, 5F=v, 99=1; else (e.g. 0xE→1) → 5F=0x20,
 // 5F=v. Each frame uses opcode (0x1C unicast or 0x2C broadcast) with
@@ -476,29 +471,27 @@ func EncodeSetPowerQS1A(panelWatts uint16, broadcast bool) ([]byte, error) {
 }
 
 // QS1A reply payload layout, body offset 0 = byte right after the
-// L2 cmd 0xB1 (i.e. main.exe's `param_1` to resolvedata_60_1200,
-// which is l2_frame[4..]).
+// L2 cmd 0xB1.
 //
-// Constants from main.exe .rodata (Ghidra dumps at 0x1dda8..0x1de8
-// and 0x1ea00):
+// Wire scale constants:
 //
-//	busPFBase    = 2.85   @ 0x1dda8  (bus V denom)
-//	busScale     = 3300.0 @ 0x1ddb0  (bus V numer)
-//	busDenom     = 4092.0 @ 0x1ddb8  (bus V denom inner)
-//	busOffset    = 757.0  @ 0x1ddc0  (bus V offset)
-//	freqDivBy    = 5e7    @ 0x1ddc8  (Hz = 5e7 / raw_3byte)
-//	panelVMax    = 82.5   @ 0x1ddd0  (panel V scale, 12-bit ADC)
-//	panelIMax    = 27.5   @ 0x1ddd8  (panel I scale, 12-bit ADC)
-//	adc12bit     = 4096.0 @ 0x1dde0
-//	gridVDenom   = 1.32   @ 0x1dde8  (V_grid = raw16 / 1.32 / 4)
-//	efficiency   = 0.95   @ 0x1ea00  (active power scale)
-//	lifetime     = 3.756e-11           (per-byte → kWh, in main.exe code)
+//	busPFBase    = 2.85   (bus V denom)
+//	busScale     = 3300.0 (bus V numer)
+//	busDenom     = 4092.0 (bus V denom inner)
+//	busOffset    = 757.0  (bus V offset)
+//	freqDivBy    = 5e7    (Hz = 5e7 / raw_3byte)
+//	panelVMax    = 82.5   (panel V scale, 12-bit ADC)
+//	panelIMax    = 27.5   (panel I scale, 12-bit ADC)
+//	adc12bit     = 4096.0
+//	gridVDenom   = 1.32   (V_grid = raw16 / 1.32 / 4)
+//	efficiency   = 0.95   (active power scale)
+//	lifetime     = 3.756e-11 (per-byte → kWh)
 const (
 	qs1aBusScale  = 3300.0
 	qs1aBusDenom  = 4092.0
 	qs1aBusOffset = 757.0
 	qs1aBusPFBase = 2.85
-	qs1aFreqDivBy = 50_000_000.0 // QS1 freq raw↔Hz dividend; also the protection-encode dividend (DAT_6dbf8/6f5e8)
+	qs1aFreqDivBy = 50_000_000.0 // QS1 freq raw↔Hz dividend; also the protection-encode dividend
 	qs1aPanelVMax = 82.5
 	qs1aPanelIMax = 27.5
 	qs1aADC12bit  = 4096.0
@@ -513,8 +506,8 @@ const (
 //
 // Field map (offsets into body):
 //
-//	[0..1]   internal DC bus voltage (16-bit ADC) → V via the busPF formula.
-//	         Stored at inv+0x4c/0x1d0 by main.exe; printed as "bus_vol".
+//	[0..1]   internal DC bus voltage (16-bit ADC) → V via the busPF formula
+//	         (printed as "bus_vol").
 //	[2..4]   grid frequency (24-bit) → Hz = 5e7 / raw
 //	[6..8]   panel D 3-byte packed (12-bit V + 12-bit I)
 //	[9..11]  panel C 3-byte packed
@@ -564,10 +557,8 @@ func decodeQS1A(body []byte, r *Reply) {
 	}
 
 	// Active power total = sum of panel watts × 0.95 efficiency.
-	// main.exe applies the same 0.95 (DAT_0001ea00) before storing
-	// at param_2 + 0x1f4. Bypassing main.exe's MAXOP and DC-vs-energy
-	// tie-break logic (those are for ECU power-limiting, not raw
-	// telemetry).
+	// MAXOP and DC-vs-energy tie-break logic are intentionally
+	// bypassed (those are for ECU power-limiting, not raw telemetry).
 	var w float64
 	for _, p := range r.Panels {
 		w += p.W
@@ -589,18 +580,15 @@ func decodeQS1A(body []byte, r *Reply) {
 }
 
 // QS1AStatus holds the raw status bytes a QS1A reply spreads across
-// the payload. main.exe (resolvedata_60_1200 @ 0x1dbec) unpacks them
-// into the same inverter-struct slots DS3 uses (0x288..0x2db) and an
-// additional grid-side block at inv+0x3cc..0x3d3 driven by Grid.
+// the payload. They are unpacked into the same logical slots DS3 uses
+// plus an additional grid-side block driven by Grid.
 //
 // Source layout (in ascending body offset order):
 //
 //	Main  = body[0x17..0x1a]  — primary fault/warning bits
-//	Extra = body[0x34]        — single byte copied verbatim to
-//	                            inv+0x3d9; semantics undocumented.
-//	Grid  = body[0x38..0x39]  — grid-side flag table; main.exe also
-//	                            steps per-bit "absence" counters at
-//	                            inv+0x3dc/0x3e0/0x3e4/0x3e8.
+//	Extra = body[0x34]        — single byte; semantics undocumented.
+//	Grid  = body[0x38..0x39]  — grid-side flag table; per-bit
+//	                            "absence" counters track loss.
 type QS1AStatus struct {
 	Main  [4]byte
 	Grid  [2]byte
@@ -648,12 +636,10 @@ func (f QS1AFaults) InverterStatus() InverterStatus {
 }
 
 // QS1AFaults names the QS1A status bits whose meaning is pinned by
-// main.exe's Modbus packing (update_modbus_status @ 0x96570) or by
-// debounce/aggregator placement. All bits are fault-active: '1' on
-// the wire means an event/fault is present; '0' means healthy.
-// Verified via qs1200_60_status @ 0x297d8 (gates the cloud-upload
-// alarm-pending flag on these slots being '1'). Bits with no named
-// semantic stay reachable via QS1AStatus.Main/Grid/Extra.
+// the firmware's Modbus packing or by debounce/aggregator placement.
+// All bits are fault-active: '1' on the wire means an event/fault is
+// present; '0' means healthy. Bits with no named semantic stay
+// reachable via QS1AStatus.Main/Grid/Extra.
 //
 // QS1A reports a strictly richer Evt1 surface than DS3: isolation is
 // split per-channel (A/B/C/D), and over-temperature has a body bit
@@ -687,11 +673,10 @@ type QS1AFaults struct {
 	UnderFreqExtra bool // body[0x19] bit 1 → inv+0x2ae → Evt1 bit 12
 	UnderFreqRMS   bool // body[0x17] bit 6 → inv+0x2b5 → Evt1 bit 12 (10-min RMS)
 
-	// ZBLink{A,B} feed Evt1 bit 4 via inv+0x3cc/0x3cd. Polarity
-	// reflects the firmware verbatim — main.exe ORs the slot value
-	// into Evt1 bit 4 regardless of SunSpec's GRID_DISCONNECT
-	// convention. Same slots also drive the per-channel absence
-	// counters at inv+0x3dc/0x3e0.
+	// ZBLink{A,B} feed Evt1 bit 4. Polarity reflects the firmware
+	// verbatim — the slot value ORs into Evt1 bit 4 regardless of
+	// SunSpec's GRID_DISCONNECT convention. Same slots also drive
+	// the per-channel absence counters.
 	ZBLinkA bool // body[0x39] bit 0 → inv+0x3cc → Evt1 bit 4
 	ZBLinkB bool // body[0x39] bit 1 → inv+0x3cd → Evt1 bit 4
 }
@@ -730,7 +715,7 @@ func (s QS1AStatus) Faults() QS1AFaults {
 	}
 }
 
-// ModbusStatus reproduces main.exe's update_modbus_status @ 0x96570
+// ModbusStatus returns the SunSpec Model 103 (St, Evt1) register pair
 // for a QS1A reply via the shared packModbusStatus helper. QS1A
 // populates strictly more Evt1 bits than DS3 — isolation (bit 14,
 // per-channel A/B/C/D), comm (bits 13 + 11), ZB-link (bit 12), and
@@ -753,23 +738,23 @@ func (s QS1AStatus) ModbusStatus() (st, evt1 uint16) {
 	})
 }
 
-// qs1aBusV applies main.exe's internal-DC-link formula:
+// qs1aBusV applies the internal-DC-link formula:
 //
 //	V = (raw * 3300/4092 - 757) / 2.85
 //
-// This is the value main.exe prints as "bus_vol".
+// This is the value printed as "bus_vol".
 func qs1aBusV(raw uint16) float64 {
 	return (float64(raw)*qs1aBusScale/qs1aBusDenom - qs1aBusOffset) / qs1aBusPFBase
 }
 
-// qs1aGridV applies main.exe's grid voltage formula:
+// qs1aGridV applies the grid voltage formula:
 //
 //	V = (raw_16bit / 1.32) / 4
 func qs1aGridV(raw uint16) float64 {
 	return (float64(raw) / qs1aGridDenom) / 4.0
 }
 
-// qs1aFreqHz applies main.exe's formula:
+// qs1aFreqHz applies the formula:
 //
 //	Hz = 5e7 / raw3byte
 func qs1aFreqHz(raw uint32) float64 {

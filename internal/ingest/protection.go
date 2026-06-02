@@ -24,8 +24,7 @@ const (
 	protReadQueueCap     = 16
 	// protReadAttempts re-sends the page set per read; pages accumulate in
 	// the buffer, so a second pass fills any page whose reply was lost on
-	// the radio (on-demand has no continuous-poll redundancy). main.exe
-	// retries each page up to 3×.
+	// the radio (on-demand has no continuous-poll redundancy).
 	protReadAttempts = 2
 )
 

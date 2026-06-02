@@ -2,9 +2,8 @@
 // decodes the QueryData (cmd 0xBB → reply cmd 0xB1 for QS1A, 0xBB
 // for DS3) telemetry payload into a typed Reply.
 //
-// The decoders mirror main.exe's resolvedata_60_1200 (QS1A,
-// addr 0x1dbec) and resolvedata_DS3 (addr 0x1f45c). Scale constants
-// come from the .rodata pools at 0x1dda8+ (QS1A) and 0x1f770+ (DS3).
+// The decoders parse the QS1A and DS3 telemetry payloads using the
+// per-family scale constants documented in the codec.
 //
 // AES-128-ECB L1 decryption is out of scope here; ECUs running
 // AES_flag_ALL=0 emit plaintext frames. The Encrypted bit on
@@ -23,14 +22,13 @@ import (
 //	FC FC <SA hi> <SA lo> <RSSI byte 4> <RSSI byte 5> <peer UID 6> <gate=L2[0]> ...
 //
 // Bytes 4 and 5 are signal-quality bytes the ZigBee modem stamps on every
-// received reply. Main.exe (zb_get_reply @ 0xe5ac) writes byte 4 to its
-// signal_strength table as the "RSSI" exposed to operators, clamping
-// values < 0x10 up to 0xff (sentinel for "tiny / unknown"). Byte 5 is
-// stored separately as signal_field2_rssi and logged to /tmp/raduis.txt.
+// received reply. Byte 4 is the primary RSSI exposed to operators, clamped
+// so values < 0x10 are replaced with 0xff (sentinel for "tiny / unknown").
+// Byte 5 is a secondary signal metric.
 type L1Envelope struct {
 	ShortAddr uint16
-	RSSI      byte    // byte 4 of L1 — primary RSSI (main.exe's signal_strength)
-	LQI       byte    // byte 5 of L1 — secondary signal metric (main.exe's signal_field2_rssi)
+	RSSI      byte    // byte 4 of L1 — primary RSSI
+	LQI       byte    // byte 5 of L1 — secondary signal metric
 	PeerUID   [6]byte // 6-byte BCD inverter ID, e.g. 80 60 00 04 25 82
 	Encrypted bool    // gate byte < 0xF0
 	L2Frame   []byte  // FB FB ... FE FE (plaintext or ciphertext block)
@@ -121,9 +119,9 @@ type Reply struct {
 	Cmd       byte   // L2 cmd byte (0xB1 QS1A, 0xBB DS3, etc.)
 	Model     string // "QS1A" / "DS3" / "unknown"
 
-	// Signal-quality bytes from the L1 envelope (zb_get_reply @ 0xe5ac).
-	// RSSI is what main.exe stores in its signal_strength SQLite table
-	// (with clamp byte < 0x10 → 0xff applied at consumer level).
+	// Signal-quality bytes from the L1 envelope.
+	// RSSI is the primary signal strength value (with clamp byte < 0x10
+	// → 0xff applied at consumer level).
 	RSSI byte
 	LQI  byte
 
@@ -142,10 +140,8 @@ type Reply struct {
 	LifetimeScale float64 // kWh per raw unit
 
 	// Status holds the family-agnostic aggregator booleans (DC bus,
-	// fault A/B, warning A/B) — the same five signals main.exe
-	// derives at the tail of every resolvedata_* function before
-	// stepping its on-firmware counters at inv+0x3ec..0x400.
-	// Populated for every recognised family.
+	// fault A/B, warning A/B) derived at the tail of every per-family
+	// resolver. Populated for every recognised family.
 	Status InverterStatus
 
 	// DS3Status holds the raw 5-byte status block at body[0x0b..0x10].
@@ -157,13 +153,9 @@ type Reply struct {
 	QS1AStatus QS1AStatus
 }
 
-// InverterStatus collects the five aggregator signals main.exe
-// derives in every resolvedata_* function. Each codec populates this
-// from its own byte map; the inverter-struct slots and counter
-// addresses are identical across families (DC bus → inv+0x3f0 vs
-// 0x3ec, fault A → 0x3f4, fault B → 0x3f8, warning A → 0x3fc,
-// warning B → 0x400). All bits are fault-active: true means a fault
-// event is present (firmware counter inv+0x3f0 advances).
+// InverterStatus collects the five aggregator signals each per-family
+// resolver derives. Each codec populates this from its own byte map.
+// All bits are fault-active: true means a fault event is present.
 type InverterStatus struct {
 	DCBusFault         bool
 	FaultA, FaultB     bool
@@ -190,11 +182,10 @@ type modbusStatusInputs struct {
 	UnderFreqAny   bool
 }
 
-// packModbusStatus mirrors main.exe's update_modbus_status @ 0x96570:
-// returns (St, Evt1) as the SunSpec Model 103 16-bit big-endian
-// register pair the firmware writes at inv+0x534 and inv+0x538.
-// Per-family ModbusStatus methods build a modbusStatusInputs and call
-// here so the Evt1 layout has one source of truth.
+// packModbusStatus returns (St, Evt1) as the SunSpec Model 103 16-bit
+// big-endian register pair. Per-family ModbusStatus methods build a
+// modbusStatusInputs and call here so the Evt1 layout has one source
+// of truth.
 func packModbusStatus(in modbusStatusInputs) (st, evt1 uint16) {
 	if in.GridRelay {
 		st = 6
@@ -290,8 +281,8 @@ func DecodeReplyFromEnvelope(env L1Envelope) (Reply, error) {
 }
 
 // charsToUint reads `n` big-endian bytes from b starting at off and
-// returns the value as uint64. main.exe's charsToLongLong does the
-// same thing, used for the 4–5 byte panel lifetime accumulators.
+// returns the value as uint64. Used for the 4–5 byte panel lifetime
+// accumulators.
 func charsToUint(b []byte, off, n int) uint64 {
 	var v uint64
 	for i := 0; i < n && off+i < len(b); i++ {

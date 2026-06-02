@@ -866,7 +866,7 @@ func (x *Telemetry) GetEncrypted() bool {
 
 // InverterFaults dispatches on family. Each variant mirrors the
 // codec's named-bit struct (codec.DS3Faults / codec.QS1AFaults).
-// Bits whose meaning is not pinned by main.exe's Modbus packing
+// Bits whose meaning is not pinned by the firmware's Modbus packing
 // (warning-bucket, legacy slots) are NOT carried here — consumers
 // that need raw bytes should read RawFrame.
 type InverterFaults struct {
@@ -953,7 +953,7 @@ func (*InverterFaults_Qs1A) isInverterFaults_Family() {}
 
 // DS3Faults mirrors codec.DS3Faults — 18 named bits from the
 // 5-byte status block at body[0x0b..0x10] of a DS3 reply.
-// Semantics pinned by main.exe update_modbus_status @ 0x96570.
+// Semantics pinned by the firmware's Modbus packing.
 type DS3Faults struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	GridRelayFault    bool                   `protobuf:"varint,1,opt,name=grid_relay_fault,json=gridRelayFault,proto3" json:"grid_relay_fault,omitempty"`             // body[0x0c] bit 1 — 1=event/fault (per DS3_DS3D_status @ 0x290f8)
@@ -1136,7 +1136,7 @@ func (x *DS3Faults) GetUnderFreqExtra() bool {
 
 // QS1AFaults mirrors codec.QS1AFaults — 24 named bits from
 // body[0x17..0x1a], body[0x38..0x39], plus implicit ZB-link
-// derivation. Semantics pinned by main.exe update_modbus_status.
+// derivation. Semantics pinned by the firmware's Modbus packing.
 type QS1AFaults struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	GridRelayFault   bool                   `protobuf:"varint,1,opt,name=grid_relay_fault,json=gridRelayFault,proto3" json:"grid_relay_fault,omitempty"`       // body[0x17] bit 2 — 1=event/fault (per qs1200_60_status @ 0x297d8)
@@ -1721,8 +1721,7 @@ type FleetSummary struct {
 	NameplateTotalW uint32                 `protobuf:"varint,2,opt,name=nameplate_total_w,json=nameplateTotalW,proto3" json:"nameplate_total_w,omitempty"`
 	InverterCount   uint32                 `protobuf:"varint,3,opt,name=inverter_count,json=inverterCount,proto3" json:"inverter_count,omitempty"`
 	// Fleet-level energy in watt-hours, computed by inv-driver from its
-	// own energy_lifetime + energy_period_anchor tables. Independent of
-	// main.exe's daily/monthly/yearly tables.
+	// own energy_lifetime + energy_period_anchor tables.
 	//
 	//	lifetime_wh  : sum across all inverters/channels of raw*scale
 	//	today_wh     : lifetime_wh - anchor at start of today
@@ -1923,9 +1922,7 @@ func (x *InverterInfo) GetTurnedOffRpt() bool {
 // read back from the inverter (the 0xDD/0xDE/0xD9 reply, decoded by
 // codec.DecodeProtectionReply). Mirrors ecu-sunspec's ProtectionParams.
 // Values are in native units (V, Hz, seconds; mode/PF are enums). Each
-// is optional: absence = the inverter didn't report that field, matching
-// the SQLite reader's per-code presence map. This replaces ecu-sunspec's
-// read of main.exe's protection_parameters60code.
+// is optional: absence = the inverter didn't report that field.
 type Protection struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PeerUid       string                 `protobuf:"bytes,1,opt,name=peer_uid,json=peerUid,proto3" json:"peer_uid,omitempty"` // 12-char hex

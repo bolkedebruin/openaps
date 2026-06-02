@@ -10,7 +10,7 @@ import (
 	"github.com/bolke/inv-driver/wire"
 )
 
-// commitRounds is the number of 0x22 broadcast commits per main.exe
+// commitRounds is the number of 0x22 broadcast commits sent per rekey
 // (send22order sends it ×3). ecu-zb may itself repeat internally; we issue
 // the commit primitive commitRounds times for parity.
 const commitRounds = 3

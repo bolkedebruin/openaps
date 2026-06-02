@@ -74,8 +74,8 @@ var ErrUnsupportedProtectionFamily = errors.New("set-protection: unsupported mod
 
 // ErrUnsupportedProtectionParam is returned when there is no single-frame
 // encoding for (family, paramName). This covers params genuinely absent
-// on a family (e.g. Over_frequency_Watt_Start_set has no DS3 branch in
-// main.exe) AND params whose firmware encoding is env-gated or multi-frame
+// on a family (e.g. Over_frequency_Watt_Start_set has no DS3 branch)
+// AND params whose firmware encoding is env-gated or multi-frame
 // (the over-frequency mode enum, the slope/delay terms, the reconnect
 // time) — those are deliberately not emitted here until their device-state
 // dependence is resolved and validated on-wire.
@@ -105,8 +105,7 @@ func IsProtectionWrite(frame []byte) bool {
 // grid-protection param on a given inverter. value is in the param's
 // native unit: Hz for the frequency thresholds, %P/Hz for the slope,
 // seconds for the delay/reconnect, the mode enum for the over-frequency
-// switch. It mirrors main.exe's per-inverter dispatcher
-// (set_paraName_paraValue_inverter @ 0x69bdc, unicast), not the broadcast
+// switch. It dispatches per-inverter (unicast), not via the broadcast
 // profile path; the per-family encoders live in ds3.go / qs1a.go.
 //
 // Returns a slice because a few params are multi-frame on the wire (the

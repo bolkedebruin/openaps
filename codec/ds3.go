@@ -5,15 +5,13 @@ import (
 	"math"
 )
 
-// DS3 protection-param wire scales (main.exe .rodata, via
-// set_paraName_paraValue_inverter @ 0x69bdc). All produce a 16-bit
-// big-endian value, truncated toward zero (the firmware's (int) cast).
+// DS3 protection-param wire scales. All produce a 16-bit big-endian
+// value, truncated toward zero (the firmware's (int) cast).
 const (
-	ds3ProtFreqScale  = 100.0                // freq thresholds CB/CC/DH/DI: int(Hz*100). DAT_6dc28/6efc0/6f5f0.
-	ds3ProtSlopeScale = 1023.0 * 16.0 * 0.01 // CF slope: int(v*163.68). DAT_6dc18 * 16 * DAT_6dc20. NOT env-gated on DS3.
-	// AG grid_recovery: int(s * line-cycles-per-sec). main.exe uses ×60
-	// when ecu_environment==2 (60 Hz) else ×50. Encoded for 50 Hz here; a
-	// 60 Hz site would need ×60.
+	ds3ProtFreqScale  = 100.0                // freq thresholds CB/CC/DH/DI: int(Hz*100).
+	ds3ProtSlopeScale = 1023.0 * 16.0 * 0.01 // CF slope: int(v*163.68). NOT env-gated on DS3.
+	// AG grid_recovery: int(s * line-cycles-per-sec). Use ×60 on 60 Hz
+	// sites, else ×50. Encoded for 50 Hz here; a 60 Hz site would need ×60.
 	ds3ProtRecoveryScale = 50.0
 )
 
@@ -66,14 +64,11 @@ func ds3ScaleClear(v float64) int64 { return int64(v * ds3ClearTimeScale) }
 
 // ds3ProtParams maps each writable DS3 protection param to its sub-byte
 // and scaling. Over_frequency_Watt_Start_set (CA) has no DS3 branch in
-// main.exe and so is intentionally absent.
+// the firmware and so is intentionally absent.
 //
-// Trip sub-bytes sourced from main.exe set_parameters_boardcast @ 0x440fc
-// (set_protection_dsp_DS3_D_all call sites) and set_paraName_paraValue_inverter
-// @ 0x69bdc (set_protection_dsp_ds3_D_one call sites). Voltage scale is
-// int(V × DAT_00044430) = int(V/0.268). Freq scale is int(Hz × DAT_00044a88) = int(Hz×100).
-// Clear-time scale is int(s × DAT_00045910 / DAT_00045fc0) = int(s×100).
-// All golden captures confirm 16-bit values (max captured: BD=120, well within 0xFFFF).
+// Voltage scale is int(V/0.268). Freq scale is int(Hz×100). Clear-time
+// scale is int(s×100). All golden captures confirm 16-bit values
+// (max captured: BD=120, well within 0xFFFF).
 var ds3ProtParams = map[string]ds3ProtParam{
 	// Freq-watt curve + droop (existing)
 	"Over_frequency_Watt_Low_set":        {0x2B, ds3ScaleHz},     // CB
@@ -85,8 +80,8 @@ var ds3ProtParams = map[string]ds3ProtParam{
 	"Over_frequency_Watt_set":            {0x28, ds3ModeEnum},    // CV (mode enum)
 	"grid_recovery_time":                 {0x25, ds3RecoverySec}, // AG
 
-	// Voltage trip thresholds (main.exe names: over/under_voltage_fast/slow/slow_90/stage_2_90)
-	// Scale: int(V × DAT_00044430) = int(V/0.268), 16-bit, sub from set_protection_dsp_DS3_D_all.
+	// Voltage trip thresholds (over/under_voltage_fast/slow/slow_90/stage_2_90)
+	// Scale: int(V/0.268), 16-bit.
 	"over_voltage_fast":      {0x01, ds3ScaleVolt}, // AI — golden: 264 V → 985
 	"under_voltage_fast":     {0x02, ds3ScaleVolt}, // AH — golden: 196 V → 731
 	"over_voltage_slow":      {0x03, ds3ScaleVolt}, // AD — golden: 264 V → 985
@@ -94,35 +89,33 @@ var ds3ProtParams = map[string]ds3ProtParam{
 	"over_voltage_slow_90":   {0x05, ds3ScaleVolt}, // AY — golden: 253 V → 944
 	"under_voltage_stage_2_90": {0x06, ds3ScaleVolt}, // AC — golden: 196 V → 731
 
-	// Frequency trip thresholds (main.exe names: over/under_frequency_fast/slow)
-	// Scale: int(Hz × DAT_00044a88) = int(Hz × 100), 16-bit.
+	// Frequency trip thresholds (over/under_frequency_fast/slow)
+	// Scale: int(Hz × 100), 16-bit.
 	"over_frequency_fast":  {0x09, ds3ScaleHz}, // AK — golden: 52.0 Hz → 5200
 	"under_frequency_fast": {0x0a, ds3ScaleHz}, // AJ — golden: 47.0 Hz → 4700
 	"over_frequency_slow":  {0x0b, ds3ScaleHz}, // AF — golden: 52.0 Hz → 5200
 	"under_frequency_slow": {0x0c, ds3ScaleHz}, // AE — golden: 47.5 Hz → 4750
 
-	// Voltage trip clearance times (main.exe names: Over/Under_Voltage[1/2]_clearance_time)
-	// Scale: int(s × DAT_00045910) = int(s × 100), centiseconds, 16-bit.
+	// Voltage trip clearance times (Over/Under_Voltage[1/2]_clearance_time)
+	// Scale: int(s × 100), centiseconds, 16-bit.
 	"Over_Voltage1_clearance_time":  {0x0f, ds3ScaleClear}, // BC — golden: 0.10 s → 10
 	"Under_Voltage1_clearance_time": {0x10, ds3ScaleClear}, // BB — golden: 0.02 s → 2
 	"Over_Voltage2_clearance_time":  {0x11, ds3ScaleClear}, // BE — golden: 0.05 s → 5
 	"Under_Voltage2_clearance_time": {0x12, ds3ScaleClear}, // BD — golden: 1.2 s → 120
 
-	// Frequency trip clearance times (main.exe names: Over/Under_Frequency[1/2]_clearance_time)
-	// Scale: int(s × DAT_00045fc0) = int(s × 100), centiseconds, 16-bit.
+	// Frequency trip clearance times (Over/Under_Frequency[1/2]_clearance_time)
+	// Scale: int(s × 100), centiseconds, 16-bit.
 	"Over_Frequency1_clearance_time":  {0x15, ds3ScaleClear}, // BI — golden: 0.30 s → 30
 	"Under_Frequency1_clearance_time": {0x16, ds3ScaleClear}, // BH — golden: 0.16 s → 16
 	"Over_Frequency2_clearance_time":  {0x17, ds3ScaleClear}, // BK — golden: 0.30 s → 30
 	"Under_Frequency2_clearance_time": {0x18, ds3ScaleClear}, // BJ — golden: 0.30 s → 30
 
-	// 10-min average over-voltage (main.exe: min10_Over_average_voltage / ac_600s)
+	// 10-min average over-voltage (min10_Over_average_voltage / ac_600s)
 	// Scale: int(V/ds3GridVScale), truncates, 16-bit. Golden capture: 253 V → 944.
 	"min10_Over_average_voltage": {0x42, ds3ScaleVolt}, // AB
 
-	// Reconnect-frequency thresholds (main.exe: Reconnection_over/under_frequency).
-	// Source: set_paraName_paraValue_inverter @ 0x69bdc — DS3 (model 0x20/0x22/0x21/0x36)
-	// dispatches to set_protection_dsp_ds3_D_one with sub 0x23 (BQ) / 0x24 (BP),
-	// scale int(Hz × DAT_0006ce38) = int(Hz × 100), byte_count 2.
+	// Reconnect-frequency thresholds (Reconnection_over/under_frequency).
+	// DS3 dispatch: sub 0x23 (BQ) / 0x24 (BP), scale int(Hz × 100), byte_count 2.
 	"Reconnection_over_frequency":  {0x23, ds3ScaleHz}, // BQ
 	"Reconnection_under_frequency": {0x24, ds3ScaleHz}, // BP
 }
@@ -161,12 +154,11 @@ func dsSec(raw int) float64   { return float64(raw) * ds3FreqScale } // clearanc
 func dsVoltAvg(raw int) float64 { return float64(int(float64(raw) * ds3GridVScale)) }
 
 // dsDroop is the over-frequency-watt droop slope (DD): ((raw×6000)/2208898)×100,
-// the same factor main.exe applies on page A for AG. ~16.7 = EN 50549-1 max.
+// the same factor the firmware applies on page A for AG. ~16.7 = EN 50549-1 max.
 func dsDroop(raw int) float64 { return float64(raw) * ds3DroopNum / ds3DroopDen * 100.0 }
 
 // dsMaxPower is the rated/limited output cap (DA), per panel: raw16 × 0.06027 W
 // — the exact inverse of EncodeSetPowerDS3's round(W / 0.06027).
-// (main.exe resolve_protection_paras_DS3_DS3D, key "DA".)
 func dsMaxPower(raw int) float64 { return float64(raw) * setPowerScaleDS3Inv }
 
 // dsMode is the over-frequency-watt mode (CV): a 1-byte enum the firmware
@@ -260,18 +252,16 @@ func EncodeSetPowerDS3(panelWatts uint16, broadcast bool) ([]byte, error) {
 }
 
 // DS3 reply payload layout, body offset 0 = byte right after the L2
-// cmd 0xBB (= main.exe `param_1` for resolvedata_DS3, which is
-// l2_frame[4..]).
+// cmd 0xBB.
 //
-// Magic constants from main.exe .rodata (read via Ghidra at
-// 0x1f770..0x1f790):
+// Wire scale constants:
 //
-//	panelVScale  = 0.020   @ 0x1f770  (panel V = raw16 × 0.020)
-//	panelIScale  = 0.01172 @ 0x1f778  (panel I = raw16 × 0.01172)
-//	gridVScale   = 0.268   @ 0x1f780  (grid V = raw16 × 0.268)
-//	freqScale    = 0.010   @ 0x1f788  (freq Hz = raw16 × 0.010)
-//	tempScale    = 0.321   @ 0x1f790  (some temperature, optional)
-//	lifetime     = 1.674e-08            (per-byte → kWh, hard-coded)
+//	panelVScale  = 0.020   (panel V = raw16 × 0.020)
+//	panelIScale  = 0.01172 (panel I = raw16 × 0.01172)
+//	gridVScale   = 0.268   (grid V = raw16 × 0.268)
+//	freqScale    = 0.010   (freq Hz = raw16 × 0.010)
+//	tempScale    = 0.321   (some temperature, optional)
+//	lifetime     = 1.674e-08 (per-byte → kWh, hard-coded)
 const (
 	ds3PanelVScale = 0.020
 	ds3PanelIScale = 0.01172
@@ -332,27 +322,22 @@ func decodeDS3(body []byte, r *Reply) {
 }
 
 // DS3Status holds the five raw status/fault bytes a DS3 reply ships
-// at body[0x0b..0x10]. main.exe (resolvedata_DS3 @ 0x1f45c) unpacks
-// the same bytes into ~32 individual ASCII '0'/'1' slots in its
-// inverter struct (0x288..0x2db, 0x3d0..0x3d8); the firmware only
-// derives semantic signals from a subset of those slots — those
-// land in InverterStatus on the parent Reply, and the named-bit
-// Faults() decoder below surfaces the per-flag semantics for the
-// bits whose meaning is pinned by main.exe's Modbus packing
-// (update_modbus_status @ 0x96570).
+// at body[0x0b..0x10]. The firmware unpacks the same bytes into ~32
+// individual slots but only derives semantic signals from a subset of
+// those — those land in InverterStatus on the parent Reply, and the
+// named-bit Faults() decoder below surfaces the per-flag semantics
+// for the bits whose meaning is pinned by the Modbus packing.
 type DS3Status struct {
 	// Raw is body[0x0b..0x10] verbatim. Bit numbering: bit 0 = LSB.
 	Raw [5]byte
 }
 
 // DS3Faults names the DS3 status bits whose meaning is confirmed by
-// main.exe's update_modbus_status (Modbus/SunSpec landing) or by
+// the firmware's Modbus packing (Modbus/SunSpec landing) or by
 // debounce/aggregator placement. All bits are fault-active: '1' on
 // the wire means an event/fault is present; '0' means healthy.
-// Verified via DS3_DS3D_status @ 0x290f8 (gates the cloud-upload
-// alarm-pending flag on these slots being '1'). Warning-bucket and
-// legacy-slot bits are not surfaced here; consumers needing them
-// read DS3Status.Raw.
+// Warning-bucket and legacy-slot bits are not surfaced here; consumers
+// needing them read DS3Status.Raw.
 type DS3Faults struct {
 	GridRelayFault   bool // body[0xc] bit 1 → inv+0x29a (1=event; firmware also maps St 4↔6 and Evt1 bit 1)
 	DCContactorFault bool // body[0xd] bit 7 → inv+0x299 → Evt1 bit 7
@@ -404,15 +389,15 @@ func (s DS3Status) Faults() DS3Faults {
 	}
 }
 
-// ModbusStatus reproduces main.exe's update_modbus_status @ 0x96570
-// for a DS3 reply. Returns the SunSpec Model 103 (St, Evt1) register
-// pair via the shared packModbusStatus helper. Comm, ZB-link, and
-// over-temperature bits stay zero — DS3 has no body source for those.
+// ModbusStatus returns the SunSpec Model 103 (St, Evt1) register pair
+// for a DS3 reply via the shared packModbusStatus helper. Comm, ZB-link,
+// and over-temperature bits stay zero — DS3 has no body source for
+// those.
 //
-// NOTE: the firmware's St mapping (slot 0x29a=='1' → St=6) is
-// suspected dead code; ecu-sunspec computes its own St via
-// aggregateOperatingState. This helper is kept as a faithful
-// firmware emulation for reference.
+// NOTE: the legacy St mapping (slot 0x29a=='1' → St=6) is suspected
+// dead code; ecu-sunspec computes its own St via
+// aggregateOperatingState. This helper is kept as a faithful firmware
+// emulation for reference.
 func (s DS3Status) ModbusStatus() (st, evt1 uint16) {
 	f := s.Faults()
 	return packModbusStatus(modbusStatusInputs{
@@ -441,8 +426,7 @@ func decodeDS3Status(body []byte) DS3Status {
 }
 
 // InverterStatus reduces named DS3 fault bits to the firmware's five
-// aggregator signals. Mirrors main.exe's slot-walking aggregator in
-// resolvedata_DS3 (inv+0x3ec / 0x3f0 / 0x3f4 / 0x3f8 / 0x3fc / 0x400).
+// aggregator signals.
 func (f DS3Faults) InverterStatus() InverterStatus {
 	return InverterStatus{
 		DCBusFault: f.DCBusFault,

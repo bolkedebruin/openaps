@@ -1,8 +1,7 @@
 package codec
 
 // onOffBodyLen is the fixed body length of an on/off frame: 5 zero
-// bytes. With the 1-byte command that makes inner_len 0x06, matching
-// main.exe's zb_boot_single / zb_shutdown_single immediates.
+// bytes. With the 1-byte command that makes inner_len 0x06.
 const onOffBodyLen = 5
 
 // EncodeOnOff returns the L2 frame that switches an inverter on or off.
@@ -10,7 +9,7 @@ const onOffBodyLen = 5
 // EncodeSetPower it needs no model code and cannot fail — the body is a
 // fixed run of zeros and the checksum is derived by BuildL2Frame.
 //
-// Worked frames (verified against main.exe disassembly):
+// Worked frames:
 //
 //	on,  unicast    → FB FB 06 C1 00 00 00 00 00 00 C7 FE FE
 //	off, unicast    → FB FB 06 C2 00 00 00 00 00 00 C8 FE FE

@@ -540,9 +540,9 @@ ON CONFLICT(inverter_uid, channel_idx) DO UPDATE SET
 // WriteEnergyLifetime applies the per-poll raw counters to the
 // per-channel cumulative_wh via delta accumulation.
 //
-// The on-wire raw counter is a wrap-prone short-window value — main.exe
-// also tracks deltas, not absolute raw, into its own ltpower table. We
-// mirror that behaviour: each call computes (new_raw - prev_raw) *
+// The on-wire raw counter is a wrap-prone short-window value, so we
+// track deltas rather than absolute raw: each call computes
+// (new_raw - prev_raw) *
 // scale * 1000 Wh and adds it to cumulative_wh. If the counter went
 // down (wrap, reboot, transient mis-frame), we re-anchor at the new
 // raw without adding anything — under-counting a small unknown window
@@ -634,9 +634,9 @@ type InverterPollRef struct {
 
 // ListInvertersForPoll returns every inverter row whose short_addr is
 // known and non-zero, ordered by uid. Used by the telemetry poller to
-// build its round schedule from inv-driver's own inventory, independent
-// of any main.exe state. short_addr = 0 (broadcast/coordinator sentinel)
-// is excluded to prevent mis-fall-back to the inventory on the dispatch path.
+// build its round schedule from inv-driver's own inventory. short_addr
+// = 0 (broadcast/coordinator sentinel) is excluded to prevent
+// mis-fall-back to the inventory on the dispatch path.
 func (s *Store) ListInvertersForPoll(ctx context.Context) ([]InverterPollRef, error) {
 	rows, err := s.db.QueryContext(ctx, `
 SELECT uid, short_addr

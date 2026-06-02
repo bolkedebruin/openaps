@@ -8,8 +8,7 @@ import "fmt"
 // the loaded grid-protection thresholds. The L1 envelope (target short
 // address) is added downstream by ecu-zb.
 //
-// Mirrors main.exe's get_parameters_from_inverter @ 0x6462c: send the
-// pages, collect the replies, then DecodeProtectionReply over them.
+// Send the pages, collect the replies, then DecodeProtectionReply over them.
 func ProtectionQueryFrames() [][]byte {
 	return [][]byte{
 		BuildL2Frame(CmdProtReadPageA, make([]byte, protQueryBodyLen)),
@@ -30,7 +29,7 @@ const protReadSaneMax = 2000
 // ProtectionReading is one inverter's decoded grid-protection thresholds,
 // keyed by APsystems 2-letter code in native units (V, Hz, seconds; the
 // mode/PF enums as their raw index). Only codes the reply actually
-// carried are present — mirroring main.exe's per-column 60code presence.
+// carried are present.
 type ProtectionReading struct {
 	Model  string
 	Values map[string]float64

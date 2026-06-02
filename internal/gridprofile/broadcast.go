@@ -21,7 +21,7 @@ import (
 // The ecu-zb bus-manager carries an independent gate at the (cmd,sub)
 // level that must be flipped in coordination with this constant.
 //
-// Validated on-wire 2026-05-23: DS3 (0xAB) against a captured main.exe
+// Validated on-wire 2026-05-23: DS3 (0xAB) against a captured
 // iSetPvGrid broadcast, and QS1A (0x2C) by a direct apply-then-read test
 // (CB 50.2->50.3->50.2 confirmed on both QS1A units). The SelectBase
 // broadcast path stays opt-in via the operator -gridprofile-broadcast flag.

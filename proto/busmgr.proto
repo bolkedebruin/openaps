@@ -127,7 +127,7 @@ message Telemetry {
 
 // InverterFaults dispatches on family. Each variant mirrors the
 // codec's named-bit struct (codec.DS3Faults / codec.QS1AFaults).
-// Bits whose meaning is not pinned by main.exe's Modbus packing
+// Bits whose meaning is not pinned by the firmware's Modbus packing
 // (warning-bucket, legacy slots) are NOT carried here — consumers
 // that need raw bytes should read RawFrame.
 message InverterFaults {
@@ -139,7 +139,7 @@ message InverterFaults {
 
 // DS3Faults mirrors codec.DS3Faults — 18 named bits from the
 // 5-byte status block at body[0x0b..0x10] of a DS3 reply.
-// Semantics pinned by main.exe update_modbus_status @ 0x96570.
+// Semantics pinned by the firmware's Modbus packing.
 message DS3Faults {
   bool grid_relay_fault      = 1;   // body[0x0c] bit 1 — 1=event/fault (per DS3_DS3D_status @ 0x290f8)
   bool dc_contactor_fault    = 2;   // body[0x0d] bit 7 — 1=event/fault
@@ -163,7 +163,7 @@ message DS3Faults {
 
 // QS1AFaults mirrors codec.QS1AFaults — 24 named bits from
 // body[0x17..0x1a], body[0x38..0x39], plus implicit ZB-link
-// derivation. Semantics pinned by main.exe update_modbus_status.
+// derivation. Semantics pinned by the firmware's Modbus packing.
 message QS1AFaults {
   bool grid_relay_fault      = 1;   // body[0x17] bit 2 — 1=event/fault (per qs1200_60_status @ 0x297d8)
   bool dc_contactor_fault    = 2;   // body[0x17] bit 1 — 1=event/fault
@@ -249,8 +249,7 @@ message FleetSummary {
   uint32 inverter_count     = 3;
 
   // Fleet-level energy in watt-hours, computed by inv-driver from its
-  // own energy_lifetime + energy_period_anchor tables. Independent of
-  // main.exe's daily/monthly/yearly tables.
+  // own energy_lifetime + energy_period_anchor tables.
   //   lifetime_wh  : sum across all inverters/channels of raw*scale
   //   today_wh     : lifetime_wh - anchor at start of today
   //   month_wh     : lifetime_wh - anchor at start of month
@@ -280,9 +279,7 @@ message InverterInfo {
 // read back from the inverter (the 0xDD/0xDE/0xD9 reply, decoded by
 // codec.DecodeProtectionReply). Mirrors ecu-sunspec's ProtectionParams.
 // Values are in native units (V, Hz, seconds; mode/PF are enums). Each
-// is optional: absence = the inverter didn't report that field, matching
-// the SQLite reader's per-code presence map. This replaces ecu-sunspec's
-// read of main.exe's protection_parameters60code.
+// is optional: absence = the inverter didn't report that field.
 message Protection {
   string peer_uid = 1;   // 12-char hex
   int64  ts_ms    = 2;   // wall-clock at decode time

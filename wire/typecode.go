@@ -2,14 +2,13 @@ package wire
 
 import "strings"
 
-// TypeCodeForModel returns the leading "type" column main.exe writes
-// in /tmp/parameters_app.conf for the given inverter family. Only
+// TypeCodeForModel returns the leading "type" column used in
+// /tmp/parameters_app.conf for the given inverter family. Only
 // families that have been verified on real hardware are listed; any
 // unknown model returns "" so callers fail loudly instead of mis-
 // categorising the inverter.
 //
-// Verified mappings (from main.exe protocol_APS18 @ 0x32eb4 and live
-// captures on firmware 2.1.29D):
+// Verified mappings (from live captures on firmware 2.1.29D):
 //
 //	"01"  DS3 / DS3D / YC600 (2-channel)
 //	"03"  QS1 / QS1A (4-channel)

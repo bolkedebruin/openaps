@@ -8,9 +8,8 @@ import (
 	"github.com/bolke/inv-driver/wire"
 )
 
-// commitSettle is the post-commit quiet window mirroring main.exe's 10s
-// sleep after send22order — the migration radio latency is on the order of
-// seconds; do not race a read across it.
+// commitSettle is the post-commit quiet window — the migration radio
+// latency is on the order of seconds; do not race a read across it.
 const commitSettle = 10 * time.Second
 
 // startScan runs a discovery scan (fast = current channel on PAN 0xFFFF;

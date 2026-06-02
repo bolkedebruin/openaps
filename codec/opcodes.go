@@ -29,9 +29,7 @@ const (
 	CmdSetPowerC3Unicast    byte = 0xC3
 	CmdSetPowerC3Broadcast  byte = 0xA3
 
-	// Inverter on/off. Family-independent: main.exe's zb_boot_single /
-	// zb_shutdown_single (and the generic set_protection_yc600 encoder
-	// reused by the MQTT / DA-conf dispatchers) emit the same frame for
+	// Inverter on/off. Family-independent: the same frame applies to
 	// DS3, QS1A, and YC600/C3. The opcode encodes on/off and unicast/
 	// broadcast; the body is all zero.
 	CmdTurnOnUnicast    byte = 0xC1
@@ -44,9 +42,9 @@ const (
 	// at [4..5], no sub-byte.
 	CmdGridRecoveryQS1 byte = 0x5D
 
-	// Protection-param READ queries. main.exe's get_parameters_from_inverter
-	// sends three paged read requests per inverter; the inverter replies
-	// page A/B/C with the protection thresholds. All-zero body.
+	// Protection-param READ queries. Three paged read requests per
+	// inverter; the inverter replies page A/B/C with the protection
+	// thresholds. All-zero body.
 	CmdProtReadPageA byte = 0xDD
 	CmdProtReadPageB byte = 0xDE
 	CmdProtReadPageC byte = 0xD9
@@ -54,8 +52,7 @@ const (
 	// CmdReplyQS1PageA is the L2 cmd a QS1/QS1A inverter uses for its
 	// page-A protection reply. The outbound page-A query is 0xDD (shared
 	// across families), but QS1A answers it with a 0xDB-tagged page (DS3
-	// answers 0xDD); main.exe distinguishes via reply[3] == 0xDB
-	// (get_parameters_from_inverter @ 0x6462c, local_41d == -0x25).
+	// answers 0xDD); families are distinguished via reply[3] == 0xDB.
 	CmdReplyQS1PageA byte = 0xDB
 
 	CmdInfoQuery        byte = 0xDC
