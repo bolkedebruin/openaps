@@ -93,6 +93,8 @@ The orchestrator script inside the tarball:
 ssh root@<ECU-IP> /usr/local/bin/openaps-rollback
 ```
 
+> The bundled `dropbear` predates the algorithms modern OpenSSH ships enabled by default — drop the snippet from [`docs/SSH-CONFIG.md`](docs/SSH-CONFIG.md) into your `~/.ssh/config` on first connection.
+
 Full install reference: [`docs/INSTALL-ECU.md`](docs/INSTALL-ECU.md). Release notes: [`docs/RELEASE.md`](docs/RELEASE.md).
 
 ## Build from source

@@ -98,6 +98,8 @@ ssh root@<ECU-IP> cat /etc/openaps/installed.json
 ssh root@<ECU-IP> netstat -ltn   # :22 dropbear, :443 ecu-web, :502 sunspec, :19999 ecu-zb tap
 ```
 
+> **First-time SSH note:** the bundled dropbear is 2012.55 (latest build that links against the ECU's glibc 2.15 runtime) and predates the algorithms modern OpenSSH ships enabled by default. If `ssh root@<ECU-IP>` fails to negotiate, drop the legacy-host block from [`SSH-CONFIG.md`](SSH-CONFIG.md) into your `~/.ssh/config`.
+
 ## Rolling back
 
 The installer ships a rollback CLI at `/usr/local/bin/openaps-rollback`:
