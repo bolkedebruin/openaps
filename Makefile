@@ -39,9 +39,10 @@ GOFLAGS_ARM  := -trimpath
 
 PROTOC ?= protoc
 
-# DROPBEAR_DIR is optional for package-sunspec-with-dropbear (preserves
-# the ecu-sunspec optional dropbear bundle path).
-DROPBEAR_DIR ?=
+# DROPBEAR_DIR holds extracted dropbear ARMv7 binaries.
+# - package-sunspec-with-dropbear requires it as an explicit operator arg.
+# - package-openaps auto-fetches into $(BUILD_DIR)/dropbear-armv7 if unset.
+DROPBEAR_DIR ?= $(BUILD_DIR)/dropbear-armv7
 
 .PHONY: all build-all build-all-arm \
         build-inv-driver build-inv-driver-arm \
@@ -267,8 +268,10 @@ package-sunspec-with-dropbear: build-ecu-sunspec-arm
 	@rm -rf $(BUILD_DIR)/pkgroot-sunspec
 	@ls -lh $(BUILD_DIR)/apsystems-sunspec-$(VERSION)-dropbear.tar.bz2
 
-fetch-dropbear:
-	@./packaging/fetch-dropbear.sh $(BUILD_DIR)/dropbear-armv7
+fetch-dropbear: $(DROPBEAR_DIR)/dropbear
+
+$(DROPBEAR_DIR)/dropbear:
+	@./packaging/fetch-dropbear.sh $(DROPBEAR_DIR)
 
 package-all: package-zb package-sunspec
 
@@ -292,7 +295,7 @@ SOURCE_DATE_EPOCH ?= $(shell git log -1 --format=%ct 2>/dev/null || echo 1700000
 GIT_SHA           ?= $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
 OPENAPS_PKG_NAME  := openaps-$(VERSION)-ecu.tar.bz2
 
-package-openaps: build-all-arm
+package-openaps: build-all-arm $(DROPBEAR_DIR)/dropbear
 	@echo "+ packaging openaps $(VERSION) (sha=$(GIT_SHA))"
 	@rm -rf $(BUILD_DIR)/pkgroot-openaps
 	@mkdir -p $(BUILD_DIR)/pkgroot-openaps/update_localweb

@@ -95,7 +95,7 @@ From the command line:
 
 ```sh
 ssh root@<ECU-IP> cat /etc/openaps/installed.json
-ssh root@<ECU-IP> netstat -ltn   # :22 dropbear, :443 ecu-web, :1502 sunspec, :19999 ecu-zb tap
+ssh root@<ECU-IP> netstat -ltn   # :22 dropbear, :443 ecu-web, :502 sunspec, :19999 ecu-zb tap
 ```
 
 ## Rolling back

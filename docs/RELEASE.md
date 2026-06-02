@@ -16,7 +16,7 @@ modern web console.
 - **`ecu-web`** — operator console. HTTP/2 + SSE on :443, embedded Lit
   SPA, single-user passkey-deferred auth (password + rotating recovery
   code).
-- **`ecu-sunspec`** — Modbus/TCP + RTU adapter on :1502, SunSpec
+- **`ecu-sunspec`** — Modbus/TCP + RTU adapter on :502, SunSpec
   Model 1/103/123/711 frontend. Subscriber to inv-driver over UDS.
 - **Brownfield installer** — `openaps-v1.0.0-ecu.tar.bz2`. Single
   POST to the stock `exec_upgrade_ecu_app` endpoint. Backup + dropbear

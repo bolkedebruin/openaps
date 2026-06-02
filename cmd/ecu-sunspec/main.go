@@ -35,7 +35,7 @@ func main() {
 	}
 
 	var (
-		bind           = flag.String("bind", "tcp://0.0.0.0:1502", "modbus TCP listen URL")
+		bind           = flag.String("bind", "tcp://0.0.0.0:502", "modbus TCP listen URL")
 		yunengDir      = flag.String("yuneng-dir", "/etc/yuneng", "directory containing ecuid.conf, version.conf, model.conf (\"\" to skip)")
 		manufacturer   = flag.String("manufacturer", "", "SunSpec Mn field; empty = "+sunspec.DefaultManufacturer)
 		modelName      = flag.String("model-name", "", "SunSpec Md field; empty = read /etc/yuneng/model.conf, then fall back to "+sunspec.DefaultModelName)

@@ -14,7 +14,7 @@
 BIN=/home/applications/ecu-sunspec
 PIDOF="pidof ecu-sunspec"
 LOG=/home/ecu-sunspec.log
-ARGS="--bind tcp://0.0.0.0:1502 --invdriver-sock /var/run/inv-driver.sock --log-file $LOG --log-max-size 5 --log-max-backups 3"
+ARGS="--bind tcp://0.0.0.0:502 --invdriver-sock /var/run/inv-driver.sock --log-file $LOG --log-max-size 5 --log-max-backups 3"
 
 start() {
     if $PIDOF >/dev/null 2>&1; then

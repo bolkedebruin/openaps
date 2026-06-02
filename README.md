@@ -40,7 +40,7 @@ It runs today on the APsystems ECU-R / ECU-R-Pro that you already own. A Raspber
 - Grid-protection profile management: select base profile (e.g. `EN 50549-1`), apply per inverter, verify on read-back, audit
 - Per-inverter and array-wide output-power capping; works with Victron frequency-shift curtailment
 - OTA pairing: fast/slow scan, add-by-ID, replace-me (inherits the dead inverter's grid profile and operator label), full fleet PAN re-key, channel migration
-- SunSpec / Modbus TCP (port `1502`) — models 101/103/111/113/123/711 etc., consumed cleanly by Home Assistant and other EMS
+- SunSpec / Modbus TCP (port `502`, the IANA-standard Modbus port) — models 101/103/111/113/123/711 etc., consumed cleanly by Home Assistant and other EMS
 - HTTPS operator console on `:443` with operator-password auth + single-use recovery code + change-password
 - Encryption badge per inverter (AES vs plaintext frame detection)
 - Audit event log with `by` attribution for every settings/profile/power-cap change

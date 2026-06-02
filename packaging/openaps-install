@@ -160,12 +160,18 @@ if [ -d "$SRC/dropbear" ] && [ -f "$SRC/dropbear/dropbear" ]; then
         exit 1
     fi
 else
-    # Pre-existing dropbear is acceptable.
+    # No bundled dropbear. A pre-existing SSH on :22 OR telnet on :23 is
+    # acceptable as a recovery path — either lets the operator log in and
+    # roll back if the lighttpd removal in step 7 leaves the box wedged.
     if netstat -ltn 2>/dev/null | grep -q ':22 '; then
         echo "  dropbear already listening on :22 (no bundle supplied)"
         DROPBEAR_INSTALLED=1
+    elif netstat -ltn 2>/dev/null | grep -q ':23 '; then
+        echo "  telnet listening on :23 — recovery path verified (no dropbear)"
+        DROPBEAR_INSTALLED=1
     else
-        echo "FATAL: no dropbear bundle and nothing on :22 — no recovery path"
+        echo "FATAL: no dropbear bundle, no SSH on :22, no telnet on :23 — no recovery path"
+        echo "  rollback: tar -xjf $BACKUP_PATH -P -C /"
         exit 1
     fi
 fi

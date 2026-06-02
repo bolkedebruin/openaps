@@ -50,7 +50,7 @@ A quick sanity check against any SunSpec scanner. Using `pysunspec2`:
 pip install pysunspec2 pyserial
 python3 -c "
 import sunspec2.modbus.client as c
-d = c.SunSpecModbusClientDeviceTCP(slave_id=1, ipaddr='<ECU-IP>', ipport=1502, timeout=3)
+d = c.SunSpecModbusClientDeviceTCP(slave_id=1, ipaddr='<ECU-IP>', ipport=502, timeout=3)
 d.scan()
 for m in d.model_list: print(m.model_id, m.model_len)
 "
@@ -111,7 +111,7 @@ A log of the install lands in `/home/sunspec-install.log` on the ECU.
 ### 3. Confirm
 
 ```sh
-nc -zv <ECU-IP> 1502   # should connect
+nc -zv <ECU-IP> 502   # should connect
 ```
 
 …and re-run the pysunspec2 verify above.
@@ -187,7 +187,7 @@ If you don't want to deploy on the ECU, run the binary anywhere with read access
 
 ```sh
 ./ecu-sunspec \
-    --bind tcp://0.0.0.0:1502 \
+    --bind tcp://0.0.0.0:502 \
     --db-dir /mnt/ecu/home \
     --params-file /mnt/ecu/tmp/parameters_app.conf \
     --yuneng-dir /mnt/ecu/etc/yuneng
@@ -200,10 +200,10 @@ All configuration is via flags — see `--help`.
 Use the [CJNE/ha-sunspec](https://github.com/CJNE/ha-sunspec) custom component (HACS-installable). Add the integration up to four times:
 
 ```
-Host: <ECU-IP>   Port: 1502   Slave ID: 1   →  System aggregate
-Host: <ECU-IP>   Port: 1502   Slave ID: 2   →  Microinverter A
-Host: <ECU-IP>   Port: 1502   Slave ID: 3   →  Microinverter B
-Host: <ECU-IP>   Port: 1502   Slave ID: 4   →  Microinverter C
+Host: <ECU-IP>   Port: 502   Slave ID: 1   →  System aggregate
+Host: <ECU-IP>   Port: 502   Slave ID: 2   →  Microinverter A
+Host: <ECU-IP>   Port: 502   Slave ID: 3   →  Microinverter B
+Host: <ECU-IP>   Port: 502   Slave ID: 4   →  Microinverter C
 ```
 
 For the vendor model (model 64202 — daily/month/year energy aggregates, per-inverter RSSI, etc.) to be decoded natively, copy [`sunspec-models/model_64202.json`](sunspec-models/model_64202.json) into pysunspec2's `models/json/` directory inside the HA container. See [`sunspec-models/README.md`](sunspec-models/README.md) for the path.
@@ -214,7 +214,7 @@ For the vendor model (model 64202 — daily/month/year energy aggregates, per-in
 Settings → PV inverters → Find PV inverters
 ```
 
-Pick the entry that auto-discovers at `<ECU-IP>:1502` (the aggregate, slave ID 1). When prompted, choose **Position = AC out** (if your microinverters are downstream of the Multi for AC-coupled freq-shift control) and **Phase = L1** for single-phase setups.
+Pick the entry that auto-discovers at `<ECU-IP>:502` (the aggregate, slave ID 1). When prompted, choose **Position = AC out** (if your microinverters are downstream of the Multi for AC-coupled freq-shift control) and **Phase = L1** for single-phase setups.
 
 If Venus' driver gets stuck after a binary upgrade — the standard fix is to toggle the inverter's "Show in overview" off and on again from the GX UI, which forces a driver reconnect.
 
@@ -285,7 +285,7 @@ For real-time control (e.g. fast zero-feed-in), use AC-coupled frequency-shift o
 # Read the current cap.
 python3 -c "
 import sunspec2.modbus.client as c
-d = c.SunSpecModbusClientDeviceTCP(slave_id=2, ipaddr='<ECU-IP>', ipport=1502, timeout=3)
+d = c.SunSpecModbusClientDeviceTCP(slave_id=2, ipaddr='<ECU-IP>', ipport=502, timeout=3)
 d.scan()
 m = next(m for m in d.model_list if m.model_id == 123); m.read()
 print('current pct:', m.WMaxLimPct.value)
@@ -294,7 +294,7 @@ print('current pct:', m.WMaxLimPct.value)
 # Cap to 50%.
 python3 -c "
 import sunspec2.modbus.client as c
-d = c.SunSpecModbusClientDeviceTCP(slave_id=2, ipaddr='<ECU-IP>', ipport=1502, timeout=3)
+d = c.SunSpecModbusClientDeviceTCP(slave_id=2, ipaddr='<ECU-IP>', ipport=502, timeout=3)
 d.scan()
 m = next(m for m in d.model_list if m.model_id == 123); m.read()
 m.WMaxLimPct.value = 50

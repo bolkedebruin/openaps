@@ -24,7 +24,7 @@ type Provider interface {
 
 // Config tunes server behavior. Zero values fall back to sensible defaults.
 type Config struct {
-	URL             string        // tcp://0.0.0.0:1502
+	URL             string        // tcp://0.0.0.0:502
 	RefreshInterval time.Duration // default 5s
 	Timeout         time.Duration // session idle timeout
 	MaxClients      uint
@@ -87,7 +87,7 @@ type Server struct {
 // New constructs a Server. Call Start to begin listening, Stop to shut down.
 func New(p Provider, cfg Config) *Server {
 	if cfg.URL == "" {
-		cfg.URL = "tcp://0.0.0.0:1502"
+		cfg.URL = "tcp://0.0.0.0:502"
 	}
 	if cfg.RefreshInterval == 0 {
 		cfg.RefreshInterval = 5 * time.Second
