@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="log.png" alt="OpenAPS" width="320">
+  <img src="logo.png" alt="OpenAPS" width="320">
 </p>
 
 <p align="center">
