@@ -1,6 +1,6 @@
 # AES Codec Design — APsystems ECU L1 Encryption
 
-Reverse-engineered from `/Users/bolke/dev/apsystems/binaries/main.exe`
+Reverse-engineered from `main.exe`
 (ARM:LE:32:v8, ARM Cortex, OpenSSL 1.1.0 dynamic linkage).
 
 This document specifies byte-exact-compatible encrypt + decrypt for the L1
