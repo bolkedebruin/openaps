@@ -135,6 +135,21 @@ ssh root@<ECU-IP> /usr/local/bin/openaps-rollback
 
 > The bundled `dropbear` predates the algorithms modern OpenSSH ships enabled by default — drop the snippet from [`docs/SSH-CONFIG.md`](docs/SSH-CONFIG.md) into your `~/.ssh/config` on first connection.
 
+### What's preserved when you migrate from stock firmware
+
+The install is a near-zero-config drop-in. Inverters, grid profile, and power caps come back automatically within a few minutes of first boot. The matrix:
+
+| Thing | Inherited? | How |
+|---|:--:|---|
+| ZigBee PAN, channel, ECU ID, ECU MAC | ✅ | Read from `/etc/yuneng/*.conf` during install. Same PAN your fleet is paired against. |
+| Paired inverter inventory | ✅ | Auto-discovered from the first telemetry frame each inverter sends after the radio comes up — usually within 1-3 minutes. |
+| Active grid profile per inverter | ✅ | Reverse-identified from the inverter's own protection-register read-back (e.g. matches `EN 50549-1` against shipped base profiles). |
+| Output power caps | ✅ | Persisted in inverter NVRAM (DA code, both DS3 and QS1A), read back on first contact. |
+| Encryption state (AES vs plaintext badge) | ✅ | Detected from frame gate byte on first sight. |
+| Inverter friendly names | ❌ | Stock keeps these in `/home/database.db`; you re-label via the inverters table on first browse. |
+| Historical pre-install energy timeseries | ❌ | Stock per-day/per-month/per-year history isn't imported. The backup tarball preserves `/home/database.db` so a future importer is feasible. Per-inverter lifetime counters on the inverter itself are unaffected — totals stay correct. |
+| Operator account (web UI password) | ❌ | Fresh install prompts you to set a new password + generates a one-time recovery code. |
+
 Full install reference: [`docs/INSTALL-ECU.md`](docs/INSTALL-ECU.md). Release notes: [`docs/RELEASE.md`](docs/RELEASE.md).
 
 ## Build from source

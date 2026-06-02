@@ -111,6 +111,33 @@ ssh root@<ECU-IP> netstat -ltn   # :22 dropbear, :443 ecu-web, :502 sunspec, :19
 
 > **First-time SSH note:** the bundled dropbear is 2012.55 (latest build that links against the ECU's glibc 2.15 runtime) and predates the algorithms modern OpenSSH ships enabled by default. If `ssh root@<ECU-IP>` fails to negotiate, drop the legacy-host block from [`SSH-CONFIG.md`](SSH-CONFIG.md) into your `~/.ssh/config`.
 
+## What gets carried over from stock firmware
+
+The install inherits all the *operational* state automatically. You don't pre-import an inventory; the fleet self-announces.
+
+**Auto-inherited:**
+
+- **ZigBee PAN, channel, ECU ID, ECU MAC** — read from `/etc/yuneng/*.conf` during step 4. Same PAN the fleet is currently paired against, so the radio comes up on the right network with zero operator input.
+- **Paired inverter inventory** — `inv-driver` doesn't have a list to import. Each paired inverter keeps transmitting on the same PAN+channel; the first telemetry frame each one sends after the coordinator is back up registers it in the inventory. Expect every previously-paired inverter to appear in the dashboard within **1-3 minutes**.
+- **Active grid profile per inverter** — `gridprofile VerifyStartup` reads back the protection registers (CA/CB/CC/CV/DD/AD/...) from each inverter and identifies which shipped base profile matches (e.g. `identified="EN50549-1" score=1.00`). No manual reconfiguration needed.
+- **Output power caps** — persisted in inverter NVRAM (the `DA` code on protection page B, both DS3 and QS1A families). Read back on first contact. The dashboard's "current cap" column populates with the exact cap you had set under stock firmware.
+- **Encryption state per inverter** — detected from the L1 gate byte. The AES/plaintext badge populates within one frame of first sight.
+
+**Not inherited:**
+
+- **Inverter friendly names.** Stock firmware stores per-inverter nicknames in `/home/database.db`; OpenAPS keeps them in its own `settings.json.inverter_names` map, which is empty on a fresh install. Add them via the inverters table once everything's up.
+- **Historical pre-install energy timeseries** (per-day / per-month / per-year totals). OpenAPS keeps its own state in `/var/lib/inv-driver/state.db` and starts counting from install time. **The backup tarball (step 2) preserves `/home/database.db`**, so a future importer could pull the stock history; no such tool ships today. Per-inverter lifetime energy counters on the inverter itself keep counting from their persistent value, so the cumulative totals on the dashboard stay correct.
+- **Power-cap / settings audit log.** Stock has its own log schema; OpenAPS's audit-event log starts fresh.
+- **Operator account.** The web console prompts you to set an operator password on first browse and generates a one-time recovery code.
+
+**Practical first-5-minutes experience:**
+
+1. Run the `curl` install command.
+2. Wait ~60-90 seconds for install + dropbear bring-up + service start.
+3. Open `https://<ECU-IP>/`, accept the self-signed cert, set an operator password.
+4. Within 1-3 minutes the inverters table shows every previously-paired inverter with live telemetry, the right model code, the right power cap, and the right identified grid profile.
+5. Optionally re-label inverters with friendly names.
+
 ## Rolling back
 
 The installer ships a rollback CLI at `/usr/local/bin/openaps-rollback`:
