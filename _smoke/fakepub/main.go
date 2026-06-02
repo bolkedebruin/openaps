@@ -37,9 +37,9 @@ func main() {
 		chans int
 	}
 	invs := []inv{
-		{"704000006835", "DS3", 0xBB, 0x20, 480, 2},
-		{"806000041211", "QS1A", 0xB1, 0x18, 1120, 4},
-		{"806000042582", "QS1A", 0xB1, 0x18, 1010, 4},
+		{"999900000001", "DS3", 0xBB, 0x20, 480, 2},
+		{"999900000002", "QS1A", 0xB1, 0x18, 1120, 4},
+		{"999900000003", "QS1A", 0xB1, 0x18, 1010, 4},
 	}
 	for _, v := range invs {
 		send(&wire.Envelope{Body: &wire.Envelope_Info{Info: &wire.InverterInfo{PeerUid: v.uid, ModelCode: &v.mc}}})

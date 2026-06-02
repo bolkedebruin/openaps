@@ -361,7 +361,7 @@ export class SettingsForm extends LitElement {
     let blockReason = "";
     if (macInvalid) {
       blockReason =
-        "MAC must be 6 colon-separated hex octets (e.g. 80:97:1b:03:0d:ce).";
+        "MAC must be 6 colon-separated hex octets (e.g. aa:bb:cc:dd:ee:ff).";
     } else if (typedSensitive && noEffectivePan) {
       blockReason =
         "Cannot resolve effective PAN; refusing to save MAC / PAN-override changes.";
@@ -386,14 +386,14 @@ export class SettingsForm extends LitElement {
           <input
             id="mac"
             type="text"
-            placeholder="80:97:1b:03:0d:ce"
+            placeholder="aa:bb:cc:dd:ee:ff"
             pattern="^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$"
             .value=${s.mac ?? ""}
             @input=${this.onMacInput}
           />
           ${macHint ? html`<div class="hint">${macHint}</div>` : nothing}
           ${macInvalid
-            ? html`<div class="err-inline">Use colon-separated hex (e.g. 80:97:1b:03:0d:ce).</div>`
+            ? html`<div class="err-inline">Use colon-separated hex (e.g. aa:bb:cc:dd:ee:ff).</div>`
             : nothing}
         </label>
         <label>
@@ -518,7 +518,7 @@ function panFromOverride(s: string): string {
  * panFromMAC returns the lower-16 of a MAC as 4 uppercase hex, or "".
  *
  * Mirrors the Go server's panFromMAC: only 6-octet colon-separated MACs
- * are accepted (e.g. 80:97:1b:03:0d:ce). Bare-hex strings are rejected
+ * are accepted (e.g. aa:bb:cc:dd:ee:ff). Bare-hex strings are rejected
  * so client and server reach the same verdict on the same input.
  */
 function panFromMAC(mac: string): string {

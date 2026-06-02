@@ -2,7 +2,7 @@ import { test, expect, describe } from "bun:test";
 import { validateOverlay } from "../src/schemas/overlay.ts";
 
 // A 12-hex uid that satisfies the uid regex.
-const U1 = "806000042582";
+const U1 = "999900000003";
 const U2 = "806000042583";
 
 function ok(r: ReturnType<typeof validateOverlay>) {

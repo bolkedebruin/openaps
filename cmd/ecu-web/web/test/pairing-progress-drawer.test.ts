@@ -9,11 +9,11 @@ function status(over: Partial<PairingStatus> = {}): PairingStatus {
     stage: "bind",
     total: 3,
     done: 1,
-    current_serial: "704000006835",
+    current_serial: "999900000001",
     substep: "get-short-addr",
     per_inverter: [
-      { serial: "704000006835", short_addr: 0x1a, state: "binding", encrypted: true },
-      { serial: "806000042582", state: "found", encrypted: false },
+      { serial: "999900000001", short_addr: 0x1a, state: "binding", encrypted: true },
+      { serial: "999900000003", state: "found", encrypted: false },
     ],
     ...over,
   };
@@ -50,7 +50,7 @@ describe("<pairing-progress-drawer>", () => {
   test("shows current serial and per-inverter sub-status rows", async () => {
     const el = await mount({ status: status() });
     const t = el.shadowRoot?.textContent ?? "";
-    expect(t).toContain("704000006835");
+    expect(t).toContain("999900000001");
     expect(t).toContain("binding");
     const rows = el.shadowRoot?.querySelectorAll("tbody tr") ?? [];
     expect(rows.length).toBe(2);

@@ -5,7 +5,7 @@ import type { Inverter } from "../src/api.ts";
 
 function sample(over: Partial<Inverter> = {}): Inverter {
   return {
-    uid: "806000042582", short_addr: 1, model: "QS1A", model_code: 0x18, phase: 1, sw_version: 1,
+    uid: "999900000003", short_addr: 1, model: "QS1A", model_code: 0x18, phase: 1, sw_version: 1,
     online: true, last_seen_ms: Date.now(), age_s: 1, active_power_w: 800, nameplate_w: 1600,
     load_pct: 50, grid_v: 230, bus_v: 360, freq_hz: 50, reactive_var: 0, rssi: 70, lqi: 200,
     panels: [{ index: 0, dc_v: 35, dc_a: 5, w: 175 }], ...over,

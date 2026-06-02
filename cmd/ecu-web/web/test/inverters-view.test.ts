@@ -6,7 +6,7 @@ import type { Fleet, Inverter } from "../src/api.ts";
 
 function inv(over: Partial<Inverter> = {}): Inverter {
   return {
-    uid: "704000006835", short_addr: 1, model: "DS3", model_code: 0x20, phase: 1,
+    uid: "999900000001", short_addr: 1, model: "DS3", model_code: 0x20, phase: 1,
     sw_version: 3067, online: true, last_seen_ms: Date.now(), age_s: 2,
     active_power_w: 0, nameplate_w: 750, load_pct: 0, grid_v: 0, bus_v: 0,
     freq_hz: 0, reactive_var: 0, rssi: 0, lqi: 0, panels: [],

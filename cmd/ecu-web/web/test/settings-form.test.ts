@@ -85,13 +85,13 @@ describe("<settings-form> effective hints (computed client-side)", () => {
     // server no longer sends SettingsResponse.effective for radio fields.
     const el = await mount({
       ecu_id: "",
-      mac: "80:97:1b:03:0d:ce",
+      mac: "aa:bb:cc:dd:ee:ff",
       pan_override: "",
       zigbee_type: "",
     });
     const text = el.shadowRoot!.textContent ?? "";
-    expect(text).toContain("effective PAN source: 80:97:1b:03:0d:ce");
-    expect(text).toContain("effective: 0DCE (from MAC)");
+    expect(text).toContain("effective PAN source: aa:bb:cc:dd:ee:ff");
+    expect(text).toContain("effective: EEFF (from MAC)");
     expect(text).toContain("effective: apsystems (default)");
   });
 
@@ -297,7 +297,7 @@ describe("<settings-form> unresolvable-PAN fail-closed (client-side)", () => {
     // so a sensitive change to that state is fail-closed.
     const el = await mount({
       ecu_id: "",
-      mac: "80:97:1b:03:0d:ce",
+      mac: "aa:bb:cc:dd:ee:ff",
       pan_override: "",
       zigbee_type: "apsystems",
     });
@@ -342,7 +342,7 @@ describe("<settings-form> unresolvable-PAN fail-closed (client-side)", () => {
   test("MAC change to a new colon MAC: Save enabled (will open confirm)", async () => {
     const el = await mount({
       ecu_id: "",
-      mac: "80:97:1b:03:0d:ce",
+      mac: "aa:bb:cc:dd:00:01",
       pan_override: "",
       zigbee_type: "apsystems",
     });
@@ -355,7 +355,7 @@ describe("<settings-form> unresolvable-PAN fail-closed (client-side)", () => {
 
     save.click();
     await el.updateComplete;
-    // PAN diverges (0DCE -> EEFF), so the confirm dialog opens.
+    // PAN diverges (0001 -> EEFF), so the confirm dialog opens.
     expect(root.querySelector(".backdrop")).not.toBeNull();
   });
 });
@@ -383,7 +383,7 @@ describe("<settings-form> MAC-change network-drop warning", () => {
   test("confirm dialog shows the network-drop warning when MAC is the active diff", async () => {
     const el = await mount({
       ecu_id: "",
-      mac: "80:97:1b:03:0d:ce",
+      mac: "aa:bb:cc:dd:00:01",
       pan_override: "",
       zigbee_type: "apsystems",
     });
@@ -400,7 +400,7 @@ describe("<settings-form> MAC-change network-drop warning", () => {
   test("confirm dialog OMITS the warning when the only sensitive change is pan_override", async () => {
     const el = await mount({
       ecu_id: "",
-      mac: "80:97:1b:03:0d:ce",
+      mac: "aa:bb:cc:dd:ee:ff",
       pan_override: "0DCE",
       zigbee_type: "apsystems",
     });
@@ -422,7 +422,7 @@ describe("<settings-form> ZigBee channel", () => {
   function withEffectiveChannel(channel?: number): Settings {
     return {
       ecu_id: "e",
-      mac: "80:97:1b:03:0d:ce",
+      mac: "aa:bb:cc:dd:ee:ff",
       pan_override: "",
       zigbee_type: "apsystems",
       channel: channel,
@@ -513,12 +513,12 @@ describe("<settings-form> MAC strictness (Go-side)", () => {
   test("bare-hex MAC input: inline error + Save disabled, no PAN computed", async () => {
     const el = await mount({
       ecu_id: "",
-      mac: "80:97:1b:03:0d:ce",
+      mac: "aa:bb:cc:dd:ee:ff",
       pan_override: "",
       zigbee_type: "apsystems",
     });
     const root = el.shadowRoot!;
-    setInput(root, "mac", "80971b030dce"); // bare hex — rejected by the Go validator
+    setInput(root, "mac", "aabbccddeeff"); // bare hex — rejected by the Go validator
     await el.updateComplete;
 
     expect(root.textContent ?? "").toContain("Use colon-separated hex");
@@ -536,7 +536,7 @@ describe("<settings-form> MAC strictness (Go-side)", () => {
   test("colon-separated MAC: accepted, PAN computed", async () => {
     const el = await mount({
       ecu_id: "",
-      mac: "80:97:1b:03:0d:ce",
+      mac: "aa:bb:cc:dd:00:01",
       pan_override: "",
       zigbee_type: "apsystems",
     });
@@ -548,7 +548,7 @@ describe("<settings-form> MAC strictness (Go-side)", () => {
     const save = root.querySelector<HTMLButtonElement>("button.save")!;
     expect(save.disabled).toBe(false);
 
-    // Clicking Save opens the confirm dialog (PAN diverges 0DCE → EEFF).
+    // Clicking Save opens the confirm dialog (PAN diverges 0001 → EEFF).
     save.click();
     await el.updateComplete;
     expect(root.querySelector(".backdrop")).not.toBeNull();

@@ -54,7 +54,7 @@ describe("<pairing-scan-panel>", () => {
     input.dispatchEvent(new Event("input"));
     await el.updateComplete;
     expect(addBtn().disabled).toBe(true);
-    input.value = "704000006835"; // 12 digits
+    input.value = "999900000001"; // 12 digits
     input.dispatchEvent(new Event("input"));
     await el.updateComplete;
     expect(addBtn().disabled).toBe(false);
@@ -63,10 +63,10 @@ describe("<pairing-scan-panel>", () => {
   test("non-digits are stripped from the serial input", async () => {
     const el = await mount();
     const input = el.shadowRoot?.querySelector("input.serial") as HTMLInputElement;
-    input.value = "70-40 00ab006835x"; // mixed → 704000006835
+    input.value = "99-99 00ab000001x"; // mixed → 999900000001
     input.dispatchEvent(new Event("input"));
     await el.updateComplete;
-    expect(el.serial).toBe("704000006835");
+    expect(el.serial).toBe("999900000001");
   });
 
   test("Add emits {serial} and clears the field", async () => {
@@ -74,14 +74,14 @@ describe("<pairing-scan-panel>", () => {
     let got: { serial: string } | null = null;
     el.addEventListener("add", (e) => (got = (e as CustomEvent).detail));
     const input = el.shadowRoot?.querySelector("input.serial") as HTMLInputElement;
-    input.value = "704000006835";
+    input.value = "999900000001";
     input.dispatchEvent(new Event("input"));
     await el.updateComplete;
     const addBtn = Array.from(el.shadowRoot!.querySelectorAll("button.go")).find(
       (b) => b.textContent?.trim() === "Add",
     ) as HTMLButtonElement;
     addBtn.click();
-    expect(got).toEqual({ serial: "704000006835" });
+    expect(got).toEqual({ serial: "999900000001" });
     expect(el.serial).toBe("");
   });
 

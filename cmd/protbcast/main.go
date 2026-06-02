@@ -11,7 +11,7 @@
 //
 //	# Unicast the same param to one DS3 inverter:
 //	protbcast -model ds3 -param Over_frequency_Watt_Low_set -value 50.3 \
-//	          -broadcast=false -uid 806000042582
+//	          -broadcast=false -uid <uid>
 //
 //	# Use a non-default socket:
 //	protbcast -socket /tmp/inv-driver.sock -model qs1a \

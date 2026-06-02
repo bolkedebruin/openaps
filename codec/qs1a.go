@@ -537,7 +537,7 @@ func decodeQS1A(body []byte, r *Reply) {
 
 	// Panels: payload byte order is D, C, B, A — invert so r.Panels
 	// is indexed A=0, B=1, C=2, D=3 to match the 12-character UID
-	// suffix labels users see (704000006835A/B/C/D).
+	// suffix labels users see (<uid>A/B/C/D).
 	for _, pp := range []struct {
 		idx, off int
 	}{

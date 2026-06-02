@@ -10,7 +10,7 @@ const fakeProfilesState: ProfilesState = {
   base_defaults: {},
   overlays: [],
   inverters: [
-    { uid: "704000006835", model: "DS3", model_code: 0x20, writable_codes: ["CB"], current: {} },
+    { uid: "999900000001", model: "DS3", model_code: 0x20, writable_codes: ["CB"], current: {} },
   ],
   params: [
     {
@@ -88,7 +88,7 @@ describe("<profiles-view>", () => {
         return jsonResp(202, {
           id: "victron-shift",
           status: "queued",
-          uids: ["704000006835", "806000042582"],
+          uids: ["999900000001", "999900000003"],
         });
       }
       throw new Error("unexpected fetch: " + url);
@@ -99,7 +99,7 @@ describe("<profiles-view>", () => {
     // Dispatch the save event directly (bypassing the modal form interaction).
     const draft: OverlayDraft = {
       id: "victron-shift",
-      uids: ["704000006835", "806000042582"],
+      uids: ["999900000001", "999900000003"],
       points: [{ aps_code: "CB", value: 50.3 }],
     };
     el.dispatchEvent(new CustomEvent<OverlayDraft>("save", { detail: draft })); // unused
@@ -163,7 +163,7 @@ describe("<profiles-view>", () => {
     const form = el.shadowRoot!.querySelector("local-site-profile-form");
     form!.dispatchEvent(
       new CustomEvent<OverlayDraft>("save", {
-        detail: { id: "x", uids: ["704000006835"], points: [{ aps_code: "CB", value: 50 }] },
+        detail: { id: "x", uids: ["999900000001"], points: [{ aps_code: "CB", value: 50 }] },
         bubbles: true,
         composed: true,
       }),

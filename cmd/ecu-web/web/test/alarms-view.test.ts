@@ -5,7 +5,7 @@ import type { Event, EventsResult, Fleet, Inverter } from "../src/api.ts";
 
 function inv(over: Partial<Inverter> = {}): Inverter {
   return {
-    uid: "704000006835", short_addr: 1, model: "DS3", model_code: 0x20, phase: 1,
+    uid: "999900000001", short_addr: 1, model: "DS3", model_code: 0x20, phase: 1,
     sw_version: 3067, online: true, last_seen_ms: Date.now(), age_s: 2,
     active_power_w: 0, nameplate_w: 750, load_pct: 0, grid_v: 0, bus_v: 0,
     freq_hz: 0, reactive_var: 0, rssi: 0, lqi: 0, panels: [],
@@ -70,7 +70,7 @@ describe("<alarms-view> live faults section", () => {
     expect(sev?.textContent?.trim()).toBe("fault");
     // model + uid on the row
     expect(text).toContain("DS3");
-    expect(text).toContain("704000006835");
+    expect(text).toContain("999900000001");
   });
 
   test("shows the ok state when no faults and inverter online", async () => {
@@ -87,7 +87,7 @@ describe("<alarms-view> Recent (24h) section", () => {
       ts_ms: Date.now() - 60_000,
       kind: "fault_raised",
       severity: "warn",
-      inverter_uid: "704000006835",
+      inverter_uid: "999900000001",
       detail: "over_freq_stage1 freq=50.42 v=248.1 w=0",
       by: "inv-driver",
       ...over,
@@ -106,7 +106,7 @@ describe("<alarms-view> Recent (24h) section", () => {
     const inner = (table as HTMLElement).shadowRoot!;
     const text = inner.textContent ?? "";
     expect(text).toContain("inv-driver");
-    expect(text).toContain("704000006835");
+    expect(text).toContain("999900000001");
     expect(text).toContain("over_freq_stage1");
     // By column header exists
     const headers = Array.from(inner.querySelectorAll("th")).map((h) => h.textContent?.trim());
