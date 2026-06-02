@@ -27,11 +27,11 @@ func runSetPower(args []string) error {
 	uid := fs.String("uid", "", "inverter UID (12 hex chars); required unless --broadcast is set")
 	broadcast := fs.Bool("broadcast", false, "broadcast to every inverter on the bus (SA=0)")
 	watts := fs.Int("watts", -1, "max-power per panel in watts, 20..500")
-	family := fs.String("family", "qs1a", "family for --broadcast: 'qs1a' (QS1 / QS1A; alias 'dsp'), 'ds3' (DS3 family), or 'c3' (YC600 / YC1000)")
+	family := fs.String("family", "", "family for --broadcast (required when --broadcast is set); see -h for the list of accepted names")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "usage:")
 		fmt.Fprintln(fs.Output(), "  inv-driver set-power --uid <12-hex> --watts <20-500>")
-		fmt.Fprintln(fs.Output(), "  inv-driver set-power --broadcast --family qs1a|c3|ds3 --watts <20-500>")
+		fmt.Fprintf(fs.Output(), "  inv-driver set-power --broadcast --family %s --watts <20-500>\n", setPowerFamilyChoices())
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -42,6 +42,9 @@ func runSetPower(args []string) error {
 	}
 	if *broadcast == (*uid != "") {
 		return errors.New("exactly one of --uid or --broadcast must be set")
+	}
+	if *broadcast && *family == "" {
+		return fmt.Errorf("--family is required with --broadcast (choices: %s)", setPowerFamilyChoices())
 	}
 	if !*broadcast && !isValidUID(*uid) {
 		return fmt.Errorf("--uid %q: expected 12 hex characters", *uid)
@@ -90,16 +93,9 @@ func isValidUID(s string) bool {
 
 func buildSetPowerFrame(dbPath, uid string, broadcast bool, panelWatts uint16, family string) ([]byte, string, error) {
 	if broadcast {
-		var modelCode uint8
-		switch strings.ToLower(family) {
-		case "qs1a", "dsp":
-			modelCode = codec.ModelQS1A
-		case "ds3":
-			modelCode = codec.ModelDS3
-		case "c3":
-			modelCode = codec.ModelYC1000
-		default:
-			return nil, "", fmt.Errorf("unknown --family %q (want 'qs1a', 'ds3', or 'c3')", family)
+		modelCode, err := setPowerFamilyToModel(family)
+		if err != nil {
+			return nil, "", err
 		}
 		l2, err := codec.EncodeSetPower(modelCode, panelWatts, true)
 		if err != nil {
@@ -117,6 +113,46 @@ func buildSetPowerFrame(dbPath, uid string, broadcast bool, panelWatts uint16, f
 		return nil, "", err
 	}
 	return l2, uid, nil
+}
+
+// setPowerFamilies pairs a flag name with a representative model code
+// that EncodeSetPower accepts. Listed in family-key order (codec.Family
+// strings) plus the legacy "c3" name for the YC600 / YC1000 group, so
+// callers and help output stay in sync with codec without enumerating
+// model codes here.
+var setPowerFamilies = []struct {
+	name      string
+	modelCode uint8
+}{
+	{"ds3", codec.ModelDS3},
+	{"qs1", codec.ModelQS1A},
+	{"qs1a", codec.ModelQS1A}, // alias for qs1
+	{"dsp", codec.ModelQS1A},  // alias for qs1
+	{"yc600", codec.ModelYC600},
+	{"yc1000", codec.ModelYC1000},
+	{"c3", codec.ModelYC1000}, // alias for the YC600 / YC1000 group
+}
+
+// setPowerFamilyToModel maps a -family flag value to a representative
+// model code. Unknown names return an error listing the accepted set.
+func setPowerFamilyToModel(name string) (uint8, error) {
+	n := strings.ToLower(strings.TrimSpace(name))
+	for _, f := range setPowerFamilies {
+		if f.name == n {
+			return f.modelCode, nil
+		}
+	}
+	return 0, fmt.Errorf("unknown --family %q (choices: %s)", name, setPowerFamilyChoices())
+}
+
+// setPowerFamilyChoices renders the accepted -family values as a
+// pipe-separated list for the usage string.
+func setPowerFamilyChoices() string {
+	names := make([]string, 0, len(setPowerFamilies))
+	for _, f := range setPowerFamilies {
+		names = append(names, f.name)
+	}
+	return strings.Join(names, "|")
 }
 
 // lookupInverter returns the model_code for uid. short_addr is checked

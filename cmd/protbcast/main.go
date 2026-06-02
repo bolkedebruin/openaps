@@ -42,7 +42,7 @@ func run(args []string) error {
 	socket := fs.String("socket", "/var/run/inv-driver.sock",
 		"UDS path of the running inv-driver daemon")
 	modelStr := fs.String("model", "",
-		`inverter family: "ds3" (0x20), "qs1a" or "qs1" (0x18/0x08)`)
+		"inverter family (required); see -h for the list of accepted names")
 	param := fs.String("param", "",
 		`firmware long param name, e.g. "Over_frequency_Watt_Low_set"`)
 	value := fs.Float64("value", 0,
@@ -137,18 +137,44 @@ func run(args []string) error {
 	return nil
 }
 
-// parseModel maps a user-supplied family string to a codec model code.
+// parseModel maps a user-supplied family string to a representative
+// codec model code. Names are matched against the broadcast-capable
+// model codes that codec.BroadcastModelCodes returns — so adding a new
+// broadcast encoder in codec automatically widens the CLI's accepted
+// set without a parallel list to keep in sync. The lookup accepts both
+// the family key (codec.Family.String, e.g. "qs1") and the exact model
+// label codec.FamilyForModelString understands (e.g. "QS1A", "DS3-L").
 func parseModel(s string) (uint8, error) {
-	switch strings.ToLower(s) {
-	case "ds3":
-		return codec.ModelDS3, nil // 0x20
-	case "qs1a":
-		return codec.ModelQS1A, nil // 0x18
-	case "qs1":
-		return codec.ModelQS1, nil // 0x08
-	default:
-		return 0, fmt.Errorf("-model %q: must be one of ds3, qs1a, qs1", s)
+	n := strings.ToLower(strings.TrimSpace(s))
+	if n == "" {
+		return 0, fmt.Errorf("-model %q: empty", s)
 	}
+	wantFam := codec.FamilyForModelString(n)
+	for _, code := range codec.BroadcastModelCodes() {
+		fam := codec.FamilyOf(code)
+		if wantFam == fam && wantFam != codec.FamilyUnknown {
+			return code, nil
+		}
+	}
+	return 0, fmt.Errorf("-model %q: must be one of %s", s, protbcastFamilyChoices())
+}
+
+// protbcastFamilyChoices renders the accepted family names — one per
+// broadcast-capable family in codec.BroadcastModelCodes — for error /
+// help messages. The list is built from codec at call time so it stays
+// in sync with the broadcast encoder coverage.
+func protbcastFamilyChoices() string {
+	seen := make(map[codec.Family]bool)
+	var names []string
+	for _, code := range codec.BroadcastModelCodes() {
+		fam := codec.FamilyOf(code)
+		if fam == codec.FamilyUnknown || seen[fam] {
+			continue
+		}
+		seen[fam] = true
+		names = append(names, fam.String())
+	}
+	return strings.Join(names, ", ")
 }
 
 // isValidUID accepts the 12-hex UID form that codec.ParseL1 emits.
