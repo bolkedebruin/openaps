@@ -14,6 +14,17 @@
 
 ---
 
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" alt="ECU Console — Dashboard" width="32%">
+  <img src="docs/screenshots/inverters.png" alt="ECU Console — Inverters" width="32%">
+  <img src="docs/screenshots/profiles.png" alt="ECU Console — Grid profiles" width="32%">
+</p>
+<p align="center">
+  <em>Built-in ECU Console — dashboard (live fleet, totals, per-inverter cards), inverters (caps, encryption badges, scan/replace), profiles (base + overlays). See <a href="docs/screenshots/">docs/screenshots/</a> for events, settings and the login screen.</em>
+</p>
+
+---
+
 OpenAPS replaces the stock firmware on APsystems ECU gateways with a clean Go stack that keeps the fleet running entirely on your LAN: no cloud uplink, no unauthenticated web admin, no firmware OTAs you don't control. You read live telemetry, push grid-protection profiles, cap output power, expose data over SunSpec/Modbus, and audit every change — locally.
 
 **Supported hardware:** APsystems **ECU-R-Pro** (serial prefix `2162…`) and **ECU-C** (`215…`) — both run a BusyBox Linux userspace on ARMv7. **Not supported:** the original RTOS-based ECU-R (`2160…`, also sold as ECU-R-M3) and ECU-B (`2163…`) — they have no Linux userspace, so OpenAPS cannot be installed. A Raspberry Pi target is on the roadmap.
