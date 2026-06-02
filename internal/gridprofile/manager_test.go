@@ -21,6 +21,20 @@ type stubReadback struct{}
 func (stubReadback) ReadbackNative(string) (map[string]float64, bool) { return nil, false }
 func (stubReadback) TriggerRead(string)                               {}
 
+// waitForCalls polls runner.calls until it reaches want or deadline elapses.
+// Returns the observed value. Replaces fixed sleeps that flake on slow CI.
+func waitForCalls(t *testing.T, runner *stubRunner, want int64, deadline time.Duration) int64 {
+	t.Helper()
+	end := time.Now().Add(deadline)
+	for time.Now().Before(end) {
+		if got := runner.calls.Load(); got >= want {
+			return got
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return runner.calls.Load()
+}
+
 // newManagerForTest assembles a Manager with a real Store + a Reconciler
 // whose modelOf is supplied by the caller. The applier stays uninitialised
 // until enqueue/setOverlay is invoked.
@@ -180,10 +194,8 @@ func TestReconcileAllOverlays_EnqueuesEachPersistedOverlay(t *testing.T) {
 	if err := m.ReconcileAllOverlays(ctx); err != nil {
 		t.Fatalf("ReconcileAllOverlays: %v", err)
 	}
-	// Give the goroutines a moment to drain (each just runs the noop runner).
-	time.Sleep(150 * time.Millisecond)
 
-	// noopRunner.calls.Load() counts each ReconcileUID invocation, which equals one
+	// noopRunner.calls counts each ReconcileUID invocation, which equals one
 	// enqueue per (uid, overlay) pair that passed the fleet gate.
 	// Expected in-fleet enqueues:
 	//   - (a, ov1) [ov1 targets a,b → a in-fleet]
@@ -193,7 +205,7 @@ func TestReconcileAllOverlays_EnqueuesEachPersistedOverlay(t *testing.T) {
 	//   - (gone, *) — not in fleet, skipped.
 	// Note: ListOverlays groups by id (DISTINCT id), so each overlay
 	// contributes len(in-fleet uids).
-	got := noopRunner.calls.Load()
+	got := waitForCalls(t, noopRunner, 3, 2*time.Second)
 	// ListOverlays + GROUP BY id returns each overlay once with its body
 	// (which includes the full uids list). For ov1: uids=[a,b], both
 	// in-fleet → 2 enqueues. For ov2: uids=[a,gone], one in-fleet → 1.
@@ -264,11 +276,8 @@ func TestReconcileOverlaysForUID_EnqueuesOverlay(t *testing.T) {
 	if err := m.ReconcileOverlaysForUID(ctx, uid); err != nil {
 		t.Fatalf("ReconcileOverlaysForUID: %v", err)
 	}
-	// Drain the goroutine.
-	time.Sleep(150 * time.Millisecond)
-
-	if noopRunner.calls.Load() != 1 {
-		t.Errorf("expected 1 enqueue; got %d", noopRunner.calls.Load())
+	if got := waitForCalls(t, noopRunner, 1, 2*time.Second); got != 1 {
+		t.Errorf("expected 1 enqueue; got %d", got)
 	}
 
 	// Verify the started event has the overlay's id.
