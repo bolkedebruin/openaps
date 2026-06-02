@@ -1,7 +1,7 @@
 // Package events implements an in-process broadcaster that fans
 // inbound wire envelopes out to UDS subscribers. The driver decodes
 // each upstream frame once, and any number of subscriber processes
-// (e.g. legacy-bridge) consume the same Envelope stream.
+// consume the same Envelope stream.
 //
 // Slow subscribers are dropped — see Publish. Ingest never blocks on
 // a stuck reader.
