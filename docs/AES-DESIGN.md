@@ -4,9 +4,32 @@ Reverse-engineered from `main.exe`
 (ARM:LE:32:v8, ARM Cortex, OpenSSL 1.1.0 dynamic linkage).
 
 This document specifies byte-exact-compatible encrypt + decrypt for the L1
-over-the-air ciphertext frames that APsystems main.exe emits and accepts on
-fleets running `AES_flag_ALL=1`. It is the spec for a follow-up build agent
-to implement in `inv-driver/codec/`.
+over-the-air ciphertext frames that the stock firmware emits and accepts
+on fleets running `AES_flag_ALL=1`.
+
+## Status (as of v1.0.2)
+
+| Piece | Status | Where |
+|---|---|---|
+| Spec (this document) | ✅ landed | `docs/AES-DESIGN.md` |
+| Per-frame key derivation (`deriveFrameKey`) | ✅ implemented + unit-tested | `codec/aes.go` |
+| BCD inverter-ID encoding (`idToBCD`) | ✅ implemented + unit-tested | `codec/aes.go` |
+| RX decrypt (`DecryptRX`) — standalone | ✅ implemented + unit-tested | `codec/aes.go` |
+| RX decrypt — wired into `DecodeReplyFromEnvelope` | ✅ wired behind `-enable-aes-l1` flag (default OFF) | `codec/codec.go` `DecodeReplyFromEnvelope` |
+| TX encrypt (`EncryptTX`) — primitive | ✅ implemented + unit-tested | `codec/aes.go` |
+| TX encrypt — wired into `ecu-zb` outbound send path | ❌ deferred — primitive callable but no production path uses it | gap in `ecu-zb/internal/zigbee/busmgr` dispatch |
+| Algorithmic round-trip tests (decrypt(encrypt(body))=body across pad boundaries) | ✅ green | `codec/aes_test.go` |
+| **On-wire byte-exact validation against captured stock-firmware frames** | ❌ no fixture available | maintainer's fleet is all plaintext; needs a `'2'`-prefix capture |
+| Daemon CLI flag (`-enable-aes-l1`) | ✅ shipped, default OFF; emits `L1 AES enabled (EXPERIMENTAL: no on-wire test vectors)` on startup when set | `cmd/inv-driver/main.go` |
+| Multi-agent review (DRY / Architecture / Security) | ✅ verdicts SHIP / SHIP-WITH-FOLLOWUPS / SHIP | review reports |
+| Remediation pass (helper extraction + threat-model docs + `ErrAESEncryptFailed`) | ✅ landed | `bc93fcf` |
+| README threat-model section | ✅ landed | `README.md` § *AES L1 Encryption (EXPERIMENTAL)* |
+
+**What this means in practice:**
+- A fleet running `AES_flag_ALL=0` (all stock fleets observed so far on the maintainer's bench) is unaffected — the codec stays in the existing plaintext path.
+- A fleet with `AES_flag_ALL=1` can now decrypt inbound telemetry with `-enable-aes-l1` set. The Encrypted badge stays on per-inverter to flag "this was AES on the wire", even after the body is decrypted.
+- The TX encrypt path is callable as a library function (`codec.EncryptTX`) but no production caller invokes it. Operator-set commands to AES-enabled inverters fall through to the same `ErrEncrypted` path until the `ecu-zb` outbound dispatch gains the wire-up.
+- The implementation is correct **by construction** against this spec + algorithmic round-trip. The first operator with a real AES-enabled fleet is the proof-test.
 
 ## TL;DR
 
