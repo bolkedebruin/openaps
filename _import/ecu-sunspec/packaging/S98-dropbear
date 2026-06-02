@@ -1,0 +1,57 @@
+#!/bin/sh
+#
+# S98-dropbear — start the dropbear SSH server bundled with this package.
+# Skipped automatically if the bundled binary doesn't exist (e.g., main
+# package without --with-dropbear).
+
+DBEAR=/usr/local/sbin/dropbear
+PORT=22
+
+start() {
+    [ -x "$DBEAR" ] || { echo "dropbear not installed"; return 0; }
+    if pidof dropbear >/dev/null 2>&1; then
+        echo "dropbear already running"
+        return 0
+    fi
+
+    # Simple daemonize. Works fine at boot (init(1) ancestor) and on a
+    # normal shell.
+    "$DBEAR" -R -E -p "$PORT" >/dev/null 2>&1 &
+    sleep 1
+    if pidof dropbear >/dev/null 2>&1; then
+        echo "dropbear started on :$PORT"
+        return 0
+    fi
+
+    # Fallback: when invoked from a context that reaps its descendants
+    # (e.g. PHP-FPM running this script via the firmware-update endpoint),
+    # the default daemonize is killed when the request ends. Run dropbear
+    # in foreground inside an nohup'd subshell — the SIGHUP-immune wrapper
+    # keeps it alive after the parent returns.
+    nohup sh -c "exec '$DBEAR' -F -E -p '$PORT'" </dev/null >/dev/null 2>&1 &
+    sleep 1
+    if pidof dropbear >/dev/null 2>&1; then
+        echo "dropbear started on :$PORT (detached fallback)"
+        return 0
+    fi
+
+    echo "dropbear failed to start"
+    return 1
+}
+
+stop() {
+    if pidof dropbear >/dev/null 2>&1; then
+        killall -q dropbear
+        echo "dropbear stopped"
+    fi
+}
+
+case "$1" in
+    start)   start ;;
+    stop)    stop ;;
+    restart) stop; sleep 1; start ;;
+    *)
+        echo "usage: $0 {start|stop|restart}"
+        exit 2
+        ;;
+esac

@@ -1,0 +1,124 @@
+#!/bin/sh
+# Install entry point invoked by /index.php/management/exec_upgrade_ecu_app
+# after it extracts the uploaded tarball into /home/update_from_app/.
+#
+# Layout it expects (sibling to itself):
+#   ../update/applications/ecu-sunspec   — the SunSpec adapter binary
+#   ../update/etc-init-d/S99-sunspec     — boot init script
+#   ../update/etc-yuneng/*.conf          — optional yuneng config overlays
+#   ../update/dropbear/                  — optional, included when packaged
+#       dropbear, dropbearkey, dropbearconvert, dbclient
+#       authorized_keys                  — SSH public keys to install
+#
+# Uses only busybox-available shell commands (cp + chmod + mkdir, not install(1)).
+# Logs go to /home/sunspec-install.log.
+
+set -e
+LOG=/home/sunspec-install.log
+exec >> "$LOG" 2>&1
+echo
+echo "=== $(date) installing apsystems-sunspec ==="
+
+# Resolve the package root regardless of where PHP extracted us.
+ASSIST_DIR="$(cd "$(dirname "$0")" && pwd)"
+PKG_ROOT="$(cd "$ASSIST_DIR/.." && pwd)"
+SRC="$PKG_ROOT/update"
+
+if [ ! -d "$SRC" ]; then
+    echo "FATAL: $SRC not found; aborting"
+    exit 1
+fi
+
+# put_exec SRC DST — copy a file into place with mode 0755.
+put_exec() {
+    src="$1"
+    dst="$2"
+    [ -f "$src" ] || return 1
+    mkdir -p "$(dirname "$dst")"
+    cp -f "$src" "$dst"
+    chmod 0755 "$dst"
+    echo "+ $dst"
+}
+
+# 1. The SunSpec adapter binary itself.
+put_exec "$SRC/applications/ecu-sunspec" /home/applications/ecu-sunspec || true
+
+# 2. Default config file at /home/sunspec.json — only if not already present.
+#    Preserves any custom writes.allow_list / allow_local_network settings
+#    from a previous install.
+if [ -f "$SRC/etc-sunspec/sunspec.json" ] && [ ! -f /home/sunspec.json ]; then
+    cp -f "$SRC/etc-sunspec/sunspec.json" /home/sunspec.json
+    chmod 0644 /home/sunspec.json
+    echo "+ /home/sunspec.json (default — edit to customize writes)"
+elif [ -f /home/sunspec.json ]; then
+    echo "  /home/sunspec.json present — keeping existing config"
+fi
+
+# 2b. Nameplate lookup file at /home/sunspec-nameplate.json — only if not already
+#     present. Preserves any user-added entries for fleet hardware not in the
+#     shipped defaults.
+if [ -f "$SRC/etc-sunspec/sunspec-nameplate.json" ] && [ ! -f /home/sunspec-nameplate.json ]; then
+    cp -f "$SRC/etc-sunspec/sunspec-nameplate.json" /home/sunspec-nameplate.json
+    chmod 0644 /home/sunspec-nameplate.json
+    echo "+ /home/sunspec-nameplate.json (default — edit to add submodels)"
+elif [ -f /home/sunspec-nameplate.json ]; then
+    echo "  /home/sunspec-nameplate.json present — keeping existing table"
+fi
+
+# 3. Boot init script (BusyBox /etc/init.d style).
+put_exec "$SRC/etc-init-d/S99-sunspec" /etc/init.d/S99-sunspec || true
+
+# 3. Optional yuneng config overlays.
+if [ -d "$SRC/etc-yuneng" ]; then
+    for f in "$SRC/etc-yuneng/"*; do
+        [ -f "$f" ] || continue
+        cp -f "$f" /etc/yuneng/
+        echo "+ /etc/yuneng/$(basename "$f")"
+    done
+fi
+
+# 4. Optional dropbear bundle. Only acts if the dropbear/ subdir exists.
+if [ -d "$SRC/dropbear" ]; then
+    put_exec "$SRC/dropbear/dropbear"        /usr/local/sbin/dropbear        || true
+    put_exec "$SRC/dropbear/dropbearkey"     /usr/local/sbin/dropbearkey     || true
+    put_exec "$SRC/dropbear/dropbearconvert" /usr/local/sbin/dropbearconvert || true
+    put_exec "$SRC/dropbear/dbclient"        /usr/local/sbin/dbclient        || true
+
+    mkdir -p /etc/dropbear
+    if [ ! -f /etc/dropbear/dropbear_rsa_host_key ] && [ -x /usr/local/sbin/dropbearkey ]; then
+        /usr/local/sbin/dropbearkey -t rsa -f /etc/dropbear/dropbear_rsa_host_key 2>/dev/null || true
+    fi
+
+    if [ -f "$SRC/dropbear/authorized_keys" ]; then
+        # Resolve root's actual home dir from /etc/passwd. APsystems
+        # firmware sets root's home to /home/root (not /root) and that
+        # directory ships owned by uid 1001 — dropbear refuses to read
+        # authorized_keys from a home dir not owned by user-or-root.
+        ROOT_HOME=$(awk -F: '$1=="root"{print $6; exit}' /etc/passwd)
+        [ -n "$ROOT_HOME" ] || ROOT_HOME=/root
+        chown root:root "$ROOT_HOME" 2>/dev/null || true
+        mkdir -p "$ROOT_HOME/.ssh"
+        chown root:root "$ROOT_HOME/.ssh"
+        chmod 700 "$ROOT_HOME/.ssh"
+        # Append (don't overwrite) and de-duplicate.
+        touch "$ROOT_HOME/.ssh/authorized_keys"
+        cat "$SRC/dropbear/authorized_keys" >> "$ROOT_HOME/.ssh/authorized_keys"
+        awk '!seen[$0]++' "$ROOT_HOME/.ssh/authorized_keys" > /tmp/.ak.tmp \
+            && mv /tmp/.ak.tmp "$ROOT_HOME/.ssh/authorized_keys"
+        chown root:root "$ROOT_HOME/.ssh/authorized_keys"
+        chmod 600 "$ROOT_HOME/.ssh/authorized_keys"
+        echo "+ $ROOT_HOME/.ssh/authorized_keys"
+    fi
+
+    if [ -f "$SRC/etc-init-d/S98-dropbear" ]; then
+        put_exec "$SRC/etc-init-d/S98-dropbear" /etc/init.d/S98-dropbear || true
+        /etc/init.d/S98-dropbear start || true
+    fi
+fi
+
+# 5. Restart the SunSpec adapter so the freshly installed binary takes effect.
+if [ -x /etc/init.d/S99-sunspec ]; then
+    /etc/init.d/S99-sunspec restart || true
+fi
+
+echo "=== $(date) done ==="

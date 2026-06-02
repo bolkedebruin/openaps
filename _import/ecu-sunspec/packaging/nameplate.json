@@ -1,0 +1,7 @@
+{
+  "_comment": "model_int → AC nameplate watts mapping. The model_int comes from the `model` column of the ECU's /home/database.db `id` table. Add an entry for each APsystems submodel encountered. To derive a value: read /tmp/powerALL.conf (the fleet total APsystems' main.exe computes) and SELECT id, model FROM id, then solve for the per-model values when the fleet's hardware is known.",
+  "models": {
+    "24": {"nameplate_w": 1600, "label": "QS1A T24 (EU 4-MPPT)"},
+    "32": {"nameplate_w": 750,  "label": "DS3 EU"}
+  }
+}
