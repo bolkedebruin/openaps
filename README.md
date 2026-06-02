@@ -124,4 +124,4 @@ Output lands in `build/`. `make test` runs the full suite (`go test -race ./...`
 
 ## License
 
-[Apache 2.0](LICENSE).
+[MIT](LICENSE).
