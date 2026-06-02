@@ -209,7 +209,7 @@ func TestAdd_BindOnPAN(t *testing.T) {
 	}
 
 	resp := m.Handle(context.Background(), "ecu-web", &wire.PairingRequest{
-		Op: &wire.PairingRequest_AddById{AddById: &wire.AddById{Serial: "806000042582"}}})
+		Op: &wire.PairingRequest_AddById{AddById: &wire.AddById{Serial: "999900000003"}}})
 	if !resp.GetOk() {
 		t.Fatalf("start add: %s", resp.GetError())
 	}
@@ -228,7 +228,7 @@ func TestAdd_BindOnPAN(t *testing.T) {
 		t.Fatalf("expected bind_ok milestone; got %v", ev.kinds)
 	}
 	// short_addr persisted.
-	row, err := st.GetInverterPairing(context.Background(), "806000042582")
+	row, err := st.GetInverterPairing(context.Background(), "999900000003")
 	if err != nil {
 		t.Fatalf("GetInverterPairing: %v", err)
 	}
@@ -260,7 +260,7 @@ func TestAdd_MigrateWhenOffPAN(t *testing.T) {
 	}
 	// Shorten the post-commit settle for the test.
 	resp := m.Handle(context.Background(), "ecu-web", &wire.PairingRequest{
-		Op: &wire.PairingRequest_AddById{AddById: &wire.AddById{Serial: "704000006835"}}})
+		Op: &wire.PairingRequest_AddById{AddById: &wire.AddById{Serial: "999900000001"}}})
 	if !resp.GetOk() {
 		t.Fatalf("start: %s", resp.GetError())
 	}
@@ -293,7 +293,7 @@ func TestRekey_CommitAndVerify(t *testing.T) {
 	st := newTestStore(t)
 	// Seed two inverters in the inventory.
 	ctx := context.Background()
-	for _, uid := range []string{"806000042582", "704000006835"} {
+	for _, uid := range []string{"999900000003", "999900000001"} {
 		if err := st.SetInverterShortAddr(ctx, uid, 0x0001); err != nil {
 			t.Fatal(err)
 		}
@@ -342,7 +342,7 @@ func TestRekey_RollbackOnPrimeFailure(t *testing.T) {
 	}
 	st := newTestStore(t)
 	ctx := context.Background()
-	if err := st.SetInverterShortAddr(ctx, "806000042582", 0x0001); err != nil {
+	if err := st.SetInverterShortAddr(ctx, "999900000003", 0x0001); err != nil {
 		t.Fatal(err)
 	}
 	settings := &stubSettings{pan: "0DCE"}
@@ -428,7 +428,7 @@ func TestConcurrentStatusAndAbort(t *testing.T) {
 		CommitSettle: time.Millisecond, VerifyRetrySleep: time.Millisecond,
 	}
 	resp := m.Handle(context.Background(), "ecu-web", &wire.PairingRequest{
-		Op: &wire.PairingRequest_AddById{AddById: &wire.AddById{Serial: "806000042582"}}})
+		Op: &wire.PairingRequest_AddById{AddById: &wire.AddById{Serial: "999900000003"}}})
 	if !resp.GetOk() {
 		t.Fatalf("start add: %s", resp.GetError())
 	}
@@ -451,7 +451,7 @@ func TestConcurrentStatusAndAbort(t *testing.T) {
 func TestStatus_JSONShape(t *testing.T) {
 	m := &Manager{}
 	m.status.begin(OpScan, StageScan, 3, "ecu-web")
-	m.status.upsertInverter(PerInverter{Serial: "806000042582", State: "found", Encrypted: true})
+	m.status.upsertInverter(PerInverter{Serial: "999900000003", State: "found", Encrypted: true})
 	resp := m.getStatus()
 	if !resp.GetOk() {
 		t.Fatalf("get_status: %s", resp.GetError())
@@ -503,9 +503,9 @@ func TestParsePAN(t *testing.T) {
 func TestReplace_RejectsBadInput(t *testing.T) {
 	m := &Manager{Transport: nil}
 	cases := []*wire.ReplaceInverter{
-		{OldUid: "bad", NewSerial: "806000042582"},
-		{OldUid: "806000042582", NewSerial: ""},
-		{OldUid: "806000042582", NewSerial: "12ab"},
+		{OldUid: "bad", NewSerial: "999900000003"},
+		{OldUid: "999900000003", NewSerial: ""},
+		{OldUid: "999900000003", NewSerial: "12ab"},
 	}
 	for i, c := range cases {
 		resp := m.startReplace("ecu-web", c)
@@ -520,7 +520,7 @@ func TestTransport_Timeout(t *testing.T) {
 	silent := senderFunc(func(string, *wire.Envelope) bool { return true })
 	tr := NewTransport(silent, "ecu-zb")
 	tr.Timeout = 50 * time.Millisecond
-	_, err := tr.getShortAddr(context.Background(), "806000042582")
+	_, err := tr.getShortAddr(context.Background(), "999900000003")
 	if err == nil {
 		t.Fatal("expected timeout error")
 	}

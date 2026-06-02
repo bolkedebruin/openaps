@@ -19,7 +19,7 @@ func TestParseInboundPair_RejectsL2WrappedFrame(t *testing.T) {
 // short address and UID read from their real offsets.
 func TestParseInboundPair_GenuineShortAddrReply(t *testing.T) {
 	// short_addr 0x5011 at [0:1], not A5A5 at [4:5], UID at [4:10].
-	l2 := mustHex("501100008060000425820000")
+	l2 := mustHex("501100009999000000030000")
 	pf, ok := ParsePairFrame(DirInbound, l2)
 	if !ok || pf.Kind != PairShortAddrReply {
 		t.Fatalf("genuine ShortAddrReply not parsed: ok=%v kind=%v", ok, pf.Kind)
@@ -27,8 +27,8 @@ func TestParseInboundPair_GenuineShortAddrReply(t *testing.T) {
 	if pf.ShortAddr != 0x5011 {
 		t.Fatalf("short_addr = 0x%04X; want 0x5011", pf.ShortAddr)
 	}
-	if pf.PeerUID != "806000042582" {
-		t.Fatalf("uid = %q; want 806000042582", pf.PeerUID)
+	if pf.PeerUID != "999900000003" {
+		t.Fatalf("uid = %q; want 999900000003", pf.PeerUID)
 	}
 }
 

@@ -52,7 +52,7 @@ func shortenVerify(t *testing.T) {
 }
 
 func TestApplyMAC_HappyPath(t *testing.T) {
-	const wantMAC = "80:97:1b:03:0d:ce"
+	const wantMAC = "aa:bb:cc:dd:ee:ff"
 	got := stubRunCmd(t, func(call int, name string, args []string) ([]byte, error) {
 		return nil, nil
 	})
@@ -75,11 +75,11 @@ func TestApplyMAC_HappyPath(t *testing.T) {
 func TestApplyMAC_RejectsInvalidMAC(t *testing.T) {
 	cases := []string{
 		"; rm -rf /",
-		"80:97:1b:03:0d",     // 5 octets
-		"80971b030dce",       // bare hex
+		"aa:bb:cc:dd:ee",     // 5 octets
+		"aabbccddeeff",       // bare hex
 		"",                   // empty
-		"80:97:1b:03:0d:zz",  // non-hex
-		"80:97:1b:03:0d:ce0", // octet too long
+		"aa:bb:cc:dd:ee:zz",  // non-hex
+		"aa:bb:cc:dd:ee:ff0", // octet too long
 	}
 	for _, mac := range cases {
 		t.Run(mac, func(t *testing.T) {

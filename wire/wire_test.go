@@ -41,7 +41,7 @@ func TestReadWriteFrame_RoundTrip(t *testing.T) {
 			env: &Envelope{Body: &Envelope_Telemetry{Telemetry: &Telemetry{
 				TsMs:         1747200000002,
 				ShortAddr:    0x5011,
-				PeerUid:      "806000042582",
+				PeerUid:      "999900000003",
 				Cmd:          0xB1,
 				Model:        "QS1A",
 				GridV:        232.5,
@@ -63,7 +63,7 @@ func TestReadWriteFrame_RoundTrip(t *testing.T) {
 			env: &Envelope{Body: &Envelope_Telemetry{Telemetry: &Telemetry{
 				TsMs:         1747200000003,
 				ShortAddr:    0x61F0,
-				PeerUid:      "704000006835",
+				PeerUid:      "999900000001",
 				Cmd:          0xBB,
 				Model:        "DS3",
 				ActivePowerW: 555.0,

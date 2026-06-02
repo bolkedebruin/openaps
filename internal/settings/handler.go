@@ -13,7 +13,7 @@ import (
 )
 
 // macPattern matches a 6-octet colon-separated hex MAC (e.g.
-// 80:97:1b:03:0d:ce); case-insensitive.
+// aa:bb:cc:dd:ee:ff); case-insensitive.
 var macPattern = regexp.MustCompile(`^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$`)
 
 // maxEcuIDLen bounds the operator's free-form ECU identifier;
@@ -195,7 +195,7 @@ func macClassReject(mac string) string {
 func validate(s Settings) error {
 	if s.MAC != "" {
 		if !macPattern.MatchString(s.MAC) {
-			return fmt.Errorf("mac %q invalid: want 6 colon-separated hex octets (e.g. 80:97:1b:03:0d:ce)", s.MAC)
+			return fmt.Errorf("mac %q invalid: want 6 colon-separated hex octets (e.g. aa:bb:cc:dd:ee:ff)", s.MAC)
 		}
 		if reason := macClassReject(s.MAC); reason != "" {
 			return fmt.Errorf("mac %q invalid: %s", s.MAC, reason)

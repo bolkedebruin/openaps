@@ -44,8 +44,8 @@ func TestParseL1_QS1A(t *testing.T) {
 	if env.ShortAddr != 0x5011 {
 		t.Fatalf("SA: got 0x%04X want 0x5011", env.ShortAddr)
 	}
-	if env.PeerUIDString() != "806000042582" {
-		t.Fatalf("PeerUID: got %q want 806000042582", env.PeerUIDString())
+	if env.PeerUIDString() != "999900000003" {
+		t.Fatalf("PeerUID: got %q want 999900000003", env.PeerUIDString())
 	}
 	if env.Encrypted {
 		t.Fatal("expected plaintext (gate byte 0xFB ≥ 0xF0)")
@@ -81,8 +81,8 @@ func TestDecodeReply_QS1A_FromLiveCapture(t *testing.T) {
 	if r.Model != "QS1A" {
 		t.Fatalf("Model: got %q want QS1A", r.Model)
 	}
-	if r.PeerUID != "806000042582" {
-		t.Fatalf("PeerUID: got %q want 806000042582", r.PeerUID)
+	if r.PeerUID != "999900000003" {
+		t.Fatalf("PeerUID: got %q want 999900000003", r.PeerUID)
 	}
 	if r.Cmd != 0xB1 {
 		t.Fatalf("Cmd: got 0x%02X want 0xB1", r.Cmd)
@@ -144,8 +144,8 @@ func TestDecodeReply_DS3_FromLiveCapture(t *testing.T) {
 	if r.Model != "DS3" {
 		t.Fatalf("Model: got %q want DS3", r.Model)
 	}
-	if r.PeerUID != "704000006835" {
-		t.Fatalf("PeerUID: got %q want 704000006835", r.PeerUID)
+	if r.PeerUID != "999900000001" {
+		t.Fatalf("PeerUID: got %q want 999900000001", r.PeerUID)
 	}
 	if r.Cmd != 0xBB {
 		t.Fatalf("Cmd: got 0x%02X want 0xBB", r.Cmd)
@@ -358,8 +358,8 @@ func TestDecodeReply_RejectsTruncated(t *testing.T) {
 	cases := []struct{ name, hexStr string }{
 		{"empty", ""},
 		{"L1 SOF only", "fcfc"},
-		{"missing FE FE", "fcfc501100ff806000042582fbfb51b104"},
-		{"bad L1 SOF", "feed5011000080600004258200000000fefe"},
+		{"missing FE FE", "fcfc501100ff999900000003fbfb51b104"},
+		{"bad L1 SOF", "feed5011000099990000000300000000fefe"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -373,12 +373,12 @@ func TestDecodeReply_RejectsTruncated(t *testing.T) {
 
 func TestDecodeReply_UnknownCmdLeavesBodyForInspection(t *testing.T) {
 	// Same SA + UID, but cmd 0xAA — used for set/SET ops, not BB query.
-	frame := hx(t, "fcfc 5011 00ff 806000042582 fbfb 06 aa 00 00 00 00 00 00 c1 fefe")
+	frame := hx(t, "fcfc 5011 00ff 999900000003 fbfb 06 aa 00 00 00 00 00 00 c1 fefe")
 	r, err := DecodeReply(frame)
 	if err == nil {
 		t.Fatal("unknown cmd should return an error")
 	}
-	if r.PeerUID != "806000042582" {
+	if r.PeerUID != "999900000003" {
 		t.Fatalf("PeerUID still parsed: got %q", r.PeerUID)
 	}
 	if r.Cmd != 0xAA {

@@ -64,7 +64,7 @@ func validOverlayJSON(t *testing.T, id string, uids []string) []byte {
 // overlay is NOT persisted and no async apply is queued. This closes the
 // bogus-uid growth vector for gp_overlays (operator typo → dead row).
 func TestSetOverlay_RejectsUidNotInFleet(t *testing.T) {
-	known := "704000006835"
+	known := "999900000001"
 	unknown := "806000000000"
 
 	// modelOf returns true only for the known uid; the unknown uid returns
@@ -107,8 +107,8 @@ func TestSetOverlay_RejectsUidNotInFleet(t *testing.T) {
 // TestSetOverlay_AcceptsAllUidsInFleet is the positive control: when every
 // uid is known, setOverlay persists + enqueues normally.
 func TestSetOverlay_AcceptsAllUidsInFleet(t *testing.T) {
-	a := "704000006835"
-	b := "806000042582"
+	a := "999900000001"
+	b := "999900000003"
 	modelOf := func(uid string) (uint8, bool) {
 		if uid == a || uid == b {
 			return 0x20, true
@@ -138,8 +138,8 @@ func TestSetOverlay_AcceptsAllUidsInFleet(t *testing.T) {
 // Seeds two overlays — one targeting two uids both in fleet, one targeting a
 // mix — then asserts the enqueue calls match the in-fleet uids only.
 func TestReconcileAllOverlays_EnqueuesEachPersistedOverlay(t *testing.T) {
-	a := "704000006835"
-	b := "806000042582"
+	a := "999900000001"
+	b := "999900000003"
 	gone := "ffffffffffff" // persisted overlay row but not in fleet anymore
 
 	modelOf := func(uid string) (uint8, bool) {
@@ -208,7 +208,7 @@ func TestReconcileAllOverlays_EnqueuesEachPersistedOverlay(t *testing.T) {
 // uids without a Local Site profile). No applier instance is created and no
 // jobs are enqueued.
 func TestReconcileOverlaysForUID_NoOverlay(t *testing.T) {
-	uid := "704000006835"
+	uid := "999900000001"
 	modelOf := func(u string) (uint8, bool) {
 		if u == uid {
 			return 0x20, true
@@ -239,7 +239,7 @@ func TestReconcileOverlaysForUID_NoOverlay(t *testing.T) {
 // the overlay's id (which the runner sees indirectly via call count + sink
 // events).
 func TestReconcileOverlaysForUID_EnqueuesOverlay(t *testing.T) {
-	uid := "704000006835"
+	uid := "999900000001"
 	modelOf := func(u string) (uint8, bool) {
 		if u == uid {
 			return 0x20, true

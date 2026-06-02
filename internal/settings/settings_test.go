@@ -23,7 +23,7 @@ func TestSaveThenReopen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := Settings{EcuID: "roof-1", MAC: "80:97:1b:03:0d:ce", PANOverride: "0DCE", ZigbeeType: "apsystems"}
+	want := Settings{EcuID: "roof-1", MAC: "aa:bb:cc:dd:ee:ff", PANOverride: "0DCE", ZigbeeType: "apsystems"}
 	if err := st.Save(want); err != nil {
 		t.Fatal(err)
 	}

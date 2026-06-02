@@ -34,7 +34,7 @@ func setReq(s *wire.Settings) *wire.SettingsRequest {
 
 func TestHandle_GetReturnsStoreValues(t *testing.T) {
 	h, st := newHandler(t)
-	if err := st.Save(Settings{EcuID: "roof", MAC: "80:97:1b:03:0d:ce", PANOverride: "0DCE", ZigbeeType: "apsystems"}); err != nil {
+	if err := st.Save(Settings{EcuID: "roof", MAC: "aa:bb:cc:dd:ee:ff", PANOverride: "0DCE", ZigbeeType: "apsystems"}); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	resp := h.Handle(context.Background(), getReq())
@@ -42,7 +42,7 @@ func TestHandle_GetReturnsStoreValues(t *testing.T) {
 		t.Fatalf("get not ok: %s", resp.GetError())
 	}
 	got := resp.GetSettings()
-	if got.GetEcuId() != "roof" || got.GetMac() != "80:97:1b:03:0d:ce" ||
+	if got.GetEcuId() != "roof" || got.GetMac() != "aa:bb:cc:dd:ee:ff" ||
 		got.GetPanOverride() != "0DCE" || got.GetZigbeeType() != "apsystems" {
 		t.Fatalf("get returned %+v", got)
 	}
@@ -62,7 +62,7 @@ func TestHandle_GetEmptyOpReadsCurrent(t *testing.T) {
 
 func TestHandle_SetValidPersistsAndEchoes(t *testing.T) {
 	h, st := newHandler(t)
-	in := &wire.Settings{EcuId: "site-a", Mac: "80:97:1b:03:0d:ce", PanOverride: "1f", ZigbeeType: "general"}
+	in := &wire.Settings{EcuId: "site-a", Mac: "aa:bb:cc:dd:ee:ff", PanOverride: "1f", ZigbeeType: "general"}
 	resp := h.Handle(context.Background(), setReq(in))
 	if !resp.GetOk() {
 		t.Fatalf("set not ok: %s", resp.GetError())
@@ -71,7 +71,7 @@ func TestHandle_SetValidPersistsAndEchoes(t *testing.T) {
 		t.Fatalf("echo mismatch: %+v", resp.GetSettings())
 	}
 	persisted := st.Get()
-	if persisted.EcuID != "site-a" || persisted.MAC != "80:97:1b:03:0d:ce" ||
+	if persisted.EcuID != "site-a" || persisted.MAC != "aa:bb:cc:dd:ee:ff" ||
 		persisted.PANOverride != "1f" || persisted.ZigbeeType != "general" {
 		t.Fatalf("not persisted: %+v", persisted)
 	}
@@ -137,7 +137,7 @@ func TestValidate_RejectsBadMACClasses(t *testing.T) {
 // the stored Settings only; the radio Effective fields are not populated.
 func TestHandle_NoEffectiveRadioOnGet(t *testing.T) {
 	h, _ := newHandler(t)
-	h.LiveMAC = func() string { return "80:97:1b:03:0d:ce" }
+	h.LiveMAC = func() string { return "aa:bb:cc:dd:ee:ff" }
 	resp := h.Handle(context.Background(), getReq())
 	if eff := resp.GetEffective(); eff != nil &&
 		(eff.GetPan() != "" || eff.GetChannel() != 0 || eff.GetZigbeeType() != "") {
@@ -170,7 +170,7 @@ func TestSet_AppliesMACBeforeSave(t *testing.T) {
 		gotMAC = mac
 		return nil
 	}
-	in := &wire.Settings{Mac: "aa:bb:cc:dd:ee:ff"}
+	in := &wire.Settings{Mac: "22:33:44:55:66:77"}
 	resp := h.Handle(context.Background(), setReq(in))
 	if !resp.GetOk() {
 		t.Fatalf("set not ok: %s", resp.GetError())
@@ -178,26 +178,26 @@ func TestSet_AppliesMACBeforeSave(t *testing.T) {
 	if applyCalls != 1 {
 		t.Fatalf("Apply called %d times, want 1", applyCalls)
 	}
-	if gotMAC != "aa:bb:cc:dd:ee:ff" {
-		t.Fatalf("Apply got mac %q, want aa:bb:cc:dd:ee:ff", gotMAC)
+	if gotMAC != "22:33:44:55:66:77" {
+		t.Fatalf("Apply got mac %q, want 22:33:44:55:66:77", gotMAC)
 	}
-	if persisted := st.Get(); persisted.MAC != "aa:bb:cc:dd:ee:ff" {
+	if persisted := st.Get(); persisted.MAC != "22:33:44:55:66:77" {
 		t.Fatalf("save did not persist new mac: %+v", persisted)
 	}
-	if resp.GetSettings().GetMac() != "aa:bb:cc:dd:ee:ff" {
-		t.Errorf("response settings mac = %q, want aa:bb:cc:dd:ee:ff", resp.GetSettings().GetMac())
+	if resp.GetSettings().GetMac() != "22:33:44:55:66:77" {
+		t.Errorf("response settings mac = %q, want 22:33:44:55:66:77", resp.GetSettings().GetMac())
 	}
 }
 
 func TestSet_AbortsSaveOnApplyFailure(t *testing.T) {
 	h, st := newHandler(t)
-	if err := st.Save(Settings{MAC: "80:97:1b:03:0d:ce", EcuID: "old"}); err != nil {
+	if err := st.Save(Settings{MAC: "aa:bb:cc:dd:ee:ff", EcuID: "old"}); err != nil {
 		t.Fatalf("seed Save: %v", err)
 	}
 	boom := errors.New("ip link down failed")
 	h.Apply = func(_ context.Context, _ string) error { return boom }
 
-	in := &wire.Settings{Mac: "aa:bb:cc:dd:ee:ff", EcuId: "new"}
+	in := &wire.Settings{Mac: "22:33:44:55:66:77", EcuId: "new"}
 	resp := h.Handle(context.Background(), setReq(in))
 	if resp.GetOk() {
 		t.Fatalf("set unexpectedly ok with failing apply")
@@ -205,14 +205,14 @@ func TestSet_AbortsSaveOnApplyFailure(t *testing.T) {
 	if !strings.Contains(resp.GetError(), "ip link down failed") {
 		t.Errorf("response error %q should mention apply failure", resp.GetError())
 	}
-	if persisted := st.Get(); persisted.MAC != "80:97:1b:03:0d:ce" || persisted.EcuID != "old" {
+	if persisted := st.Get(); persisted.MAC != "aa:bb:cc:dd:ee:ff" || persisted.EcuID != "old" {
 		t.Fatalf("save ran despite apply failure: %+v", persisted)
 	}
 }
 
 func TestSet_NoApplyWhenMACUnchanged(t *testing.T) {
 	h, st := newHandler(t)
-	if err := st.Save(Settings{MAC: "80:97:1b:03:0d:ce", EcuID: "old"}); err != nil {
+	if err := st.Save(Settings{MAC: "aa:bb:cc:dd:ee:ff", EcuID: "old"}); err != nil {
 		t.Fatalf("seed Save: %v", err)
 	}
 	var applyCalls int
@@ -221,7 +221,7 @@ func TestSet_NoApplyWhenMACUnchanged(t *testing.T) {
 		return nil
 	}
 	// Same MAC, but EcuID changes — Save must still run.
-	in := &wire.Settings{Mac: "80:97:1b:03:0d:ce", EcuId: "renamed"}
+	in := &wire.Settings{Mac: "aa:bb:cc:dd:ee:ff", EcuId: "renamed"}
 	resp := h.Handle(context.Background(), setReq(in))
 	if !resp.GetOk() {
 		t.Fatalf("set not ok: %s", resp.GetError())
@@ -236,7 +236,7 @@ func TestSet_NoApplyWhenMACUnchanged(t *testing.T) {
 
 func TestSet_EmptyMACClears(t *testing.T) {
 	h, st := newHandler(t)
-	if err := st.Save(Settings{MAC: "80:97:1b:03:0d:ce", EcuID: "old"}); err != nil {
+	if err := st.Save(Settings{MAC: "aa:bb:cc:dd:ee:ff", EcuID: "old"}); err != nil {
 		t.Fatalf("seed Save: %v", err)
 	}
 	var applyCalls int
@@ -272,7 +272,7 @@ func TestSet_EmitsApplyEventOnSuccess(t *testing.T) {
 	}
 	h.AppendEventBy = "ecu-web"
 
-	in := &wire.Settings{Mac: "80:97:1b:03:0d:ce"}
+	in := &wire.Settings{Mac: "aa:bb:cc:dd:ee:ff"}
 	resp := h.Handle(context.Background(), setReq(in))
 	if !resp.GetOk() {
 		t.Fatalf("set not ok: %s", resp.GetError())
@@ -293,7 +293,7 @@ func TestSet_EmitsApplyEventOnSuccess(t *testing.T) {
 	if got.UID != "" {
 		t.Errorf("inverter_uid = %q, want empty (ECU-level event)", got.UID)
 	}
-	if !strings.Contains(got.Detail, "live=64:33:db:fa:47:0b") || !strings.Contains(got.Detail, "applied=80:97:1b:03:0d:ce") {
+	if !strings.Contains(got.Detail, "live=64:33:db:fa:47:0b") || !strings.Contains(got.Detail, "applied=aa:bb:cc:dd:ee:ff") {
 		t.Errorf("detail %q missing live/applied fields", got.Detail)
 	}
 }
@@ -310,7 +310,7 @@ func TestSet_EmitsApplyEventOnFailure(t *testing.T) {
 	}
 	h.AppendEventBy = "ecu-web"
 
-	in := &wire.Settings{Mac: "80:97:1b:03:0d:ce"}
+	in := &wire.Settings{Mac: "aa:bb:cc:dd:ee:ff"}
 	resp := h.Handle(context.Background(), setReq(in))
 	if resp.GetOk() {
 		t.Fatalf("set unexpectedly ok with failing apply")
@@ -331,14 +331,14 @@ func TestSet_EmitsApplyEventOnFailure(t *testing.T) {
 	if !strings.Contains(got.Detail, "ip link down failed") {
 		t.Errorf("detail %q missing apply error", got.Detail)
 	}
-	if !strings.Contains(got.Detail, "wanted=80:97:1b:03:0d:ce") {
+	if !strings.Contains(got.Detail, "wanted=aa:bb:cc:dd:ee:ff") {
 		t.Errorf("detail %q missing wanted", got.Detail)
 	}
 }
 
 func TestSet_NoApplyEventWhenMACUnchanged(t *testing.T) {
 	h, st := newHandler(t)
-	if err := st.Save(Settings{MAC: "80:97:1b:03:0d:ce", EcuID: "old"}); err != nil {
+	if err := st.Save(Settings{MAC: "aa:bb:cc:dd:ee:ff", EcuID: "old"}); err != nil {
 		t.Fatalf("seed Save: %v", err)
 	}
 	var calls int
@@ -347,7 +347,7 @@ func TestSet_NoApplyEventWhenMACUnchanged(t *testing.T) {
 		return nil
 	}
 	// Same MAC, but EcuID changes — apply is skipped, so no event row.
-	in := &wire.Settings{Mac: "80:97:1b:03:0d:ce", EcuId: "renamed"}
+	in := &wire.Settings{Mac: "aa:bb:cc:dd:ee:ff", EcuId: "renamed"}
 	resp := h.Handle(context.Background(), setReq(in))
 	if !resp.GetOk() {
 		t.Fatalf("set not ok: %s", resp.GetError())

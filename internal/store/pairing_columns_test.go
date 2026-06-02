@@ -40,12 +40,12 @@ func TestSetInverterEncrypted_AndRead(t *testing.T) {
 	defer st.Close()
 
 	// Seed an inverter via the pairing-state upsert.
-	if err := st.SetInverterShortAddr(ctx, "806000042582", 0x1234); err != nil {
+	if err := st.SetInverterShortAddr(ctx, "999900000003", 0x1234); err != nil {
 		t.Fatalf("SetInverterShortAddr: %v", err)
 	}
 
 	// Before setting encrypted, it reads as nil (NULL/unknown).
-	row, err := st.GetInverterPairing(ctx, "806000042582")
+	row, err := st.GetInverterPairing(ctx, "999900000003")
 	if err != nil {
 		t.Fatalf("GetInverterPairing: %v", err)
 	}
@@ -56,18 +56,18 @@ func TestSetInverterEncrypted_AndRead(t *testing.T) {
 		t.Fatalf("short_addr = 0x%X", row.ShortAddr)
 	}
 
-	if err := st.SetInverterEncrypted(ctx, "806000042582", true); err != nil {
+	if err := st.SetInverterEncrypted(ctx, "999900000003", true); err != nil {
 		t.Fatalf("SetInverterEncrypted: %v", err)
 	}
-	row, _ = st.GetInverterPairing(ctx, "806000042582")
+	row, _ = st.GetInverterPairing(ctx, "999900000003")
 	if row.Encrypted == nil || !*row.Encrypted {
 		t.Fatalf("encrypted not set true: %+v", row)
 	}
 
-	if err := st.SetInverterEncrypted(ctx, "806000042582", false); err != nil {
+	if err := st.SetInverterEncrypted(ctx, "999900000003", false); err != nil {
 		t.Fatalf("SetInverterEncrypted false: %v", err)
 	}
-	row, _ = st.GetInverterPairing(ctx, "806000042582")
+	row, _ = st.GetInverterPairing(ctx, "999900000003")
 	if row.Encrypted == nil || *row.Encrypted {
 		t.Fatalf("encrypted not set false: %+v", row)
 	}
@@ -81,10 +81,10 @@ func TestSetInverterPairingState_AndDelete(t *testing.T) {
 	}
 	defer st.Close()
 
-	if err := st.SetInverterPairingState(ctx, "704000006835", "found", 1234567); err != nil {
+	if err := st.SetInverterPairingState(ctx, "999900000001", "found", 1234567); err != nil {
 		t.Fatalf("SetInverterPairingState: %v", err)
 	}
-	row, err := st.GetInverterPairing(ctx, "704000006835")
+	row, err := st.GetInverterPairing(ctx, "999900000001")
 	if err != nil {
 		t.Fatalf("GetInverterPairing: %v", err)
 	}
@@ -93,10 +93,10 @@ func TestSetInverterPairingState_AndDelete(t *testing.T) {
 	}
 
 	// A second update with lastAnnounceMs=0 must preserve the prior value.
-	if err := st.SetInverterPairingState(ctx, "704000006835", "bound", 0); err != nil {
+	if err := st.SetInverterPairingState(ctx, "999900000001", "bound", 0); err != nil {
 		t.Fatalf("update state: %v", err)
 	}
-	row, _ = st.GetInverterPairing(ctx, "704000006835")
+	row, _ = st.GetInverterPairing(ctx, "999900000001")
 	if row.PairingState != "bound" {
 		t.Fatalf("state = %q want bound", row.PairingState)
 	}
@@ -105,10 +105,10 @@ func TestSetInverterPairingState_AndDelete(t *testing.T) {
 	}
 
 	// DeleteInverter removes the row.
-	if err := st.DeleteInverter(ctx, "704000006835"); err != nil {
+	if err := st.DeleteInverter(ctx, "999900000001"); err != nil {
 		t.Fatalf("DeleteInverter: %v", err)
 	}
-	if _, err := st.GetInverterPairing(ctx, "704000006835"); err != sql.ErrNoRows {
+	if _, err := st.GetInverterPairing(ctx, "999900000001"); err != sql.ErrNoRows {
 		t.Fatalf("GetInverterPairing after delete = %v want sql.ErrNoRows", err)
 	}
 }

@@ -7,7 +7,7 @@ import (
 )
 
 // capturedQS1PageAFrame is a real 0xDB page-A reply captured on-wire from
-// QS1A 806000042582 (FB FB <len=0x3f> DB <payload> <csum> FE FE). It is the
+// QS1A 999900000003 (FB FB <len=0x3f> DB <payload> <csum> FE FE). It is the
 // ground-truth fixture for the byte-faithful decode below.
 const capturedQS1PageAFrame = "fbfb3fdbff0001c003d4057e03cf054303d00543103b950eac02100fd70eac02000000000000000000780004000000000000001e1770177000040005000c000c00000000fefe"
 

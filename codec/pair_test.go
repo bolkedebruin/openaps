@@ -29,7 +29,7 @@ func TestParsePairFrame_OffReportBind_BadA0(t *testing.T) {
 func TestParsePairFrame_ChangePan11(t *testing.T) {
 	t.Parallel()
 	// AA AA AA AA 11 00 00 <mac=AB CD> <chan=1A> 00 00 <crc=11 22> 00 08 <uid=80 60 00 04 25 82> 01
-	l2 := hx(t, "AAAAAAAA 11 0000 ABCD 1A 0000 1122 00 08 806000042582 01")
+	l2 := hx(t, "AAAAAAAA 11 0000 ABCD 1A 0000 1122 00 08 999900000003 01")
 	got, ok := ParsePairFrame(DirOutbound, l2)
 	if !ok {
 		t.Fatalf("expected match")
@@ -37,15 +37,15 @@ func TestParsePairFrame_ChangePan11(t *testing.T) {
 	if got.Kind != PairChangePan11 {
 		t.Errorf("Kind: got %d want PairChangePan11", got.Kind)
 	}
-	if got.PeerUID != "806000042582" {
-		t.Errorf("PeerUID: got %q want 806000042582", got.PeerUID)
+	if got.PeerUID != "999900000003" {
+		t.Errorf("PeerUID: got %q want 999900000003", got.PeerUID)
 	}
 }
 
 func TestParsePairFrame_ChangePan11_BadTrailer(t *testing.T) {
 	t.Parallel()
 	// trailing byte must be 0x01
-	l2 := hx(t, "AAAAAAAA 11 0000 ABCD 1A 0000 1122 00 08 806000042582 02")
+	l2 := hx(t, "AAAAAAAA 11 0000 ABCD 1A 0000 1122 00 08 999900000003 02")
 	if _, ok := ParsePairFrame(DirOutbound, l2); ok {
 		t.Fatalf("expected no-match for trailer != 0x01")
 	}
@@ -98,7 +98,7 @@ func TestParsePairFrame_BindAck_RptOffFalse(t *testing.T) {
 func TestParsePairFrame_ShortAddrReply(t *testing.T) {
 	t.Parallel()
 	// short_addr BE16 0x5011 at [0..1], 6-byte UID at [4..9].
-	l2 := hx(t, "5011 0000 806000042582")
+	l2 := hx(t, "5011 0000 999900000003")
 	got, ok := ParsePairFrame(DirInbound, l2)
 	if !ok {
 		t.Fatalf("expected match")
@@ -109,15 +109,15 @@ func TestParsePairFrame_ShortAddrReply(t *testing.T) {
 	if got.ShortAddr != 0x5011 {
 		t.Errorf("ShortAddr: got 0x%X want 0x5011", got.ShortAddr)
 	}
-	if got.PeerUID != "806000042582" {
-		t.Errorf("PeerUID: got %q want 806000042582", got.PeerUID)
+	if got.PeerUID != "999900000003" {
+		t.Errorf("PeerUID: got %q want 999900000003", got.PeerUID)
 	}
 }
 
 func TestParsePairFrame_ShortAddrReply_RejectsBroadcastSentinel(t *testing.T) {
 	t.Parallel()
 	// short_addr == 0xFFFF must not be matched as a discovery reply.
-	l2 := hx(t, "FFFF 0000 806000042582")
+	l2 := hx(t, "FFFF 0000 999900000003")
 	if _, ok := ParsePairFrame(DirInbound, l2); ok {
 		t.Fatalf("expected no-match for short_addr >= 0xFFF8")
 	}

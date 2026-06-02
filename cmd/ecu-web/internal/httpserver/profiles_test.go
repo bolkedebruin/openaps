@@ -28,7 +28,7 @@ func fakeProfiles(_ context.Context, req *wire.GridProfileRequest) (*wire.GridPr
 			`[{"id":"EN50549-1","vnom_v":230,"source":{"ref":"TY=36"},"point_count":13}]`)}, nil
 	case req.GetListOverlays() != nil:
 		return &wire.GridProfileResponse{Ok: true, Json: []byte(
-			`[{"schema":"invdriver.gridprofile/v1","id":"victron-shift","uids":["704000006835"],` +
+			`[{"schema":"invdriver.gridprofile/v1","id":"victron-shift","uids":["999900000001"],` +
 				`"points":[{"model":134,"group":"CrvSet","point":"Hz3","native":{"value":50.3,"unit":"Hz"},"apply":{"aps_code":"CB"}}]}]`)}, nil
 	case req.GetGetBase() != nil:
 		return &wire.GridProfileResponse{Ok: true, Json: []byte(
@@ -55,7 +55,7 @@ func withCookies(r *http.Request, cookies []*http.Cookie) *http.Request {
 }
 
 func TestGetProfilesEndpoint(t *testing.T) {
-	ds3, qs1a := "704000006835", "806000042582"
+	ds3, qs1a := "999900000001", "999900000003"
 	h, cookies := newSettingsServer(t, Config{
 		GridProfileFn: fakeProfiles,
 		Snap:          snapWith(map[string]uint8{ds3: codec.ModelDS3, qs1a: codec.ModelQS1A}),
@@ -116,7 +116,7 @@ func TestGetProfilesDegradesButKeepsLocalData(t *testing.T) {
 		GridProfileFn: func(context.Context, *wire.GridProfileRequest) (*wire.GridProfileResponse, error) {
 			return nil, errors.New("inv-driver down")
 		},
-		Snap: snapWith(map[string]uint8{"704000006835": codec.ModelDS3}),
+		Snap: snapWith(map[string]uint8{"999900000001": codec.ModelDS3}),
 	})
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, withCookies(httptest.NewRequest("GET", "/api/profiles", nil), cookies))
@@ -134,7 +134,7 @@ func TestGetProfilesDegradesButKeepsLocalData(t *testing.T) {
 }
 
 func TestPutOverlayBuildsValidDocAndAppliesPerUID(t *testing.T) {
-	a, b := "704000006835", "806000042582"
+	a, b := "999900000001", "999900000003"
 	var seen []*wire.OverlaySet
 	h, cookies := newSettingsServer(t, Config{
 		GridProfileFn: func(_ context.Context, req *wire.GridProfileRequest) (*wire.GridProfileResponse, error) {
@@ -189,8 +189,8 @@ func TestPutOverlayBuildsValidDocAndAppliesPerUID(t *testing.T) {
 // non-OK reply 400'd the whole request and earlier successes vanished from
 // the response.
 func TestSetOverlay_PartialQueueAllReturned(t *testing.T) {
-	a := "704000006835"
-	b := "806000042582"
+	a := "999900000001"
+	b := "999900000003"
 	h, cookies := newSettingsServer(t, Config{
 		GridProfileFn: func(_ context.Context, req *wire.GridProfileRequest) (*wire.GridProfileResponse, error) {
 			so := req.GetSetOverlay()
@@ -236,7 +236,7 @@ func TestSetOverlay_PartialQueueAllReturned(t *testing.T) {
 
 func TestPutOverlayUnknownCode(t *testing.T) {
 	h, cookies := newSettingsServer(t, Config{GridProfileFn: fakeProfiles})
-	body := `{"id":"x","uids":["704000006835"],"points":[{"aps_code":"ZZ","value":1}]}`
+	body := `{"id":"x","uids":["999900000001"],"points":[{"aps_code":"ZZ","value":1}]}`
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, withCookies(jsonReq("PUT", "/api/profiles/overlay", body), cookies))
 	if rec.Code != http.StatusBadRequest {
@@ -247,9 +247,9 @@ func TestPutOverlayUnknownCode(t *testing.T) {
 func TestPutOverlayValidation(t *testing.T) {
 	h, cookies := newSettingsServer(t, Config{GridProfileFn: fakeProfiles})
 	for _, body := range []string{
-		`{"id":"","uids":["704000006835"],"points":[{"aps_code":"CB","value":1}]}`, // no id
+		`{"id":"","uids":["999900000001"],"points":[{"aps_code":"CB","value":1}]}`, // no id
 		`{"id":"x","uids":[],"points":[{"aps_code":"CB","value":1}]}`,              // no targets
-		`{"id":"x","uids":["704000006835"],"points":[]}`,                          // no points
+		`{"id":"x","uids":["999900000001"],"points":[]}`,                          // no points
 	} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, withCookies(jsonReq("PUT", "/api/profiles/overlay", body), cookies))
@@ -270,7 +270,7 @@ func TestDeleteOverlay(t *testing.T) {
 			return &wire.GridProfileResponse{Ok: false}, errors.New("unexpected op")
 		},
 	})
-	body := `{"id":"victron-shift","uids":["704000006835","806000042582"]}`
+	body := `{"id":"victron-shift","uids":["999900000001","999900000003"]}`
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, withCookies(jsonReq("DELETE", "/api/profiles/overlay", body), cookies))
 	if rec.Code != http.StatusOK {
@@ -324,7 +324,7 @@ func TestGetOverlaysEndpoint(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
 		t.Fatal(err)
 	}
-	if len(out) != 1 || out[0].ID != "victron-shift" || out[0].UIDs[0] != "704000006835" {
+	if len(out) != 1 || out[0].ID != "victron-shift" || out[0].UIDs[0] != "999900000001" {
 		t.Errorf("overlays wrong: %+v", out)
 	}
 	if out[0].Points[0].ApsCode != "CB" {

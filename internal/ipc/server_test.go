@@ -663,7 +663,7 @@ func TestServer_SendToBackend_DeliversToPublisher(t *testing.T) {
 	}
 
 	sendEnv := &wire.Envelope{Body: &wire.Envelope_Send{Send: &wire.Send{
-		PeerUid:    "806000042582",
+		PeerUid:    "999900000003",
 		Frame:      []byte{0xAA, 0xBB, 0xCC},
 		DeadlineMs: 5000,
 	}}}
@@ -681,7 +681,7 @@ func TestServer_SendToBackend_DeliversToPublisher(t *testing.T) {
 	if send == nil {
 		t.Fatalf("expected Send body, got %T", got.GetBody())
 	}
-	if send.GetPeerUid() != "806000042582" {
+	if send.GetPeerUid() != "999900000003" {
 		t.Fatalf("peer_uid: %q", send.GetPeerUid())
 	}
 	if string(send.GetFrame()) != string([]byte{0xAA, 0xBB, 0xCC}) {

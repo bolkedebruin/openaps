@@ -28,7 +28,7 @@ var validProfile = []byte(`{
 var validOverlay = []byte(`{
   "schema": "invdriver.gridprofile/v1",
   "id": "my-overlay",
-  "uids": ["704000006835"],
+  "uids": ["999900000001"],
   "points": [
     {
       "model": 134,

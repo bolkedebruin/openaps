@@ -89,7 +89,7 @@ func TestOverlayApply_ReturnsQueuedImmediately(t *testing.T) {
 	runner := &stubRunner{delay: 5 * time.Second}
 	a, _ := newTestApplier(t, runner)
 
-	uid := "704000006835"
+	uid := "999900000001"
 	t0 := time.Now()
 	done := a.enqueue(context.Background(), uid, "x", 2)
 	elapsed := time.Since(t0)
@@ -121,7 +121,7 @@ func TestOverlayApply_EmitsStartedThenCompleted(t *testing.T) {
 	}
 	a, sink := newTestApplier(t, runner)
 
-	uid := "704000006835"
+	uid := "999900000001"
 	done := a.enqueue(context.Background(), uid, "victron-shift", 2)
 	select {
 	case <-done:
@@ -187,7 +187,7 @@ func TestOverlayApply_EmitsParamFailedOnWireError(t *testing.T) {
 	}
 	a, sink := newTestApplier(t, runner)
 
-	uid := "806000042582"
+	uid := "999900000003"
 	done := a.enqueue(context.Background(), uid, "p1", 2)
 	select {
 	case <-done:
@@ -236,7 +236,7 @@ func TestOverlayApply_EmitsParamFailedOnWireError(t *testing.T) {
 func TestOverlayApply_EmitsParamFailedOnTopLevelError(t *testing.T) {
 	runner := &stubRunner{err: errors.New("model unknown")}
 	a, sink := newTestApplier(t, runner)
-	done := a.enqueue(context.Background(), "704000006835", "p1", 1)
+	done := a.enqueue(context.Background(), "999900000001", "p1", 1)
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
@@ -263,7 +263,7 @@ func TestOverlayApply_Supersedes(t *testing.T) {
 	}
 	a, sink := newTestApplier(t, slowRunner)
 
-	uid := "704000006835"
+	uid := "999900000001"
 	d1 := a.enqueue(context.Background(), uid, "old", 1)
 
 	// Wait a beat so the started event lands and the first goroutine is
@@ -339,7 +339,7 @@ func TestOverlayApply_EmitsOnlyOverlayPoints(t *testing.T) {
 	}
 	a, sink := newTestApplier(t, runner)
 
-	uid := "704000006835"
+	uid := "999900000001"
 	done := a.enqueueWithPoints(context.Background(), uid, "ds3-reconnect-widen", []string{"BP", "BQ"})
 	select {
 	case <-done:
@@ -408,7 +408,7 @@ func TestOverlayApply_AllOverlayParamsInReport(t *testing.T) {
 	}
 	a, sink := newTestApplier(t, runner)
 
-	done := a.enqueueWithPoints(context.Background(), "704000006835", "ov", []string{"BP", "BQ"})
+	done := a.enqueueWithPoints(context.Background(), "999900000001", "ov", []string{"BP", "BQ"})
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
@@ -451,7 +451,7 @@ func TestOverlayApply_EmitsCompleteOnShutdown(t *testing.T) {
 	a, sink := newTestApplier(t, runner)
 
 	parent, cancel := context.WithCancel(context.Background())
-	uid := "704000006835"
+	uid := "999900000001"
 	done := a.enqueue(parent, uid, "ov-shut", 1)
 
 	// Let the started event land + the goroutine enter ReconcileUID.

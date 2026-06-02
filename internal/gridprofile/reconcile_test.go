@@ -134,7 +134,7 @@ func TestReconcileUID_NoActiveBase(t *testing.T) {
 	rb := newFakeReadback(true, map[string]float64{"DD": 16.7})
 	rec := NewReconciler(s, snd, rb, modelDS3, fastOpts())
 
-	rpt, err := rec.ReconcileUID(context.Background(), "704000006835")
+	rpt, err := rec.ReconcileUID(context.Background(), "999900000001")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestReconcileUID_UnknownModel(t *testing.T) {
 	rb := newFakeReadback(true, map[string]float64{"DD": 16.7})
 	rec := NewReconciler(s, snd, rb, modelUnknown, fastOpts())
 
-	rpt, err := rec.ReconcileUID(ctx, "704000006835")
+	rpt, err := rec.ReconcileUID(ctx, "999900000001")
 	if err == nil {
 		t.Fatal("expected error for unknown model")
 	}
@@ -185,7 +185,7 @@ func TestReconcileUID_InSync(t *testing.T) {
 	rb := newFakeReadback(true, map[string]float64{"DD": 16.57})
 	rec := NewReconciler(s, snd, rb, modelDS3, fastOpts())
 
-	rpt, err := rec.ReconcileUID(ctx, "704000006835")
+	rpt, err := rec.ReconcileUID(ctx, "999900000001")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -218,7 +218,7 @@ func TestReconcileUID_DriftAutoReassert(t *testing.T) {
 
 	// After the send+settle the readback stub still returns 10.0, so the
 	// result will be "unconfirmed" — but at least one frame was sent.
-	rpt, err := rec.ReconcileUID(ctx, "704000006835")
+	rpt, err := rec.ReconcileUID(ctx, "999900000001")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -258,7 +258,7 @@ func TestReconcileUID_DriftAutoReassertConfirmed(t *testing.T) {
 
 	rec := NewReconciler(s, snd, confirmedRB, modelDS3, fastOpts())
 
-	rpt, err := rec.ReconcileUID(ctx, "704000006835")
+	rpt, err := rec.ReconcileUID(ctx, "999900000001")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -313,7 +313,7 @@ func TestReconcileUID_AutoReassertDisabled(t *testing.T) {
 	opts := Options{AutoReassert: false, ReadSettle: time.Millisecond}
 	rec := NewReconciler(s, snd, rb, modelDS3, opts)
 
-	rpt, err := rec.ReconcileUID(ctx, "704000006835")
+	rpt, err := rec.ReconcileUID(ctx, "999900000001")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -341,7 +341,7 @@ func TestReconcileUID_NoReadback(t *testing.T) {
 	rb := newFakeReadback(false, nil)
 	rec := NewReconciler(s, snd, rb, modelDS3, fastOpts())
 
-	rpt, err := rec.ReconcileUID(ctx, "704000006835")
+	rpt, err := rec.ReconcileUID(ctx, "999900000001")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -369,7 +369,7 @@ func TestReconcileUID_SendError(t *testing.T) {
 	rb := newFakeReadback(true, map[string]float64{"DD": 10.0})
 	rec := NewReconciler(s, snd, rb, modelDS3, fastOpts())
 
-	rpt, err := rec.ReconcileUID(ctx, "704000006835")
+	rpt, err := rec.ReconcileUID(ctx, "999900000001")
 	if err != nil {
 		t.Fatalf("unexpected top-level error: %v", err)
 	}
@@ -414,7 +414,7 @@ func TestReconcileUID_QS1APageACodesUnknown(t *testing.T) {
 	rb := newFakeReadback(true, map[string]float64{"AE": 47.5})
 	rec := NewReconciler(s, snd, rb, modelQS1A, fastOpts())
 
-	rpt, err := rec.ReconcileUID(ctx, "806000042582")
+	rpt, err := rec.ReconcileUID(ctx, "999900000003")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -430,7 +430,7 @@ func TestReconcileUID_OverlayOverridesBase(t *testing.T) {
 	s := NewStore(db)
 	ctx := context.Background()
 
-	uid := "704000006835"
+	uid := "999900000001"
 	// Base: CB=50.5
 	_ = s.UpsertProfile(ctx, testProfileFreq(50.5), "")
 	_ = s.SetActiveBase(ctx, "test-freq")
@@ -506,7 +506,7 @@ func TestReconcileUID_RangeClamp(t *testing.T) {
 	rb := newFakeReadback(true, map[string]float64{"DD": 50.0})
 	rec := NewReconciler(s, snd, rb, modelDS3, fastOpts())
 
-	rpt, err := rec.ReconcileUID(ctx, "704000006835")
+	rpt, err := rec.ReconcileUID(ctx, "999900000001")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -549,8 +549,8 @@ func TestReconcileAll_WithOverlays(t *testing.T) {
 	_ = s.UpsertProfile(ctx, testProfileFreq(50.5), "")
 	_ = s.SetActiveBase(ctx, "test-freq")
 
-	uid1 := "704000006835"
-	uid2 := "806000042582"
+	uid1 := "999900000001"
+	uid2 := "999900000003"
 	for _, uid := range []string{uid1, uid2} {
 		ov := Overlay{
 			Schema: "invdriver.gridprofile/v1",
@@ -721,7 +721,7 @@ func TestReconcileUID_ApplyLogWritten(t *testing.T) {
 	rb := newFakeReadback(true, map[string]float64{"DD": 16.57})
 	rec := NewReconciler(s, snd, rb, modelDS3, fastOpts())
 
-	_, _ = rec.ReconcileUID(ctx, "704000006835")
+	_, _ = rec.ReconcileUID(ctx, "999900000001")
 
 	var count int
 	_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM gp_apply_log`).Scan(&count)
@@ -769,7 +769,7 @@ func TestReconcileUID_StoreClosed(t *testing.T) {
 	rb := newFakeReadback(true, map[string]float64{"DD": 16.57})
 	rec := NewReconciler(s, snd, rb, modelDS3, fastOpts())
 
-	_, err := rec.ReconcileUID(ctx, "704000006835")
+	_, err := rec.ReconcileUID(ctx, "999900000001")
 	if err == nil {
 		t.Error("expected error after DB closed")
 	}
@@ -785,7 +785,7 @@ func TestReconcileUID_NoActiveBaseNoError(t *testing.T) {
 	rb := newFakeReadback(true, map[string]float64{})
 	rec := NewReconciler(s, snd, rb, modelDS3, fastOpts())
 
-	_, err := rec.ReconcileUID(context.Background(), "704000006835")
+	_, err := rec.ReconcileUID(context.Background(), "999900000001")
 	if err != nil {
 		t.Errorf("expected nil error for no active base, got %v", err)
 	}
@@ -834,7 +834,7 @@ func TestReconcileAll_KnownUIDsCoversBaseOnly(t *testing.T) {
 	if err := s.SetActiveBase(ctx, "b"); err != nil {
 		t.Fatal(err)
 	}
-	uid := "704000006835"
+	uid := "999900000001"
 	snd := &fakeSender{}
 	rb := newFakeReadback(true, map[string]float64{"CB": 51.0}) // drift from base 50.2
 	rec := NewReconciler(s, snd, rb, modelDS3, fastOpts())

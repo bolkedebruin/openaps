@@ -69,7 +69,7 @@ func TestVerifyStartup_NoDesiredState(t *testing.T) {
 	_ = s.UpsertProfile(ctx, testProfileDD(), "")
 
 	rec := NewReconciler(s, snd, rb, modelDS3, fastOpts())
-	report, err := rec.VerifyStartup(ctx, "704000006835", codec.ModelDS3)
+	report, err := rec.VerifyStartup(ctx, "999900000001", codec.ModelDS3)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestVerifyStartup_NoDesiredState_IdentifiesRunningProfile(t *testing.T) {
 	snd := &fakeSender{}
 	rec := NewReconciler(s, snd, rb, modelDS3, fastOpts())
 
-	report, _ := rec.VerifyStartup(ctx, "704000006835", codec.ModelDS3)
+	report, _ := rec.VerifyStartup(ctx, "999900000001", codec.ModelDS3)
 	if report.IdentifiedID != "test-dd" {
 		t.Errorf("identified id: got %q want test-dd", report.IdentifiedID)
 	}
@@ -123,7 +123,7 @@ func TestVerifyStartup_InSync(t *testing.T) {
 	snd := &fakeSender{}
 	rec := NewReconciler(s, snd, rb, modelDS3, fastOpts())
 
-	report, err := rec.VerifyStartup(ctx, "704000006835", codec.ModelDS3)
+	report, err := rec.VerifyStartup(ctx, "999900000001", codec.ModelDS3)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestVerifyStartup_DriftAutoReassert(t *testing.T) {
 	snd := &fakeSender{}
 	rec := NewReconciler(s, snd, rb, modelDS3, fastOpts())
 
-	report, err := rec.VerifyStartup(ctx, "704000006835", codec.ModelDS3)
+	report, err := rec.VerifyStartup(ctx, "999900000001", codec.ModelDS3)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -192,7 +192,7 @@ func TestVerifyStartup_DriftNoAutoReassert(t *testing.T) {
 	opts := Options{AutoReassert: false, ReadSettle: time.Millisecond}
 	rec := NewReconciler(s, snd, rb, modelDS3, opts)
 
-	report, err := rec.VerifyStartup(ctx, "704000006835", codec.ModelDS3)
+	report, err := rec.VerifyStartup(ctx, "999900000001", codec.ModelDS3)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -252,7 +252,7 @@ func TestVerifyStartup_QS1APageAReadable(t *testing.T) {
 	snd := &fakeSender{}
 	rec := NewReconciler(s, snd, rb, modelQS1A, fastOpts())
 
-	report, err := rec.VerifyStartup(ctx, "806000042582", codec.ModelQS1A)
+	report, err := rec.VerifyStartup(ctx, "999900000003", codec.ModelQS1A)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -290,7 +290,7 @@ func TestVerifyStartup_NoReadback(t *testing.T) {
 	snd := &fakeSender{}
 	rec := NewReconciler(s, snd, rb, modelDS3, fastOpts())
 
-	report, err := rec.VerifyStartup(ctx, "704000006835", codec.ModelDS3)
+	report, err := rec.VerifyStartup(ctx, "999900000001", codec.ModelDS3)
 	// Error is expected when desired state exists but no read-back is available.
 	if err == nil && report.HasDesiredState {
 		// This path is acceptable — some implementations may not error here.

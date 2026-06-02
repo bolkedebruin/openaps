@@ -65,7 +65,7 @@ func byteFromHex(s string) byte {
 }
 
 // TestDecodeProtectionReply_DS3_LiveCapture decodes the real DS3
-// 704000006835 page A+B reply frames captured 2026-05-22 and asserts the
+// 999900000001 page A+B reply frames captured 2026-05-22 and asserts the
 // values match the live 60code ground truth.
 func TestDecodeProtectionReply_DS3_LiveCapture(t *testing.T) {
 	pageA := hexFrame("FB FB 5C DD DD 03 D9 02 DB 03 D9 02 AE 03 B0 02 DB 03 B0 02 AB 14 50 12 5C 14 50 12 8E 00 02 00 02 00 09 00 02 00 04 00 77 00 04 00 77 00 00 1D 00 00 10 FF FF 03 B0 02 DB 13 9C 13 56 00 3C 02 D0 03 B0 02 DB 13 9C 13 56 0B B8 02 D0 DD 20 40 00 00 1D 00 00 1D 01 D9 04 BD 0A FF FF FF FF 1C 5C FE FE")

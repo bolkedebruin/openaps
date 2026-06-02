@@ -165,7 +165,7 @@ func TestStore_OverlayCRUD(t *testing.T) {
 	s := NewStore(db)
 	ctx := context.Background()
 
-	uid := "704000006835"
+	uid := "999900000001"
 	o := Overlay{
 		Schema: "invdriver.gridprofile/v1",
 		ID:     "my-overlay",
@@ -270,12 +270,12 @@ func TestStore_LoadOverlaysFromDir(t *testing.T) {
 
 	dir := t.TempDir()
 
-	uid1 := "704000006835"
-	uid2 := "806000042582"
+	uid1 := "999900000001"
+	uid2 := "999900000003"
 	ov := Overlay{
 		Schema: "invdriver.gridprofile/v1",
 		ID:     "dir-overlay",
-		UIDs:   []string{"704000006835", "806000042582"},
+		UIDs:   []string{"999900000001", "999900000003"},
 		Points: []PointEntry{
 			{
 				Model:  134,

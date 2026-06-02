@@ -55,7 +55,7 @@ func TestHandle_Send_RoutesToBackend(t *testing.T) {
 
 	frame := []byte{0xAA, 0xAA, 0xAA, 0xAA, 0x55, 0x12, 0x34}
 	env := &wire.Envelope{Body: &wire.Envelope_Send{Send: &wire.Send{
-		PeerUid: "806000042582", Frame: frame,
+		PeerUid: "999900000003", Frame: frame,
 	}}}
 	if err := in.Handle(context.Background(), "inv-driver-cli", env); err != nil {
 		t.Fatalf("Handle: %v", err)
@@ -193,7 +193,7 @@ func TestHandle_Broadcast_UnknownSenderRejected(t *testing.T) {
 func TestHandle_RawFrame_IdleCmd00_Consumed(t *testing.T) {
 	t.Parallel()
 	in := newIngestor(t)
-	raw, err := hex.DecodeString("FCFCC459CFA5806000041211FBFB5F00000F0011100000000000FFFFFFFF" +
+	raw, err := hex.DecodeString("FCFCC459CFA5999900000002FBFB5F00000F0011100000000000FFFFFFFF" +
 		"00000000008900000000000000000000000000000000000000000000000000000000000000000000" +
 		"000000000000000000000000000000000000000000000000000000000000007DDBFEFE")
 	if err != nil {
@@ -252,7 +252,7 @@ func TestHandle_Telemetry_QS1A(t *testing.T) {
 	env := &wire.Envelope{Body: &wire.Envelope_Telemetry{Telemetry: &wire.Telemetry{
 		TsMs:         9999,
 		ShortAddr:    0x5011,
-		PeerUid:      "806000042582",
+		PeerUid:      "999900000003",
 		Cmd:          0xB1,
 		Model:        "QS1A",
 		GridV:        232.0,
@@ -265,7 +265,7 @@ func TestHandle_Telemetry_QS1A(t *testing.T) {
 	}
 
 	var family sql.NullString
-	if err := in.S.DB().QueryRow(`SELECT family FROM inverters WHERE uid='806000042582'`).Scan(&family); err != nil {
+	if err := in.S.DB().QueryRow(`SELECT family FROM inverters WHERE uid='999900000003'`).Scan(&family); err != nil {
 		t.Fatalf("inverter: %v", err)
 	}
 	if !family.Valid || family.String != "qs1" {
@@ -273,7 +273,7 @@ func TestHandle_Telemetry_QS1A(t *testing.T) {
 	}
 
 	var acW, acV, freq, busV float64
-	if err := in.S.DB().QueryRow(`SELECT ac_w, ac_v, ac_freq, bus_v FROM telemetry_live WHERE inverter_uid='806000042582'`).Scan(&acW, &acV, &freq, &busV); err != nil {
+	if err := in.S.DB().QueryRow(`SELECT ac_w, ac_v, ac_freq, bus_v FROM telemetry_live WHERE inverter_uid='999900000003'`).Scan(&acW, &acV, &freq, &busV); err != nil {
 		t.Fatalf("live: %v", err)
 	}
 	if acW != 800.0 || acV != 232.0 || freq != 50.0 || busV != 400.0 {
@@ -281,7 +281,7 @@ func TestHandle_Telemetry_QS1A(t *testing.T) {
 	}
 
 	var nEvents int
-	if err := in.S.DB().QueryRow(`SELECT COUNT(*) FROM events WHERE inverter_uid='806000042582'`).Scan(&nEvents); err != nil {
+	if err := in.S.DB().QueryRow(`SELECT COUNT(*) FROM events WHERE inverter_uid='999900000003'`).Scan(&nEvents); err != nil {
 		t.Fatalf("event count: %v", err)
 	}
 	if nEvents != 0 {
@@ -428,7 +428,7 @@ func TestHandle_RawFrame_QS1A(t *testing.T) {
 
 	// telemetry_live row landed.
 	var acV float64
-	if err := in.S.DB().QueryRow(`SELECT ac_v FROM telemetry_live WHERE inverter_uid='806000042582'`).Scan(&acV); err != nil {
+	if err := in.S.DB().QueryRow(`SELECT ac_v FROM telemetry_live WHERE inverter_uid='999900000003'`).Scan(&acV); err != nil {
 		t.Fatalf("scan ac_v: %v", err)
 	}
 	if acV < 200 || acV > 250 {
@@ -437,7 +437,7 @@ func TestHandle_RawFrame_QS1A(t *testing.T) {
 
 	// telemetry event row landed.
 	var nEvents int
-	if err := in.S.DB().QueryRow(`SELECT COUNT(*) FROM events WHERE inverter_uid='806000042582'`).Scan(&nEvents); err != nil {
+	if err := in.S.DB().QueryRow(`SELECT COUNT(*) FROM events WHERE inverter_uid='999900000003'`).Scan(&nEvents); err != nil {
 		t.Fatalf("event count: %v", err)
 	}
 	if nEvents != 0 {
@@ -446,7 +446,7 @@ func TestHandle_RawFrame_QS1A(t *testing.T) {
 
 	// inverter_panels populated (QS1A has 4 channels).
 	var panelCount int
-	if err := in.S.DB().QueryRow(`SELECT COUNT(*) FROM inverter_panels WHERE inverter_uid='806000042582'`).Scan(&panelCount); err != nil {
+	if err := in.S.DB().QueryRow(`SELECT COUNT(*) FROM inverter_panels WHERE inverter_uid='999900000003'`).Scan(&panelCount); err != nil {
 		t.Fatalf("count panels: %v", err)
 	}
 	if panelCount != 4 {
@@ -455,7 +455,7 @@ func TestHandle_RawFrame_QS1A(t *testing.T) {
 
 	// energy_lifetime populated.
 	var lifetimeCount int
-	if err := in.S.DB().QueryRow(`SELECT COUNT(*) FROM energy_lifetime WHERE inverter_uid='806000042582'`).Scan(&lifetimeCount); err != nil {
+	if err := in.S.DB().QueryRow(`SELECT COUNT(*) FROM energy_lifetime WHERE inverter_uid='999900000003'`).Scan(&lifetimeCount); err != nil {
 		t.Fatalf("count energy_lifetime: %v", err)
 	}
 	if lifetimeCount != 4 {
@@ -469,7 +469,7 @@ func TestHandle_RawFrame_QS1A(t *testing.T) {
 		if tel == nil {
 			t.Fatalf("published envelope is not Telemetry: %T", got.GetBody())
 		}
-		if tel.GetPeerUid() != "806000042582" {
+		if tel.GetPeerUid() != "999900000003" {
 			t.Fatalf("published peer_uid: got %q", tel.GetPeerUid())
 		}
 	default:
@@ -544,7 +544,7 @@ func TestHandle_InverterInfo_ModelOnly(t *testing.T) {
 
 	env := &wire.Envelope{Body: &wire.Envelope_Info{Info: &wire.InverterInfo{
 		TsMs:      111,
-		PeerUid:   "806000042582",
+		PeerUid:   "999900000003",
 		ShortAddr: 0x5011,
 		ModelCode: u32p(0x24),
 	}}}
@@ -554,7 +554,7 @@ func TestHandle_InverterInfo_ModelOnly(t *testing.T) {
 
 	var modelCode sql.NullInt64
 	var sw, phase, bound, rpt sql.NullInt64
-	if err := in.S.DB().QueryRow(`SELECT model_code, software_version, phase, zigbee_bound, turned_off_rpt FROM inverters WHERE uid='806000042582'`).
+	if err := in.S.DB().QueryRow(`SELECT model_code, software_version, phase, zigbee_bound, turned_off_rpt FROM inverters WHERE uid='999900000003'`).
 		Scan(&modelCode, &sw, &phase, &bound, &rpt); err != nil {
 		t.Fatalf("scan: %v", err)
 	}
@@ -566,7 +566,7 @@ func TestHandle_InverterInfo_ModelOnly(t *testing.T) {
 	}
 
 	var nEvents int
-	if err := in.S.DB().QueryRow(`SELECT COUNT(*) FROM events WHERE inverter_uid='806000042582'`).Scan(&nEvents); err != nil {
+	if err := in.S.DB().QueryRow(`SELECT COUNT(*) FROM events WHERE inverter_uid='999900000003'`).Scan(&nEvents); err != nil {
 		t.Fatalf("event count: %v", err)
 	}
 	if nEvents != 0 {
@@ -575,7 +575,7 @@ func TestHandle_InverterInfo_ModelOnly(t *testing.T) {
 
 	select {
 	case got := <-ch:
-		if got.GetInfo().GetPeerUid() != "806000042582" {
+		if got.GetInfo().GetPeerUid() != "999900000003" {
 			t.Fatalf("published peer_uid: %q", got.GetInfo().GetPeerUid())
 		}
 	default:
@@ -724,7 +724,7 @@ func TestOnFirstSeen_HookFiresOnce(t *testing.T) {
 		mu.Unlock()
 	}
 
-	uid := "704000006835"
+	uid := "999900000001"
 	tel := makeTelemetry(uid, "DS3")
 
 	// First telemetry — hook should fire once.
@@ -765,7 +765,7 @@ func TestOnFirstSeen_HookFiresOnce(t *testing.T) {
 
 func TestReadbackSeq_IncrementOnCache(t *testing.T) {
 	in := newIngestor(t)
-	uid := "704000006835"
+	uid := "999900000001"
 
 	if seq := in.ReadbackSeq(uid); seq != 0 {
 		t.Errorf("initial ReadbackSeq: got %d want 0", seq)

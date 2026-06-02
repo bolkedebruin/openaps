@@ -67,7 +67,7 @@ func TestBuildDesired_OverlayRangeIntersect_NoWiden(t *testing.T) {
 	s := NewStore(db)
 	ctx := context.Background()
 
-	uid := "704000006835"
+	uid := "999900000001"
 	// Base: CB range [50.0, 52.0]
 	base := Profile{
 		Schema: "invdriver.gridprofile/v1",
@@ -224,7 +224,7 @@ func TestApplyBaseBroadcast_Validated(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS inverters (uid TEXT PRIMARY KEY, model_code INTEGER)`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO inverters (uid, model_code) VALUES ('704000006835', 32)`); err != nil {
+	if _, err := db.ExecContext(ctx, `INSERT INTO inverters (uid, model_code) VALUES ('999900000001', 32)`); err != nil {
 		t.Fatal(err)
 	}
 
@@ -266,7 +266,7 @@ func TestGetEffective_ClampedMatchesApplied(t *testing.T) {
 	s := NewStore(db)
 	ctx := context.Background()
 
-	uid := "704000006835"
+	uid := "999900000001"
 
 	// Profile: DD=60.0 but range max=50; effective must be 50.
 	p := Profile{
@@ -332,7 +332,7 @@ func TestManager_OkFalse_OnUnconfirmed(t *testing.T) {
 	s := NewStore(db)
 	ctx := context.Background()
 
-	uid := "704000006835"
+	uid := "999900000001"
 	_ = s.UpsertProfile(ctx, testProfileDD(), "")
 	_ = s.SetActiveBase(ctx, "test-dd")
 
@@ -362,7 +362,7 @@ func TestManager_SelectBase_OkFalse_OnUnconfirmed(t *testing.T) {
 	s := NewStore(db)
 	ctx := context.Background()
 
-	uid := "704000006835"
+	uid := "999900000001"
 
 	_ = s.UpsertProfile(ctx, testProfileDD(), "")
 	// No active base yet — set it via selectBase.
@@ -470,7 +470,7 @@ func TestReadbackFreshness_StaleNotFalselyConfirmed(t *testing.T) {
 		ReadSettle:   time.Millisecond,
 	})
 
-	rpt, err := rec.ReconcileUID(ctx, "704000006835")
+	rpt, err := rec.ReconcileUID(ctx, "999900000001")
 	if err != nil {
 		t.Fatalf("ReconcileUID: %v", err)
 	}
@@ -508,7 +508,7 @@ func TestOnFirstSeen_HookFiresOnce(t *testing.T) {
 	rec := NewReconciler(s, snd, rb, modelDS3, fastOpts())
 
 	// Call VerifyStartup as the hook implementation would.
-	rpt, err := rec.VerifyStartup(ctx, "704000006835", codec.ModelDS3)
+	rpt, err := rec.VerifyStartup(ctx, "999900000001", codec.ModelDS3)
 	if err != nil {
 		t.Fatalf("VerifyStartup: %v", err)
 	}
@@ -567,7 +567,7 @@ func TestManager_SetOverlay_InvalidUID(t *testing.T) {
 	}{
 		{"", "empty uid"},
 		{"short", "too short"},
-		{"704000006835XY", "too long"},
+		{"999900000001XY", "too long"},
 		{"ZZZZZZZZZZZZ", "non-hex chars"},
 	}
 	for _, tc := range cases {
@@ -589,7 +589,7 @@ func TestManager_SetOverlay_UIDNotInBody(t *testing.T) {
 	mgr := &Manager{Store: s}
 
 	// Valid uid format but not in the overlay body uids[].
-	uid := "704000006835"
+	uid := "999900000001"
 	overlayJSON := `{
 		"schema":"invdriver.gridprofile/v1",
 		"id":"test",

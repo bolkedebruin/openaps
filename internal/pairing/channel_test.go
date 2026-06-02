@@ -37,7 +37,7 @@ func TestChangeChannel_MoveAndVerify(t *testing.T) {
 	}
 	settings := &stubSettings{pan: "0DCE", channel: 16}
 	ev := &recordingEvents{}
-	m := newChannelManager(t, mock, tr, settings, 16, "806000042582", "704000006835")
+	m := newChannelManager(t, mock, tr, settings, 16, "999900000003", "999900000001")
 	m.Events = ev
 
 	resp := m.Handle(context.Background(), "ecu-web", &wire.PairingRequest{
@@ -91,7 +91,7 @@ func TestChangeChannel_RejectSameChannel(t *testing.T) {
 	tr, mock := newMockTransport()
 	_ = mock
 	settings := &stubSettings{pan: "0DCE", channel: 16}
-	m := newChannelManager(t, mock, tr, settings, 16, "806000042582")
+	m := newChannelManager(t, mock, tr, settings, 16, "999900000003")
 	resp := m.Handle(context.Background(), "ecu-web", &wire.PairingRequest{
 		Op: &wire.PairingRequest_ChangeChannel{ChangeChannel: &wire.FleetChangeChannel{Channel: 16}}})
 	if resp.GetOk() {
@@ -102,7 +102,7 @@ func TestChangeChannel_RejectSameChannel(t *testing.T) {
 func TestChangeChannel_RejectZeroChannel(t *testing.T) {
 	tr, mock := newMockTransport()
 	settings := &stubSettings{pan: "0DCE", channel: 16}
-	m := newChannelManager(t, mock, tr, settings, 16, "806000042582")
+	m := newChannelManager(t, mock, tr, settings, 16, "999900000003")
 	resp := m.Handle(context.Background(), "ecu-web", &wire.PairingRequest{
 		Op: &wire.PairingRequest_ChangeChannel{ChangeChannel: &wire.FleetChangeChannel{Channel: 0}}})
 	if resp.GetOk() {
@@ -124,7 +124,7 @@ func TestChangeChannel_OutOfRangePassesThrough(t *testing.T) {
 		return &wire.PairingCmdResult{Ok: true}
 	}
 	settings := &stubSettings{pan: "0DCE", channel: 16}
-	m := newChannelManager(t, mock, tr, settings, 16, "806000042582")
+	m := newChannelManager(t, mock, tr, settings, 16, "999900000003")
 	resp := m.Handle(context.Background(), "ecu-web", &wire.PairingRequest{
 		Op: &wire.PairingRequest_ChangeChannel{ChangeChannel: &wire.FleetChangeChannel{Channel: 99}}})
 	// The op STARTS (no driver-side range check) and fails at the wire.
@@ -162,7 +162,7 @@ func TestChangeChannel_RollbackOnHopFailure(t *testing.T) {
 		return &wire.PairingCmdResult{Ok: true}
 	}
 	settings := &stubSettings{pan: "0DCE", channel: 16}
-	m := newChannelManager(t, mock, tr, settings, 16, "806000042582")
+	m := newChannelManager(t, mock, tr, settings, 16, "999900000003")
 	resp := m.Handle(context.Background(), "ecu-web", &wire.PairingRequest{
 		Op: &wire.PairingRequest_ChangeChannel{ChangeChannel: &wire.FleetChangeChannel{Channel: 20}}})
 	if !resp.GetOk() {
@@ -198,7 +198,7 @@ func TestChangeChannel_PartialVerifyReportsError(t *testing.T) {
 	// to answer the directed 0x0E after rearm), so a transient single-call
 	// failure now succeeds on retry. A permanently-unresponsive inverter is
 	// what yields the partial-verify report.
-	const failSerial = "806000042582"
+	const failSerial = "999900000003"
 	mock.responder = func(c *wire.PairingCmd) *wire.PairingCmdResult {
 		if g := c.GetGetShortAddr(); g != nil {
 			if g.GetSerial() == failSerial {
@@ -209,7 +209,7 @@ func TestChangeChannel_PartialVerifyReportsError(t *testing.T) {
 		return &wire.PairingCmdResult{Ok: true}
 	}
 	settings := &stubSettings{pan: "0DCE", channel: 16}
-	m := newChannelManager(t, mock, tr, settings, 16, "806000042582", "704000006835")
+	m := newChannelManager(t, mock, tr, settings, 16, "999900000003", "999900000001")
 	resp := m.Handle(context.Background(), "ecu-web", &wire.PairingRequest{
 		Op: &wire.PairingRequest_ChangeChannel{ChangeChannel: &wire.FleetChangeChannel{Channel: 20}}})
 	if !resp.GetOk() {

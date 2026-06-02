@@ -37,7 +37,7 @@ func TestReadingToProto_CarriesEveryCode(t *testing.T) {
 // merges per-UID, so DA survives a partial read and a real change still wins.
 func TestCacheProtectionValues_MergeKeepsDroppedPage(t *testing.T) {
 	in := &Ingestor{}
-	uid := "806000042582"
+	uid := "999900000003"
 
 	// Full read: page A + B + C (DA + DD live on page B).
 	m1 := in.cacheProtectionValues(uid, map[string]float64{"AC": 196, "DA": 375, "DD": 16.56, "DH": 47})

@@ -25,9 +25,9 @@ func TestSetOverlay_RejectsConflictBeforePersist(t *testing.T) {
 	if err := s.SetActiveBase(ctx, "b"); err != nil {
 		t.Fatal(err)
 	}
-	uid := "704000006835"
+	uid := "999900000001"
 	// Overlay sets CC=50 → effective CB(50.2) < CC(50) is violated.
-	ovJSON := `{"schema":"invdriver.gridprofile/v1","id":"x","uids":["704000006835"],` +
+	ovJSON := `{"schema":"invdriver.gridprofile/v1","id":"x","uids":["999900000001"],` +
 		`"points":[{"model":134,"group":"CrvSet","point":"Hz4","native":{"value":50,"unit":"Hz"},"apply":{"aps_code":"CC"}}]}`
 	resp := (&Manager{Store: s}).setOverlay(ctx, uid, []byte(ovJSON))
 	if resp.Ok {
@@ -57,7 +57,7 @@ func TestBuildDesired_ClampsBaseAbsentOverlayToPhysicalRange(t *testing.T) {
 	if err := s.SetActiveBase(ctx, "b"); err != nil {
 		t.Fatal(err)
 	}
-	uid := "704000006835"
+	uid := "999900000001"
 	// Overlay drives AF to an absurd 999 Hz; the base has no range for it.
 	ov := Overlay{
 		Schema: SchemaVersion, ID: "x", UIDs: []string{uid},
@@ -92,7 +92,7 @@ func TestStore_ListOverlays_GroupsByID(t *testing.T) {
 	s := NewStore(db)
 	ctx := context.Background()
 
-	uidA, uidB, uidC := "704000006835", "806000042582", "806000099999"
+	uidA, uidB, uidC := "999900000001", "999900000003", "806000099999"
 	// One named profile "victron-shift" applied to two inverters: stored once
 	// per uid with identical JSON carrying the full uids list.
 	shift := Overlay{
