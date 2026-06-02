@@ -1,0 +1,15 @@
+OpenAPS release public key — placeholder for v1.0.0.
+
+This file is a PLACEHOLDER. The matching private key was generated at build
+time and discarded immediately — no entity holds it. v1.0.0 ships UNSIGNED:
+the installer plumbs in `release.pub` at /etc/openaps/release.pub so v1.0.1's
+signed-tarball OTA path has a key to verify against, but for v1.0.0 itself no
+signature check is performed.
+
+v1.0.1 will replace this with the real production key. Operators who pin to
+the production key out-of-band (e.g. via configuration management) should
+overwrite /etc/openaps/release.pub during v1.0.1 deployment.
+
+DO NOT trust this key for any signature verification. It only exists so the
+path /etc/openaps/release.pub is present and the v1.0.1 verify code can be
+unit-tested against a real key file shape.

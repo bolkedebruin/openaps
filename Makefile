@@ -51,7 +51,7 @@ DROPBEAR_DIR ?=
         deploy-inv-driver deploy-ecu-web deploy-ecu-zb deploy-ecu-sunspec \
         install-init-zb uninstall-init-zb \
         package-zb package-sunspec package-sunspec-with-dropbear \
-        package-all fetch-dropbear \
+        package-openaps package-all fetch-dropbear \
         web web-test proto \
         test vet fmt clean
 
@@ -271,6 +271,83 @@ fetch-dropbear:
 	@./packaging/fetch-dropbear.sh $(BUILD_DIR)/dropbear-armv7
 
 package-all: package-zb package-sunspec
+
+# package-openaps — single master installer tarball for brownfield ECU
+# install via stock POST /index.php/management/exec_upgrade_ecu_app.
+#
+# Layout:
+#   openaps-$(VERSION)-ecu.tar.bz2
+#   ├── update_localweb/
+#   │   └── assist                       (master orchestrator)
+#   └── update/
+#       ├── applications/{inv-driver,ecu-zb,ecu-web,ecu-sunspec}
+#       ├── rcS.d/{S48,S53,S54,S98,S99}-*
+#       ├── dropbear/                    (optional, DROPBEAR_DIR=)
+#       ├── etc-openaps/{release.pub,release.pub.README,git-sha}
+#       ├── etc-inv-driver/settings.json.sample
+#       └── openaps-rollback             (rollback CLI)
+#
+# Deterministic: --sort by file name, fixed mtime (git commit ts by default).
+SOURCE_DATE_EPOCH ?= $(shell git log -1 --format=%ct 2>/dev/null || echo 1700000000)
+GIT_SHA           ?= $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
+OPENAPS_PKG_NAME  := openaps-$(VERSION)-ecu.tar.bz2
+
+package-openaps: build-all-arm
+	@echo "+ packaging openaps $(VERSION) (sha=$(GIT_SHA))"
+	@rm -rf $(BUILD_DIR)/pkgroot-openaps
+	@mkdir -p $(BUILD_DIR)/pkgroot-openaps/update_localweb
+	@mkdir -p $(BUILD_DIR)/pkgroot-openaps/update/applications
+	@mkdir -p $(BUILD_DIR)/pkgroot-openaps/update/rcS.d
+	@mkdir -p $(BUILD_DIR)/pkgroot-openaps/update/etc-openaps
+	@mkdir -p $(BUILD_DIR)/pkgroot-openaps/update/etc-inv-driver
+	@cp packaging/openaps-install $(BUILD_DIR)/pkgroot-openaps/update_localweb/assist
+	@chmod 0755 $(BUILD_DIR)/pkgroot-openaps/update_localweb/assist
+	@cp $(INV_DRIVER_ARMV7)  $(BUILD_DIR)/pkgroot-openaps/update/applications/inv-driver
+	@cp $(ECU_ZB_ARMV7)      $(BUILD_DIR)/pkgroot-openaps/update/applications/ecu-zb
+	@cp $(ECU_WEB_ARMV7)     $(BUILD_DIR)/pkgroot-openaps/update/applications/ecu-web
+	@cp $(ECU_SUNSPEC_ARMV7) $(BUILD_DIR)/pkgroot-openaps/update/applications/ecu-sunspec
+	@chmod 0755 $(BUILD_DIR)/pkgroot-openaps/update/applications/*
+	@cp packaging/S48-inv-driver $(BUILD_DIR)/pkgroot-openaps/update/rcS.d/S48-inv-driver
+	@cp packaging/S53-ecu-zb     $(BUILD_DIR)/pkgroot-openaps/update/rcS.d/S53-ecu-zb
+	@cp packaging/S54-ecu-web    $(BUILD_DIR)/pkgroot-openaps/update/rcS.d/S54-ecu-web
+	@cp packaging/S98-dropbear   $(BUILD_DIR)/pkgroot-openaps/update/rcS.d/S98-dropbear
+	@cp packaging/S99-sunspec    $(BUILD_DIR)/pkgroot-openaps/update/rcS.d/S99-sunspec
+	@chmod 0755 $(BUILD_DIR)/pkgroot-openaps/update/rcS.d/*
+	@if [ -n "$(DROPBEAR_DIR)" ] && [ -f "$(DROPBEAR_DIR)/dropbear" ]; then \
+		mkdir -p $(BUILD_DIR)/pkgroot-openaps/update/dropbear; \
+		for f in dropbear dropbearkey dropbearconvert dbclient authorized_keys; do \
+			if [ -f "$(DROPBEAR_DIR)/$$f" ]; then \
+				cp "$(DROPBEAR_DIR)/$$f" $(BUILD_DIR)/pkgroot-openaps/update/dropbear/; \
+				echo "  +dropbear/$$f"; \
+			fi; \
+		done; \
+		chmod 0755 $(BUILD_DIR)/pkgroot-openaps/update/dropbear/dropbear* 2>/dev/null || true; \
+	else \
+		echo "  (no DROPBEAR_DIR — installer will require pre-existing dropbear on :22)"; \
+	fi
+	@cp packaging/release.pub        $(BUILD_DIR)/pkgroot-openaps/update/etc-openaps/release.pub
+	@cp packaging/release.pub.README $(BUILD_DIR)/pkgroot-openaps/update/etc-openaps/release.pub.README
+	@echo "$(GIT_SHA)" > $(BUILD_DIR)/pkgroot-openaps/update/etc-openaps/git-sha
+	@chmod 0644 $(BUILD_DIR)/pkgroot-openaps/update/etc-openaps/*
+	@cp packaging/settings.json.sample $(BUILD_DIR)/pkgroot-openaps/update/etc-inv-driver/settings.json.sample
+	@chmod 0644 $(BUILD_DIR)/pkgroot-openaps/update/etc-inv-driver/settings.json.sample
+	@cp packaging/openaps-rollback $(BUILD_DIR)/pkgroot-openaps/update/openaps-rollback
+	@chmod 0755 $(BUILD_DIR)/pkgroot-openaps/update/openaps-rollback
+	@# Deterministic tarball: name-sorted file list, fixed mtime via
+	@# touch -t (portable across GNU/BSD tar), uid/gid normalised by tar.
+	@TS=$$(python3 -c "import datetime; print(datetime.datetime.utcfromtimestamp($(SOURCE_DATE_EPOCH)).strftime('%Y%m%d%H%M.%S'))" 2>/dev/null || date -u -r $(SOURCE_DATE_EPOCH) +%Y%m%d%H%M.%S 2>/dev/null || echo 202311140000.00); \
+	find $(BUILD_DIR)/pkgroot-openaps -exec touch -t $$TS {} +
+	@(cd $(BUILD_DIR)/pkgroot-openaps && \
+		find . ! -path . | LC_ALL=C sort > /tmp/.openaps-files.lst && \
+		tar -cjf ../$(OPENAPS_PKG_NAME) \
+		    --uid 0 --gid 0 \
+		    -T /tmp/.openaps-files.lst -n)
+	@rm -f /tmp/.openaps-files.lst
+	@rm -rf $(BUILD_DIR)/pkgroot-openaps
+	@echo
+	@echo "=== built $(BUILD_DIR)/$(OPENAPS_PKG_NAME) ==="
+	@ls -lh $(BUILD_DIR)/$(OPENAPS_PKG_NAME)
+	@(cd $(BUILD_DIR) && (sha256sum $(OPENAPS_PKG_NAME) 2>/dev/null || shasum -a 256 $(OPENAPS_PKG_NAME)))
 
 # ---------------- common ----------------
 

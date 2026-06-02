@@ -1,0 +1,99 @@
+#!/bin/sh
+#
+# openaps-rollback — restore the stock APsystems firmware from the
+# pre-install backup created by openaps-install. POSIX sh, BusyBox-safe.
+#
+# Usage: openaps-rollback [--backup /home/openaps-backup-<ts>.tar.bz2]
+#
+# Reads /etc/openaps/installed.json to find the backup, stops OpenAPS
+# services, restores binaries + init scripts + /etc/yuneng over the live
+# rootfs, then reboots.
+
+set -eu
+
+STATE_DIR=/etc/openaps
+INSTALLED=$STATE_DIR/installed.json
+LOG=/home/openaps-install.log
+
+# Resolve backup path: --backup wins, else read from installed.json.
+BACKUP=""
+case "${1:-}" in
+    --backup) BACKUP="${2:-}" ;;
+esac
+if [ -z "$BACKUP" ] && [ -f "$INSTALLED" ]; then
+    BACKUP=$(awk -F\" '/"backup_path"/{print $4; exit}' "$INSTALLED")
+fi
+if [ -z "$BACKUP" ] && [ -f "$STATE_DIR/last-backup" ]; then
+    BACKUP=$(cat "$STATE_DIR/last-backup")
+fi
+if [ -z "$BACKUP" ] || [ ! -f "$BACKUP" ]; then
+    echo "FATAL: no backup found (looked in $INSTALLED, $STATE_DIR/last-backup)" >&2
+    echo "       pass --backup /home/openaps-backup-<ts>.tar.bz2" >&2
+    exit 1
+fi
+
+echo
+echo "=== $(date) openaps-rollback starting (backup=$BACKUP) ==="
+exec >> "$LOG" 2>&1
+echo "=== $(date) openaps-rollback ==="
+echo "  backup: $BACKUP"
+
+# 1. Stop OpenAPS services in reverse order.
+for s in S99-sunspec S54-ecu-web S53-ecu-zb S48-inv-driver; do
+    init=/etc/rcS.d/$s
+    if [ -x "$init" ]; then
+        "$init" stop 2>&1 | sed 's/^/  /' || true
+    fi
+done
+
+# Also kill anything that didn't pick up the stop signal.
+for proc in ecu-sunspec ecu-web ecu-zb inv-driver; do
+    if pidof "$proc" >/dev/null 2>&1; then
+        killall -q "$proc" 2>/dev/null || true
+        sleep 1
+        killall -q -9 "$proc" 2>/dev/null || true
+    fi
+done
+
+# 2. Remove OpenAPS rcS.d entries (they'll be re-added if the user
+# re-installs; backup tarball does not necessarily contain them).
+rm -f /etc/rcS.d/S48-inv-driver /etc/rcS.d/S53-ecu-zb /etc/rcS.d/S54-ecu-web /etc/rcS.d/S99-sunspec
+
+# 3. Restore disabled stock supervisor binaries (the install moved them to
+# $STATE_DIR/disabled-bin/; the backup tarball is authoritative but
+# restoring from the holding dir is faster and survives a corrupted tar).
+if [ -d "$STATE_DIR/disabled-bin" ]; then
+    for f in "$STATE_DIR/disabled-bin/"*; do
+        [ -f "$f" ] || continue
+        name=$(basename "$f")
+        case "$name" in
+            lighttpd) mv "$f" /usr/local/lighttpd/sbin/lighttpd 2>/dev/null && chmod 0755 /usr/local/lighttpd/sbin/lighttpd ;;
+            *)        mv "$f" "/home/applications/$name" 2>/dev/null && chmod 0755 "/home/applications/$name" ;;
+        esac
+        echo "  restored: $name"
+    done
+fi
+
+# Restore any rcS.d/init.d entries we moved aside.
+if [ -d "$STATE_DIR/disabled-init" ]; then
+    for f in "$STATE_DIR/disabled-init/"*; do
+        [ -f "$f" ] || continue
+        case "$(basename "$f")" in
+            S*) mv "$f" "/etc/rcS.d/$(basename "$f")" ;;
+            *)  mv "$f" "/etc/init.d/$(basename "$f")" ;;
+        esac
+    done
+fi
+
+# 4. Untar the backup over the live rootfs. -P preserves absolute paths
+# the backup was created with.
+echo "  extracting backup ..."
+tar -xjf "$BACKUP" -P -C / 2>&1 | sed 's/^/  /' || {
+    echo "  WARN: tar extraction reported errors; check manually"
+}
+
+# 5. Reboot to land cleanly with the stock supervisors active.
+echo "=== $(date) rollback complete; rebooting in 5s ==="
+sync
+sleep 5
+reboot

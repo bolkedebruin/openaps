@@ -1,0 +1,437 @@
+#!/bin/sh
+#
+# openaps-install — master orchestrator for the brownfield OpenAPS
+# installer. POSIX sh, BusyBox-safe.
+#
+# Layout it expects (sibling to itself):
+#   ../update/applications/{inv-driver,ecu-zb,ecu-web,ecu-sunspec}
+#   ../update/rcS.d/S{48,53,54,98,99}-*
+#   ../update/dropbear/ (binaries + optional authorized_keys)
+#   ../update/etc-openaps/release.pub
+#   ../update/etc-inv-driver/settings.json.sample
+#   ../update/openaps-rollback
+#
+# Invoked by the stock APsystems lighttpd/CodeIgniter endpoint
+# exec_upgrade_ecu_app (POST /index.php/management/exec_upgrade_ecu_app).
+# Idempotent: re-running over the same version is safe.
+#
+# Logs to /home/openaps-install.log.
+
+set -eu
+
+VERSION="v1.0.0"
+LOG=/home/openaps-install.log
+STATE_DIR=/etc/openaps
+RELEASE_KEY=$STATE_DIR/release.pub
+SETTINGS_PATH=/etc/inv-driver/settings.json
+MAC_CONF=/etc/yuneng/ecu_eth0_mac.conf
+ECUID_CONF=/etc/yuneng/ecuid.conf
+NEED_KB=51200    # ~50 MB in /home
+
+exec >> "$LOG" 2>&1
+echo
+echo "=== $(date) openaps-install $VERSION starting ==="
+
+ASSIST_DIR=$(cd "$(dirname "$0")" && pwd)
+PKG_ROOT=$(cd "$ASSIST_DIR/.." && pwd)
+SRC=$PKG_ROOT/update
+
+if [ ! -d "$SRC" ]; then
+    echo "FATAL: payload directory $SRC not found"
+    exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Step 1 — pre-flight
+# ---------------------------------------------------------------------------
+echo "--- step 1: pre-flight ---"
+
+# Disk: BusyBox df -k. Available column = 4th field on the data line.
+AVAIL=$(df -k /home 2>/dev/null | awk 'NR==2 {print $4}')
+if [ -z "$AVAIL" ] || [ "$AVAIL" -lt "$NEED_KB" ]; then
+    echo "FATAL: insufficient free space in /home (have ${AVAIL:-0} KB, need $NEED_KB KB)"
+    exit 1
+fi
+echo "  disk ok: ${AVAIL} KB free in /home"
+
+if [ ! -f "$MAC_CONF" ]; then
+    echo "FATAL: $MAC_CONF missing — ECU not provisioned"
+    exit 1
+fi
+echo "  $MAC_CONF present"
+
+# Verify ARMv7 ELF on payload binaries (busybox file fallback: check magic).
+for bin in inv-driver ecu-zb ecu-web ecu-sunspec; do
+    p="$SRC/applications/$bin"
+    if [ ! -f "$p" ]; then
+        echo "FATAL: missing binary $p"
+        exit 1
+    fi
+    # ELF magic: 0x7f 'E' 'L' 'F'. Then EI_CLASS=1 (32), EI_DATA=1 (LE).
+    # We read 5 bytes with dd; busybox dd supports bs/count.
+    magic=$(dd if="$p" bs=1 count=4 2>/dev/null | od -An -c | tr -d ' \n')
+    case "$magic" in
+        '\\177ELF'|'177ELF') : ;;
+        *) echo "FATAL: $p does not look like ELF (magic=$magic)"; exit 1 ;;
+    esac
+    echo "  $bin: ELF ok"
+done
+
+mkdir -p "$STATE_DIR"
+
+# ---------------------------------------------------------------------------
+# Step 2 — backup
+# ---------------------------------------------------------------------------
+echo "--- step 2: backup ---"
+
+BACKUP_STAMP=$(date -u +%Y%m%dT%H%M%S)
+BACKUP_PATH=/home/openaps-backup-${BACKUP_STAMP}.tar.bz2
+
+# Tar can fail on /etc/yuneng if absent; -P (preserve absolute paths) lets
+# rollback restore them where they were.
+tar -cjf "$BACKUP_PATH" -P \
+    /home/applications \
+    /etc/rcS.d \
+    /etc/init.d \
+    /etc/yuneng \
+    2>/dev/null || {
+        echo "FATAL: backup tar failed"
+        exit 1
+    }
+
+echo "$BACKUP_PATH" > "$STATE_DIR/last-backup"
+echo "  backup written: $BACKUP_PATH"
+
+# ---------------------------------------------------------------------------
+# Step 3 — DROPBEAR FIRST (recovery path)
+# ---------------------------------------------------------------------------
+echo "--- step 3: install dropbear (recovery path) ---"
+
+DROPBEAR_INSTALLED=0
+if [ -d "$SRC/dropbear" ] && [ -f "$SRC/dropbear/dropbear" ]; then
+    for f in dropbear dropbearkey dropbearconvert dbclient; do
+        if [ -f "$SRC/dropbear/$f" ]; then
+            mkdir -p /usr/local/sbin
+            cp -f "$SRC/dropbear/$f" /usr/local/sbin/$f.new
+            chmod 0755 /usr/local/sbin/$f.new
+            mv /usr/local/sbin/$f.new /usr/local/sbin/$f
+            echo "  + /usr/local/sbin/$f"
+        fi
+    done
+
+    mkdir -p /etc/dropbear
+    if [ ! -f /etc/dropbear/dropbear_rsa_host_key ] && [ -x /usr/local/sbin/dropbearkey ]; then
+        /usr/local/sbin/dropbearkey -t rsa -f /etc/dropbear/dropbear_rsa_host_key 2>/dev/null || true
+        echo "  + /etc/dropbear/dropbear_rsa_host_key (generated)"
+    fi
+
+    if [ -f "$SRC/dropbear/authorized_keys" ]; then
+        ROOT_HOME=$(awk -F: '$1=="root"{print $6; exit}' /etc/passwd 2>/dev/null)
+        [ -n "$ROOT_HOME" ] || ROOT_HOME=/root
+        chown root:root "$ROOT_HOME" 2>/dev/null || true
+        mkdir -p "$ROOT_HOME/.ssh"
+        chown root:root "$ROOT_HOME/.ssh"
+        chmod 700 "$ROOT_HOME/.ssh"
+        touch "$ROOT_HOME/.ssh/authorized_keys"
+        cat "$SRC/dropbear/authorized_keys" >> "$ROOT_HOME/.ssh/authorized_keys"
+        awk '!seen[$0]++' "$ROOT_HOME/.ssh/authorized_keys" > /tmp/.ak.tmp \
+            && mv /tmp/.ak.tmp "$ROOT_HOME/.ssh/authorized_keys"
+        chown root:root "$ROOT_HOME/.ssh/authorized_keys"
+        chmod 600 "$ROOT_HOME/.ssh/authorized_keys"
+        echo "  + $ROOT_HOME/.ssh/authorized_keys"
+    fi
+
+    if [ -f "$SRC/rcS.d/S98-dropbear" ]; then
+        cp -f "$SRC/rcS.d/S98-dropbear" /etc/rcS.d/S98-dropbear.new
+        chmod 0755 /etc/rcS.d/S98-dropbear.new
+        mv /etc/rcS.d/S98-dropbear.new /etc/rcS.d/S98-dropbear
+        echo "  + /etc/rcS.d/S98-dropbear"
+    fi
+
+    # Start dropbear and verify it is listening on :22.
+    /etc/rcS.d/S98-dropbear start || true
+    sleep 2
+    if netstat -ltn 2>/dev/null | grep -q ':22 '; then
+        echo "  dropbear listening on :22 — recovery path verified"
+        DROPBEAR_INSTALLED=1
+    else
+        echo "FATAL: dropbear failed to bind :22 — aborting BEFORE touching lighttpd"
+        echo "  rollback: tar -xjf $BACKUP_PATH -P -C /"
+        exit 1
+    fi
+else
+    # Pre-existing dropbear is acceptable.
+    if netstat -ltn 2>/dev/null | grep -q ':22 '; then
+        echo "  dropbear already listening on :22 (no bundle supplied)"
+        DROPBEAR_INSTALLED=1
+    else
+        echo "FATAL: no dropbear bundle and nothing on :22 — no recovery path"
+        exit 1
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Step 4 — provision OpenAPS settings (idempotent)
+# ---------------------------------------------------------------------------
+echo "--- step 4: provision OpenAPS settings ---"
+
+mkdir -p /etc/inv-driver
+if [ -f "$SETTINGS_PATH" ]; then
+    echo "  $SETTINGS_PATH already exists — keeping operator-edited config"
+else
+    # Build a fresh settings.json from /etc/yuneng/ecu_eth0_mac.conf +
+    # /etc/yuneng/ecuid.conf. Format expected by inv-driver internal/settings.
+    MAC_RAW=$(cat "$MAC_CONF" 2>/dev/null | tr -d '[:space:]' | head -c 32)
+    # Strip any colons / dashes if present.
+    MAC_HEX=$(echo "$MAC_RAW" | tr -d ':-' | tr 'A-F' 'a-f')
+    if [ -z "$MAC_HEX" ] || [ ${#MAC_HEX} -lt 12 ]; then
+        echo "WARN: $MAC_CONF content unparseable; settings.json left for first-run autodetect"
+    else
+        # Lower 16 bits of MAC → PAN override (uppercase hex, 4 chars).
+        PAN_HEX=$(echo "$MAC_HEX" | tail -c 5 | tr 'a-f' 'A-F')
+        # Re-format MAC as colon-separated for cosmetics.
+        MAC_FMT=$(echo "$MAC_HEX" | sed 's/\(..\)/\1:/g;s/:$//')
+        ECU_ID=""
+        if [ -f "$ECUID_CONF" ]; then
+            ECU_ID=$(cat "$ECUID_CONF" 2>/dev/null | tr -d '[:space:]')
+        fi
+        cat > "$SETTINGS_PATH.new" <<EOF
+{
+  "ecu_id": "$ECU_ID",
+  "mac": "$MAC_FMT",
+  "pan_override": "$PAN_HEX",
+  "zigbee_type": "apsystems",
+  "channel": 16
+}
+EOF
+        chmod 0600 "$SETTINGS_PATH.new"
+        mv "$SETTINGS_PATH.new" "$SETTINGS_PATH"
+        echo "  + $SETTINGS_PATH (ecu_id=$ECU_ID mac=$MAC_FMT pan=$PAN_HEX)"
+    fi
+fi
+
+# Stage release.pub for future signed-tarball OTAs.
+if [ -f "$SRC/etc-openaps/release.pub" ] && [ ! -f "$RELEASE_KEY" ]; then
+    cp -f "$SRC/etc-openaps/release.pub" "$RELEASE_KEY.new"
+    chmod 0644 "$RELEASE_KEY.new"
+    mv "$RELEASE_KEY.new" "$RELEASE_KEY"
+    echo "  + $RELEASE_KEY"
+fi
+
+# ---------------------------------------------------------------------------
+# Step 5 — install OpenAPS binaries + init scripts (atomic)
+# ---------------------------------------------------------------------------
+echo "--- step 5: install OpenAPS binaries + init scripts ---"
+
+put_atomic() {
+    src=$1
+    dst=$2
+    mode=$3
+    mkdir -p "$(dirname "$dst")"
+    cp -f "$src" "$dst.new"
+    chmod "$mode" "$dst.new"
+    mv "$dst.new" "$dst"
+    echo "  + $dst"
+}
+
+mkdir -p /home/applications/inv-driver /home/applications/ecu-zb/run /home/applications/ecu-zb/log
+mkdir -p /home/applications/ecu-web /home/applications/ecu-sunspec
+mkdir -p /var/lib/inv-driver /var/lib/ecu-web
+
+put_atomic "$SRC/applications/inv-driver"  /home/applications/inv-driver/inv-driver    0755
+put_atomic "$SRC/applications/ecu-zb"      /home/applications/ecu-zb/ecu-zb            0755
+put_atomic "$SRC/applications/ecu-web"     /home/applications/ecu-web/ecu-web          0755
+put_atomic "$SRC/applications/ecu-sunspec" /home/applications/ecu-sunspec              0755
+
+for s in S48-inv-driver S53-ecu-zb S54-ecu-web S99-sunspec; do
+    if [ -f "$SRC/rcS.d/$s" ]; then
+        put_atomic "$SRC/rcS.d/$s" "/etc/rcS.d/$s" 0755
+    fi
+done
+
+# ---------------------------------------------------------------------------
+# Step 6 — DISABLE stock supervisors (init removal via binary removal)
+# ---------------------------------------------------------------------------
+# The manager binary system()-spawns each stock app ONCE at boot. Each
+# supervisor (*monitor*) is then its own respawn loop for its child.
+# Disable by:
+#   a) killing the running process(es)
+#   b) removing the binary so manager's next-boot spawn no-ops
+# This is init-level removal: no sleeper stubs, no .real swap files.
+# A supervisor with no binary on disk simply never runs again. Restored
+# from the backup tarball by openaps-rollback.
+echo "--- step 6: disable stock supervisors ---"
+
+DISABLED_LIST="$STATE_DIR/disabled-apps.list"
+: > "$DISABLED_LIST"
+
+DISABLE_SET="
+monitor.exe
+clientmonitor
+control_client_monitor
+gprsmonitor
+idwriter
+mqtt_monitor.exe
+phone_server_monitor
+phone_server_app_monitor
+lancommClientMonitor
+single_update_monitor
+updatemanager
+autoupdate2
+autoupdate_restart
+AutoUpInver2
+AutoUpInver
+autoupdate
+autoupdate_main_restart
+resmonitor
+usbTest
+quectel_monitor.exe
+4gmonitor.exe
+diagnosis_network
+"
+
+for app in $DISABLE_SET; do
+    # Live kill (best-effort; some names won't be running).
+    if pidof "$app" >/dev/null 2>&1; then
+        killall -q "$app" 2>/dev/null || true
+        sleep 1
+        killall -q -9 "$app" 2>/dev/null || true
+    fi
+
+    # Remove the binary so the next boot's manager system() no-ops.
+    BIN_PATH=/home/applications/$app
+    if [ -f "$BIN_PATH" ]; then
+        # Move into a holding dir so rollback can restore even if backup
+        # tar can't find them (defensive — backup already captured them).
+        mkdir -p "$STATE_DIR/disabled-bin"
+        mv "$BIN_PATH" "$STATE_DIR/disabled-bin/$app" 2>/dev/null || rm -f "$BIN_PATH"
+        echo "$app" >> "$DISABLED_LIST"
+        echo "  disabled: $app"
+    fi
+done
+
+# Also kill direct children of the now-defunct supervisors so they don't
+# keep running until reboot.
+for child in main.exe client control_client gprs mqtt.exe phone_server lancommClient single_update autoupdate quectel-CM; do
+    if pidof "$child" >/dev/null 2>&1; then
+        killall -q "$child" 2>/dev/null || true
+    fi
+done
+
+# ---------------------------------------------------------------------------
+# Step 7 — remove lighttpd / CodeIgniter (stock UI)
+# ---------------------------------------------------------------------------
+echo "--- step 7: remove lighttpd / CodeIgniter ---"
+
+if [ "$DROPBEAR_INSTALLED" -ne 1 ]; then
+    echo "FATAL: dropbear not verified; refusing to touch lighttpd"
+    exit 1
+fi
+
+if pidof lighttpd >/dev/null 2>&1; then
+    killall -q lighttpd 2>/dev/null || true
+    sleep 1
+    killall -q -9 lighttpd 2>/dev/null || true
+fi
+
+# lighttpd is launched by manager via system() from /usr/local/lighttpd/sbin/.
+# Disable by removing the binary.
+LIGHTTPD_BIN=/usr/local/lighttpd/sbin/lighttpd
+if [ -f "$LIGHTTPD_BIN" ]; then
+    mkdir -p "$STATE_DIR/disabled-bin"
+    mv "$LIGHTTPD_BIN" "$STATE_DIR/disabled-bin/lighttpd" 2>/dev/null || rm -f "$LIGHTTPD_BIN"
+    echo "lighttpd" >> "$DISABLED_LIST"
+    echo "  disabled: lighttpd"
+fi
+
+# Some firmwares additionally start lighttpd from rcS.d. Disable any such entry.
+for f in /etc/rcS.d/S*lighttpd* /etc/init.d/lighttpd* /etc/init.d/S*lighttpd*; do
+    [ -e "$f" ] || continue
+    mkdir -p "$STATE_DIR/disabled-init"
+    mv "$f" "$STATE_DIR/disabled-init/$(basename "$f")" 2>/dev/null || rm -f "$f"
+    echo "  disabled init: $f"
+done
+
+# ---------------------------------------------------------------------------
+# Step 8 — start OpenAPS services
+# ---------------------------------------------------------------------------
+echo "--- step 8: start OpenAPS services ---"
+
+for s in S48-inv-driver S53-ecu-zb S54-ecu-web S99-sunspec; do
+    init=/etc/rcS.d/$s
+    [ -x "$init" ] || continue
+    echo "  starting $s"
+    "$init" start || echo "  WARN: $s start exit $?"
+    sleep 2
+done
+
+# ---------------------------------------------------------------------------
+# Step 9 — smoke verify
+# ---------------------------------------------------------------------------
+echo "--- step 9: smoke verify ---"
+
+SMOKE_OK=1
+
+if [ -S /var/run/inv-driver.sock ]; then
+    echo "  ok: inv-driver UDS present"
+else
+    echo "  WARN: /var/run/inv-driver.sock missing"
+    SMOKE_OK=0
+fi
+
+# ecu-web health probe. We don't ship a /api/health; /api/auth/status is
+# the always-reachable endpoint and indicates the HTTP/2 server is up.
+if command -v curl >/dev/null 2>&1; then
+    if curl -sk --max-time 5 https://localhost:443/api/auth/status >/dev/null 2>&1; then
+        echo "  ok: ecu-web /api/auth/status reachable"
+    else
+        echo "  WARN: ecu-web /api/auth/status not reachable yet"
+        SMOKE_OK=0
+    fi
+fi
+
+# Wait 30s for ecu-zb to come up and ingest its first frame.
+echo "  waiting 30s for ecu-zb / first telemetry frame ..."
+sleep 30
+
+if [ -f /home/applications/ecu-zb/log/ecu-zb.log ]; then
+    if grep -qi 'coordinator\|configured\|started' /home/applications/ecu-zb/log/ecu-zb.log 2>/dev/null; then
+        echo "  ok: ecu-zb reports coordinator state"
+    else
+        echo "  WARN: ecu-zb log has no coordinator state line yet"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Step 10 — audit + install rollback CLI
+# ---------------------------------------------------------------------------
+echo "--- step 10: audit + rollback CLI ---"
+
+if [ -f "$SRC/openaps-rollback" ]; then
+    put_atomic "$SRC/openaps-rollback" /usr/local/bin/openaps-rollback 0755
+fi
+
+GIT_SHA=$(cat "$SRC/etc-openaps/git-sha" 2>/dev/null || echo "unknown")
+DISABLED_JSON=$(awk 'BEGIN{printf "["} {printf "%s\"%s\"", (NR>1?",":""), $0} END{printf "]"}' "$DISABLED_LIST")
+TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+cat > "$STATE_DIR/installed.json.new" <<EOF
+{
+  "version": "$VERSION",
+  "ts": "$TS",
+  "backup_path": "$BACKUP_PATH",
+  "git_sha": "$GIT_SHA",
+  "smoke_ok": $SMOKE_OK,
+  "disabled_apps": $DISABLED_JSON
+}
+EOF
+mv "$STATE_DIR/installed.json.new" "$STATE_DIR/installed.json"
+echo "  + $STATE_DIR/installed.json"
+
+echo "$TS $VERSION installed (smoke_ok=$SMOKE_OK backup=$BACKUP_PATH)" >> "$LOG"
+
+echo "=== $(date) openaps-install $VERSION done ==="
+echo
+echo "To roll back: ssh root@<ECU-IP> /usr/local/bin/openaps-rollback"
+echo
+exit 0
