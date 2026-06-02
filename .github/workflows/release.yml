@@ -12,7 +12,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # Full history + tags so `git describe --tags` in the Makefile
           # returns the tag name as VERSION (otherwise it falls back to a
