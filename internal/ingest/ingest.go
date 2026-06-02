@@ -751,7 +751,7 @@ func telemetryFromReply(r codec.Reply, tsMs int64) *wire.Telemetry {
 		ShortAddr:     uint32(r.ShortAddr),
 		PeerUid:       r.PeerUID,
 		Cmd:           uint32(r.Cmd),
-		Model:         r.Model,
+		Model:         r.ModelLabel(),
 		GridV:         r.GridV,
 		BusV:          r.BusV,
 		FreqHz:        r.FreqHz,
@@ -786,7 +786,11 @@ func telemetryFromReply(r codec.Reply, tsMs int64) *wire.Telemetry {
 func faultsFromReply(r codec.Reply) *wire.InverterFaults {
 	switch r.Cmd {
 	case codec.CmdReplyDS3:
-		f := r.DS3Status.Faults()
+		ds, ok := r.ExtendedStatus.(codec.DS3Status)
+		if !ok {
+			return nil
+		}
+		f := ds.Faults()
 		return &wire.InverterFaults{Family: &wire.InverterFaults_Ds3{Ds3: &wire.DS3Faults{
 			GridRelayFault:    f.GridRelayFault,
 			DcContactorFault:  f.DCContactorFault,
@@ -808,7 +812,11 @@ func faultsFromReply(r codec.Reply) *wire.InverterFaults {
 			UnderFreqExtra:    f.UnderFreqExtra,
 		}}}
 	case codec.CmdReplyQS1A:
-		f := r.QS1AStatus.Faults()
+		qs, ok := r.ExtendedStatus.(codec.QS1AStatus)
+		if !ok {
+			return nil
+		}
+		f := qs.Faults()
 		return &wire.InverterFaults{Family: &wire.InverterFaults_Qs1A{Qs1A: &wire.QS1AFaults{
 			GridRelayFault:   f.GridRelayFault,
 			DcContactorFault: f.DCContactorFault,

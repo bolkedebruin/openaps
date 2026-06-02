@@ -117,7 +117,7 @@ type Reply struct {
 	ShortAddr uint16
 	PeerUID   string // 12-char hex, matches `id` column
 	Cmd       byte   // L2 cmd byte (0xB1 QS1A, 0xBB DS3, etc.)
-	Model     string // "QS1A" / "DS3" / "unknown"
+	Family    Family // dispatching family classification; FamilyUnknown for unrecognised replies
 
 	// Signal-quality bytes from the L1 envelope.
 	// RSSI is the primary signal strength value (with clamp byte < 0x10
@@ -144,13 +144,27 @@ type Reply struct {
 	// resolver. Populated for every recognised family.
 	Status InverterStatus
 
-	// DS3Status holds the raw 5-byte status block at body[0x0b..0x10].
-	// Populated only for DS3-family replies.
-	DS3Status DS3Status
+	// ExtendedStatus is the family-specific raw-status block (DS3Status
+	// for DS3-family replies, QS1AStatus for QS1A-family replies). Nil
+	// for unrecognised families. Callers project through the
+	// ExtendedStatus interface (ModbusStatus / InverterStatus) and reach
+	// the family-specific accessors via a type assertion.
+	ExtendedStatus ExtendedStatus
+}
 
-	// QS1AStatus holds the raw QS1A status bytes
-	// (body[0x17..0x1a, 0x38..0x39, 0x34]). Populated only for QS1A.
-	QS1AStatus QS1AStatus
+// ModelLabel returns the legacy human model string this codec emits on
+// the proto wire for Telemetry.Model: "DS3", "QS1A", or
+// "unknown(0xNN)". It exists for the proto-boundary callers that
+// publish a string-typed model column; in-process consumers should
+// branch on r.Family directly.
+func (r Reply) ModelLabel() string {
+	switch r.Cmd {
+	case CmdReplyDS3:
+		return "DS3"
+	case CmdReplyQS1A:
+		return "QS1A"
+	}
+	return fmt.Sprintf("unknown(0x%02X)", r.Cmd)
 }
 
 // InverterStatus collects the five aggregator signals each per-family
@@ -268,13 +282,13 @@ func DecodeReplyFromEnvelope(env L1Envelope) (Reply, error) {
 	}
 	switch l2.Cmd {
 	case CmdReplyQS1A:
-		r.Model = "QS1A"
+		r.Family = FamilyQS1
 		decodeQS1A(l2.Body, &r)
 	case CmdReplyDS3:
-		r.Model = "DS3"
+		r.Family = FamilyDS3
 		decodeDS3(l2.Body, &r)
 	default:
-		r.Model = fmt.Sprintf("unknown(0x%02X)", l2.Cmd)
+		r.Family = FamilyUnknown
 		return r, fmt.Errorf("%w: 0x%02X", ErrUnknownCmd, l2.Cmd)
 	}
 	return r, nil

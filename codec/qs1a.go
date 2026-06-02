@@ -575,8 +575,9 @@ func decodeQS1A(body []byte, r *Reply) {
 	}
 	r.LifetimeScale = qs1aLifetime
 
-	r.QS1AStatus = decodeQS1AStatus(body)
-	r.Status = r.QS1AStatus.Faults().InverterStatus()
+	qs := decodeQS1AStatus(body)
+	r.ExtendedStatus = qs
+	r.Status = qs.Faults().InverterStatus()
 }
 
 // QS1AStatus holds the raw status bytes a QS1A reply spreads across

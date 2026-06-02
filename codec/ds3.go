@@ -317,8 +317,9 @@ func decodeDS3(body []byte, r *Reply) {
 	}
 	r.LifetimeScale = ds3Lifetime
 
-	r.DS3Status = decodeDS3Status(body)
-	r.Status = r.DS3Status.Faults().InverterStatus()
+	ds := decodeDS3Status(body)
+	r.ExtendedStatus = ds
+	r.Status = ds.Faults().InverterStatus()
 }
 
 // DS3Status holds the five raw status/fault bytes a DS3 reply ships

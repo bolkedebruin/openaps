@@ -18,7 +18,7 @@ func TestFaultsFromReply_UnknownCmdReturnsNil(t *testing.T) {
 
 func TestFaultsFromReply_DS3PreservesNamedBits(t *testing.T) {
 	// body[0x0d] bit 4 → DCBusFault; body[0x0e] bit 4 → IsoFaultA.
-	r := codec.Reply{Cmd: 0xBB, DS3Status: codec.DS3Status{Raw: [5]byte{
+	r := codec.Reply{Cmd: 0xBB, ExtendedStatus: codec.DS3Status{Raw: [5]byte{
 		0,      // 0x0b
 		0,      // 0x0c
 		1 << 4, // 0x0d — DCBusFault
@@ -46,7 +46,7 @@ func TestFaultsFromReply_DS3PreservesNamedBits(t *testing.T) {
 
 func TestFaultsFromReply_QS1APreservesNamedBits(t *testing.T) {
 	// body[0x17] bit 2 → GridRelayFault; body[0x1a] bit 6 → OverFreqFast.
-	r := codec.Reply{Cmd: 0xB1, QS1AStatus: codec.QS1AStatus{
+	r := codec.Reply{Cmd: 0xB1, ExtendedStatus: codec.QS1AStatus{
 		Main: [4]byte{1 << 2, 0, 0, 1 << 6},
 	}}
 	got := faultsFromReply(r)

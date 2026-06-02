@@ -78,8 +78,11 @@ func TestDecodeReply_QS1A_FromLiveCapture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DecodeReply: %v", err)
 	}
-	if r.Model != "QS1A" {
-		t.Fatalf("Model: got %q want QS1A", r.Model)
+	if r.Family != FamilyQS1 {
+		t.Fatalf("Family: got %v want FamilyQS1", r.Family)
+	}
+	if r.ModelLabel() != "QS1A" {
+		t.Fatalf("ModelLabel: got %q want QS1A", r.ModelLabel())
 	}
 	if r.PeerUID != "999900000003" {
 		t.Fatalf("PeerUID: got %q want 999900000003", r.PeerUID)
@@ -141,8 +144,11 @@ func TestDecodeReply_DS3_FromLiveCapture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DecodeReply: %v", err)
 	}
-	if r.Model != "DS3" {
-		t.Fatalf("Model: got %q want DS3", r.Model)
+	if r.Family != FamilyDS3 {
+		t.Fatalf("Family: got %v want FamilyDS3", r.Family)
+	}
+	if r.ModelLabel() != "DS3" {
+		t.Fatalf("ModelLabel: got %q want DS3", r.ModelLabel())
 	}
 	if r.PeerUID != "999900000001" {
 		t.Fatalf("PeerUID: got %q want 999900000001", r.PeerUID)
@@ -192,14 +198,18 @@ func TestDecodeReply_DS3_StatusFlagsAllZeroInLiveCapture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DecodeReply: %v", err)
 	}
-	if r.DS3Status.Raw != [5]byte{} {
-		t.Errorf("DS3Status.Raw: got %v want all zero", r.DS3Status.Raw)
+	ds, ok := r.ExtendedStatus.(DS3Status)
+	if !ok {
+		t.Fatalf("ExtendedStatus: want DS3Status, got %T", r.ExtendedStatus)
+	}
+	if ds.Raw != [5]byte{} {
+		t.Errorf("DS3Status.Raw: got %v want all zero", ds.Raw)
 	}
 	if (r.Status != InverterStatus{}) {
 		t.Errorf("expected zero InverterStatus, got %+v", r.Status)
 	}
-	if (r.QS1AStatus != QS1AStatus{}) {
-		t.Errorf("QS1AStatus should stay zero for DS3 replies, got %+v", r.QS1AStatus)
+	if _, isQS := r.ExtendedStatus.(QS1AStatus); isQS {
+		t.Errorf("ExtendedStatus on a DS3 reply should not be QS1AStatus")
 	}
 }
 
@@ -239,8 +249,12 @@ func TestDecodeReply_DS3_StatusFlagsBitMap(t *testing.T) {
 				t.Fatalf("DecodeReply: %v", err)
 			}
 			wantRaw := [5]byte{tc.b, tc.c, tc.d, tc.e, tc.f}
-			if r.DS3Status.Raw != wantRaw {
-				t.Errorf("DS3Status.Raw: got %v want %v", r.DS3Status.Raw, wantRaw)
+			ds, ok := r.ExtendedStatus.(DS3Status)
+			if !ok {
+				t.Fatalf("ExtendedStatus: want DS3Status, got %T", r.ExtendedStatus)
+			}
+			if ds.Raw != wantRaw {
+				t.Errorf("DS3Status.Raw: got %v want %v", ds.Raw, wantRaw)
 			}
 			want := InverterStatus{
 				DCBusFault: tc.dcBus,
@@ -261,20 +275,24 @@ func TestDecodeReply_QS1A_StatusFlagsAllZeroInLiveCapture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DecodeReply: %v", err)
 	}
-	if r.QS1AStatus.Main != [4]byte{} {
-		t.Errorf("QS1AStatus.Main: got %v want all zero", r.QS1AStatus.Main)
+	qs, ok := r.ExtendedStatus.(QS1AStatus)
+	if !ok {
+		t.Fatalf("ExtendedStatus: want QS1AStatus, got %T", r.ExtendedStatus)
 	}
-	if r.QS1AStatus.Grid != [2]byte{} {
-		t.Errorf("QS1AStatus.Grid: got %v want all zero", r.QS1AStatus.Grid)
+	if qs.Main != [4]byte{} {
+		t.Errorf("QS1AStatus.Main: got %v want all zero", qs.Main)
 	}
-	if r.QS1AStatus.Extra != 0 {
-		t.Errorf("QS1AStatus.Extra: got %v want 0", r.QS1AStatus.Extra)
+	if qs.Grid != [2]byte{} {
+		t.Errorf("QS1AStatus.Grid: got %v want all zero", qs.Grid)
+	}
+	if qs.Extra != 0 {
+		t.Errorf("QS1AStatus.Extra: got %v want 0", qs.Extra)
 	}
 	if (r.Status != InverterStatus{}) {
 		t.Errorf("expected zero InverterStatus, got %+v", r.Status)
 	}
-	if (r.DS3Status != DS3Status{}) {
-		t.Errorf("DS3Status should stay zero for QS1A replies, got %+v", r.DS3Status)
+	if _, isDS := r.ExtendedStatus.(DS3Status); isDS {
+		t.Errorf("ExtendedStatus on a QS1A reply should not be DS3Status")
 	}
 }
 
@@ -319,8 +337,12 @@ func TestDecodeReply_QS1A_StatusFlagsBitMap(t *testing.T) {
 				t.Fatalf("DecodeReply: %v", err)
 			}
 			wantMain := [4]byte{tc.b17, tc.b18, tc.b19, tc.b1a}
-			if r.QS1AStatus.Main != wantMain {
-				t.Errorf("QS1AStatus.Main: got %v want %v", r.QS1AStatus.Main, wantMain)
+			qs, ok := r.ExtendedStatus.(QS1AStatus)
+			if !ok {
+				t.Fatalf("ExtendedStatus: want QS1AStatus, got %T", r.ExtendedStatus)
+			}
+			if qs.Main != wantMain {
+				t.Errorf("QS1AStatus.Main: got %v want %v", qs.Main, wantMain)
 			}
 			want := InverterStatus{
 				DCBusFault: tc.dcBus,
@@ -346,11 +368,15 @@ func TestDecodeReply_QS1A_StatusPreservesGridAndExtra(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DecodeReply: %v", err)
 	}
-	if r.QS1AStatus.Extra != 0x42 {
-		t.Errorf("Extra: got 0x%02x want 0x42", r.QS1AStatus.Extra)
+	qs, ok := r.ExtendedStatus.(QS1AStatus)
+	if !ok {
+		t.Fatalf("ExtendedStatus: want QS1AStatus, got %T", r.ExtendedStatus)
 	}
-	if r.QS1AStatus.Grid != [2]byte{0xa5, 0x5a} {
-		t.Errorf("Grid: got %v want [a5 5a]", r.QS1AStatus.Grid)
+	if qs.Extra != 0x42 {
+		t.Errorf("Extra: got 0x%02x want 0x42", qs.Extra)
+	}
+	if qs.Grid != [2]byte{0xa5, 0x5a} {
+		t.Errorf("Grid: got %v want [a5 5a]", qs.Grid)
 	}
 }
 
@@ -384,8 +410,14 @@ func TestDecodeReply_UnknownCmdLeavesBodyForInspection(t *testing.T) {
 	if r.Cmd != 0xAA {
 		t.Fatalf("Cmd still parsed: got 0x%02X", r.Cmd)
 	}
-	if !strings.Contains(r.Model, "unknown") {
-		t.Fatalf("Model: got %q want contains 'unknown'", r.Model)
+	if r.Family != FamilyUnknown {
+		t.Fatalf("Family: got %v want FamilyUnknown", r.Family)
+	}
+	if !strings.Contains(r.ModelLabel(), "unknown") {
+		t.Fatalf("ModelLabel: got %q want contains 'unknown'", r.ModelLabel())
+	}
+	if r.ExtendedStatus != nil {
+		t.Errorf("ExtendedStatus: got %+v want nil for unknown family", r.ExtendedStatus)
 	}
 }
 
