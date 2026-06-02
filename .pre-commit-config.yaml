@@ -1,0 +1,44 @@
+# Pre-push hooks (prek-compatible).
+#
+# Install once per clone:
+#   prek install --hook-type pre-push
+#
+# These run on `git push` and catch the failures the GitHub Actions
+# release workflow would otherwise discover at tag-push time:
+#   - gofmt diff
+#   - go vet
+#   - go test
+
+repos:
+  - repo: local
+    hooks:
+      - id: gofmt
+        name: gofmt
+        entry: gofmt -l .
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        # gofmt -l prints offending files; non-empty output → fail.
+        verbose: true
+
+      - id: gofmt-check
+        name: gofmt (fail on diff)
+        # Stricter: explicitly fail if `gofmt -l` produces any output.
+        entry: bash -c 'out=$(gofmt -l .); if [ -n "$out" ]; then echo "needs gofmt -w:"; echo "$out"; exit 1; fi'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: go-vet
+        name: go vet
+        entry: go vet ./...
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: go-test
+        name: go test
+        entry: go test -timeout 90s ./...
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

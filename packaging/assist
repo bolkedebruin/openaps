@@ -1,0 +1,83 @@
+#!/bin/sh
+# Install entry point invoked by /index.php/management/exec_upgrade_ecu_app
+# after it extracts the uploaded tarball into /home/update_from_app/.
+#
+# Layout it expects (sibling to itself):
+#   ../update/applications/ecu-zb        — the ZigBee proxy binary
+#   ../update/etc-rcS-d/S53-ecu-zb       — boot init script
+#
+# Logs to /home/ecu-zb-install.log.
+
+set -e
+LOG=/home/ecu-zb-install.log
+exec >> "$LOG" 2>&1
+echo
+echo "=== $(date) installing ecu-zb ==="
+
+ASSIST_DIR="$(cd "$(dirname "$0")" && pwd)"
+PKG_ROOT="$(cd "$ASSIST_DIR/.." && pwd)"
+SRC="$PKG_ROOT/update"
+
+if [ ! -d "$SRC" ]; then
+    echo "FATAL: $SRC not found; aborting"
+    exit 1
+fi
+
+put_exec() {
+    src="$1"
+    dst="$2"
+    [ -f "$src" ] || return 1
+    mkdir -p "$(dirname "$dst")"
+    cp -f "$src" "$dst"
+    chmod 0755 "$dst"
+    echo "+ $dst"
+}
+
+# 1. Binary lives in its own subdir so its run/log dirs are co-located.
+mkdir -p /home/applications/ecu-zb/run /home/applications/ecu-zb/log
+put_exec "$SRC/applications/ecu-zb" /home/applications/ecu-zb/ecu-zb || \
+    { echo "FATAL: ecu-zb binary missing"; exit 1; }
+
+# 2. Boot init script (BusyBox /etc/rcS.d style — runs at S53, after
+#    S50ecu_init has brought up /dev/reset and the radio kernel modules).
+put_exec "$SRC/etc-rcS-d/S53-ecu-zb" /etc/rcS.d/S53-ecu-zb || true
+
+# 3. First-time bring-up. main.exe is currently holding /dev/ttyO2 open;
+#    we need to swap it for a pty without losing telemetry. Pause
+#    monitor.exe so it doesn't immediately respawn main.exe, kill
+#    main.exe to release the UART, start ecu-zb, then resume monitor.exe
+#    so it reaps the zombie and respawns main.exe — which then opens
+#    the new pty.
+echo "--- swap UART under main.exe ---"
+
+if pidof monitor.exe >/dev/null 2>&1; then
+    killall -STOP monitor.exe || true
+    echo "  monitor.exe paused"
+fi
+
+if pidof main.exe >/dev/null 2>&1; then
+    killall main.exe || true
+    echo "  main.exe killed"
+fi
+
+# Give the kernel a moment to reap main.exe's UART fd.
+sleep 2
+
+# Stop any previous ecu-zb that might be lingering with stale state.
+if [ -x /etc/rcS.d/S53-ecu-zb ]; then
+    /etc/rcS.d/S53-ecu-zb stop 2>&1 | sed 's/^/  /'
+fi
+
+# Start ecu-zb fresh.
+if [ -x /etc/rcS.d/S53-ecu-zb ]; then
+    /etc/rcS.d/S53-ecu-zb start 2>&1 | sed 's/^/  /'
+fi
+
+# Resume monitor.exe — it'll wait() on the dead main.exe and respawn it
+# onto the new pty.
+if pidof monitor.exe >/dev/null 2>&1; then
+    killall -CONT monitor.exe || true
+    echo "  monitor.exe resumed"
+fi
+
+echo "=== $(date) done ==="

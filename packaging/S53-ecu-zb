@@ -1,0 +1,115 @@
+#!/bin/sh
+#
+# S53-ecu-zb — start the ecu-zb ZigBee proxy.
+#
+# main.exe is retired on this ECU (monitor.exe is a sleeper stub), so the
+# old reason to run early (claim /dev/ttyO2's pty before main.exe opened it)
+# no longer applies. ecu-zb autodetects the ZigBee coordinator PAN: it reads
+# the provisioned MAC config /etc/yuneng/ecu_eth0_mac.conf if present
+# (authoritative and readable from early boot), else falls back to the live
+# eth0 MAC. So boot ordering is NOT critical for the PAN. It runs at S53
+# (after S50ecu_init) only because nothing needs it earlier now and
+# /dev/reset + kernel modules are up for the radio hardware-reset bring-up.
+#
+# Install (one-time):
+#   ssh ecu 'cat > /etc/rcS.d/S53-ecu-zb' < S53-ecu-zb
+#   ssh ecu 'chmod +x /etc/rcS.d/S53-ecu-zb'
+
+BIN=/home/applications/ecu-zb/ecu-zb
+RUN=/home/applications/ecu-zb/run
+LOG=/home/applications/ecu-zb/log
+PIDFILE=$RUN/ecu-zb.pid
+ARGS="--proxy --tty /dev/ttyO2 --pty $RUN/zb-pty --tap-sock $RUN/pcap.sock --tap-tcp 0.0.0.0:19999 --invdriver-sock /var/run/inv-driver.sock"
+
+start() {
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "ecu-zb already running (pid $(cat "$PIDFILE"))"
+        return 0
+    fi
+    [ -x "$BIN" ] || { echo "$BIN missing or not executable"; return 1; }
+    mkdir -p "$RUN" "$LOG"
+
+    # Wrapped in `nohup sh -c "exec ..."` so the proxy survives both
+    # boot-time invocation (init(1) ancestor) and PHP-FPM-context
+    # invocation from the firmware-update endpoint. The plain `nohup
+    # BIN &` form gets reaped when the FPM request returns; the inner
+    # `exec` lets the wrapper sh be replaced by ecu-zb so we still
+    # capture the right PID for the pidfile.
+    nohup sh -c "echo \$\$ > '$PIDFILE'; exec '$BIN' $ARGS" \
+        </dev/null >> "$LOG/ecu-zb.log" 2>&1 &
+    sleep 1
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "ecu-zb started (pid $(cat "$PIDFILE"))"
+    else
+        echo "ecu-zb failed to stay up; check $LOG/ecu-zb.log"
+        return 1
+    fi
+
+    # Wait for the pty symlink to appear so the next init script
+    # (S50ecu_init → manager → monitor.exe → main.exe) finds it.
+    i=0
+    while [ $i -lt 20 ]; do
+        if [ -L /dev/ttyO2 ] && [ -e /dev/ttyO2.real ]; then
+            echo "ecu-zb ready: /dev/ttyO2 -> $(readlink /dev/ttyO2)"
+            return 0
+        fi
+        sleep 1
+        i=$((i+1))
+    done
+    echo "ecu-zb did not publish pty within 20s"
+    return 1
+}
+
+stop() {
+    # Step 1: signal via pidfile.
+    if [ -f "$PIDFILE" ]; then
+        PID=$(cat "$PIDFILE")
+        kill "$PID" 2>/dev/null
+        rm -f "$PIDFILE"
+    fi
+
+    # Step 2: kill any remaining ecu-zb --proxy processes (covers stale pidfile
+    # or a double-start scenario).  `pidof` is available on BusyBox; `pgrep` is not.
+    for P in $(pidof ecu-zb 2>/dev/null); do
+        kill "$P" 2>/dev/null
+    done
+
+    # Step 3: escalate with SIGKILL after a short grace period.
+    sleep 2
+    for P in $(pidof ecu-zb 2>/dev/null); do
+        kill -9 "$P" 2>/dev/null
+    done
+
+    # Step 4: wait for tcp :19999 to be free (up to 8 s) so the next `start`
+    # can bind without "address already in use".  `netstat -ltn` is BusyBox-safe.
+    i=0
+    while [ $i -lt 8 ]; do
+        if ! netstat -ltn 2>/dev/null | grep -q ':19999 '; then
+            break
+        fi
+        sleep 1
+        i=$((i+1))
+    done
+
+    echo "ecu-zb stopped"
+}
+
+status() {
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "running (pid $(cat "$PIDFILE"))"
+    else
+        echo "stopped"
+        exit 1
+    fi
+}
+
+case "$1" in
+    start)   start ;;
+    stop)    stop ;;
+    restart) stop; sleep 1; start ;;
+    status)  status ;;
+    *)
+        echo "usage: $0 {start|stop|restart|status}"
+        exit 2
+        ;;
+esac
