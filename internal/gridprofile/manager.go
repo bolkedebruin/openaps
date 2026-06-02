@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"sync"
 
-	"github.com/bolke/inv-driver/internal/buslock"
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/internal/buslock"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 // uidRe validates IPC uid values: exactly 12 hex chars (case-insensitive).

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 // macPattern matches a 6-octet colon-separated hex MAC (e.g.

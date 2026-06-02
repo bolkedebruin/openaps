@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/bolke/inv-driver/codec"
+	"github.com/bolkedebruin/openaps/codec"
 )
 
 // ErrUnsupported is returned when a code is not writable for the given

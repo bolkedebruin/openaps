@@ -12,10 +12,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bolke/inv-driver/codec"
-	"github.com/bolke/inv-driver/internal/events"
-	"github.com/bolke/inv-driver/internal/store"
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/codec"
+	"github.com/bolkedebruin/openaps/internal/events"
+	"github.com/bolkedebruin/openaps/internal/store"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 // Ingestor owns the store handle and turns wire events into rows.

@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/bolke/inv-driver/codec"
+	"github.com/bolkedebruin/openaps/codec"
 )
 
 // qs1aPageACodes is the set of APsystems 2-letter codes QS1A firmware does

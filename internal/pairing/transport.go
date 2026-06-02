@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 // CmdSender delivers one PairingCmd envelope to the bus backend (ecu-zb)

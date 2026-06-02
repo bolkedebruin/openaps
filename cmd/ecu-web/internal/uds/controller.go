@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 // Controller issues request/response control ops to inv-driver over a

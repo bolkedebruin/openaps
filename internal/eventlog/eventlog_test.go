@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/bolke/inv-driver/internal/store"
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/internal/store"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 func openStore(t *testing.T) *store.Store {

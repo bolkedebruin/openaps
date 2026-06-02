@@ -4897,7 +4897,7 @@ const file_busmgr_proto_rawDesc = "" +
 	"\x10ROLE_UNSPECIFIED\x10\x00\x12\r\n" +
 	"\tPUBLISHER\x10\x01\x12\x0e\n" +
 	"\n" +
-	"SUBSCRIBER\x10\x02B'Z%github.com/bolke/inv-driver/wire;wireb\x06proto3"
+	"SUBSCRIBER\x10\x02B+Z)github.com/bolkedebruin/openaps/wire;wireb\x06proto3"
 
 var (
 	file_busmgr_proto_rawDescOnce sync.Once

@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/bolke/inv-driver/codec"
-	"github.com/bolke/inv-driver/codec/codectest"
-	"github.com/bolke/inv-driver/internal/events"
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/codec"
+	"github.com/bolkedebruin/openaps/codec/codectest"
+	"github.com/bolkedebruin/openaps/internal/events"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 func TestFaultsFromReply_UnknownCmdReturnsNil(t *testing.T) {

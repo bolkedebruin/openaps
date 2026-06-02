@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 func telEnv(uid string) *wire.Envelope {

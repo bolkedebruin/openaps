@@ -5,7 +5,7 @@ syntax = "proto3";
 // per wire.MaxFrameBytes (64 KiB cap).
 package busmgr.v1;
 
-option go_package = "github.com/bolke/inv-driver/wire;wire";
+option go_package = "github.com/bolkedebruin/openaps/wire;wire";
 
 // Envelope is the single top-level message on every frame. Tag
 // numbers 1..9 are upstream (backend -> driver); 10..29 are reserved

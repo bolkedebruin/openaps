@@ -19,9 +19,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bolke/inv-driver/internal/buslock"
-	"github.com/bolke/inv-driver/internal/store"
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/internal/buslock"
+	"github.com/bolkedebruin/openaps/internal/store"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 // serialRe validates a 12-digit decimal inverter serial (the label id; the

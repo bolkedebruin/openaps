@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 // Fault-bit transition auditing.

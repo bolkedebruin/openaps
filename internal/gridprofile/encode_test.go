@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/bolke/inv-driver/codec"
+	"github.com/bolkedebruin/openaps/codec"
 )
 
 // DS3 model codes for testing.

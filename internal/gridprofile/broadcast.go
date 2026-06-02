@@ -9,7 +9,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/bolke/inv-driver/codec"
+	"github.com/bolkedebruin/openaps/codec"
 )
 
 // broadcastProtoValidated controls whether broadcast protection apply is

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 // commitRounds is the number of 0x22 broadcast commits sent per rekey

@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bolke/inv-driver/codec"
-	"github.com/bolke/inv-driver/cmd/ecu-web/internal/snapshot"
-	"github.com/bolke/inv-driver/internal/gridprofile"
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/codec"
+	"github.com/bolkedebruin/openaps/cmd/ecu-web/internal/snapshot"
+	"github.com/bolkedebruin/openaps/internal/gridprofile"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 // fakeProfiles answers the read ops (get_status, list_profiles, list_overlays)

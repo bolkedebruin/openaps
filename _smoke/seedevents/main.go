@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/bolke/inv-driver/internal/store"
+	"github.com/bolkedebruin/openaps/internal/store"
 )
 
 func main() {

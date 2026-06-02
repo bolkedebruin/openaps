@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bolke/inv-driver/codec"
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/codec"
+	"github.com/bolkedebruin/openaps/wire"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )

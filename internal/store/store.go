@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bolke/inv-driver/codec"
+	"github.com/bolkedebruin/openaps/codec"
 	_ "modernc.org/sqlite"
 )
 

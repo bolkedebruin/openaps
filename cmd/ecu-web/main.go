@@ -14,11 +14,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bolke/inv-driver/cmd/ecu-web/internal/auth"
-	"github.com/bolke/inv-driver/cmd/ecu-web/internal/httpserver"
-	"github.com/bolke/inv-driver/cmd/ecu-web/internal/snapshot"
-	"github.com/bolke/inv-driver/cmd/ecu-web/internal/uds"
-	"github.com/bolke/inv-driver/cmd/ecu-web/web"
+	"github.com/bolkedebruin/openaps/cmd/ecu-web/internal/auth"
+	"github.com/bolkedebruin/openaps/cmd/ecu-web/internal/httpserver"
+	"github.com/bolkedebruin/openaps/cmd/ecu-web/internal/snapshot"
+	"github.com/bolkedebruin/openaps/cmd/ecu-web/internal/uds"
+	"github.com/bolkedebruin/openaps/cmd/ecu-web/web"
 )
 
 // version is overridden at build time via -ldflags "-X main.version=...".

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bolke/inv-driver/codec"
+	"github.com/bolkedebruin/openaps/codec"
 )
 
 func TestSetOverlay_RejectsConflictBeforePersist(t *testing.T) {

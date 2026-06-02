@@ -11,7 +11,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 func main() {

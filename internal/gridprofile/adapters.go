@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 // IPCBroadcaster is a Broadcaster implementation that routes broadcast L2

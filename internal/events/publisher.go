@@ -11,7 +11,7 @@ import (
 	"log"
 	"sync"
 
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 // chanCap is the per-subscriber buffer. Telemetry flows at <1 Hz per

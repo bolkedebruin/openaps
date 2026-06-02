@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bolke/inv-driver/cmd/ecu-web/internal/snapshot"
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/cmd/ecu-web/internal/snapshot"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 // shortSock returns a UDS path short enough to fit the OS sun_path limit

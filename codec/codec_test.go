@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bolke/inv-driver/codec/codectest"
+	"github.com/bolkedebruin/openaps/codec/codectest"
 )
 
 // hx parses a hex string with optional whitespace into bytes.

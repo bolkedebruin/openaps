@@ -14,9 +14,9 @@ import (
 	"testing/fstest"
 	"time"
 
-	"github.com/bolke/inv-driver/cmd/ecu-web/internal/auth"
-	"github.com/bolke/inv-driver/cmd/ecu-web/internal/snapshot"
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/cmd/ecu-web/internal/auth"
+	"github.com/bolkedebruin/openaps/cmd/ecu-web/internal/snapshot"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 func newTestServer(t *testing.T) (*Server, http.Handler) {

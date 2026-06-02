@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/bolke/inv-driver/internal/gridprofile"
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/internal/gridprofile"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 // gridProfileErrMsg picks the most informative error string out of a

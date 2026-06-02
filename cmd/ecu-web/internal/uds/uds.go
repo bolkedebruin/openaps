@@ -12,8 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/bolke/inv-driver/cmd/ecu-web/internal/snapshot"
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/cmd/ecu-web/internal/snapshot"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 // Subscriber maintains a resilient SUBSCRIBER connection to inv-driver,

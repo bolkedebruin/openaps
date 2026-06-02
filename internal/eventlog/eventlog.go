@@ -6,8 +6,8 @@ package eventlog
 import (
 	"context"
 
-	"github.com/bolke/inv-driver/internal/store"
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/internal/store"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 // firehoseKinds are high-volume per-frame events that drown the

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 // peer is one live UDS connection as seen at Hello time.

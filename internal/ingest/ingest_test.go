@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bolke/inv-driver/codec/codectest"
-	"github.com/bolke/inv-driver/internal/events"
-	"github.com/bolke/inv-driver/internal/store"
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/codec/codectest"
+	"github.com/bolkedebruin/openaps/internal/events"
+	"github.com/bolkedebruin/openaps/internal/store"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 func newIngestor(t *testing.T) *Ingestor {

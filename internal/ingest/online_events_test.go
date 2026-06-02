@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bolke/inv-driver/internal/store"
+	"github.com/bolkedebruin/openaps/internal/store"
 )
 
 // kindsByUID returns the per-uid list of online/offline/sunrise/sundown

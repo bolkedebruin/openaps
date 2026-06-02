@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 func TestRegistryRecordRemove(t *testing.T) {

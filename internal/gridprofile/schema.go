@@ -13,7 +13,7 @@ import (
 var v1SchemaJSON []byte
 
 // schemaID is the $id declared in v1.schema.json.
-const schemaID = "https://github.com/bolke/inv-driver/gridprofile/v1.schema.json"
+const schemaID = "https://github.com/bolkedebruin/openaps/gridprofile/v1.schema.json"
 
 // compiled holds the pre-compiled v1 schema; populated by init().
 var compiled *jsonschema.Schema

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 // fakeController accepts one publisher connection, reads Hello +

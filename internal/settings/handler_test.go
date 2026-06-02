@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 func newHandler(t *testing.T) (*Handler, *Store) {

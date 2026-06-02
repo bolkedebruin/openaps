@@ -3,7 +3,7 @@ package ingest
 import (
 	"testing"
 
-	"github.com/bolke/inv-driver/codec"
+	"github.com/bolkedebruin/openaps/codec"
 )
 
 // TestReadingToProto_CarriesEveryCode guards the publish boundary: every code

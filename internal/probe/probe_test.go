@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bolke/inv-driver/codec"
-	"github.com/bolke/inv-driver/internal/events"
-	"github.com/bolke/inv-driver/internal/ingest"
-	"github.com/bolke/inv-driver/internal/ipc"
-	"github.com/bolke/inv-driver/internal/store"
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/codec"
+	"github.com/bolkedebruin/openaps/internal/events"
+	"github.com/bolkedebruin/openaps/internal/ingest"
+	"github.com/bolkedebruin/openaps/internal/ipc"
+	"github.com/bolkedebruin/openaps/internal/store"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 type fakeSender struct {

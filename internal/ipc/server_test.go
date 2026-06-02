@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bolke/inv-driver/internal/events"
-	"github.com/bolke/inv-driver/internal/ingest"
-	"github.com/bolke/inv-driver/internal/store"
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/internal/events"
+	"github.com/bolkedebruin/openaps/internal/ingest"
+	"github.com/bolkedebruin/openaps/internal/store"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 // socketPath returns a short UDS path inside t.TempDir(). On macOS the

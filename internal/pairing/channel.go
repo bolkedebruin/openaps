@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 // startChangeChannel moves the whole fleet to a new RF channel while keeping

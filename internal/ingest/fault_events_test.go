@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bolke/inv-driver/internal/store"
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/internal/store"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 func ds3Frame(setters map[string]bool) *wire.InverterFaults {

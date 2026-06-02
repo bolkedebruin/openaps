@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bolke/inv-driver/codec"
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/codec"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 func TestApplyTelemetry_DerivesCapLoadOnline(t *testing.T) {

@@ -22,11 +22,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bolke/inv-driver/cmd/ecu-web/internal/auth"
-	"github.com/bolke/inv-driver/cmd/ecu-web/internal/powerhistory"
-	"github.com/bolke/inv-driver/cmd/ecu-web/internal/snapshot"
-	"github.com/bolke/inv-driver/codec"
-	"github.com/bolke/inv-driver/wire"
+	"github.com/bolkedebruin/openaps/cmd/ecu-web/internal/auth"
+	"github.com/bolkedebruin/openaps/cmd/ecu-web/internal/powerhistory"
+	"github.com/bolkedebruin/openaps/cmd/ecu-web/internal/snapshot"
+	"github.com/bolkedebruin/openaps/codec"
+	"github.com/bolkedebruin/openaps/wire"
 )
 
 // Config parameterises the server.
