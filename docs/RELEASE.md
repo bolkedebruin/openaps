@@ -1,47 +1,44 @@
-# OpenAPS v1.0.3
+# OpenAPS v1.0.4
 
-Patch release in the `v1.0.x` stream. **Installer-critical bug-fix release** —
-the brownfield installer in `v1.0.0`–`v1.0.2` could not complete on a real
-APsystems ECU because of three BusyBox incompatibilities, each of which aborted
-the install before it did anything. No operator-facing behaviour changes once
-installed; the four services and wire formats are unchanged from `v1.0.2`.
+Patch release in the `v1.0.x` stream. **Completes the installer fix begun in
+`v1.0.3`.** v1.0.3 cleared the three BusyBox blockers that aborted the install
+early; a full end-to-end install on a real ECU then surfaced three more issues
+that only became reachable once the install got past those points. v1.0.4 fixes
+them, so the brownfield installer now runs to completion unattended. No
+operator-facing behaviour changes once installed.
 
-## Fixed — the installer now runs on a real ECU
+## Fixed — the installer now completes end-to-end
 
-All three were reproduced and the fixes validated on a live ECU-R-Pro
-(BusyBox v1.20.2, dropbear 2012.55, am335x / ARMv7, Linux 3.2):
+Found by running v1.0.3 all the way through on a live ECU-R-Pro:
 
-- **ELF pre-flight aborted on the first binary.** The binary check used
-  `od -An -c`, but the ECU's BusyBox `od` has no `-A` option (`od: invalid
-  option -- 'A'`) — so the magic read came back empty and the install FATAL'd
-  with `does not look like ELF (magic=)` at step 1, before backup or anything
-  else. Now uses plain `od -c` and globs for the `177ELF` magic.
+- **The orchestrator killed itself at step 7.** `assist` is launched by PHP
+  under lighttpd, so it lives in lighttpd's session. Step 7 does
+  `killall lighttpd` (the session leader) → the orchestrator received SIGHUP and
+  died *before* starting OpenAPS — install left half-done (stock UI gone, no
+  services). It now `trap '' HUP` (the same SIGHUP-immunity the init scripts
+  already use for the FPM context).
 
-- **Backup wrote a 0-byte archive.** Step 2 used `tar -cjf … -P`. BusyBox tar
-  has **no `-P` flag** (`invalid option -- 'P'`) and **no bzip2 compressor**
-  (it shells out to a missing `bzip2` and still exits 0 with an empty file).
-  Backup now uses **gzip** (`openaps-backup-<ts>.tar.gz`), backs up only paths
-  that exist, and hard-fails if the archive is empty. `openaps-rollback`
-  autodetects compression, so both new `.tar.gz` and any legacy `.tar.bz2`
-  backups restore.
+- **ecu-sunspec was installed to the wrong path.** Step 5 `mkdir`'d
+  `/home/applications/ecu-sunspec` as a directory and then installed the binary
+  to that same path, so `put_atomic`'s `mv` dropped it *inside* as
+  `ecu-sunspec/ecu-sunspec.new` — S99-sunspec then couldn't find its binary.
+  ecu-sunspec is a bare binary (like S99's `BIN=`); the stray `mkdir` is gone.
 
-- **Dropbear recovery path never bound :22.** `S98-dropbear` started dropbear
-  with `-R` (auto-generate host keys), which the bundled dropbear 2012.55 does
-  not support (`Unknown argument -R`). It now generates the host key with
-  `dropbearkey` and starts with an explicit `-r <hostkey>`.
+- **`slave485` blocked ecu-sunspec's Modbus port.** The stock `slave485` daemon
+  holds `:502`, so ecu-sunspec couldn't bind its SunSpec Modbus server. It's now
+  in the installer's disable set alongside the other stock daemons.
 
-## Also in this release
+## Carried over from v1.0.3 (the BusyBox blockers)
 
-- The installer now **reports its real version** — `VERSION` is stamped by
-  `make package-openaps` at build time (it was hard-coded `v1.0.0`, so the
-  `v1.0.1`/`v1.0.2` tarballs both identified themselves as `v1.0.0` in
-  `/etc/openaps/installed.json` and the install log).
-- **Docs:** the install `curl` examples (README, `INSTALL-ECU.md`) now include
-  `-H "Expect:"`. Without it, lighttpd 1.4.35 rejects the upload with
-  `417 Expectation Failed`. Also documents that the `{"res":0}` reply only means
-  "received + launched" — the real outcome is in `/home/openaps-install.log`.
+- ELF pre-flight used `od -An -c`; BusyBox `od` has no `-A` → fixed to `od -c`.
+- Backup used `tar -cjf -P`; BusyBox tar has no `-P` and no bzip2 compressor
+  (wrote a 0-byte archive) → fixed to gzip, only existing paths, fail-on-empty.
+- `S98-dropbear` used `-R` (unsupported by the bundled dropbear 2012.55) → fixed
+  to generate the host key with `dropbearkey` and start with `-r`.
+- Installer `VERSION` is stamped at package time; install `curl` examples carry
+  `-H "Expect:"` (lighttpd 1.4.35 returns 417 otherwise).
 
-## Compatibility matrix unchanged from v1.0.2
+## Compatibility matrix unchanged from v1.0.3
 
 | Family | Telemetry | Grid profile | Set-power | Pairing |
 |---|:--:|:--:|:--:|:--:|
@@ -55,30 +52,26 @@ All three were reproduced and the fixes validated on a live ECU-R-Pro
 ## Install / upgrade
 
 ```sh
-curl -H "Expect:" -F "file=@openaps-v1.0.3-ecu.tar.bz2" \
+curl -H "Expect:" -F "file=@openaps-v1.0.4-ecu.tar.bz2" \
      http://<ECU-IP>/index.php/management/exec_upgrade_ecu_app
 ```
 
-Watch `/home/openaps-install.log` on the ECU for progress. Roll back with
-`ssh root@<ECU-IP> /usr/local/bin/openaps-rollback`.
-
-Or, if you already have `v1.0.x` installed with SSH access, `make deploy-all
-ECU_HOST=root@<ECU-IP>` from a checkout at the `v1.0.3` tag and restart the four
-services.
+Watch `/home/openaps-install.log` on the ECU for progress (the install runs in
+the background after the HTTP reply returns; `{"res":0}` only means "received +
+launched"). Roll back with `ssh root@<ECU-IP> /usr/local/bin/openaps-rollback`.
 
 ## Still deferred
 
 - **Signed-tarball OTA** — `release.pub` ships at `/etc/openaps/release.pub`;
   `/api/upgrade` is not yet plumbed.
 - **Passkeys** — blocked on WebAuthn rpId / PSL constraints; needs a real DNS name.
-- **AES encrypt wire-up in ecu-zb** — inbound decrypt only; outbound primitive
-  ready, blocked on an on-wire test vector.
+- **AES encrypt wire-up in ecu-zb** — inbound decrypt only.
 - **v2:** Pi / .deb / systemd packaging; `bus-mgr ti-znp-zb` backend for
   off-the-shelf USB ZigBee radios.
 
 ## Artifacts
 
-- `openaps-v1.0.3-ecu.tar.bz2` — brownfield installer.
+- `openaps-v1.0.4-ecu.tar.bz2` — brownfield installer.
 - `SHA256SUMS`.
 
 ## Install caveats

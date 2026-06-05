@@ -19,6 +19,13 @@
 
 set -eu
 
+# This orchestrator is launched by PHP under lighttpd (the stock
+# exec_upgrade_ecu_app endpoint), so it is a member of lighttpd's session.
+# Step 7 kills lighttpd — the session leader — which would otherwise deliver
+# SIGHUP to this script and terminate it before it starts OpenAPS. Ignore HUP
+# so the install runs to completion regardless of who launched us.
+trap '' HUP
+
 # Stamped by `make package-openaps` (sed-substitutes this line with the build
 # version). The literal default is the fallback when run unpackaged.
 VERSION="__OPENAPS_VERSION__"
@@ -253,7 +260,11 @@ put_atomic() {
 }
 
 mkdir -p /home/applications/inv-driver /home/applications/ecu-zb/run /home/applications/ecu-zb/log
-mkdir -p /home/applications/ecu-web /home/applications/ecu-sunspec
+mkdir -p /home/applications/ecu-web
+# NOTE: ecu-sunspec is a BARE binary at /home/applications/ecu-sunspec (matching
+# S99-sunspec's BIN=). Do NOT mkdir that path — it would turn the binary's
+# destination into a directory and put_atomic's `mv` would drop the binary
+# inside it as ecu-sunspec/ecu-sunspec.new instead of installing it.
 mkdir -p /var/lib/inv-driver /var/lib/ecu-web
 
 put_atomic "$SRC/applications/inv-driver"  /home/applications/inv-driver/inv-driver    0755
@@ -306,6 +317,7 @@ usbTest
 quectel_monitor.exe
 4gmonitor.exe
 diagnosis_network
+slave485
 "
 
 for app in $DISABLE_SET; do
