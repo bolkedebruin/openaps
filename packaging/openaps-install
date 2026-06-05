@@ -553,4 +553,20 @@ echo "=== $(date) openaps-install $VERSION done ==="
 echo
 echo "To roll back: ssh root@<ECU-IP> /usr/local/bin/openaps-rollback"
 echo
+
+# Reboot to start OpenAPS cleanly. The services launched in step 7 share
+# assist's process group (PHP-under-lighttpd launched us) and were torn down
+# when lighttpd was killed above — step 7 only validates that they start; the
+# real run comes from init at boot, outside any web process group. Everything
+# is on disk (binaries, init scripts, settings, seeded inventory, grid
+# profiles), the operator's HTTP call already returned `res:0`, and the stock
+# stack is disabled, so the reboot is transparent and lands on working OpenAPS.
+echo "=== rebooting to start OpenAPS via init (console returns in ~1-2 min) ==="
+sync
+sleep 2
+# `reboot` is not on PATH in this context (it lives in /sbin); try explicit
+# paths and the BusyBox applet before falling back to the sysrq trigger.
+/sbin/reboot 2>/dev/null || reboot 2>/dev/null || busybox reboot 2>/dev/null || {
+    echo b > /proc/sysrq-trigger 2>/dev/null
+}
 exit 0

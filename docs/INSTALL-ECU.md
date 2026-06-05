@@ -87,7 +87,9 @@ automatic `Expect: 100-continue` on a large upload with `417 Expectation
 Failed`; disabling the header makes the POST go through.
 
 That endpoint returns `{"value":0,"res":0,"result":""}` immediately — the
-install runs asynchronously under PHP-FPM. **Watch the install log:**
+install runs asynchronously under PHP-FPM and **reboots the ECU at the end** to
+start OpenAPS cleanly via init (the console returns in ~1-2 minutes). **Watch
+the install log** (until the reboot):
 
 ```sh
 # Before the install removes lighttpd you can still use the stock web UI

@@ -129,11 +129,12 @@ The orchestrator script inside the tarball:
 - Takes a full backup of `/home/applications`, `/etc/rcS.d`, `/etc/init.d`, `/etc/yuneng`
 - Installs SSH (`dropbear`) **first** as a recovery path and verifies it's listening
 - Installs the four OpenAPS binaries + `S48..S99` init scripts
+- Seeds the inverter inventory from the stock DB and installs the base grid-profile library, so the console is populated on first boot (no waiting for the next dawn re-announce)
 - Disables every stock APsystems supervisor (cloud uplink, unauthenticated stock endpoints, the broken `mqtt.exe` CPU-spinner, the auto-update path) by moving their binaries out of the manager's launch path
-- Removes the stock `lighttpd` / CodeIgniter web UI **only after** SSH is confirmed reachable
-- Starts OpenAPS in dependency order and smoke-checks the result
+- Starts OpenAPS + smoke-checks it, installs the rollback CLI, then removes the stock `lighttpd` / CodeIgniter web UI **only after** SSH is confirmed reachable
+- **Reboots** so OpenAPS comes up cleanly via init — the console returns in ~1-2 minutes
 
-**3. Open `https://<ECU-IP>/`** in a browser, accept the self-signed cert, set an operator password, and start using the console.
+**3. Open `https://<ECU-IP>/`** in a browser (give the ECU ~1-2 minutes to reboot first), accept the self-signed cert, set an operator password, and start using the console.
 
 **Roll back at any time** with:
 
