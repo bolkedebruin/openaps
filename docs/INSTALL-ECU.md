@@ -78,9 +78,13 @@ Check your serial prefix on the device label or via the stock web UI before down
 ## The install command
 
 ```sh
-curl -X POST -F "file=@openaps-v1.0.0-ecu.tar.bz2" \
+curl -X POST -H "Expect:" -F "file=@openaps-<version>-ecu.tar.bz2" \
      http://<ECU-IP>/index.php/management/exec_upgrade_ecu_app
 ```
+
+The `-H "Expect:"` is required — the stock lighttpd 1.4.35 answers curl's
+automatic `Expect: 100-continue` on a large upload with `417 Expectation
+Failed`; disabling the header makes the POST go through.
 
 That endpoint returns `{"value":0,"res":0,"result":""}` immediately — the
 install runs asynchronously under PHP-FPM. **Watch the install log:**

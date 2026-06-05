@@ -106,15 +106,23 @@ where RF eavesdropping is the only realistic threat.
 **1. Download the installer tarball** from the [latest release](https://github.com/bolkedebruin/openaps/releases/latest):
 
 ```
-openaps-v1.0.0-ecu.tar.bz2
+openaps-<version>-ecu.tar.bz2
 ```
 
 **2. Push it to your ECU** over the stock firmware's existing local-upgrade endpoint:
 
 ```sh
-curl -F "file=@openaps-v1.0.0-ecu.tar.bz2" \
+curl -H "Expect:" \
+     -F "file=@openaps-<version>-ecu.tar.bz2" \
      http://<ECU-IP>/index.php/management/exec_upgrade_ecu_app
 ```
+
+> The `-H "Expect:"` is required: the stock ECU runs lighttpd 1.4.35, which
+> rejects curl's automatic `Expect: 100-continue` header on a large upload with
+> **`417 Expectation Failed`**. Disabling that header makes the POST succeed.
+> A `{"res":0}` reply means the tarball was received and unpacked and the
+> installer was launched — watch its progress in `/home/openaps-install.log` on
+> the ECU (the install runs in the background after the HTTP reply returns).
 
 The orchestrator script inside the tarball:
 

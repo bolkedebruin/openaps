@@ -3,7 +3,7 @@
 # openaps-rollback — restore the stock APsystems firmware from the
 # pre-install backup created by openaps-install. POSIX sh, BusyBox-safe.
 #
-# Usage: openaps-rollback [--backup /home/openaps-backup-<ts>.tar.bz2]
+# Usage: openaps-rollback [--backup /home/openaps-backup-<ts>.tar.gz]
 #
 # Reads /etc/openaps/installed.json to find the backup, stops OpenAPS
 # services, restores binaries + init scripts + /etc/yuneng over the live
@@ -28,7 +28,7 @@ if [ -z "$BACKUP" ] && [ -f "$STATE_DIR/last-backup" ]; then
 fi
 if [ -z "$BACKUP" ] || [ ! -f "$BACKUP" ]; then
     echo "FATAL: no backup found (looked in $INSTALLED, $STATE_DIR/last-backup)" >&2
-    echo "       pass --backup /home/openaps-backup-<ts>.tar.bz2" >&2
+    echo "       pass --backup /home/openaps-backup-<ts>.tar.gz" >&2
     exit 1
 fi
 
@@ -85,10 +85,12 @@ if [ -d "$STATE_DIR/disabled-init" ]; then
     done
 fi
 
-# 4. Untar the backup over the live rootfs. -P preserves absolute paths
-# the backup was created with.
+# 4. Untar the backup over the live rootfs. BusyBox tar stripped the leading
+# '/' from member names at creation, so restore with -C / to land files back
+# at their absolute paths. No -P (BusyBox tar has no such flag). Compression
+# is autodetected, so legacy .tar.bz2 and current .tar.gz backups both work.
 echo "  extracting backup ..."
-tar -xjf "$BACKUP" -P -C / 2>&1 | sed 's/^/  /' || {
+tar -xf "$BACKUP" -C / 2>&1 | sed 's/^/  /' || {
     echo "  WARN: tar extraction reported errors; check manually"
 }
 

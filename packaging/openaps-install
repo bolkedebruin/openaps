@@ -19,7 +19,10 @@
 
 set -eu
 
-VERSION="v1.0.0"
+# Stamped by `make package-openaps` (sed-substitutes this line with the build
+# version). The literal default is the fallback when run unpackaged.
+VERSION="__OPENAPS_VERSION__"
+case "$VERSION" in __OPENAPS_VERSION__|"") VERSION="dev" ;; esac
 LOG=/home/openaps-install.log
 STATE_DIR=/etc/openaps
 RELEASE_KEY=$STATE_DIR/release.pub
@@ -67,11 +70,14 @@ for bin in inv-driver ecu-zb ecu-web ecu-sunspec; do
         echo "FATAL: missing binary $p"
         exit 1
     fi
-    # ELF magic: 0x7f 'E' 'L' 'F'. Then EI_CLASS=1 (32), EI_DATA=1 (LE).
-    # We read 5 bytes with dd; busybox dd supports bs/count.
-    magic=$(dd if="$p" bs=1 count=4 2>/dev/null | od -An -c | tr -d ' \n')
+    # ELF magic: 0x7f 'E' 'L' 'F'. The ECU's BusyBox od (v1.20.x) does NOT
+    # support -A/-t/-N (only the flags in `od [-aBbcDdeFfHhIiLlOovXx]`), so we
+    # read 4 bytes and render with plain `od -c` — the one widely-available
+    # mode. 0x7f prints as the octal escape 177; a leading offset column is
+    # harmless because we glob-match the magic anywhere in the rendered line.
+    magic=$(dd if="$p" bs=1 count=4 2>/dev/null | od -c | tr -d ' \n')
     case "$magic" in
-        '\\177ELF'|'177ELF') : ;;
+        *177ELF*) : ;;
         *) echo "FATAL: $p does not look like ELF (magic=$magic)"; exit 1 ;;
     esac
     echo "  $bin: ELF ok"
@@ -85,19 +91,25 @@ mkdir -p "$STATE_DIR"
 echo "--- step 2: backup ---"
 
 BACKUP_STAMP=$(date -u +%Y%m%dT%H%M%S)
-BACKUP_PATH=/home/openaps-backup-${BACKUP_STAMP}.tar.bz2
+BACKUP_PATH=/home/openaps-backup-${BACKUP_STAMP}.tar.gz
 
-# Tar can fail on /etc/yuneng if absent; -P (preserve absolute paths) lets
-# rollback restore them where they were.
-tar -cjf "$BACKUP_PATH" -P \
-    /home/applications \
-    /etc/rcS.d \
-    /etc/init.d \
-    /etc/yuneng \
-    2>/dev/null || {
-        echo "FATAL: backup tar failed"
-        exit 1
-    }
+# BusyBox tar (v1.20.x) has NO -P flag and ships NO bzip2 *compressor* (only a
+# built-in bunzip2 for extraction) — `tar -cjf` would "succeed" with exit 0 yet
+# write a 0-byte file. So we compress with gzip (always present) and let
+# rollback restore with -C / (BusyBox strips the leading '/' from member names).
+# Only back up paths that exist, so a missing optional dir doesn't abort.
+BACKUP_SRC=""
+for d in /home/applications /etc/rcS.d /etc/init.d /etc/yuneng; do
+    [ -e "$d" ] && BACKUP_SRC="$BACKUP_SRC $d"
+done
+tar -czf "$BACKUP_PATH" $BACKUP_SRC 2>/dev/null || {
+    echo "FATAL: backup tar failed"
+    exit 1
+}
+if [ ! -s "$BACKUP_PATH" ]; then
+    echo "FATAL: backup archive is empty ($BACKUP_PATH) — refusing to proceed"
+    exit 1
+fi
 
 echo "$BACKUP_PATH" > "$STATE_DIR/last-backup"
 echo "  backup written: $BACKUP_PATH"

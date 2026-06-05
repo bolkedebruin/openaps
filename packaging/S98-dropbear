@@ -5,7 +5,9 @@
 # package without --with-dropbear).
 
 DBEAR=/usr/local/sbin/dropbear
+DBEARKEY=/usr/local/sbin/dropbearkey
 PORT=22
+HOSTKEY=/etc/dropbear/dropbear_rsa_host_key
 
 start() {
     [ -x "$DBEAR" ] || { echo "dropbear not installed"; return 0; }
@@ -14,9 +16,23 @@ start() {
         return 0
     fi
 
+    # The bundled dropbear is 2012.55 (Debian wheezy), which has NO -R flag
+    # (auto-generate host keys). Generate the RSA host key up front with
+    # dropbearkey and start with an explicit -r — portable across every
+    # dropbear version we ship.
+    if [ ! -f "$HOSTKEY" ]; then
+        mkdir -p "$(dirname "$HOSTKEY")"
+        if [ -x "$DBEARKEY" ]; then
+            "$DBEARKEY" -t rsa -f "$HOSTKEY" >/dev/null 2>&1 \
+                || { echo "dropbearkey failed to generate $HOSTKEY"; return 1; }
+        else
+            echo "dropbearkey missing and no host key present"; return 1
+        fi
+    fi
+
     # Simple daemonize. Works fine at boot (init(1) ancestor) and on a
     # normal shell.
-    "$DBEAR" -R -E -p "$PORT" >/dev/null 2>&1 &
+    "$DBEAR" -E -p "$PORT" -r "$HOSTKEY" >/dev/null 2>&1 &
     sleep 1
     if pidof dropbear >/dev/null 2>&1; then
         echo "dropbear started on :$PORT"
@@ -28,7 +44,7 @@ start() {
     # the default daemonize is killed when the request ends. Run dropbear
     # in foreground inside an nohup'd subshell — the SIGHUP-immune wrapper
     # keeps it alive after the parent returns.
-    nohup sh -c "exec '$DBEAR' -F -E -p '$PORT'" </dev/null >/dev/null 2>&1 &
+    nohup sh -c "exec '$DBEAR' -F -E -p '$PORT' -r '$HOSTKEY'" </dev/null >/dev/null 2>&1 &
     sleep 1
     if pidof dropbear >/dev/null 2>&1; then
         echo "dropbear started on :$PORT (detached fallback)"

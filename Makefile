@@ -303,7 +303,7 @@ package-openaps: build-all-arm $(DROPBEAR_DIR)/dropbear
 	@mkdir -p $(BUILD_DIR)/pkgroot-openaps/update/rcS.d
 	@mkdir -p $(BUILD_DIR)/pkgroot-openaps/update/etc-openaps
 	@mkdir -p $(BUILD_DIR)/pkgroot-openaps/update/etc-inv-driver
-	@cp packaging/openaps-install $(BUILD_DIR)/pkgroot-openaps/update_localweb/assist
+	@sed 's|^VERSION="__OPENAPS_VERSION__"|VERSION="$(VERSION)"|' packaging/openaps-install > $(BUILD_DIR)/pkgroot-openaps/update_localweb/assist
 	@chmod 0755 $(BUILD_DIR)/pkgroot-openaps/update_localweb/assist
 	@cp $(INV_DRIVER_ARMV7)  $(BUILD_DIR)/pkgroot-openaps/update/applications/inv-driver
 	@cp $(ECU_ZB_ARMV7)      $(BUILD_DIR)/pkgroot-openaps/update/applications/ecu-zb
