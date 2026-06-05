@@ -98,4 +98,8 @@ tar -xf "$BACKUP" -C / 2>&1 | sed 's/^/  /' || {
 echo "=== $(date) rollback complete; rebooting in 5s ==="
 sync
 sleep 5
-reboot
+# `reboot` may not be on PATH in this context (it lives in /sbin); try explicit
+# paths and the BusyBox applet before falling back to the sysrq trigger.
+/sbin/reboot 2>/dev/null || reboot 2>/dev/null || busybox reboot 2>/dev/null || {
+    echo b > /proc/sysrq-trigger 2>/dev/null
+}

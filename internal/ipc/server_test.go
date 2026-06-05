@@ -409,9 +409,9 @@ func TestServer_SubscriberReceivesReplayOnAttach(t *testing.T) {
 	if err := st.UpsertInverterFromTelemetry(ctx0, "000000abcdef", 0x1234, "qs1a", "QS1A", 100); err != nil {
 		t.Fatalf("seed telemetry: %v", err)
 	}
-	if err := st.UpsertInverterInfo(ctx0, store.InverterInfoUpdate{
+	if _, err := st.UpsertInverterInfo(ctx0, store.InverterInfoUpdate{
 		UID: "000000abcdef", TsMs: 100, ShortAddr: 0x1234,
-		Model: &mc, SoftwareVer: &sw, Phase: &ph, Bound: &tt,
+		ModelCode: &mc, SoftwareVer: &sw, Phase: &ph, Bound: &tt,
 	}); err != nil {
 		t.Fatalf("seed info: %v", err)
 	}

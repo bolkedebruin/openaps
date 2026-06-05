@@ -386,9 +386,9 @@ func TestUpsertInverterInfo_ModelOnly_LeavesOthersNull(t *testing.T) {
 	ctx := context.Background()
 	s := openTestStore(t)
 
-	if err := s.UpsertInverterInfo(ctx, InverterInfoUpdate{
+	if _, err := s.UpsertInverterInfo(ctx, InverterInfoUpdate{
 		UID: "u1", TsMs: 100, ShortAddr: 0x5011,
-		Model: u32p(0x24),
+		ModelCode: u32p(0x24),
 	}); err != nil {
 		t.Fatalf("first upsert: %v", err)
 	}
@@ -410,9 +410,9 @@ func TestUpsertInverterInfo_ModelOnly_LeavesOthersNull(t *testing.T) {
 		}
 	}
 
-	if err := s.UpsertInverterInfo(ctx, InverterInfoUpdate{
+	if _, err := s.UpsertInverterInfo(ctx, InverterInfoUpdate{
 		UID: "u1", TsMs: 200, ShortAddr: 0x5011,
-		Model: u32p(0x36),
+		ModelCode: u32p(0x36),
 	}); err != nil {
 		t.Fatalf("second upsert: %v", err)
 	}
@@ -437,9 +437,9 @@ func TestUpsertInverterInfo_AllFields(t *testing.T) {
 	ctx := context.Background()
 	s := openTestStore(t)
 
-	if err := s.UpsertInverterInfo(ctx, InverterInfoUpdate{
+	if _, err := s.UpsertInverterInfo(ctx, InverterInfoUpdate{
 		UID: "u2", TsMs: 1000, ShortAddr: 0xC459,
-		Model: u32p(0x29), SoftwareVer: u32p(12345), Phase: u32p(3),
+		ModelCode: u32p(0x29), SoftwareVer: u32p(12345), Phase: u32p(3),
 		Bound: boolp(true), RptOff: boolp(false),
 	}); err != nil {
 		t.Fatalf("upsert: %v", err)
@@ -469,16 +469,16 @@ func TestUpsertInverterInfo_PartialPreservesPrior(t *testing.T) {
 	s := openTestStore(t)
 
 	// Seed full row.
-	if err := s.UpsertInverterInfo(ctx, InverterInfoUpdate{
+	if _, err := s.UpsertInverterInfo(ctx, InverterInfoUpdate{
 		UID: "u3", TsMs: 500, ShortAddr: 0x1111,
-		Model: u32p(0x24), SoftwareVer: u32p(7000), Phase: u32p(1),
+		ModelCode: u32p(0x24), SoftwareVer: u32p(7000), Phase: u32p(1),
 		Bound: boolp(true), RptOff: boolp(false),
 	}); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 
 	// Update only Bound.
-	if err := s.UpsertInverterInfo(ctx, InverterInfoUpdate{
+	if _, err := s.UpsertInverterInfo(ctx, InverterInfoUpdate{
 		UID: "u3", TsMs: 600, ShortAddr: 0x1111,
 		Bound: boolp(false),
 	}); err != nil {
@@ -506,12 +506,12 @@ func TestUpsertInverterInfo_ShortAddrUpdates(t *testing.T) {
 	ctx := context.Background()
 	s := openTestStore(t)
 
-	if err := s.UpsertInverterInfo(ctx, InverterInfoUpdate{
+	if _, err := s.UpsertInverterInfo(ctx, InverterInfoUpdate{
 		UID: "u4", TsMs: 1, ShortAddr: 0x1111,
 	}); err != nil {
 		t.Fatalf("first: %v", err)
 	}
-	if err := s.UpsertInverterInfo(ctx, InverterInfoUpdate{
+	if _, err := s.UpsertInverterInfo(ctx, InverterInfoUpdate{
 		UID: "u4", TsMs: 2, ShortAddr: 0x2222,
 	}); err != nil {
 		t.Fatalf("second: %v", err)

@@ -334,6 +334,10 @@ package-openaps: build-all-arm $(DROPBEAR_DIR)/dropbear
 	@chmod 0644 $(BUILD_DIR)/pkgroot-openaps/update/etc-openaps/*
 	@cp packaging/settings.json.sample $(BUILD_DIR)/pkgroot-openaps/update/etc-inv-driver/settings.json.sample
 	@chmod 0644 $(BUILD_DIR)/pkgroot-openaps/update/etc-inv-driver/settings.json.sample
+	@mkdir -p $(BUILD_DIR)/pkgroot-openaps/update/gridprofiles/profiles
+	@cp gridprofiles-seed/profiles/*.json $(BUILD_DIR)/pkgroot-openaps/update/gridprofiles/profiles/
+	@chmod 0644 $(BUILD_DIR)/pkgroot-openaps/update/gridprofiles/profiles/*.json
+	@echo "  +grid profiles: $$(ls gridprofiles-seed/profiles/*.json | wc -l | tr -d ' ')"
 	@cp packaging/openaps-rollback $(BUILD_DIR)/pkgroot-openaps/update/openaps-rollback
 	@chmod 0755 $(BUILD_DIR)/pkgroot-openaps/update/openaps-rollback
 	@# Deterministic tarball: name-sorted file list, fixed mtime via

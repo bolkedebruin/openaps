@@ -1,44 +1,53 @@
-# OpenAPS v1.0.4
+# OpenAPS v1.0.5
 
-Patch release in the `v1.0.x` stream. **Completes the installer fix begun in
-`v1.0.3`.** v1.0.3 cleared the three BusyBox blockers that aborted the install
-early; a full end-to-end install on a real ECU then surfaced three more issues
-that only became reachable once the install got past those points. v1.0.4 fixes
-them, so the brownfield installer now runs to completion unattended. No
-operator-facing behaviour changes once installed.
+Patch release in the `v1.0.x` stream. **Completes the brownfield first-run
+experience.** v1.0.4 made the installer run to completion; a full migration then
+showed that a fresh install came up with an empty inverter inventory and no grid
+profiles until the next dawn. v1.0.5 provisions both at install time, so the
+console is populated immediately after a mid-day migration.
 
-## Fixed — the installer now completes end-to-end
+## New — first-run provisioning
 
-Found by running v1.0.3 all the way through on a live ECU-R-Pro:
+- **`inv-driver import-stock`** seeds the inverter inventory from the stock
+  APsystems DB. OpenAPS's ecu-zb is a transparent splice (it doesn't generate
+  polls); the installer disables `main.exe`, so inv-driver becomes the sole
+  poller — but it only polls inverters already in its inventory, and a running
+  fleet doesn't spontaneously re-announce mid-day. The new subcommand imports the
+  paired list from `/home/database.db` (`id` table: serial → uid, short_address,
+  model → family) so the 0xBB poll targets the real fleet right away. It's
+  idempotent, validates serials, range-checks short_address/model code, and never
+  ages back a row already carrying live telemetry. The installer runs it
+  best-effort in step 5 (`import-stock -stock-db /home/database.db`); failure
+  never aborts the install, and the passive dawn-announce path remains the
+  fallback for newly paired inverters.
 
-- **The orchestrator killed itself at step 7.** `assist` is launched by PHP
-  under lighttpd, so it lives in lighttpd's session. Step 7 does
-  `killall lighttpd` (the session leader) → the orchestrator received SIGHUP and
-  died *before* starting OpenAPS — install left half-done (stock UI gone, no
-  services). It now `trap '' HUP` (the same SIGHUP-immunity the init scripts
-  already use for the FPM context).
+- **Base grid-profile library is now bundled.** The installer drops the
+  `gridprofiles-seed/profiles/` set (66 grid codes — EN50438, LFSM-O, Denmark-1,
+  C10-26, default-50Hz, the AS/NZS and UL families, …) into
+  `/var/lib/inv-driver/gridprofiles/profiles/`, so `gp_base_profiles` is
+  populated and the console has selectable profiles on first boot. Operator
+  overlays (a separate dir) are untouched.
 
-- **ecu-sunspec was installed to the wrong path.** Step 5 `mkdir`'d
-  `/home/applications/ecu-sunspec` as a directory and then installed the binary
-  to that same path, so `put_atomic`'s `mv` dropped it *inside* as
-  `ecu-sunspec/ecu-sunspec.new` — S99-sunspec then couldn't find its binary.
-  ecu-sunspec is a bare binary (like S99's `BIN=`); the stray `mkdir` is gone.
+## Fixed — rollback
 
-- **`slave485` blocked ecu-sunspec's Modbus port.** The stock `slave485` daemon
-  holds `:502`, so ecu-sunspec couldn't bind its SunSpec Modbus server. It's now
-  in the installer's disable set alongside the other stock daemons.
+- `openaps-rollback` called bare `reboot`, which isn't on `PATH` in the rollback
+  context (`reboot: command not found`) — the restore ran but the box never
+  rebooted. Now tries `/sbin/reboot`, then the BusyBox applet, then the sysrq
+  trigger.
+- The step-3 abort hint in the installer still printed the old
+  `tar -xjf … -P -C /` recovery command; corrected to `tar -xzf … -C /` to match
+  the gzip backup.
 
-## Carried over from v1.0.3 (the BusyBox blockers)
+## Carried over (v1.0.3 / v1.0.4 installer fixes)
 
-- ELF pre-flight used `od -An -c`; BusyBox `od` has no `-A` → fixed to `od -c`.
-- Backup used `tar -cjf -P`; BusyBox tar has no `-P` and no bzip2 compressor
-  (wrote a 0-byte archive) → fixed to gzip, only existing paths, fail-on-empty.
-- `S98-dropbear` used `-R` (unsupported by the bundled dropbear 2012.55) → fixed
-  to generate the host key with `dropbearkey` and start with `-r`.
-- Installer `VERSION` is stamped at package time; install `curl` examples carry
-  `-H "Expect:"` (lighttpd 1.4.35 returns 417 otherwise).
+ELF preflight uses `od -c` (BusyBox `od` has no `-A`); gzip backup (no `-P`, no
+bzip2 compressor; fails on empty); `S98-dropbear` starts with `-r` + a
+`dropbearkey`-generated host key (no `-R`); `assist` ignores SIGHUP so it
+survives killing lighttpd at step 7; ecu-sunspec installs as a bare binary;
+`slave485` is disabled so ecu-sunspec can bind `:502`; install `curl` examples
+carry `-H "Expect:"`; the installer stamps its real version.
 
-## Compatibility matrix unchanged from v1.0.3
+## Compatibility matrix unchanged from v1.0.4
 
 | Family | Telemetry | Grid profile | Set-power | Pairing |
 |---|:--:|:--:|:--:|:--:|
@@ -52,26 +61,23 @@ Found by running v1.0.3 all the way through on a live ECU-R-Pro:
 ## Install / upgrade
 
 ```sh
-curl -H "Expect:" -F "file=@openaps-v1.0.4-ecu.tar.bz2" \
+curl -H "Expect:" -F "file=@openaps-v1.0.5-ecu.tar.bz2" \
      http://<ECU-IP>/index.php/management/exec_upgrade_ecu_app
 ```
 
-Watch `/home/openaps-install.log` on the ECU for progress (the install runs in
-the background after the HTTP reply returns; `{"res":0}` only means "received +
-launched"). Roll back with `ssh root@<ECU-IP> /usr/local/bin/openaps-rollback`.
+Watch `/home/openaps-install.log`. Roll back with
+`ssh root@<ECU-IP> /usr/local/bin/openaps-rollback`.
 
 ## Still deferred
 
-- **Signed-tarball OTA** — `release.pub` ships at `/etc/openaps/release.pub`;
-  `/api/upgrade` is not yet plumbed.
+- **Signed-tarball OTA** — `release.pub` ships; `/api/upgrade` not yet plumbed.
 - **Passkeys** — blocked on WebAuthn rpId / PSL constraints; needs a real DNS name.
 - **AES encrypt wire-up in ecu-zb** — inbound decrypt only.
-- **v2:** Pi / .deb / systemd packaging; `bus-mgr ti-znp-zb` backend for
-  off-the-shelf USB ZigBee radios.
+- **v2:** Pi / .deb / systemd packaging; `bus-mgr ti-znp-zb` USB-radio backend.
 
 ## Artifacts
 
-- `openaps-v1.0.4-ecu.tar.bz2` — brownfield installer.
+- `openaps-v1.0.5-ecu.tar.bz2` — brownfield installer.
 - `SHA256SUMS`.
 
 ## Install caveats

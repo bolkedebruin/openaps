@@ -8,6 +8,8 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -28,6 +30,14 @@ type Store struct {
 // Open opens or creates the SQLite database at path and applies the
 // embedded schema. Caller must Close.
 func Open(ctx context.Context, path string) (*Store, error) {
+	// Create the parent directory so every caller gets a usable DB without
+	// repeating the MkdirAll. A bare filename (no directory) yields ".",
+	// which already exists, so MkdirAll is a no-op there.
+	if dir := filepath.Dir(path); dir != "" {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, fmt.Errorf("store.Open: mkdir %q: %w", dir, err)
+		}
+	}
 	dsn := "file:" + path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
@@ -136,56 +146,109 @@ ON CONFLICT(uid) DO UPDATE SET
 	return nil
 }
 
-// InverterInfoUpdate carries a partial update from an InverterInfo
-// envelope. Pointer-typed fields are optional: nil leaves the existing
-// column value untouched.
+// InverterInfoUpdate carries a partial update to an inverter's identity
+// columns, keyed by UID. It serves two callers — the live InverterInfo
+// telemetry path and the stock-DB import — which differ only in two
+// behaviours captured by the Family/Model and PreserveLastSeen fields.
+// Pointer-typed fields are optional: nil leaves the existing column value
+// untouched on an update.
 type InverterInfoUpdate struct {
 	UID         string
 	TsMs        int64
 	ShortAddr   uint16
-	Model       *uint32
+	Family      *string // nil leaves family untouched (telemetry path passes nil)
+	Model       *string // nil leaves model untouched (telemetry path passes nil)
+	ModelCode   *uint32
 	SoftwareVer *uint32
 	Phase       *uint32
 	Bound       *bool
 	RptOff      *bool
+	// PreserveLastSeen keeps last_seen_ms (and paired_at_ms) from a
+	// pre-existing row on UPDATE instead of overwriting with TsMs. The
+	// import path sets this so seeding identity does not age back a row
+	// already carrying live telemetry; the telemetry path leaves it false
+	// so each frame advances last_seen_ms.
+	PreserveLastSeen bool
 }
 
 // UpsertInverterInfo upserts the inverters row keyed by UID with the
-// optional identity / pair-state columns. On INSERT, paired_at_ms is
-// set to TsMs; on UPDATE it is preserved. last_seen_ms and short_addr
-// always take the supplied value (matching UpsertInverterFromTelemetry
-// semantics). Nil pointer fields fall back to the existing column via
-// COALESCE so a partial update never clobbers a known value with NULL.
-func (s *Store) UpsertInverterInfo(ctx context.Context, in InverterInfoUpdate) error {
-	const q = `
+// optional identity / pair-state columns. On INSERT, paired_at_ms and
+// last_seen_ms are set to TsMs. On UPDATE, last_seen_ms takes TsMs unless
+// PreserveLastSeen is set (then the existing value is kept). short_addr is
+// updated only when the supplied value is a known-good non-zero address, so
+// a stale/unbound import never resets a live, pollable short_addr to 0 and a
+// pairing/telemetry-learned address is never clobbered by an absent one. Nil
+// pointer fields fall back to the existing column via COALESCE so a partial
+// update never clobbers a known value with NULL. Reports whether a new row
+// was created.
+func (s *Store) UpsertInverterInfo(ctx context.Context, in InverterInfoUpdate) (inserted bool, err error) {
+	// Wrap the existence probe and the upsert in one transaction so the
+	// insert-vs-update decision the caller reports stays consistent with the
+	// row actually written, even if another writer races between the probe
+	// and the upsert. WAL mode is unaffected — the tx commits to the WAL.
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, fmt.Errorf("UpsertInverterInfo: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Determine insert-vs-update up front so callers can report an exact
+	// summary.
+	var existing string
+	switch perr := tx.QueryRowContext(ctx,
+		`SELECT uid FROM inverters WHERE uid = ?`, in.UID).Scan(&existing); perr {
+	case nil:
+		inserted = false
+	case sql.ErrNoRows:
+		inserted = true
+	default:
+		return false, fmt.Errorf("UpsertInverterInfo: probe: %w", perr)
+	}
+
+	// last_seen_ms on UPDATE: overwrite with the supplied ts, or keep the
+	// existing value when the caller asked to preserve it.
+	lastSeenUpdate := "excluded.last_seen_ms"
+	if in.PreserveLastSeen {
+		lastSeenUpdate = "inverters.last_seen_ms"
+	}
+
+	// short_addr on UPDATE is guarded: only a non-zero supplied address
+	// replaces the stored one. Zero means "unknown/unbound" and must not
+	// overwrite a learned, pollable address.
+	q := `
 INSERT INTO inverters (
     uid, short_addr, family, model, paired_at_ms, last_seen_ms,
     model_code, software_version, phase, zigbee_bound, turned_off_rpt
 )
-VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(uid) DO UPDATE SET
-    short_addr       = excluded.short_addr,
-    last_seen_ms     = excluded.last_seen_ms,
+    short_addr       = CASE WHEN excluded.short_addr != 0
+                            THEN excluded.short_addr ELSE inverters.short_addr END,
+    family           = COALESCE(excluded.family, inverters.family),
+    model            = COALESCE(excluded.model,  inverters.model),
+    last_seen_ms     = ` + lastSeenUpdate + `,
     model_code       = COALESCE(?, inverters.model_code),
     software_version = COALESCE(?, inverters.software_version),
     phase            = COALESCE(?, inverters.phase),
     zigbee_bound     = COALESCE(?, inverters.zigbee_bound),
     turned_off_rpt   = COALESCE(?, inverters.turned_off_rpt)
 `
-	mc := nullableUint32Ptr(in.Model)
+	mc := nullableUint32Ptr(in.ModelCode)
 	sv := nullableUint32Ptr(in.SoftwareVer)
 	ph := nullableUint32Ptr(in.Phase)
 	zb := nullableBoolPtr(in.Bound)
 	to := nullableBoolPtr(in.RptOff)
-	_, err := s.db.ExecContext(ctx, q,
-		in.UID, int(in.ShortAddr), in.TsMs, in.TsMs,
+	if _, err := tx.ExecContext(ctx, q,
+		in.UID, int(in.ShortAddr), nullablePtr(in.Family), nullablePtr(in.Model), in.TsMs, in.TsMs,
 		mc, sv, ph, zb, to,
 		mc, sv, ph, zb, to,
-	)
-	if err != nil {
-		return fmt.Errorf("UpsertInverterInfo: %w", err)
+	); err != nil {
+		return false, fmt.Errorf("UpsertInverterInfo: %w", err)
 	}
-	return nil
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("UpsertInverterInfo: commit: %w", err)
+	}
+	return inserted, nil
 }
 
 // SetInverterEncrypted records the last-observed L1 frame type for an
@@ -828,6 +891,16 @@ func nullable(s string) any {
 		return nil
 	}
 	return s
+}
+
+// nullablePtr returns nil for a nil pointer or an empty-string pointee,
+// otherwise the string. Used for optional identity columns (family/model)
+// where nil means "leave the existing column untouched".
+func nullablePtr(p *string) any {
+	if p == nil || *p == "" {
+		return nil
+	}
+	return *p
 }
 
 // nullableFloat treats 0.0 as SQL NULL. A v0 expedient — it conflates

@@ -449,13 +449,14 @@ func (in *Ingestor) handleInverterInfo(ctx context.Context, info *wire.InverterI
 		UID:         uid,
 		TsMs:        tsMs,
 		ShortAddr:   uint16(info.GetShortAddr()),
-		Model:       info.ModelCode,
+		ModelCode:   info.ModelCode,
 		SoftwareVer: info.SoftwareVersion,
 		Phase:       info.Phase,
 		Bound:       info.ZigbeeBound,
 		RptOff:      info.TurnedOffRpt,
 	}
-	return in.S.UpsertInverterInfo(ctx, upd)
+	_, err := in.S.UpsertInverterInfo(ctx, upd)
+	return err
 }
 
 // handleRawFrame parses the L1 envelope once, then dispatches the L2

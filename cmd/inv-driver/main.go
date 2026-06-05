@@ -63,6 +63,8 @@ func main() {
 		err = runDumpEvents(args)
 	case "set-power":
 		err = runSetPower(args)
+	case "import-stock":
+		err = runImportStock(args)
 	case "-h", "--help", "help":
 		usage(os.Stdout)
 		return
@@ -85,6 +87,7 @@ subcommands:
   dump-telemetry   Print the latest sample per inverter as JSON lines.
   dump-events      Print rows from the events table as JSON lines.
   set-power        Dispatch an inverter max-power command (per-UID or broadcast).
+  import-stock     Seed the inverter inventory from the stock APsystems DB.
 
 Run 'inv-driver <subcommand> -h' for subcommand-specific flags.
 `)

@@ -1,6 +1,7 @@
 package codec
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 )
@@ -100,6 +101,37 @@ func FamilyForModelString(model string) Family {
 		return FamilyQT2
 	}
 	return FamilyUnknown
+}
+
+// ModelLabelForCode returns the human model string for a numeric model
+// code — the same labels the codec emits on the proto wire for
+// Telemetry.Model ("QS1A", "DS3", "YC600", …). Codes without a pinned
+// label render as "unknown(0xNN)". It is the by-code companion to
+// Reply.ModelLabel (which keys off the reply Cmd byte).
+func ModelLabelForCode(modelCode uint8) string {
+	switch modelCode {
+	case ModelYC600Old, ModelYC600:
+		return "YC600"
+	case ModelYC600B:
+		return "YC600B"
+	case ModelYC1000:
+		return "YC1000"
+	case ModelQS1:
+		return "QS1"
+	case ModelQS1A:
+		return "QS1A"
+	case ModelDS3:
+		return "DS3"
+	case ModelDS3H:
+		return "DS3H"
+	case ModelDS3L:
+		return "DS3L"
+	case ModelExt36:
+		return "DS3"
+	case ModelQT2:
+		return "QT2"
+	}
+	return fmt.Sprintf("unknown(0x%02X)", modelCode)
 }
 
 // BroadcastModelCodes returns the sorted list of model codes that have

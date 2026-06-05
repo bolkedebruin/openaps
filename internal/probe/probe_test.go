@@ -66,8 +66,8 @@ func TestProbe_IteratesNullModelCode_Only(t *testing.T) {
 	// uidB: model_code + software_version populated — should be skipped.
 	mc := uint32(0x24)
 	sw := uint32(3067)
-	if err := s.UpsertInverterInfo(ctx, store.InverterInfoUpdate{
-		UID: "uidB", TsMs: 1, ShortAddr: 0x2222, Model: &mc, SoftwareVer: &sw,
+	if _, err := s.UpsertInverterInfo(ctx, store.InverterInfoUpdate{
+		UID: "uidB", TsMs: 1, ShortAddr: 0x2222, ModelCode: &mc, SoftwareVer: &sw,
 	}); err != nil {
 		t.Fatalf("seed B: %v", err)
 	}
@@ -189,8 +189,8 @@ func TestProbe_ColdStart_EndToEnd(t *testing.T) {
 	}
 	mc := uint32(0x24)
 	sw := uint32(3067)
-	if err := st.UpsertInverterInfo(ctx, store.InverterInfoUpdate{
-		UID: "uidKnown", TsMs: 1, ShortAddr: 0x2222, Model: &mc, SoftwareVer: &sw,
+	if _, err := st.UpsertInverterInfo(ctx, store.InverterInfoUpdate{
+		UID: "uidKnown", TsMs: 1, ShortAddr: 0x2222, ModelCode: &mc, SoftwareVer: &sw,
 	}); err != nil {
 		t.Fatalf("seed known: %v", err)
 	}

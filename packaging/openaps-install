@@ -9,6 +9,7 @@
 #   ../update/dropbear/ (binaries + optional authorized_keys)
 #   ../update/etc-openaps/release.pub
 #   ../update/etc-inv-driver/settings.json.sample
+#   ../update/gridprofiles/profiles/*.json
 #   ../update/openaps-rollback
 #
 # Invoked by the stock APsystems lighttpd/CodeIgniter endpoint
@@ -175,7 +176,7 @@ if [ -d "$SRC/dropbear" ] && [ -f "$SRC/dropbear/dropbear" ]; then
         DROPBEAR_INSTALLED=1
     else
         echo "FATAL: dropbear failed to bind :22 — aborting BEFORE touching lighttpd"
-        echo "  rollback: tar -xjf $BACKUP_PATH -P -C /"
+        echo "  rollback: tar -xzf $BACKUP_PATH -C /"
         exit 1
     fi
 else
@@ -190,7 +191,7 @@ else
         DROPBEAR_INSTALLED=1
     else
         echo "FATAL: no dropbear bundle, no SSH on :22, no telnet on :23 — no recovery path"
-        echo "  rollback: tar -xjf $BACKUP_PATH -P -C /"
+        echo "  rollback: tar -xzf $BACKUP_PATH -C /"
         exit 1
     fi
 fi
@@ -277,6 +278,39 @@ for s in S48-inv-driver S53-ecu-zb S54-ecu-web S99-sunspec; do
         put_atomic "$SRC/rcS.d/$s" "/etc/rcS.d/$s" 0755
     fi
 done
+
+# Provision the base grid-profile library so the console has profiles to select
+# on first boot. inv-driver loads these from <gridprofiles-dir>/profiles/ at
+# startup; without them gp_base_profiles is empty and nothing is selectable.
+# Operator overlays live in a separate overlays/ dir and are not touched here.
+if [ -d "$SRC/gridprofiles/profiles" ]; then
+    mkdir -p /var/lib/inv-driver/gridprofiles/profiles
+    n=0
+    for f in "$SRC"/gridprofiles/profiles/*.json; do
+        [ -f "$f" ] || continue
+        cp -f "$f" /var/lib/inv-driver/gridprofiles/profiles/ && n=$((n+1))
+    done
+    chmod 0644 /var/lib/inv-driver/gridprofiles/profiles/*.json 2>/dev/null || true
+    echo "  + grid profiles -> /var/lib/inv-driver/gridprofiles/profiles ($n)"
+fi
+
+# Seed inv-driver's inverter inventory from the stock APsystems DB so a
+# mid-day brownfield migration polls the already-paired fleet immediately
+# instead of waiting for the next dawn re-announce. Runs here (not in step 4)
+# because it needs both the provisioned settings AND the installed binary.
+# Best-effort: a failure must never abort the install.
+STOCK_DB=/home/database.db
+INV_DRIVER_BIN=/home/applications/inv-driver/inv-driver
+if [ -f "$STOCK_DB" ] && [ -x "$INV_DRIVER_BIN" ]; then
+    echo "  seeding inventory from $STOCK_DB"
+    if "$INV_DRIVER_BIN" import-stock -stock-db "$STOCK_DB" -db /var/lib/inv-driver/state.db; then
+        :
+    else
+        echo "WARN: import-stock failed (continuing install; inverters will seed on next announce)"
+    fi
+else
+    echo "  no $STOCK_DB (or binary missing) — skipping inventory seed"
+fi
 
 # ---------------------------------------------------------------------------
 # Step 6 — DISABLE stock supervisors (init removal via binary removal)
