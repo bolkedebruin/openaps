@@ -21,11 +21,13 @@
 set -eu
 
 # This orchestrator is launched by PHP under lighttpd (the stock
-# exec_upgrade_ecu_app endpoint), so it is a member of lighttpd's session.
-# Step 7 kills lighttpd — the session leader — which would otherwise deliver
-# SIGHUP to this script and terminate it before it starts OpenAPS. Ignore HUP
-# so the install runs to completion regardless of who launched us.
-trap '' HUP
+# exec_upgrade_ecu_app endpoint), so it is a member of lighttpd's process
+# group. Killing lighttpd tears down that group and would otherwise deliver a
+# signal to this script and terminate it. Ignore HUP and TERM so the install
+# runs to completion regardless of who launched us. (KILL is uncatchable, which
+# is why the lighttpd removal is deliberately the LAST step — see step 10.)
+# This is re-armed alongside the lock-cleanup EXIT trap once $STATE_DIR exists.
+trap '' HUP TERM
 
 # Stamped by `make package-openaps` (sed-substitutes this line with the build
 # version). The literal default is the fallback when run unpackaged.
@@ -51,6 +53,22 @@ if [ ! -d "$SRC" ]; then
     echo "FATAL: payload directory $SRC not found"
     exit 1
 fi
+
+# Single-instance guard. exec_upgrade_ecu_app is unauthenticated and stays
+# callable for the whole install (steps 7-9 take ~40s, mostly the step-8
+# sleep 30). A second POST would spawn a concurrent assist that races the first
+# on service start, killall, the $DISABLED_LIST rewrite and the installed.json
+# write. mkdir is atomic on this fs, so it serves as the lock. Clean it up on a
+# normal EXIT; keep ignoring HUP/TERM (merged with the trap above) so a signal
+# from lighttpd's process-group teardown still can't kill us mid-install.
+mkdir -p "$STATE_DIR"
+LOCK=$STATE_DIR/install.lock
+if ! mkdir "$LOCK" 2>/dev/null; then
+    echo "FATAL: another openaps-install is running ($LOCK)"
+    exit 1
+fi
+trap '' HUP TERM
+trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 
 # ---------------------------------------------------------------------------
 # Step 1 — pre-flight
@@ -90,8 +108,6 @@ for bin in inv-driver ecu-zb ecu-web ecu-sunspec; do
     esac
     echo "  $bin: ELF ok"
 done
-
-mkdir -p "$STATE_DIR"
 
 # ---------------------------------------------------------------------------
 # Step 2 — backup
@@ -175,14 +191,14 @@ if [ -d "$SRC/dropbear" ] && [ -f "$SRC/dropbear/dropbear" ]; then
         echo "  dropbear listening on :22 — recovery path verified"
         DROPBEAR_INSTALLED=1
     else
-        echo "FATAL: dropbear failed to bind :22 — aborting BEFORE touching lighttpd"
+        echo "FATAL: dropbear failed to bind :22 — aborting BEFORE removing lighttpd"
         echo "  rollback: tar -xzf $BACKUP_PATH -C /"
         exit 1
     fi
 else
     # No bundled dropbear. A pre-existing SSH on :22 OR telnet on :23 is
     # acceptable as a recovery path — either lets the operator log in and
-    # roll back if the lighttpd removal in step 7 leaves the box wedged.
+    # roll back if the lighttpd removal in step 10 leaves the box wedged.
     if netstat -ltn 2>/dev/null | grep -q ':22 '; then
         echo "  dropbear already listening on :22 (no bundle supplied)"
         DROPBEAR_INSTALLED=1
@@ -367,8 +383,12 @@ for app in $DISABLE_SET; do
     if [ -f "$BIN_PATH" ]; then
         # Move into a holding dir so rollback can restore even if backup
         # tar can't find them (defensive — backup already captured them).
+        # Copy-then-remove so a failed cross-device move can't delete the only
+        # copy; these are also in the step-2 tarball, but keep it consistent
+        # with the lighttpd handling in step 10.
         mkdir -p "$STATE_DIR/disabled-bin"
-        mv "$BIN_PATH" "$STATE_DIR/disabled-bin/$app" 2>/dev/null || rm -f "$BIN_PATH"
+        cp -f "$BIN_PATH" "$STATE_DIR/disabled-bin/$app"
+        rm -f "$BIN_PATH"
         echo "$app" >> "$DISABLED_LIST"
         echo "  disabled: $app"
     fi
@@ -383,43 +403,9 @@ for child in main.exe client control_client gprs mqtt.exe phone_server lancommCl
 done
 
 # ---------------------------------------------------------------------------
-# Step 7 — remove lighttpd / CodeIgniter (stock UI)
+# Step 7 — start OpenAPS services
 # ---------------------------------------------------------------------------
-echo "--- step 7: remove lighttpd / CodeIgniter ---"
-
-if [ "$DROPBEAR_INSTALLED" -ne 1 ]; then
-    echo "FATAL: dropbear not verified; refusing to touch lighttpd"
-    exit 1
-fi
-
-if pidof lighttpd >/dev/null 2>&1; then
-    killall -q lighttpd 2>/dev/null || true
-    sleep 1
-    killall -q -9 lighttpd 2>/dev/null || true
-fi
-
-# lighttpd is launched by manager via system() from /usr/local/lighttpd/sbin/.
-# Disable by removing the binary.
-LIGHTTPD_BIN=/usr/local/lighttpd/sbin/lighttpd
-if [ -f "$LIGHTTPD_BIN" ]; then
-    mkdir -p "$STATE_DIR/disabled-bin"
-    mv "$LIGHTTPD_BIN" "$STATE_DIR/disabled-bin/lighttpd" 2>/dev/null || rm -f "$LIGHTTPD_BIN"
-    echo "lighttpd" >> "$DISABLED_LIST"
-    echo "  disabled: lighttpd"
-fi
-
-# Some firmwares additionally start lighttpd from rcS.d. Disable any such entry.
-for f in /etc/rcS.d/S*lighttpd* /etc/init.d/lighttpd* /etc/init.d/S*lighttpd*; do
-    [ -e "$f" ] || continue
-    mkdir -p "$STATE_DIR/disabled-init"
-    mv "$f" "$STATE_DIR/disabled-init/$(basename "$f")" 2>/dev/null || rm -f "$f"
-    echo "  disabled init: $f"
-done
-
-# ---------------------------------------------------------------------------
-# Step 8 — start OpenAPS services
-# ---------------------------------------------------------------------------
-echo "--- step 8: start OpenAPS services ---"
+echo "--- step 7: start OpenAPS services ---"
 
 for s in S48-inv-driver S53-ecu-zb S54-ecu-web S99-sunspec; do
     init=/etc/rcS.d/$s
@@ -430,9 +416,9 @@ for s in S48-inv-driver S53-ecu-zb S54-ecu-web S99-sunspec; do
 done
 
 # ---------------------------------------------------------------------------
-# Step 9 — smoke verify
+# Step 8 — smoke verify
 # ---------------------------------------------------------------------------
-echo "--- step 9: smoke verify ---"
+echo "--- step 8: smoke verify ---"
 
 SMOKE_OK=1
 
@@ -467,9 +453,9 @@ if [ -f /home/applications/ecu-zb/log/ecu-zb.log ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Step 10 — audit + install rollback CLI
+# Step 9 — audit + install rollback CLI
 # ---------------------------------------------------------------------------
-echo "--- step 10: audit + rollback CLI ---"
+echo "--- step 9: audit + rollback CLI ---"
 
 if [ -f "$SRC/openaps-rollback" ]; then
     put_atomic "$SRC/openaps-rollback" /usr/local/bin/openaps-rollback 0755
@@ -493,6 +479,75 @@ mv "$STATE_DIR/installed.json.new" "$STATE_DIR/installed.json"
 echo "  + $STATE_DIR/installed.json"
 
 echo "$TS $VERSION installed (smoke_ok=$SMOKE_OK backup=$BACKUP_PATH)" >> "$LOG"
+
+# ---------------------------------------------------------------------------
+# Step 10 — remove lighttpd / CodeIgniter (stock UI) — DELIBERATELY LAST
+# ---------------------------------------------------------------------------
+# assist is a member of lighttpd's process group (PHP under lighttpd launched
+# us). Killing lighttpd tears down that group, and a KILL/group teardown is
+# uncatchable — the trap at the top can't save us. So this is the LAST thing we
+# do: by now OpenAPS is installed, started, smoke-verified, the rollback CLI is
+# in place and installed.json is written, so a death at the killall below loses
+# nothing. ecu-web (:443), ecu-sunspec (:502) and stock lighttpd (:80) don't
+# collide, so OpenAPS was started in step 7 while lighttpd was still up. The
+# trade-off is that the stock unauthenticated surface (exec_upgrade_ecu_app et
+# al.) stays live for the ~40s of steps 7-9; the single-instance lock taken at
+# the top prevents a second POST racing a concurrent install through that window.
+#
+# We also neutralize lighttpd on disk BEFORE the killall: move the binary aside
+# and disable any rcS.d/init.d entry first. That way, even if assist dies at the
+# killall, lighttpd is already gone from the boot path and won't come back.
+echo "--- step 10: remove lighttpd / CodeIgniter ---"
+
+if [ "$DROPBEAR_INSTALLED" -ne 1 ]; then
+    echo "FATAL: dropbear not verified; refusing to touch lighttpd"
+    exit 1
+fi
+
+# lighttpd is launched by manager via system() from /usr/local/lighttpd/sbin/.
+# Neutralize on disk first: move the binary aside so the next boot's spawn
+# no-ops even if we're killed at the killall below.
+LIGHTTPD_BIN=/usr/local/lighttpd/sbin/lighttpd
+if [ -f "$LIGHTTPD_BIN" ]; then
+    mkdir -p "$STATE_DIR/disabled-bin"
+    # Non-destructive: copy first, and only remove the original once the copy
+    # lands. /usr/local/lighttpd is NOT in the step-2 backup tarball and
+    # openaps-rollback restores lighttpd ONLY from disabled-bin/, so a plain
+    # `mv ... || rm -f` that lost the copy (e.g. a cross-device mv that failed)
+    # would leave the stock UI permanently unrecoverable. No `|| rm -f`
+    # fallback: under set -e a copy failure aborts rather than deleting the
+    # sole binary.
+    cp -f "$LIGHTTPD_BIN" "$STATE_DIR/disabled-bin/lighttpd"
+    rm -f "$LIGHTTPD_BIN"
+    # This lands in $DISABLED_LIST after installed.json was already written in
+    # step 9, so installed.json's disabled_apps omits lighttpd. Harmless:
+    # openaps-rollback restores from disabled-bin/, not from installed.json.
+    echo "lighttpd" >> "$DISABLED_LIST"
+    echo "  disabled: lighttpd"
+fi
+
+# Some firmwares additionally start lighttpd from rcS.d. Disable any such entry
+# now, also before the killall.
+for f in /etc/rcS.d/S*lighttpd* /etc/init.d/lighttpd* /etc/init.d/S*lighttpd*; do
+    [ -e "$f" ] || continue
+    mkdir -p "$STATE_DIR/disabled-init"
+    mv "$f" "$STATE_DIR/disabled-init/$(basename "$f")" 2>/dev/null || rm -f "$f"
+    echo "  disabled init: $f"
+done
+
+# Binary and boot entries are gone; NOW kill the running process. If this kills
+# assist too, the install is already complete and persistent. Emit the marker
+# first so a successful-but-killed run is distinguishable in the log from one
+# that died earlier in step 10. Release the lock here too: a SIGKILL at the
+# killall would skip the EXIT trap and leave a stale lock that blocks re-runs,
+# and the concurrency window is already over by this point.
+echo "  install complete and persistent; killing lighttpd (assist may not survive)"
+rmdir "$LOCK" 2>/dev/null || true
+if pidof lighttpd >/dev/null 2>&1; then
+    killall -q lighttpd 2>/dev/null || true
+    sleep 1
+    killall -q -9 lighttpd 2>/dev/null || true
+fi
 
 echo "=== $(date) openaps-install $VERSION done ==="
 echo
