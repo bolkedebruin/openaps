@@ -17,13 +17,16 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/bolkedebruin/openaps/internal/atomicfile"
 )
 
-// DefaultAuthorizedKeys is the authorized_keys file recoveryd owns when no
-// -authorized-keys flag is given. It is root's key file for the openaps
-// dropbear server.
+// DefaultAuthorizedKeys is the last-ditch authorized_keys path recoveryd
+// owns when no -authorized-keys flag is given AND the managed user's home
+// dir cannot be resolved. Normally path() resolves the managed user's real
+// home (root's home is /home/root on the ECU, not /root), so this constant
+// is only the fallback for a failed/empty lookup.
 const DefaultAuthorizedKeys = "/root/.ssh/authorized_keys"
 
 // DefaultDropbearHostKey is the RSA host key dropbear reads. recoveryd
@@ -57,14 +60,57 @@ type Provider struct {
 	dropbearKeyGen func(path string) error
 	// lookupUser resolves a host user. nil uses os/user.Lookup.
 	lookupUser func(name string) (*user.User, error)
+
+	// resolveOnce guards the one-time user lookup so path() resolves once,
+	// not on every readKeys/writeKeys/ensureSSHDir call, and is safe to call
+	// from the UDS server goroutine (stateResp) concurrently with a Manager
+	// mutation that holds m.mu.
+	resolveOnce sync.Once
+	// resolvedPath memoizes the resolved authorized_keys path. Written only
+	// under resolveOnce, then read-only.
+	resolvedPath string
 }
 
-// path returns the resolved authorized_keys path.
+// managedUser is the unix user whose ~/.ssh/authorized_keys recoveryd owns.
+// It is ChownUser when set (the host/Pi provider) and "root" otherwise (the
+// openaps dropbear case).
+func (p *Provider) managedUser() string {
+	if p.ChownUser != "" {
+		return p.ChownUser
+	}
+	return "root"
+}
+
+// path returns the resolved authorized_keys path. An explicit
+// AuthorizedKeysPath is used verbatim. Otherwise recoveryd resolves the
+// managed user's home dir (root's real home is /home/root on the ECU, not
+// /root) and returns <home>/.ssh/authorized_keys, falling back to
+// DefaultAuthorizedKeys only if the lookup fails or the home is empty. The
+// result is resolved once under resolveOnce so a tight read/write loop does
+// not re-parse /etc/passwd and a concurrent UDS Status call cannot race the
+// memo write.
 func (p *Provider) path() string {
-	if p.AuthorizedKeysPath == "" {
+	if p.AuthorizedKeysPath != "" {
+		return p.AuthorizedKeysPath
+	}
+	p.resolveOnce.Do(func() {
+		p.resolvedPath = p.resolveDefaultPath()
+	})
+	return p.resolvedPath
+}
+
+// resolveDefaultPath looks up the managed user's home dir and joins
+// .ssh/authorized_keys onto it, falling back to DefaultAuthorizedKeys.
+func (p *Provider) resolveDefaultPath() string {
+	lu := p.lookupUser
+	if lu == nil {
+		lu = user.Lookup
+	}
+	u, err := lu(p.managedUser())
+	if err != nil || u == nil || u.HomeDir == "" {
 		return DefaultAuthorizedKeys
 	}
-	return p.AuthorizedKeysPath
+	return filepath.Join(u.HomeDir, ".ssh", "authorized_keys")
 }
 
 // resolveOwner returns the uid/gid the .ssh dir and authorized_keys must

@@ -30,7 +30,7 @@ func main() {
 	log.SetPrefix("recoveryd: ")
 
 	fs := flag.NewFlagSet("recoveryd", flag.ExitOnError)
-	authorizedKeys := fs.String("authorized-keys", recoveryd.DefaultAuthorizedKeys, "authorized_keys file recoveryd owns (source of truth)")
+	authorizedKeys := fs.String("authorized-keys", "", "authorized_keys file recoveryd owns (source of truth); empty resolves the managed user's ~/.ssh/authorized_keys (root by default)")
 	chownUser := fs.String("chown-user", "", "host user to own .ssh + authorized_keys (empty = root; set for the host provider)")
 	manageDropbear := fs.Bool("manage-dropbear", true, "ensure the dropbear RSA host key (set false for a host sshd / Pi)")
 	socketPath := fs.String("socket", defaultSocket, "local UDS path (root-only, mode 0600)")

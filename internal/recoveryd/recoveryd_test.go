@@ -1,6 +1,7 @@
 package recoveryd
 
 import (
+	"errors"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -314,6 +315,109 @@ func TestBootNoDropbearSkipsHostKey(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "hk")); !os.IsNotExist(err) {
 		t.Errorf("host key was created despite manage-dropbear=false: %v", err)
+	}
+}
+
+// lookupTo returns a lookupUser hook that yields a user with the given home
+// dir for any username, so path() resolution can be exercised hermetically.
+func lookupTo(home string) func(string) (*user.User, error) {
+	return func(name string) (*user.User, error) {
+		return &user.User{Uid: "0", Gid: "0", HomeDir: home, Username: name}, nil
+	}
+}
+
+func TestPathResolvesManagedUserHome(t *testing.T) {
+	// The core regression: with no explicit AuthorizedKeysPath, recoveryd must
+	// resolve the managed user's REAL home (/home/root on the ECU), not the
+	// hardcoded /root. dropbear authenticates against ~root/.ssh/authorized_keys.
+	prov := &Provider{lookupUser: lookupTo("/home/root")}
+	if got, want := prov.path(), "/home/root/.ssh/authorized_keys"; got != want {
+		t.Errorf("path() = %q, want %q", got, want)
+	}
+}
+
+func TestPathResolvesChownUserHome(t *testing.T) {
+	// With ChownUser set (the host/Pi provider), path() resolves that user's
+	// home, not root's.
+	prov := &Provider{ChownUser: "ops", lookupUser: lookupTo("/home/ops")}
+	if got, want := prov.path(), "/home/ops/.ssh/authorized_keys"; got != want {
+		t.Errorf("path() = %q, want %q", got, want)
+	}
+}
+
+func TestPathExplicitWins(t *testing.T) {
+	// An explicit AuthorizedKeysPath is used verbatim and the lookup is never
+	// consulted.
+	explicit := "/custom/place/authorized_keys"
+	prov := &Provider{
+		AuthorizedKeysPath: explicit,
+		lookupUser: func(string) (*user.User, error) {
+			t.Fatalf("lookupUser must not be called when AuthorizedKeysPath is set")
+			return nil, nil
+		},
+	}
+	if got := prov.path(); got != explicit {
+		t.Errorf("path() = %q, want %q", got, explicit)
+	}
+}
+
+func TestPathFallsBackOnLookupFailure(t *testing.T) {
+	// A failed lookup (or an empty home) falls back to DefaultAuthorizedKeys
+	// so recoveryd still has a key file to manage rather than panicking.
+	prov := &Provider{lookupUser: func(string) (*user.User, error) {
+		return nil, errors.New("no such user")
+	}}
+	if got := prov.path(); got != DefaultAuthorizedKeys {
+		t.Errorf("path() on lookup failure = %q, want %q", got, DefaultAuthorizedKeys)
+	}
+	// An empty home dir is treated the same as a failure.
+	prov2 := &Provider{lookupUser: lookupTo("")}
+	if got := prov2.path(); got != DefaultAuthorizedKeys {
+		t.Errorf("path() on empty home = %q, want %q", got, DefaultAuthorizedKeys)
+	}
+}
+
+func TestPathMemoizedSingleLookup(t *testing.T) {
+	// path() must resolve once and reuse, not re-parse /etc/passwd on every
+	// readKeys/writeKeys call in a tight loop.
+	calls := 0
+	prov := &Provider{lookupUser: func(name string) (*user.User, error) {
+		calls++
+		return &user.User{Uid: "0", Gid: "0", HomeDir: "/home/root", Username: name}, nil
+	}}
+	for i := 0; i < 5; i++ {
+		_ = prov.path()
+	}
+	if calls != 1 {
+		t.Errorf("lookupUser called %d times, want 1 (memoized)", calls)
+	}
+}
+
+func TestAddKeyOperatesOnResolvedHome(t *testing.T) {
+	// Manager-level regression: with no explicit path, AddKey/readKeys/writeKeys
+	// must all operate on <resolved home>/.ssh/authorized_keys. Inject a temp
+	// dir as the fake home so the test is hermetic, then assert AddKey actually
+	// creates that file (and NOT a /root one).
+	home := t.TempDir()
+	prov := &Provider{
+		ManageDropbear: false,
+		lookupUser:     lookupTo(home),
+	}
+	m := NewManager(prov)
+	if _, err := m.AddKey(keyA, "alice"); err != nil {
+		t.Fatalf("AddKey: %v", err)
+	}
+	resolved := filepath.Join(home, ".ssh", "authorized_keys")
+	if _, err := os.Stat(resolved); err != nil {
+		t.Fatalf("AddKey did not create the resolved authorized_keys %s: %v", resolved, err)
+	}
+	keys := mustKeys(t, m)
+	if len(keys) != 1 || keys[0].Fingerprint != fpOf(t, keyA) {
+		t.Errorf("readKeys did not read back from the resolved home: %+v", keys)
+	}
+	b, _ := os.ReadFile(resolved)
+	if !strings.Contains(string(b), "alice") {
+		t.Errorf("key not written to resolved home file: %q", string(b))
 	}
 }
 

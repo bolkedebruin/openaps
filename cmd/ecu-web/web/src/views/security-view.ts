@@ -13,9 +13,10 @@ import { fmtTime } from "../format.ts";
  * operator confirms their password, which the server requires within a short
  * window before it accepts the DELETE.
  *
- * Provider semantics: "openaps" renders /root/.ssh/authorized_keys (the ECU
- * console manages dropbear access); "host" renders a host user's keys; "off"
- * is a no-op (recoveryd is not managing any keys).
+ * Provider semantics: "openaps" renders root's ~/.ssh/authorized_keys (the
+ * ECU console manages dropbear access; root's real home is /home/root there);
+ * "host" renders a host user's keys; "off" is a no-op (recoveryd is not
+ * managing any keys).
  */
 export class SecurityView extends LitElement {
   static properties = {
@@ -161,9 +162,25 @@ export class SecurityView extends LitElement {
     .dialog .err { color: var(--err); font-size: 12px; margin-top: 8px; }
   `;
 
+  // onVisible re-fetches when the tab becomes visible again so a list left
+  // open in a background tab does not show a stale authorized_keys snapshot.
+  private onVisible = () => {
+    if (document.visibilityState === "visible") void this.load();
+  };
+
+  // connectedCallback re-fetches on every connect. The shell switches views
+  // by swapping the active element's template, so returning to the security
+  // route reconnects a fresh element and reloads the current key list — the
+  // list always reflects the file on disk on each visit, never a stale cache.
   connectedCallback(): void {
     super.connectedCallback();
     void this.load();
+    document.addEventListener("visibilitychange", this.onVisible);
+  }
+
+  disconnectedCallback(): void {
+    document.removeEventListener("visibilitychange", this.onVisible);
+    super.disconnectedCallback();
   }
 
   private async load() {

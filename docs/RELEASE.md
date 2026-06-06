@@ -1,3 +1,47 @@
+# OpenAPS v1.0.13
+
+`recoveryd` now manages root's **real** home dir, fixing a wrong-file bug that
+silently desynced the Security page from the file dropbear actually reads — and
+could lock an operator out of SSH.
+
+## Fixed
+
+- **recoveryd resolves the managed user's real `~/.ssh/authorized_keys`.** On the
+  ECU root's home per `/etc/passwd` is `/home/root`, so dropbear authenticates
+  against `/home/root/.ssh/authorized_keys`. recoveryd previously hardcoded
+  `/root/.ssh/authorized_keys` (a different file), so the web console listed a
+  stale key set, "added a key, success but nothing written" reflected a write to
+  the wrong file, and removing/moving the real file left recoveryd unable to
+  restore access — an SSH lockout. `Provider.path()` now uses an explicit
+  `-authorized-keys` verbatim when given, otherwise resolves the managed user's
+  home (`-chown-user` when set, else `root`) via the injectable user lookup and
+  returns `<home>/.ssh/authorized_keys`, resolved once under a `sync.Once` so a
+  tight read/write loop does not re-parse `/etc/passwd` and the UDS `Status` call
+  (which reads the path without the Manager mutex) cannot race a concurrent
+  `AddKey`. `/root/.ssh/authorized_keys` remains only as a
+  last-ditch fallback when the lookup fails or the home is empty. `readKeys`,
+  `writeKeys`, `ensureSSHDir` and `resolveOwner` all agree on the resolved path.
+- **`recoveryd` `-authorized-keys` flag now defaults to empty.** Empty resolves
+  the managed user's `~/.ssh/authorized_keys` (root by default); the `S97-recoveryd`
+  init script drops the hardcoded `-authorized-keys /root/.ssh/authorized_keys`
+  and starts recoveryd with just `-manage-dropbear=true -socket …`, so it targets
+  root's real home. The host/Pi init passes `-chown-user` instead.
+- **Installer writes the bundled operator key to root's real home.**
+  `openaps-install` derives `ROOT_HOME` from `/etc/passwd`
+  (`awk -F: '$1=="root"{print $6}'`, fallback `/root`) and appends to
+  `$ROOT_HOME/.ssh/authorized_keys` (0600, `.ssh` 0700), BusyBox-safe. No path is
+  hardcoded, so the seeded recovery key lands where dropbear reads it.
+- **Security view re-fetches on every visit.** `<security-view>` reloads the key
+  list on each connect and whenever the tab becomes visible again, so navigating
+  away and back (or returning to a backgrounded tab) always reflects the current
+  file on disk rather than a stale snapshot.
+- **Install-time socket readiness check matches the init script.** `openaps-install`
+  now probes `/var/run/recoveryd.sock`, the same path `S97-recoveryd` publishes, so
+  a healthy start on a box where `/var/run` is not a symlink to `/run` no longer
+  prints a spurious "socket absent" warning.
+
+---
+
 # OpenAPS v1.0.12
 
 Applying a grid profile from the web console no longer times out. A base-profile

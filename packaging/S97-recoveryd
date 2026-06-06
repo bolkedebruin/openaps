@@ -2,26 +2,27 @@
 #
 # S97-recoveryd — start recoveryd BEFORE S98-dropbear so the .ssh dir and
 # the dropbear host key are in place before dropbear binds :22. recoveryd
-# is the single writer of /root/.ssh/authorized_keys, which is itself the
+# is the single writer of root's ~/.ssh/authorized_keys, which is itself the
 # source of truth — recoveryd reads and rewrites it directly and serves a
-# root-only local UDS for the web console.
+# root-only local UDS for the web console. No -authorized-keys flag is
+# passed, so recoveryd resolves root's REAL home dir from /etc/passwd
+# (/home/root on the ECU) — the file dropbear actually authenticates against.
 #
 # Install:
 #   ssh ecu 'cat > /etc/rcS.d/S97-recoveryd' < S97-recoveryd
 #   ssh ecu 'chmod +x /etc/rcS.d/S97-recoveryd'
 #
 # State paths:
-#   /root/.ssh/authorized_keys       key file (mode 0600), the source of truth
+#   ~root/.ssh/authorized_keys       key file (mode 0600), the source of truth
 #   /var/run/recoveryd.sock          UDS endpoint (mode 0600, root-only)
 #   /home/applications/recoveryd/recoveryd.log   stdout/stderr
 
 BIN=/home/applications/recoveryd/recoveryd
-AUTHKEYS=/root/.ssh/authorized_keys
 SOCK=/var/run/recoveryd.sock
 RUN=/home/applications/recoveryd
 LOG=$RUN/recoveryd.log
 PIDFILE=$RUN/recoveryd.pid
-ARGS="-authorized-keys $AUTHKEYS -manage-dropbear=true -socket $SOCK"
+ARGS="-manage-dropbear=true -socket $SOCK"
 
 start() {
     if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then

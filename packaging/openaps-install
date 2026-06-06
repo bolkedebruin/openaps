@@ -161,10 +161,10 @@ if [ -d "$SRC/dropbear" ] && [ -f "$SRC/dropbear/dropbear" ]; then
         echo "  + /etc/dropbear/dropbear_rsa_host_key (generated)"
     fi
 
-    # recoveryd owns /root/.ssh/authorized_keys, which is itself the source
+    # recoveryd owns root's ~/.ssh/authorized_keys, which is itself the source
     # of truth (no separate key-list store). Install its binary + init
     # script so it starts before S98-dropbear; the operator's bundled key is
-    # appended to authorized_keys directly below.
+    # appended to authorized_keys directly below, under root's REAL home dir.
     if [ -f "$SRC/applications/recoveryd" ]; then
         mkdir -p /home/applications/recoveryd
         cp -f "$SRC/applications/recoveryd" /home/applications/recoveryd/recoveryd.new
@@ -179,11 +179,13 @@ if [ -d "$SRC/dropbear" ] && [ -f "$SRC/dropbear/dropbear" ]; then
         echo "  + /etc/rcS.d/S97-recoveryd"
     fi
 
-    # Append the bundled operator key to /root/.ssh/authorized_keys directly
-    # (atomic, deduped). authorized_keys is the source of truth — recoveryd
-    # reads and rewrites it in place; there is no separate key-list store to
-    # seed. Writing the key here makes the recovery path exist before
-    # recoveryd or dropbear even start.
+    # Append the bundled operator key to root's ~/.ssh/authorized_keys
+    # directly (atomic, deduped). ROOT_HOME is root's REAL home from
+    # /etc/passwd (/home/root on the ECU, not /root) — the file dropbear
+    # authenticates against and the same file recoveryd resolves. authorized_keys
+    # is the source of truth — recoveryd reads and rewrites it in place; there
+    # is no separate key-list store to seed. Writing the key here makes the
+    # recovery path exist before recoveryd or dropbear even start.
     if [ -f "$SRC/dropbear/authorized_keys" ]; then
         ROOT_HOME=$(awk -F: '$1=="root"{print $6; exit}' /etc/passwd 2>/dev/null)
         [ -n "$ROOT_HOME" ] || ROOT_HOME=/root
@@ -218,10 +220,10 @@ if [ -d "$SRC/dropbear" ] && [ -f "$SRC/dropbear/dropbear" ]; then
     # appeared, and warn loudly.
     if [ -x /etc/rcS.d/S97-recoveryd ]; then
         if /etc/rcS.d/S97-recoveryd start; then
-            if [ -S /run/recoveryd.sock ]; then
+            if [ -S /var/run/recoveryd.sock ]; then
                 echo "  recoveryd up — socket ready, authorized_keys is the source of truth"
             else
-                echo "  WARNING: recoveryd start returned ok but /run/recoveryd.sock is absent"
+                echo "  WARNING: recoveryd start returned ok but /var/run/recoveryd.sock is absent"
             fi
         else
             echo "  WARNING: recoveryd failed to start."

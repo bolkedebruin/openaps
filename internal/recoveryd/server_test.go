@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -128,6 +129,66 @@ func TestServerAddListRemoveStatus(t *testing.T) {
 	if r.GetOk() {
 		t.Error("removing the only remaining key should be refused")
 	}
+}
+
+// TestProviderPathConcurrentResolve fires a burst of concurrent path()
+// calls on a fresh provider so the one-time resolve write overlaps the
+// other goroutines' reads. The UDS server calls path() from stateResp
+// WITHOUT the Manager mutex (server.go), concurrently with a mutating
+// AddKey that holds it, so the resolve must be internally synchronized.
+// Under -race a lazy unguarded memo (write resolvedPath on first call,
+// read on the rest) trips the detector here; sync.Once makes it clean.
+// Without -race this is a smoke test.
+func TestProviderPathConcurrentResolve(t *testing.T) {
+	home := t.TempDir()
+	prov := &Provider{ManageDropbear: false, lookupUser: lookupTo(home)}
+
+	const n = 64
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func() {
+			defer wg.Done()
+			<-start
+			_ = prov.path()
+		}()
+	}
+	close(start)
+	wg.Wait()
+	if got := prov.path(); got != home+"/.ssh/authorized_keys" {
+		t.Errorf("path() = %q, want resolved under %q", got, home)
+	}
+}
+
+// TestServerStatusRaceWithAddKey runs Status (which calls Provider.path()
+// from stateResp without holding the Manager mutex) concurrently with
+// AddKey (which holds it), end-to-end through the Server, so the access
+// plane's real call graph is exercised under -race.
+func TestServerStatusRaceWithAddKey(t *testing.T) {
+	home := t.TempDir()
+	prov := &Provider{ManageDropbear: false, lookupUser: lookupTo(home)}
+	m := NewManager(prov)
+	s := &Server{Manager: m}
+
+	const readers = 32
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(readers + 1)
+	for i := 0; i < readers; i++ {
+		go func() {
+			defer wg.Done()
+			<-start
+			_ = s.dispatch(&wire.AccessRequest{Op: &wire.AccessRequest_Status{Status: &wire.StatusOp{}}})
+		}()
+	}
+	go func() {
+		defer wg.Done()
+		<-start
+		_, _ = m.AddKey(keyA, "alice")
+	}()
+	close(start)
+	wg.Wait()
 }
 
 // An empty AccessRequest marshals to a zero-length body, which the
