@@ -49,7 +49,8 @@ func startTestServer(t *testing.T) string {
 	t.Helper()
 	m, _ := newTestManager(t)
 	sock := shortSock(t)
-	srv := &Server{Manager: m, SocketPath: sock}
+	// CI runs as a non-root uid; allow the test's own uid through the gate.
+	srv := &Server{Manager: m, SocketPath: sock, AllowUID: os.Getuid()}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { _ = srv.Serve(ctx); close(done) }()

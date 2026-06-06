@@ -29,6 +29,10 @@ type Server struct {
 	SocketPath string
 	// SocketMode is the UDS file mode; zero means 0600.
 	SocketMode os.FileMode
+	// AllowUID is the only peer uid permitted to connect. Zero (the default,
+	// and what production uses) means root. Tests set it to the current uid
+	// since CI runs as a non-root user.
+	AllowUID int
 
 	conns   sync.Map
 	connSeq uint64
@@ -103,12 +107,12 @@ func (s *Server) handleConn(ctx context.Context, c net.Conn) {
 	defer c.Close()
 
 	uid := udsutil.PeerUID(c)
-	// On Linux uid is the real peer uid; require root. On non-Linux the
-	// gate is unavailable (uid == -1) and we allow it for local testing.
-	if uid >= 0 && uid != 0 {
-		log.Printf("recoveryd: refused peer uid=%d (root only)", uid)
+	// On Linux uid is the real peer uid; require AllowUID (0/root by default).
+	// On non-Linux the gate is unavailable (uid == -1) and we allow it.
+	if uid >= 0 && uid != s.AllowUID {
+		log.Printf("recoveryd: refused peer uid=%d (allowed uid=%d)", uid, s.AllowUID)
 		_ = c.SetWriteDeadline(time.Now().Add(idleDeadline))
-		_ = wire.WriteMessage(c, &wire.AccessResponse{Ok: false, Error: fmt.Sprintf("refused: peer uid=%d not root", uid)})
+		_ = wire.WriteMessage(c, &wire.AccessResponse{Ok: false, Error: fmt.Sprintf("refused: peer uid=%d not allowed", uid)})
 		return
 	}
 
