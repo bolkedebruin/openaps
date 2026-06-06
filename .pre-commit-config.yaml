@@ -1,0 +1,47 @@
+# prek (https://github.com/j178/prek) — a fast drop-in for pre-commit.
+#
+# These PRE-PUSH hooks mirror .github/workflows/ci.yml so a failing
+# gofmt / vet / test / cross-compile / web bundle is caught locally
+# BEFORE it reaches GitHub CI.
+#
+# One-time setup (per clone):
+#     prek install --hook-type pre-push
+# Run them by hand against the whole tree:
+#     prek run --hook-stage pre-push --all-files
+#
+# Hooks are pre-push only (not pre-commit), so ordinary commits stay fast;
+# the heavier checks run once, when you push.
+default_stages: [pre-push]
+repos:
+  - repo: local
+    hooks:
+      - id: gofmt
+        name: gofmt (no unformatted Go files)
+        entry: "bash -c 'f=$(gofmt -l .); if [ -n \"$f\" ]; then echo \"gofmt: unformatted files:\"; echo \"$f\"; gofmt -d .; exit 1; fi'"
+        language: system
+        types: [go]
+        pass_filenames: false
+      - id: go-vet
+        name: go vet ./...
+        entry: go vet ./...
+        language: system
+        types: [go]
+        pass_filenames: false
+      - id: go-test
+        name: go test -race ./...
+        entry: go test -race -timeout 120s ./...
+        language: system
+        types: [go]
+        pass_filenames: false
+      - id: build-all-arm
+        name: cross-compile ARMv7 (make build-all-arm)
+        entry: make build-all-arm
+        language: system
+        types: [go]
+        pass_filenames: false
+      - id: web
+        name: ecu-web SPA (bun install + test + build)
+        entry: "bash -c 'cd cmd/ecu-web/web && bun install --frozen-lockfile && bun test && bun run build'"
+        language: system
+        files: ^cmd/ecu-web/web/
+        pass_filenames: false
