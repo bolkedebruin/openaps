@@ -28,7 +28,7 @@ var version = "dev"
 
 const (
 	defaultAccess = "/etc/recoveryd/access.json"
-	defaultSocket = "/run/recoveryd.sock"
+	defaultSocket = "/var/run/recoveryd.sock"
 )
 
 func main() {

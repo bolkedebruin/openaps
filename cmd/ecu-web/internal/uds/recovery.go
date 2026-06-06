@@ -14,7 +14,7 @@ import (
 // box's SSH access plane (the single writer of authorized_keys). Unlike
 // Controller, recoveryd speaks raw length-prefixed AccessRequest/
 // AccessResponse frames (no Hello handshake, no Envelope wrapper): each
-// call dials /run/recoveryd.sock, writes one AccessRequest, reads the one
+// call dials /var/run/recoveryd.sock, writes one AccessRequest, reads the one
 // AccessResponse, and closes. It reuses wire.ReadMessage/WriteMessage so
 // the length-prefixed framing lives in exactly one place.
 type Recovery struct {

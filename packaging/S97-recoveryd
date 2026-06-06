@@ -12,12 +12,12 @@
 #
 # State paths:
 #   /etc/recoveryd/access.json   key list (mode 0600), recoveryd-owned
-#   /run/recoveryd.sock          UDS endpoint (mode 0600, root-only)
+#   /var/run/recoveryd.sock          UDS endpoint (mode 0600, root-only)
 #   /home/applications/recoveryd/recoveryd.log   stdout/stderr
 
 BIN=/home/applications/recoveryd/recoveryd
 ACCESS=/etc/recoveryd/access.json
-SOCK=/run/recoveryd.sock
+SOCK=/var/run/recoveryd.sock
 RUN=/home/applications/recoveryd
 LOG=$RUN/recoveryd.log
 PIDFILE=$RUN/recoveryd.pid

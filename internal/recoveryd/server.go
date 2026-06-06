@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -47,6 +48,14 @@ func (s *Server) Serve(ctx context.Context) error {
 	}
 	if s.SocketMode == 0 {
 		s.SocketMode = 0o600
+	}
+	// Ensure the socket's parent dir exists (defensive — the default
+	// /var/run exists on the ECU and resolves to /run on modern systems, but
+	// an operator-supplied -socket path may point somewhere that doesn't).
+	if dir := filepath.Dir(s.SocketPath); dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("recoveryd.Serve: mkdir %s: %w", dir, err)
+		}
 	}
 	if err := udsutil.RemoveStaleSocket(s.SocketPath); err != nil {
 		return fmt.Errorf("recoveryd.Serve: %w", err)

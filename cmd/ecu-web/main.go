@@ -27,7 +27,7 @@ var version = "dev"
 func main() {
 	listen := flag.String("listen", ":443", "HTTPS listen address")
 	sock := flag.String("invdriver-sock", "/var/run/inv-driver.sock", "inv-driver UDS path")
-	recoverySock := flag.String("recoveryd-sock", "/run/recoveryd.sock", "recoveryd UDS path (SSH access plane)")
+	recoverySock := flag.String("recoveryd-sock", "/var/run/recoveryd.sock", "recoveryd UDS path (SSH access plane)")
 	stateDir := flag.String("state-dir", "/var/lib/ecu-web", "dir for TLS cert/key and auth credentials")
 	backend := flag.String("backend", "ecu-web", "Hello backend identity reported to inv-driver")
 	pushRate := flag.Duration("push-rate", time.Second, "minimum interval between SSE fleet frames")
