@@ -1,15 +1,12 @@
 // Command recoveryd owns the box's SSH access plane: it is the single
-// writer of authorized_keys. It loads the operator's authorized-key list
-// from /etc/recoveryd/access.json, renders it into the active provider's
-// authorized_keys at startup (the anti-brick boot guarantee), and serves
-// a local protobuf UDS so the web console can add/remove keys. It is
-// independent of inv-driver and ecu-web.
+// writer of authorized_keys, and authorized_keys is the source of truth.
+// It reads and rewrites the real authorized_keys file directly (no separate
+// key-list store) and serves a local protobuf UDS so the web console can
+// list/add/remove keys. It is independent of inv-driver and ecu-web.
 //
-// Subcommands:
-//
-//	(default) / serve   run the daemon (boot-render + UDS server)
-//	seed                ingest an authorized_keys file into access.json
-//	                    (used by the brownfield installer; no daemon)
+// At startup it ensures the .ssh dir exists and, when managing dropbear,
+// the dropbear RSA host key — then serves. There is nothing to render:
+// authorized_keys already is the truth.
 package main
 
 import (
@@ -26,54 +23,39 @@ import (
 // version is set via -ldflags at build time.
 var version = "dev"
 
-const (
-	defaultAccess = "/etc/recoveryd/access.json"
-	defaultSocket = "/var/run/recoveryd.sock"
-)
+const defaultSocket = "/var/run/recoveryd.sock"
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
 	log.SetPrefix("recoveryd: ")
 
-	// First non-flag arg selects a subcommand; bare invocation serves.
-	args := os.Args[1:]
-	if len(args) > 0 {
-		switch args[0] {
-		case "seed":
-			runSeed(args[1:])
-			return
-		case "serve":
-			args = args[1:]
-		}
-	}
-	runServe(args)
-}
-
-func runServe(args []string) {
-	fs := flag.NewFlagSet("serve", flag.ExitOnError)
-	accessPath := fs.String("access", defaultAccess, "path to access.json (key list source of truth)")
+	fs := flag.NewFlagSet("recoveryd", flag.ExitOnError)
+	authorizedKeys := fs.String("authorized-keys", recoveryd.DefaultAuthorizedKeys, "authorized_keys file recoveryd owns (source of truth)")
+	chownUser := fs.String("chown-user", "", "host user to own .ssh + authorized_keys (empty = root; set for the host provider)")
+	manageDropbear := fs.Bool("manage-dropbear", true, "ensure the dropbear RSA host key (set false for a host sshd / Pi)")
 	socketPath := fs.String("socket", defaultSocket, "local UDS path (root-only, mode 0600)")
-	dropbearKey := fs.String("dropbear-host-key", recoveryd.DefaultDropbearHostKey, "dropbear RSA host key ensured under the openaps provider")
+	dropbearKey := fs.String("dropbear-host-key", recoveryd.DefaultDropbearHostKey, "dropbear RSA host key ensured when -manage-dropbear")
 	showVersion := fs.Bool("version", false, "print version and exit")
-	_ = fs.Parse(args)
+	_ = fs.Parse(os.Args[1:])
 
 	if *showVersion {
 		log.Printf("version %s", version)
 		return
 	}
 
-	store, err := recoveryd.Open(*accessPath)
-	if err != nil {
-		log.Fatalf("load access file: %v", err)
+	prov := &recoveryd.Provider{
+		AuthorizedKeysPath: *authorizedKeys,
+		ChownUser:          *chownUser,
+		ManageDropbear:     *manageDropbear,
+		DropbearKeyPath:    *dropbearKey,
 	}
-	rend := &recoveryd.Renderer{DropbearKeyPath: *dropbearKey}
-	mgr := recoveryd.NewManager(store, rend)
+	mgr := recoveryd.NewManager(prov)
 
-	// Boot-render BEFORE serving so authorized_keys + the dropbear host
-	// key are in place even if the UDS never gets a client. A render
-	// failure is fatal — it means the box may be unreachable.
-	if err := mgr.BootRender(); err != nil {
-		log.Fatalf("boot-render authorized_keys: %v", err)
+	// Ensure the .ssh dir + (if managing dropbear) the host key BEFORE
+	// serving so the recovery path is intact even if the UDS never gets a
+	// client. A failure here is fatal — it means the box may be unreachable.
+	if err := mgr.Boot(); err != nil {
+		log.Fatalf("boot: %v", err)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -84,30 +66,4 @@ func runServe(args []string) {
 		log.Fatalf("serve: %v", err)
 	}
 	log.Printf("shutdown")
-}
-
-// runSeed ingests an authorized_keys file into access.json and exits. It
-// does NOT render — the daemon renders at boot. Used by the installer to
-// seed the operator's bundled key under recoveryd's ownership instead of
-// writing /root/.ssh/authorized_keys directly.
-func runSeed(args []string) {
-	fs := flag.NewFlagSet("seed", flag.ExitOnError)
-	accessPath := fs.String("access", defaultAccess, "path to access.json to seed/merge into")
-	from := fs.String("from", "", "authorized_keys-format file to ingest (required)")
-	provider := fs.String("provider", string(recoveryd.ProviderOpenAPS), "provider: openaps|host|off")
-	hostUser := fs.String("host-user", "", "host user for the host provider")
-	_ = fs.Parse(args)
-
-	if *from == "" {
-		log.Fatalf("seed: -from is required")
-	}
-	store, err := recoveryd.Open(*accessPath)
-	if err != nil {
-		log.Fatalf("seed: load access file: %v", err)
-	}
-	n, err := recoveryd.Seed(store, recoveryd.Provider(*provider), *hostUser, *from)
-	if err != nil {
-		log.Fatalf("seed: %v", err)
-	}
-	log.Printf("seed: added %d key(s) -> %s (provider=%s)", n, *accessPath, *provider)
 }

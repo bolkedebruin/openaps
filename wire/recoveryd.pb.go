@@ -396,10 +396,10 @@ type AccessResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Ok    bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
 	Error string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
-	// Provider is "openaps", "host", or "off".
+	// Provider is the managed authorized_keys path (the source of truth).
 	Provider string `protobuf:"bytes,3,opt,name=provider,proto3" json:"provider,omitempty"`
-	// HostUser is the unix user whose authorized_keys is rendered under
-	// the "host" provider; empty otherwise.
+	// HostUser is the unix user that owns authorized_keys under the host
+	// provider; empty when recoveryd writes as root.
 	HostUser string `protobuf:"bytes,4,opt,name=host_user,json=hostUser,proto3" json:"host_user,omitempty"`
 	// Keys is the full list (set on ListKeys; empty on Status).
 	Keys []*SshKey `protobuf:"bytes,5,rep,name=keys,proto3" json:"keys,omitempty"`

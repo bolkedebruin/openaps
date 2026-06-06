@@ -57,10 +57,10 @@ message AccessResponse {
   bool   ok    = 1;
   string error = 2;
 
-  // Provider is "openaps", "host", or "off".
+  // Provider is the managed authorized_keys path (the source of truth).
   string provider = 3;
-  // HostUser is the unix user whose authorized_keys is rendered under
-  // the "host" provider; empty otherwise.
+  // HostUser is the unix user that owns authorized_keys under the host
+  // provider; empty when recoveryd writes as root.
   string host_user = 4;
   // Keys is the full list (set on ListKeys; empty on Status).
   repeated SshKey keys = 5;

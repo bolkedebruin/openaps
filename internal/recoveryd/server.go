@@ -156,37 +156,55 @@ func (s *Server) handleConn(ctx context.Context, c net.Conn) {
 func (s *Server) dispatch(req *wire.AccessRequest) *wire.AccessResponse {
 	switch op := req.GetOp().(type) {
 	case *wire.AccessRequest_ListKeys:
-		a := s.Manager.List()
-		return s.stateResp(a, true)
+		keys, err := s.Manager.ListKeys()
+		if err != nil {
+			return &wire.AccessResponse{Ok: false, Error: err.Error()}
+		}
+		return s.stateResp(keys, true)
 	case *wire.AccessRequest_AddKey:
 		if _, err := s.Manager.AddKey(op.AddKey.GetPubkey(), op.AddKey.GetComment()); err != nil {
 			return &wire.AccessResponse{Ok: false, Error: err.Error()}
 		}
-		return s.stateResp(s.Manager.List(), true)
+		return s.listResp()
 	case *wire.AccessRequest_RemoveKey:
 		if err := s.Manager.RemoveKey(op.RemoveKey.GetFingerprint()); err != nil {
 			return &wire.AccessResponse{Ok: false, Error: err.Error()}
 		}
-		return s.stateResp(s.Manager.List(), true)
+		return s.listResp()
 	case *wire.AccessRequest_Status:
-		return s.stateResp(s.Manager.List(), false)
+		keys, err := s.Manager.ListKeys()
+		if err != nil {
+			return &wire.AccessResponse{Ok: false, Error: err.Error()}
+		}
+		return s.stateResp(keys, false)
 	default:
 		return &wire.AccessResponse{Ok: false, Error: "empty or unknown op"}
 	}
 }
 
-// stateResp builds an ok response from access state. withKeys controls
-// whether the full key list is included (ListKeys/AddKey/RemoveKey) or
-// just the count (Status).
-func (s *Server) stateResp(a Access, withKeys bool) *wire.AccessResponse {
+// listResp re-reads the file and builds a keys response after a mutation.
+func (s *Server) listResp() *wire.AccessResponse {
+	keys, err := s.Manager.ListKeys()
+	if err != nil {
+		return &wire.AccessResponse{Ok: false, Error: err.Error()}
+	}
+	return s.stateResp(keys, true)
+}
+
+// stateResp builds an ok response from the parsed key list. withKeys
+// controls whether the full list is included (ListKeys/AddKey/RemoveKey) or
+// just the count (Status). The provider field reports the managed
+// authorized_keys path and host_user the chown-user (empty = root).
+func (s *Server) stateResp(keys []Key, withKeys bool) *wire.AccessResponse {
+	p := s.Manager.Provider()
 	resp := &wire.AccessResponse{
 		Ok:       true,
-		Provider: string(a.Provider),
-		HostUser: a.HostUser,
-		KeyCount: uint32(len(a.SSHKeys)),
+		Provider: p.path(),
+		HostUser: p.ChownUser,
+		KeyCount: uint32(len(keys)),
 	}
 	if withKeys {
-		for _, k := range a.SSHKeys {
+		for _, k := range keys {
 			resp.Keys = append(resp.Keys, &wire.SshKey{
 				Pubkey:      k.Pubkey,
 				Comment:     k.Comment,

@@ -1,27 +1,27 @@
 #!/bin/sh
 #
-# S97-recoveryd — start recoveryd BEFORE S98-dropbear so authorized_keys
-# and the dropbear host key are rendered from /etc/recoveryd/access.json
-# before dropbear binds :22. recoveryd is the single writer of
-# authorized_keys; it boot-renders the key list on startup (the anti-brick
-# guarantee) and serves a root-only local UDS for the web console.
+# S97-recoveryd — start recoveryd BEFORE S98-dropbear so the .ssh dir and
+# the dropbear host key are in place before dropbear binds :22. recoveryd
+# is the single writer of /root/.ssh/authorized_keys, which is itself the
+# source of truth — recoveryd reads and rewrites it directly and serves a
+# root-only local UDS for the web console.
 #
 # Install:
 #   ssh ecu 'cat > /etc/rcS.d/S97-recoveryd' < S97-recoveryd
 #   ssh ecu 'chmod +x /etc/rcS.d/S97-recoveryd'
 #
 # State paths:
-#   /etc/recoveryd/access.json   key list (mode 0600), recoveryd-owned
+#   /root/.ssh/authorized_keys       key file (mode 0600), the source of truth
 #   /var/run/recoveryd.sock          UDS endpoint (mode 0600, root-only)
 #   /home/applications/recoveryd/recoveryd.log   stdout/stderr
 
 BIN=/home/applications/recoveryd/recoveryd
-ACCESS=/etc/recoveryd/access.json
+AUTHKEYS=/root/.ssh/authorized_keys
 SOCK=/var/run/recoveryd.sock
 RUN=/home/applications/recoveryd
 LOG=$RUN/recoveryd.log
 PIDFILE=$RUN/recoveryd.pid
-ARGS="-access $ACCESS -socket $SOCK"
+ARGS="-authorized-keys $AUTHKEYS -manage-dropbear=true -socket $SOCK"
 
 start() {
     if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
@@ -29,7 +29,7 @@ start() {
         return 0
     fi
     [ -x "$BIN" ] || { echo "$BIN missing or not executable"; return 1; }
-    mkdir -p "$RUN" /etc/recoveryd
+    mkdir -p "$RUN"
 
     # nohup-sh-exec wrapper: same pattern as S48-inv-driver / S98-dropbear,
     # so the daemon survives both init(1) boot context and a PHP-FPM

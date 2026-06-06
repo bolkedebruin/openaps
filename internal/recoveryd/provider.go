@@ -1,111 +1,142 @@
+// Package recoveryd owns the box's SSH access plane: it reads and writes
+// the real authorized_keys file directly and serves a local protobuf UDS
+// that ecu-web drives. authorized_keys is the single source of truth —
+// recoveryd parses it on every list, and every mutation is an atomic
+// rewrite of that same file. The fleet daemon (inv-driver) and the web
+// console (ecu-web) never touch it directly.
 package recoveryd
 
 import (
+	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/bolkedebruin/openaps/internal/atomicfile"
 )
 
+// DefaultAuthorizedKeys is the authorized_keys file recoveryd owns when no
+// -authorized-keys flag is given. It is root's key file for the openaps
+// dropbear server.
+const DefaultAuthorizedKeys = "/root/.ssh/authorized_keys"
+
 // DefaultDropbearHostKey is the RSA host key dropbear reads. recoveryd
-// ensures it exists under the openaps provider so dropbear can start;
+// ensures it exists when managing dropbear so dropbear can start;
 // S98-dropbear does the same, idempotently.
 const DefaultDropbearHostKey = "/etc/dropbear/dropbear_rsa_host_key"
 
-// Renderer turns an Access into an authorized_keys file on disk. It is
-// the only thing that writes authorized_keys.
-type Renderer struct {
-	// DropbearKeyPath is the dropbear RSA host key ensured under the
-	// openaps provider. Empty uses DefaultDropbearHostKey.
+// Provider names which authorized_keys file recoveryd owns and whether it
+// manages the dropbear host key. It carries no key list of its own — the
+// authorized_keys file at AuthorizedKeysPath is the source of truth. The
+// provider is selected by cmd/recoveryd flags, not a runtime config file.
+type Provider struct {
+	// AuthorizedKeysPath is the file recoveryd reads and rewrites. Empty
+	// uses DefaultAuthorizedKeys.
+	AuthorizedKeysPath string
+	// ChownUser, when non-empty, is the unix user that must own the .ssh
+	// dir and authorized_keys file (the host provider, so a host sshd's
+	// StrictModes accepts them). Empty leaves ownership as the writing
+	// process (root, the openaps dropbear case).
+	ChownUser string
+	// ManageDropbear ensures the dropbear RSA host key exists at boot. The
+	// openaps case sets it true; the host/Pi case sets it false to defer to
+	// the host sshd.
+	ManageDropbear bool
+	// DropbearKeyPath is the host key ensured when ManageDropbear is true.
+	// Empty uses DefaultDropbearHostKey.
 	DropbearKeyPath string
-	// dropbearKeyGen runs dropbearkey to create a host key. Overridable
-	// in tests; nil uses the real dropbearkey binary.
+
+	// dropbearKeyGen runs dropbearkey to create a host key. Overridable in
+	// tests; nil uses the real dropbearkey binary.
 	dropbearKeyGen func(path string) error
-	// rootHome is the home dir used for the openaps provider. Empty uses
-	// "/root". Overridable in tests.
-	rootHome string
 	// lookupUser resolves a host user. nil uses os/user.Lookup.
 	lookupUser func(name string) (*user.User, error)
 }
 
-// Render writes authorized_keys for the given access state and, under
-// the openaps provider, ensures the dropbear host key exists. It is a
-// full rewrite from the key list (never an append), so removing a key
-// from the list removes it from the file. Render is idempotent and is
-// the anti-brick boot guarantee: it runs at startup and after every
-// change.
-func (r *Renderer) Render(a Access) error {
-	home := r.rootHome
-	if home == "" {
-		home = "/root"
+// path returns the resolved authorized_keys path.
+func (p *Provider) path() string {
+	if p.AuthorizedKeysPath == "" {
+		return DefaultAuthorizedKeys
 	}
-	switch a.Provider {
-	case ProviderOff:
-		// off does NOT silently leave a previously-rendered openaps
-		// authorized_keys in place — that would keep granting shell access
-		// after the operator asked recoveryd to stop. Truncate the root
-		// authorized_keys to empty so flipping to off actually revokes the
-		// keys recoveryd had rendered. (The host provider writes elsewhere;
-		// see writeAuthorizedKeys.)
-		return writeAuthorizedKeys(filepath.Join(home, ".ssh"), nil, -1, -1)
-	case ProviderOpenAPS:
-		sshDir := filepath.Join(home, ".ssh")
-		// Fail-to-empty guard: rendering ZERO keys would truncate
-		// /root/.ssh/authorized_keys. If a non-empty file already exists
-		// (operator still has keys, but access.json was blanked/lost), log
-		// loudly and skip the truncating rewrite rather than locking the
-		// operator out. A deliberate "remove all keys" goes through off.
-		if len(a.SSHKeys) == 0 && fileNonEmpty(filepath.Join(sshDir, "authorized_keys")) {
-			log.Printf("recoveryd: REFUSING to render an empty authorized_keys over a non-empty one (provider=openaps, zero keys in access.json); existing keys preserved. Use provider=off to deliberately revoke all keys.")
-			return r.ensureDropbearHostKey()
-		}
-		if err := writeAuthorizedKeys(sshDir, a.SSHKeys, -1, -1); err != nil {
-			return err
-		}
-		return r.ensureDropbearHostKey()
-	case ProviderHost:
-		if a.HostUser == "" {
-			return errors.New("recoveryd: host provider requires host_user")
-		}
-		lu := r.lookupUser
-		if lu == nil {
-			lu = user.Lookup
-		}
-		u, err := lu(a.HostUser)
-		if err != nil {
-			return fmt.Errorf("recoveryd: lookup host_user %q: %w", a.HostUser, err)
-		}
-		uid, _ := strconv.Atoi(u.Uid)
-		gid, _ := strconv.Atoi(u.Gid)
-		// host provider does NOT manage a host key — the host sshd owns it.
-		return writeAuthorizedKeys(filepath.Join(u.HomeDir, ".ssh"), a.SSHKeys, uid, gid)
-	default:
-		return fmt.Errorf("recoveryd: unknown provider %q", a.Provider)
-	}
+	return p.AuthorizedKeysPath
 }
 
-// writeAuthorizedKeys atomically rewrites <sshDir>/authorized_keys from
-// keys. sshDir is created 0700 and the file is 0600. When uid/gid are
-// >= 0 the directory and file are chowned to them (host provider).
-//
-// The temp file is fsync'd before the rename and the containing directory
-// is fsync'd after, so a power loss can never publish a zero-length or
-// partial authorized_keys — exactly the anti-brick file this daemon
-// exists to protect.
-func writeAuthorizedKeys(sshDir string, keys []Key, uid, gid int) error {
+// resolveOwner returns the uid/gid the .ssh dir and authorized_keys must
+// be chowned to, or (-1, -1) when ownership should be left as-is (root).
+func (p *Provider) resolveOwner() (uid, gid int, err error) {
+	if p.ChownUser == "" {
+		return -1, -1, nil
+	}
+	lu := p.lookupUser
+	if lu == nil {
+		lu = user.Lookup
+	}
+	u, err := lu(p.ChownUser)
+	if err != nil {
+		return -1, -1, fmt.Errorf("recoveryd: lookup chown-user %q: %w", p.ChownUser, err)
+	}
+	uid, _ = strconv.Atoi(u.Uid)
+	gid, _ = strconv.Atoi(u.Gid)
+	return uid, gid, nil
+}
+
+// readKeys parses the provider's authorized_keys file into a key list. A
+// missing file yields an empty list (a fresh box with no keys yet); blank
+// lines and # comment lines are skipped. A malformed key line is an error
+// so a corrupt file is surfaced rather than silently dropping access.
+func (p *Provider) readKeys() ([]Key, error) {
+	b, err := os.ReadFile(p.path())
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("recoveryd: read %s: %w", p.path(), err)
+	}
+	var keys []Key
+	sc := bufio.NewScanner(bytes.NewReader(b))
+	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		k, perr := ParseKey(line, "")
+		if perr != nil {
+			return nil, fmt.Errorf("recoveryd: %s: %w", p.path(), perr)
+		}
+		keys = append(keys, k)
+	}
+	if err := sc.Err(); err != nil {
+		return nil, fmt.Errorf("recoveryd: scan %s: %w", p.path(), err)
+	}
+	return keys, nil
+}
+
+// writeKeys atomically rewrites the provider's authorized_keys from keys.
+// The .ssh dir is ensured 0700 and the file is 0600; under a chown-user
+// both are owned by that user. The temp file is fsync'd before the rename
+// and the directory fsync'd after, so a power loss can never publish a
+// zero-length or partial authorized_keys.
+func (p *Provider) writeKeys(keys []Key) error {
+	path := p.path()
+	sshDir := filepath.Dir(path)
+	uid, gid, err := p.resolveOwner()
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(sshDir, 0o700); err != nil {
 		return fmt.Errorf("recoveryd: mkdir %s: %w", sshDir, err)
 	}
 	if uid >= 0 && gid >= 0 {
-		// Under the host provider the .ssh dir must be owned by the host
-		// user or some sshd StrictModes configs reject it. A half-chowned
-		// .ssh (root dir, user file) is a hard error, not best-effort.
+		// Under a chown-user the .ssh dir must be owned by that user or some
+		// sshd StrictModes configs reject it. A half-chowned .ssh (root dir,
+		// user file) is a hard error, not best-effort.
 		if err := os.Chown(sshDir, uid, gid); err != nil {
 			return fmt.Errorf("recoveryd: chown %s: %w", sshDir, err)
 		}
@@ -115,64 +146,40 @@ func writeAuthorizedKeys(sshDir string, keys []Key, uid, gid int) error {
 		buf = append(buf, renderLine(k)...)
 		buf = append(buf, '\n')
 	}
-	path := filepath.Join(sshDir, "authorized_keys")
-	// host provider chowns the temp file to the host user before the
-	// rename, so it can't use atomicfile.Write's anonymous temp path.
-	if uid >= 0 && gid >= 0 {
-		return writeChownedAuthorizedKeys(path, buf, uid, gid)
-	}
-	// openaps/off: full-rewrite with fsync+rename+dir-fsync so a crash
-	// never publishes a zero-length/partial authorized_keys.
-	return atomicfile.Write(path, buf, 0o600)
+	// Both branches share atomicfile's durable temp+fsync+rename+dir-fsync;
+	// the host provider only differs by chowning the temp to the host user
+	// before the rename. uid/gid below zero (the root case) skips the chown.
+	return atomicfile.WriteOwned(path, buf, 0o600, uid, gid)
 }
 
-// writeChownedAuthorizedKeys writes the authorized_keys for the host
-// provider: temp file fsync'd, chowned to the host user, then renamed.
-func writeChownedAuthorizedKeys(path string, buf []byte, uid, gid int) error {
-	tmp := path + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+// ensureSSHDir creates the parent .ssh dir 0700, chowned to the host user
+// under a chown-user. recoveryd calls this at boot so the dir exists even
+// before the first key is added.
+func (p *Provider) ensureSSHDir() error {
+	uid, gid, err := p.resolveOwner()
 	if err != nil {
-		return fmt.Errorf("recoveryd: open %s: %w", tmp, err)
+		return err
 	}
-	if _, err := f.Write(buf); err != nil {
-		_ = f.Close()
-		_ = os.Remove(tmp)
-		return fmt.Errorf("recoveryd: write %s: %w", tmp, err)
+	sshDir := filepath.Dir(p.path())
+	if err := os.MkdirAll(sshDir, 0o700); err != nil {
+		return fmt.Errorf("recoveryd: mkdir %s: %w", sshDir, err)
 	}
-	if err := f.Sync(); err != nil {
-		_ = f.Close()
-		_ = os.Remove(tmp)
-		return fmt.Errorf("recoveryd: fsync %s: %w", tmp, err)
-	}
-	if err := f.Close(); err != nil {
-		_ = os.Remove(tmp)
-		return fmt.Errorf("recoveryd: close %s: %w", tmp, err)
-	}
-	if err := os.Chown(tmp, uid, gid); err != nil {
-		_ = os.Remove(tmp)
-		return fmt.Errorf("recoveryd: chown %s: %w", tmp, err)
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
-		return fmt.Errorf("recoveryd: rename %s: %w", path, err)
-	}
-	if d, derr := os.Open(filepath.Dir(path)); derr == nil {
-		_ = d.Sync()
-		_ = d.Close()
+	if uid >= 0 && gid >= 0 {
+		if err := os.Chown(sshDir, uid, gid); err != nil {
+			return fmt.Errorf("recoveryd: chown %s: %w", sshDir, err)
+		}
 	}
 	return nil
 }
 
-// fileNonEmpty reports whether path exists and has a non-zero size.
-func fileNonEmpty(path string) bool {
-	fi, err := os.Stat(path)
-	return err == nil && fi.Size() > 0
-}
-
 // ensureDropbearHostKey generates the dropbear RSA host key if missing.
-// Idempotent: a present key is left untouched.
-func (r *Renderer) ensureDropbearHostKey() error {
-	path := r.DropbearKeyPath
+// It is a no-op when the provider does not manage dropbear. Idempotent: a
+// present key is left untouched.
+func (p *Provider) ensureDropbearHostKey() error {
+	if !p.ManageDropbear {
+		return nil
+	}
+	path := p.DropbearKeyPath
 	if path == "" {
 		path = DefaultDropbearHostKey
 	}
@@ -184,7 +191,7 @@ func (r *Renderer) ensureDropbearHostKey() error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("recoveryd: mkdir %s: %w", filepath.Dir(path), err)
 	}
-	gen := r.dropbearKeyGen
+	gen := p.dropbearKeyGen
 	if gen == nil {
 		gen = realDropbearKeyGen
 	}

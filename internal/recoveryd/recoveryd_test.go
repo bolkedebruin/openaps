@@ -79,245 +79,178 @@ func TestParseKeyRejectsCommentNewlineInjection(t *testing.T) {
 	}
 }
 
-func TestManagerRejectsInjectedCommentAndNeverRenders(t *testing.T) {
-	m, root := newTestManager(t)
-	if _, err := m.AddKey(keyA, "ok\nssh-ed25519 AAAA injected"); err == nil {
-		t.Fatal("expected AddKey to reject injected comment")
+// newTestManager builds a Manager over a provider whose authorized_keys
+// lives under a temp dir, with a no-op dropbear key generator.
+func newTestManager(t *testing.T) (*Manager, string) {
+	t.Helper()
+	dir := t.TempDir()
+	prov := &Provider{
+		AuthorizedKeysPath: filepath.Join(dir, ".ssh", "authorized_keys"),
+		ManageDropbear:     true,
+		DropbearKeyPath:    filepath.Join(dir, "hk"),
+		dropbearKeyGen:     noopDropbear,
 	}
-	if len(m.List().SSHKeys) != 0 {
-		t.Error("injected-comment key was persisted")
-	}
-	// The rendered authorized_keys must never gain the injected line. The
-	// file may not exist at all (nothing rendered); if it does, it is empty.
-	b, _ := os.ReadFile(filepath.Join(root, ".ssh", "authorized_keys"))
-	if strings.Contains(string(b), "injected") {
-		t.Errorf("injected line reached rendered file: %q", string(b))
-	}
-}
-
-func TestStoreRoundTrip(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "sub", "access.json")
-	st, err := Open(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if st.Get().Provider != ProviderOpenAPS {
-		t.Errorf("default provider = %q, want openaps", st.Get().Provider)
-	}
-	want := Access{
-		Provider: ProviderHost,
-		HostUser: "ops",
-		SSHKeys:  []Key{{Pubkey: "x", Comment: "c", AddedMs: 42, Fingerprint: "SHA256:zz"}},
-	}
-	if err := st.Save(want); err != nil {
-		t.Fatal(err)
-	}
-	// mode 0600
-	fi, err := os.Stat(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if fi.Mode().Perm() != 0o600 {
-		t.Errorf("access.json mode = %o, want 600", fi.Mode().Perm())
-	}
-	// reopen and confirm round-trip
-	st2, err := Open(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := st2.Get()
-	if got.Provider != want.Provider || got.HostUser != want.HostUser || len(got.SSHKeys) != 1 {
-		t.Fatalf("round-trip mismatch: %+v", got)
-	}
-	if got.SSHKeys[0].Fingerprint != "SHA256:zz" {
-		t.Errorf("key fingerprint mismatch: %+v", got.SSHKeys[0])
-	}
-}
-
-func TestStoreCloneIsolation(t *testing.T) {
-	st, _ := Open(filepath.Join(t.TempDir(), "access.json"))
-	_ = st.Save(Access{Provider: ProviderOpenAPS, SSHKeys: []Key{{Fingerprint: "a"}}})
-	g := st.Get()
-	g.SSHKeys[0].Fingerprint = "mutated"
-	if st.Get().SSHKeys[0].Fingerprint != "a" {
-		t.Error("Get() did not return an isolated copy")
-	}
+	return NewManager(prov), dir
 }
 
 // noopDropbear avoids invoking the real dropbearkey binary in tests.
 func noopDropbear(path string) error { return os.WriteFile(path, []byte("hostkey"), 0o600) }
 
-func TestRenderOpenAPS(t *testing.T) {
-	root := t.TempDir()
-	dbkey := filepath.Join(t.TempDir(), "dropbear", "host_key")
-	r := &Renderer{rootHome: root, DropbearKeyPath: dbkey, dropbearKeyGen: noopDropbear}
-
-	ka, _ := ParseKey(keyA, "alice")
-	kb, _ := ParseKey(keyB, "bob")
-	if err := r.Render(Access{Provider: ProviderOpenAPS, SSHKeys: []Key{ka, kb}}); err != nil {
-		t.Fatal(err)
-	}
-
-	akPath := filepath.Join(root, ".ssh", "authorized_keys")
-	b, err := os.ReadFile(akPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
-	if len(lines) != 2 {
-		t.Fatalf("want 2 lines, got %d: %q", len(lines), string(b))
-	}
-	if !strings.HasSuffix(lines[0], " alice") || !strings.HasSuffix(lines[1], " bob") {
-		t.Errorf("comments not rendered: %q", lines)
-	}
-	// .ssh dir 0700, file 0600
-	di, _ := os.Stat(filepath.Join(root, ".ssh"))
-	if di.Mode().Perm() != 0o700 {
-		t.Errorf(".ssh mode = %o, want 700", di.Mode().Perm())
-	}
-	fi, _ := os.Stat(akPath)
-	if fi.Mode().Perm() != 0o600 {
-		t.Errorf("authorized_keys mode = %o, want 600", fi.Mode().Perm())
-	}
-	// dropbear host key ensured
-	if _, err := os.Stat(dbkey); err != nil {
-		t.Errorf("dropbear host key not created: %v", err)
-	}
-}
-
-func TestRenderIsFullRewrite(t *testing.T) {
-	root := t.TempDir()
-	r := &Renderer{rootHome: root, dropbearKeyGen: noopDropbear, DropbearKeyPath: filepath.Join(t.TempDir(), "hk")}
-	ka, _ := ParseKey(keyA, "")
-	kb, _ := ParseKey(keyB, "")
-	if err := r.Render(Access{Provider: ProviderOpenAPS, SSHKeys: []Key{ka, kb}}); err != nil {
-		t.Fatal(err)
-	}
-	// now render with only one key — file must shrink (not append).
-	if err := r.Render(Access{Provider: ProviderOpenAPS, SSHKeys: []Key{kb}}); err != nil {
-		t.Fatal(err)
-	}
-	b, _ := os.ReadFile(filepath.Join(root, ".ssh", "authorized_keys"))
-	if strings.Contains(string(b), "AAAAIAG3oZkfNp0gi") {
-		t.Errorf("removed key still present after re-render: %q", string(b))
-	}
-	lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
-	if len(lines) != 1 {
-		t.Errorf("want 1 line after rewrite, got %d", len(lines))
-	}
-}
-
-func TestRenderOffRevokesRenderedKeys(t *testing.T) {
-	root := t.TempDir()
-	r := &Renderer{rootHome: root, dropbearKeyGen: noopDropbear, DropbearKeyPath: filepath.Join(t.TempDir(), "hk")}
-	// First render keys under openaps, then flip to off.
-	ka, _ := ParseKey(keyA, "alice")
-	if err := r.Render(Access{Provider: ProviderOpenAPS, SSHKeys: []Key{ka}}); err != nil {
-		t.Fatal(err)
-	}
-	akPath := filepath.Join(root, ".ssh", "authorized_keys")
-	if !fileNonEmpty(akPath) {
-		t.Fatalf("openaps render did not write keys")
-	}
-	if err := r.Render(Access{Provider: ProviderOff}); err != nil {
-		t.Fatalf("off render: %v", err)
-	}
-	// off must truncate the previously-rendered authorized_keys, not leave
-	// the stale root keys honored by dropbear.
-	if fileNonEmpty(akPath) {
-		b, _ := os.ReadFile(akPath)
-		t.Errorf("off did not revoke rendered keys: %q", string(b))
-	}
-}
-
-func TestRenderOpenAPSRefusesToEmptyExisting(t *testing.T) {
-	root := t.TempDir()
-	r := &Renderer{rootHome: root, dropbearKeyGen: noopDropbear, DropbearKeyPath: filepath.Join(t.TempDir(), "hk")}
-	ka, _ := ParseKey(keyA, "alice")
-	if err := r.Render(Access{Provider: ProviderOpenAPS, SSHKeys: []Key{ka}}); err != nil {
-		t.Fatal(err)
-	}
-	akPath := filepath.Join(root, ".ssh", "authorized_keys")
-	// Now render zero keys under openaps (simulating a blanked access.json);
-	// the existing non-empty file must be preserved, not truncated.
-	if err := r.Render(Access{Provider: ProviderOpenAPS, SSHKeys: nil}); err != nil {
-		t.Fatal(err)
-	}
-	if !fileNonEmpty(akPath) {
-		t.Errorf("openaps with zero keys truncated a non-empty authorized_keys")
-	}
-}
-
-func TestRenderHostUsesUserHome(t *testing.T) {
-	home := t.TempDir()
-	me, err := user.Current()
-	if err != nil {
-		t.Skip("no current user")
-	}
-	r := &Renderer{
-		lookupUser: func(name string) (*user.User, error) {
-			return &user.User{Uid: me.Uid, Gid: me.Gid, HomeDir: home, Username: name}, nil
-		},
-	}
-	ka, _ := ParseKey(keyA, "")
-	if err := r.Render(Access{Provider: ProviderHost, HostUser: "ops", SSHKeys: []Key{ka}}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(filepath.Join(home, ".ssh", "authorized_keys")); err != nil {
-		t.Errorf("host authorized_keys not written: %v", err)
-	}
-	// host provider must NOT manage a dropbear host key — the render
-	// succeeds with no DropbearKeyPath set, which proves it isn't touched.
-}
-
-func TestRenderHostRequiresUser(t *testing.T) {
-	r := &Renderer{}
-	if err := r.Render(Access{Provider: ProviderHost}); err == nil {
-		t.Error("host provider without host_user should error")
-	}
-}
-
-func newTestManager(t *testing.T) (*Manager, string) {
+func mustKeys(t *testing.T, m *Manager) []Key {
 	t.Helper()
-	dir := t.TempDir()
-	st, err := Open(filepath.Join(dir, "access.json"))
+	keys, err := m.ListKeys()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ListKeys: %v", err)
 	}
-	r := &Renderer{rootHome: dir, dropbearKeyGen: noopDropbear, DropbearKeyPath: filepath.Join(dir, "hk")}
-	return NewManager(st, r), dir
+	return keys
 }
 
-func TestManagerAddDedupe(t *testing.T) {
+func TestListParsesMultiLineFile(t *testing.T) {
+	m, dir := newTestManager(t)
+	akPath := filepath.Join(dir, ".ssh", "authorized_keys")
+	if err := os.MkdirAll(filepath.Dir(akPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// blank lines and a # comment must be tolerated/skipped.
+	content := "# operator bundle\n\n" + keyA + "\n" + keyB + "\n"
+	if err := os.WriteFile(akPath, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	keys := mustKeys(t, m)
+	if len(keys) != 2 {
+		t.Fatalf("parsed %d keys, want 2", len(keys))
+	}
+	if keys[0].Fingerprint != fpOf(t, keyA) || keys[1].Fingerprint != fpOf(t, keyB) {
+		t.Errorf("fingerprints mismatch: %+v", keys)
+	}
+}
+
+func TestListMissingFileIsEmpty(t *testing.T) {
 	m, _ := newTestManager(t)
-	k1, err := m.AddKey(keyA, "alice")
-	if err != nil {
+	if got := len(mustKeys(t, m)); got != 0 {
+		t.Errorf("missing authorized_keys should list empty, got %d", got)
+	}
+}
+
+func TestAddDedupesAppendsAtomic(t *testing.T) {
+	m, dir := newTestManager(t)
+	akPath := filepath.Join(dir, ".ssh", "authorized_keys")
+
+	if _, err := m.AddKey(keyA, "alice"); err != nil {
 		t.Fatal(err)
 	}
 	// adding the same key (even with a different comment line) is a no-op.
 	if _, err := m.AddKey(keyA, "alice-again"); err != nil {
 		t.Fatal(err)
 	}
-	if got := len(m.List().SSHKeys); got != 1 {
+	if got := len(mustKeys(t, m)); got != 1 {
 		t.Fatalf("dedupe failed: %d keys", got)
 	}
-	if k1.Fingerprint != fpOf(t, keyA) {
-		t.Errorf("fingerprint mismatch")
+	// second distinct key appends.
+	if _, err := m.AddKey(keyB, "bob"); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(mustKeys(t, m)); got != 2 {
+		t.Fatalf("append failed: %d keys", got)
+	}
+	// file is mode 0600 and dir 0700.
+	fi, err := os.Stat(akPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o600 {
+		t.Errorf("authorized_keys mode = %o, want 600", fi.Mode().Perm())
+	}
+	di, _ := os.Stat(filepath.Dir(akPath))
+	if di.Mode().Perm() != 0o700 {
+		t.Errorf(".ssh mode = %o, want 700", di.Mode().Perm())
 	}
 }
 
-func TestManagerAddRejectsMalformed(t *testing.T) {
+func TestAddRejectsMalformed(t *testing.T) {
 	m, _ := newTestManager(t)
 	if _, err := m.AddKey("garbage", ""); err == nil {
 		t.Error("expected error adding malformed key")
 	}
-	if len(m.List().SSHKeys) != 0 {
+	if len(mustKeys(t, m)) != 0 {
 		t.Error("malformed key was persisted")
 	}
 }
 
-func TestManagerRemove(t *testing.T) {
-	m, root := newTestManager(t)
+func TestManagerRejectsInjectedComment(t *testing.T) {
+	m, dir := newTestManager(t)
+	if _, err := m.AddKey(keyA, "ok\nssh-ed25519 AAAA injected"); err == nil {
+		t.Fatal("expected AddKey to reject injected comment")
+	}
+	if len(mustKeys(t, m)) != 0 {
+		t.Error("injected-comment key was persisted")
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, ".ssh", "authorized_keys"))
+	if strings.Contains(string(b), "injected") {
+		t.Errorf("injected line reached the file: %q", string(b))
+	}
+}
+
+func TestOptionsSurviveRewrite(t *testing.T) {
+	// A restricted key (forced command + no-pty) must keep its options
+	// across the whole-file rewrite an unrelated AddKey triggers — dropping
+	// them would silently widen it to a full shell.
+	m, dir := newTestManager(t)
+	akPath := filepath.Join(dir, ".ssh", "authorized_keys")
+	if err := os.MkdirAll(filepath.Dir(akPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	restricted := `command="/usr/local/bin/recover",no-pty,no-port-forwarding ` + keyA + " ops"
+	if err := os.WriteFile(akPath, []byte(restricted+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Adding an unrelated key rewrites the file.
+	if _, err := m.AddKey(keyB, "bob"); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(akPath)
+	got := string(b)
+	if !strings.Contains(got, `command="/usr/local/bin/recover"`) ||
+		!strings.Contains(got, "no-pty") || !strings.Contains(got, "no-port-forwarding") {
+		t.Errorf("restricted key options were stripped on rewrite:\n%s", got)
+	}
+}
+
+func TestOptionsControlCharRejected(t *testing.T) {
+	// An option carrying an embedded newline is the same injection vector
+	// as a comment newline and must be rejected.
+	bad := "command=\"a\nb\" " + keyA
+	if _, err := ParseKey(bad, ""); err == nil {
+		t.Error("expected rejection of option with embedded newline")
+	}
+}
+
+func TestWriteFixesStaleTempMode(t *testing.T) {
+	// A stale <path>.tmp left by a prior crash must not leak its (looser)
+	// permissions into the published authorized_keys: open(2) only honours
+	// the mode when creating, so writeSync chmods explicitly.
+	m, dir := newTestManager(t)
+	akPath := filepath.Join(dir, ".ssh", "authorized_keys")
+	if err := os.MkdirAll(filepath.Dir(akPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(akPath+".tmp", []byte("stale"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.AddKey(keyA, "alice"); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(akPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o600 {
+		t.Errorf("authorized_keys mode = %o after stale-tmp write, want 600", fi.Mode().Perm())
+	}
+}
+
+func TestRemoveDropsOne(t *testing.T) {
+	m, dir := newTestManager(t)
 	ka, _ := m.AddKey(keyA, "alice")
 	if _, err := m.AddKey(keyB, "bob"); err != nil {
 		t.Fatal(err)
@@ -325,38 +258,90 @@ func TestManagerRemove(t *testing.T) {
 	if err := m.RemoveKey(ka.Fingerprint); err != nil {
 		t.Fatal(err)
 	}
-	if len(m.List().SSHKeys) != 1 {
+	if len(mustKeys(t, m)) != 1 {
 		t.Fatalf("remove failed")
 	}
-	// authorized_keys re-rendered without the removed key.
-	b, _ := os.ReadFile(filepath.Join(root, ".ssh", "authorized_keys"))
+	b, _ := os.ReadFile(filepath.Join(dir, ".ssh", "authorized_keys"))
 	if strings.Contains(string(b), "alice") {
 		t.Errorf("removed key still in authorized_keys: %q", string(b))
 	}
-	// removing again errors (absent).
+	// removing an absent key errors.
 	if err := m.RemoveKey(ka.Fingerprint); err == nil {
 		t.Error("expected error removing absent key")
 	}
 }
 
-func TestManagerBootRenderFromPersisted(t *testing.T) {
-	dir := t.TempDir()
-	st, _ := Open(filepath.Join(dir, "access.json"))
-	ka, _ := ParseKey(keyA, "alice")
-	_ = st.Save(Access{Provider: ProviderOpenAPS, SSHKeys: []Key{ka}})
-
-	// fresh manager (simulating a reboot) must render from disk.
-	st2, _ := Open(filepath.Join(dir, "access.json"))
-	r := &Renderer{rootHome: dir, dropbearKeyGen: noopDropbear, DropbearKeyPath: filepath.Join(dir, "hk")}
-	m := NewManager(st2, r)
-	if err := m.BootRender(); err != nil {
-		t.Fatal(err)
+func TestRemoveLastKeyRefused(t *testing.T) {
+	m, dir := newTestManager(t)
+	ka, _ := m.AddKey(keyA, "alice")
+	if err := m.RemoveKey(ka.Fingerprint); err == nil {
+		t.Fatal("expected refusal removing the only key")
 	}
-	b, err := os.ReadFile(filepath.Join(dir, ".ssh", "authorized_keys"))
-	if err != nil {
-		t.Fatal(err)
+	// the key must still be present — the refusal is the lockout guard.
+	if len(mustKeys(t, m)) != 1 {
+		t.Error("the only key was removed despite the guard")
 	}
+	b, _ := os.ReadFile(filepath.Join(dir, ".ssh", "authorized_keys"))
 	if !strings.Contains(string(b), "alice") {
-		t.Errorf("boot-render did not write persisted key: %q", string(b))
+		t.Errorf("only-key guard truncated the file: %q", string(b))
+	}
+}
+
+func TestBootEnsuresDirAndHostKey(t *testing.T) {
+	m, dir := newTestManager(t)
+	if err := m.Boot(); err != nil {
+		t.Fatal(err)
+	}
+	if di, err := os.Stat(filepath.Join(dir, ".ssh")); err != nil || di.Mode().Perm() != 0o700 {
+		t.Errorf(".ssh not created 0700: err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "hk")); err != nil {
+		t.Errorf("dropbear host key not ensured: %v", err)
+	}
+}
+
+func TestBootNoDropbearSkipsHostKey(t *testing.T) {
+	dir := t.TempDir()
+	prov := &Provider{
+		AuthorizedKeysPath: filepath.Join(dir, ".ssh", "authorized_keys"),
+		ManageDropbear:     false,
+		DropbearKeyPath:    filepath.Join(dir, "hk"),
+		dropbearKeyGen:     noopDropbear,
+	}
+	m := NewManager(prov)
+	if err := m.Boot(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "hk")); !os.IsNotExist(err) {
+		t.Errorf("host key was created despite manage-dropbear=false: %v", err)
+	}
+}
+
+func TestHostProviderChowns(t *testing.T) {
+	dir := t.TempDir()
+	me, err := user.Current()
+	if err != nil {
+		t.Skip("no current user")
+	}
+	prov := &Provider{
+		AuthorizedKeysPath: filepath.Join(dir, ".ssh", "authorized_keys"),
+		ChownUser:          "ops",
+		ManageDropbear:     false,
+		lookupUser: func(name string) (*user.User, error) {
+			return &user.User{Uid: me.Uid, Gid: me.Gid, HomeDir: dir, Username: name}, nil
+		},
+	}
+	m := NewManager(prov)
+	if _, err := m.AddKey(keyA, ""); err != nil {
+		t.Fatalf("host AddKey: %v", err)
+	}
+	akPath := filepath.Join(dir, ".ssh", "authorized_keys")
+	if _, err := os.Stat(akPath); err != nil {
+		t.Errorf("host authorized_keys not written: %v", err)
+	}
+	// chown to the (current-uid) host user succeeds; a real uid mismatch
+	// would surface as an error from writeKeys, which AddKey propagates.
+	if di, err := os.Stat(filepath.Join(dir, ".ssh")); err != nil || di.Mode().Perm() != 0o700 {
+		t.Errorf("host .ssh dir not 0700: err=%v", err)
 	}
 }

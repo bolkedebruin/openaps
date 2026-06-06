@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -74,8 +75,10 @@ func TestServerAddListRemoveStatus(t *testing.T) {
 	if !r.GetOk() || r.GetKeyCount() != 0 {
 		t.Fatalf("empty list: ok=%v count=%d err=%q", r.GetOk(), r.GetKeyCount(), r.GetError())
 	}
-	if r.GetProvider() != "openaps" {
-		t.Errorf("provider = %q, want openaps", r.GetProvider())
+	// provider now reports the managed authorized_keys path (the source of
+	// truth), not an enum.
+	if !strings.HasSuffix(r.GetProvider(), "authorized_keys") {
+		t.Errorf("provider = %q, want the authorized_keys path", r.GetProvider())
 	}
 
 	// add a key
@@ -88,6 +91,13 @@ func TestServerAddListRemoveStatus(t *testing.T) {
 		t.Fatal("no fingerprint returned")
 	}
 
+	// add a second key so removal is allowed (the last-key guard refuses
+	// removing the only remaining key).
+	r = roundtrip(t, sock, &wire.AccessRequest{Op: &wire.AccessRequest_AddKey{AddKey: &wire.AddKeyOp{Pubkey: keyB, Comment: "bob"}}})
+	if !r.GetOk() || r.GetKeyCount() != 2 {
+		t.Fatalf("add second: ok=%v count=%d err=%q", r.GetOk(), r.GetKeyCount(), r.GetError())
+	}
+
 	// add malformed -> error
 	r = roundtrip(t, sock, &wire.AccessRequest{Op: &wire.AccessRequest_AddKey{AddKey: &wire.AddKeyOp{Pubkey: "garbage"}}})
 	if r.GetOk() {
@@ -96,13 +106,13 @@ func TestServerAddListRemoveStatus(t *testing.T) {
 
 	// status (no keys in payload, count set)
 	r = roundtrip(t, sock, &wire.AccessRequest{Op: &wire.AccessRequest_Status{Status: &wire.StatusOp{}}})
-	if !r.GetOk() || r.GetKeyCount() != 1 || len(r.GetKeys()) != 0 {
+	if !r.GetOk() || r.GetKeyCount() != 2 || len(r.GetKeys()) != 0 {
 		t.Fatalf("status: ok=%v count=%d keys=%d", r.GetOk(), r.GetKeyCount(), len(r.GetKeys()))
 	}
 
-	// remove
+	// remove one
 	r = roundtrip(t, sock, &wire.AccessRequest{Op: &wire.AccessRequest_RemoveKey{RemoveKey: &wire.RemoveKeyOp{Fingerprint: fp}}})
-	if !r.GetOk() || r.GetKeyCount() != 0 {
+	if !r.GetOk() || r.GetKeyCount() != 1 {
 		t.Fatalf("remove: ok=%v count=%d err=%q", r.GetOk(), r.GetKeyCount(), r.GetError())
 	}
 
@@ -110,6 +120,13 @@ func TestServerAddListRemoveStatus(t *testing.T) {
 	r = roundtrip(t, sock, &wire.AccessRequest{Op: &wire.AccessRequest_RemoveKey{RemoveKey: &wire.RemoveKeyOp{Fingerprint: fp}}})
 	if r.GetOk() {
 		t.Error("removing absent key should fail")
+	}
+
+	// remove the last remaining key -> refused (lockout guard).
+	bfp := fpOf(t, keyB)
+	r = roundtrip(t, sock, &wire.AccessRequest{Op: &wire.AccessRequest_RemoveKey{RemoveKey: &wire.RemoveKeyOp{Fingerprint: bfp}}})
+	if r.GetOk() {
+		t.Error("removing the only remaining key should be refused")
 	}
 }
 

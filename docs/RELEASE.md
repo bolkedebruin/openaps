@@ -1,3 +1,55 @@
+# OpenAPS v1.0.11
+
+`recoveryd` now treats `authorized_keys` as the **single source of truth**.
+The prior release kept a separate `/etc/recoveryd/access.json` key list that
+the daemon *rendered* into `authorized_keys` — letting the two diverge (the UI
+could show an empty list while `authorized_keys` still held a key) and forcing a
+"refuse to render empty over non-empty" anti-brick hack plus an installer
+adoption/seed step. This release removes that indirection entirely: `recoveryd`
+reads and rewrites the real `authorized_keys` file directly.
+
+## Changed
+
+- **`authorized_keys` is the source of truth.** `recoveryd` parses it on every
+  `ListKeys`, and every `AddKey`/`RemoveKey` is an atomic
+  (temp+fsync+rename, mode `0600`) rewrite of that same file. The `.ssh` parent
+  dir is ensured `0700` (and chowned to the target user under the host
+  provider).
+- **Removed the `access.json` store and the render-from-list model**, including
+  the "refuse to render empty over non-empty" guard, the boot-render step, the
+  installer `seed` subcommand, and the `-access` flag. This supersedes the
+  `access.json` render model shipped in the prior release.
+- **One lockout guard remains:** `RemoveKey` refuses to remove the *last*
+  remaining key ("refusing to remove the only key — you would lose access").
+- **Provider is selected by flags, not a config file** (provider switching over
+  the API was deferred): `-authorized-keys` (default `/root/.ssh/authorized_keys`),
+  `-chown-user` (default empty = root; set for the host/Pi provider),
+  `-manage-dropbear` (default `true`; host/Pi sets `false` to defer to the host
+  sshd). `-socket` and `-dropbear-host-key` are unchanged. `S97-recoveryd` passes
+  `-authorized-keys /root/.ssh/authorized_keys -manage-dropbear=true`.
+- **Boot is render-free:** `recoveryd` ensures the `.ssh` dir and (when managing
+  dropbear) the host key, then serves. If `authorized_keys` is absent,
+  `ListKeys` returns empty and the operator adds keys via the web UI.
+- **Installer** appends the bundled operator key to `/root/.ssh/authorized_keys`
+  directly (atomic, deduped) — the original pre-`recoveryd` behavior — and still
+  installs the `recoveryd` binary + `S97-recoveryd`. No `access.json` is written.
+- The protobuf UDS API (`ListKeys`/`AddKey`/`RemoveKey`/`Status`) and the
+  `ecu-web` Security page are unchanged. `Status` now reports the managed
+  `authorized_keys` path and the key count parsed from the file. The
+  dropbear-managed flag is intentionally **not** surfaced over the API — the
+  proto surface is frozen, so adding a field is out of scope; it is a
+  start-up flag only.
+- **Restricted keys are preserved.** `authorized_keys` options
+  (`command=`, `from=`, `no-pty`, …) are parsed and re-emitted verbatim, so a
+  forced-command/source-locked key keeps its restrictions across the rewrite
+  every mutation performs (a control byte in an option is rejected, like the
+  comment).
+- **Atomic writes are centralised** in `internal/atomicfile`: the host
+  provider's chown-before-rename now goes through `atomicfile.WriteOwned`
+  rather than a hand-rolled second copy of the fsync+rename choreography, and
+  `writeSync` chmods explicitly so a stale temp left by a crash can't publish
+  looser-than-`0600` permissions.
+
 # OpenAPS v1.0.10
 
 Bug-fix for `recoveryd` (v1.0.9). `recoveryd` defaulted its UDS to

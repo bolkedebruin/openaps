@@ -7,51 +7,56 @@ import (
 	"time"
 )
 
-// Manager is the policy layer over the store and renderer. It serialises
-// mutations, validates and dedupes keys, persists the list, and rewrites
-// authorized_keys after every change. It is the single owner of the
-// access plane.
+// Manager is the policy layer over the provider's authorized_keys file. It
+// serialises mutations, validates and dedupes keys, and rewrites the file
+// atomically after every change. authorized_keys is the single source of
+// truth — the Manager holds no key list of its own; it parses the file on
+// every read.
 type Manager struct {
-	store *Store
-	rend  *Renderer
-	mu    sync.Mutex
+	prov *Provider
+	mu   sync.Mutex
 	// now is overridable in tests.
 	now func() int64
 }
 
-// NewManager builds a Manager over a store and renderer. It does NOT
-// render — call BootRender once at startup so authorized_keys reflects
-// the persisted list before dropbear binds.
-func NewManager(store *Store, rend *Renderer) *Manager {
+// NewManager builds a Manager over a provider.
+func NewManager(prov *Provider) *Manager {
 	return &Manager{
-		store: store,
-		rend:  rend,
-		now:   func() int64 { return time.Now().UnixMilli() },
+		prov: prov,
+		now:  func() int64 { return time.Now().UnixMilli() },
 	}
 }
 
-// BootRender renders authorized_keys from the persisted list at startup.
-// This is the anti-brick guarantee: even with no client ever connecting,
-// the box's keys are in place before dropbear starts.
-func (m *Manager) BootRender() error {
+// Boot ensures the .ssh dir exists and, when managing dropbear, the host
+// key — then the daemon serves. There is nothing to render: authorized_keys
+// already is the truth. A missing authorized_keys is fine; ListKeys returns
+// empty and the operator adds keys via the web UI.
+func (m *Manager) Boot() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	a := m.store.Get()
-	if err := m.rend.Render(a); err != nil {
+	if err := m.prov.ensureSSHDir(); err != nil {
 		return err
 	}
-	log.Printf("recoveryd: boot-render provider=%s keys=%d", a.Provider, len(a.SSHKeys))
+	if err := m.prov.ensureDropbearHostKey(); err != nil {
+		return err
+	}
+	log.Printf("recoveryd: boot authorized-keys=%s manage-dropbear=%v", m.prov.path(), m.prov.ManageDropbear)
 	return nil
 }
 
-// List returns the current access state.
-func (m *Manager) List() Access {
-	return m.store.Get()
+// Provider returns the underlying provider (for status reporting).
+func (m *Manager) Provider() *Provider { return m.prov }
+
+// ListKeys parses the authorized_keys file and returns the current keys.
+func (m *Manager) ListKeys() ([]Key, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.prov.readKeys()
 }
 
-// AddKey validates pubkey, dedupes by fingerprint, persists, and
-// re-renders authorized_keys. Adding an already-present key is a no-op
-// success (idempotent). Returns the parsed key.
+// AddKey validates pubkey, dedupes by fingerprint against the file,
+// appends, and atomically rewrites authorized_keys. Adding an already-present
+// key is a no-op success (idempotent). Returns the parsed key.
 func (m *Manager) AddKey(pubkey, comment string) (Key, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -60,32 +65,40 @@ func (m *Manager) AddKey(pubkey, comment string) (Key, error) {
 	if err != nil {
 		return Key{}, err
 	}
-	a := m.store.Get()
-	for _, existing := range a.SSHKeys {
+	keys, err := m.prov.readKeys()
+	if err != nil {
+		return Key{}, err
+	}
+	for _, existing := range keys {
 		if existing.Fingerprint == k.Fingerprint {
 			log.Printf("recoveryd: add key %s already present (no-op)", k.Fingerprint)
 			return existing, nil
 		}
 	}
 	k.AddedMs = m.now()
-	a.SSHKeys = append(a.SSHKeys, k)
-	if err := m.persistAndRender(a); err != nil {
+	keys = append(keys, k)
+	if err := m.prov.writeKeys(keys); err != nil {
 		return Key{}, err
 	}
-	log.Printf("recoveryd: ADDED key fp=%s comment=%q (now %d keys)", k.Fingerprint, k.Comment, len(a.SSHKeys))
+	log.Printf("recoveryd: ADDED key fp=%s comment=%q (now %d keys)", k.Fingerprint, k.Comment, len(keys))
 	return k, nil
 }
 
-// RemoveKey removes the key with the given fingerprint, persists, and
-// re-renders. Removing an absent key is an error so the caller can tell
-// the operator it wasn't found.
+// RemoveKey drops the key with the given fingerprint and atomically
+// rewrites authorized_keys. Removing an absent key is an error so the caller
+// can tell the operator it wasn't found. Removing the LAST remaining key is
+// refused — that would lock the operator out of the box. This is the only
+// lockout guard the direct-file model needs.
 func (m *Manager) RemoveKey(fingerprint string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	a := m.store.Get()
+	keys, err := m.prov.readKeys()
+	if err != nil {
+		return err
+	}
 	idx := -1
-	for i, k := range a.SSHKeys {
+	for i, k := range keys {
 		if k.Fingerprint == fingerprint {
 			idx = i
 			break
@@ -94,21 +107,13 @@ func (m *Manager) RemoveKey(fingerprint string) error {
 	if idx < 0 {
 		return fmt.Errorf("no key with fingerprint %s", fingerprint)
 	}
-	a.SSHKeys = append(a.SSHKeys[:idx], a.SSHKeys[idx+1:]...)
-	if err := m.persistAndRender(a); err != nil {
+	if len(keys) == 1 {
+		return fmt.Errorf("refusing to remove the only key — you would lose access")
+	}
+	keys = append(keys[:idx], keys[idx+1:]...)
+	if err := m.prov.writeKeys(keys); err != nil {
 		return err
 	}
-	log.Printf("recoveryd: REMOVED key fp=%s (now %d keys)", fingerprint, len(a.SSHKeys))
+	log.Printf("recoveryd: REMOVED key fp=%s (now %d keys)", fingerprint, len(keys))
 	return nil
-}
-
-// persistAndRender saves the list then rewrites authorized_keys. The
-// store is the source of truth, so it is written first; a render failure
-// after a successful save still leaves the next BootRender able to
-// recover the file from disk.
-func (m *Manager) persistAndRender(a Access) error {
-	if err := m.store.Save(a); err != nil {
-		return err
-	}
-	return m.rend.Render(a)
 }
