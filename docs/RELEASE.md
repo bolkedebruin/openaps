@@ -1,27 +1,53 @@
-# OpenAPS v1.0.8
+# OpenAPS v1.0.9
 
-Patch release in the `v1.0.x` stream. **Keeps the stock `idwriter` daemon enabled
-after migration as a LAN recovery path.** Behaviour change in the installer only;
-the OpenAPS services are unchanged from v1.0.7.
+Adds **`recoveryd`** — a dedicated, minimal root daemon that owns the box's SSH
+access plane — plus a web **Security** page to manage SSH keys. This makes the
+migrated box harder to lock yourself out of, independent of the fleet daemon and
+the web service.
 
-## Changed — `idwriter` is no longer disabled
+## New — `recoveryd` access daemon
 
-The brownfield installer's step-6 supervisor-disable list no longer includes
-`idwriter`. After migration the box keeps the stock provisioning daemon running
-on TCP `:4540`, which exposes an **unauthenticated root command surface** (the
-`A108:` shell verb). It is retained deliberately as a **recovery path**: once the
-stock web UI is removed, dropbear on `:22` is otherwise the only way back in, and
-if dropbear ever fails to start (e.g. a host-key problem) idwriter's `A108:`
-backdoor is the fallback that gets a root shell on the LAN.
+- **A separate, hardened daemon owns `authorized_keys`.** `recoveryd` is the
+  single writer of the root key file, independent of `inv-driver` (fleet) and
+  `ecu-web` (UI). Source of truth is `/etc/recoveryd/access.json`; it renders
+  `authorized_keys` as a **full rewrite** on every change **and at boot** (started
+  by `S97-recoveryd`, before `S98-dropbear`), and ensures the dropbear host key
+  exists. Provider-aware: `openaps` → `/root/.ssh/authorized_keys` + dropbear;
+  `host` → `~<user>/.ssh/authorized_keys` (defers to the host `sshd`, for the
+  Raspberry Pi target); `off` → no-op.
+- **Anti-brick by construction.** Boot-render means the key file always reflects
+  the managed list; `recoveryd` **refuses to render an empty `authorized_keys`
+  over a non-empty one** (you can't accidentally zero out your keys — use
+  `provider=off` to deliberately revoke); writes are durable (temp → `fsync` →
+  rename → dir-`fsync`), so a power loss can't leave a truncated/empty file.
+- **API:** length-prefixed protobuf over a **local UDS** (`/run/recoveryd.sock`,
+  mode `0600`, `SO_PEERCRED` uid-0 gate) — `ListKeys` / `AddKey` / `RemoveKey` /
+  `Status`. No network listener, no out-of-band path (a button-based recovery is
+  future work). Keys are validated with `x/crypto/ssh`, fingerprinted
+  (SHA256), and deduped; operator comments are rejected if they contain control
+  characters (no `authorized_keys` line injection).
 
-This is an intentional security trade-off — it leaves an unauthenticated root
-surface reachable on the LAN. The installer comment and README call it out; to
-opt out, add `idwriter` back to the step-6 disable set (or remove the binary on
-the box).
+## New — web Security page
 
-Everything else (the full v1.0.3–v1.0.7 installer arc — BusyBox fixes,
-`import-stock` inventory seeding, bundled grid profiles, the reordered/rebooting
-install that lands on working OpenAPS) is carried forward unchanged.
+`ecu-web` gains a **Security** page that lists / adds / removes root SSH keys
+(fingerprint, comment, added date), with an empty-state "add a key for shell
+access" nudge. It's a thin proxy to `recoveryd` over the local UDS, behind the
+existing operator session auth; **removing** a key requires the same single-use
+step-up confirmation as other sensitive writes.
+
+## Installer
+
+The brownfield installer now installs `recoveryd` + `S97-recoveryd` and **seeds
+`/etc/recoveryd/access.json`** from the operator's bundled key instead of writing
+`/root/.ssh/authorized_keys` directly — `recoveryd` renders it at boot, before
+dropbear binds. `idwriter` is unchanged (still the interim out-of-band path).
+
+## Internal
+
+Review extracted shared helpers used across daemons: `internal/udsutil`
+(`SO_PEERCRED` peer-uid + stale-socket removal) and `internal/atomicfile`
+(durable temp+fsync+rename write); `internal/ipc` and `internal/settings` now use
+them.
 
 ## Compatibility matrix unchanged from v1.0.4
 
@@ -37,27 +63,26 @@ install that lands on working OpenAPS) is carried forward unchanged.
 ## Install / upgrade
 
 ```sh
-curl -H "Expect:" -F "file=@openaps-v1.0.8-ecu.tar.bz2" \
+curl -H "Expect:" -F "file=@openaps-v1.0.9-ecu.tar.bz2" \
      http://<ECU-IP>/index.php/management/exec_upgrade_ecu_app
 ```
 
-`{"res":0}` means received + launched; watch `/home/openaps-install.log` until
-the reboot, then open `https://<ECU-IP>/` after ~1-2 minutes. Roll back with
+`{"res":0}` = received + launched; watch `/home/openaps-install.log` until the
+reboot, then open `https://<ECU-IP>/` after ~1-2 minutes. Roll back with
 `ssh root@<ECU-IP> /usr/local/bin/openaps-rollback`.
 
 ## Still deferred
 
-- **Signed-tarball OTA** — `release.pub` ships; `/api/upgrade` not yet plumbed.
-- **Passkeys** — blocked on WebAuthn rpId / PSL constraints; needs a real DNS name.
-- **AES encrypt wire-up in ecu-zb** — inbound decrypt only.
-- **v2:** Pi / .deb / systemd packaging; `bus-mgr ti-znp-zb` USB-radio backend.
+- **Out-of-band recovery** — button/GPIO-triggered path into `recoveryd` (Mode-B);
+  `idwriter` remains the interim path until then.
+- **Provider switching over the UDS API** — set via `access.json` for now.
+- **Signed-tarball OTA**, **passkeys**, **AES encrypt wire-up**, **v2 Pi/.deb**.
 
 ## Artifacts
 
-- `openaps-v1.0.8-ecu.tar.bz2` — brownfield installer.
+- `openaps-v1.0.9-ecu.tar.bz2` — brownfield installer (now ships `recoveryd`).
 - `SHA256SUMS`.
 
 ## Install caveats
 
-Install only on LANs you control. v1.0.8 additionally leaves `idwriter`'s
-unauthenticated root surface on `:4540` — only run it where that is acceptable.
+Install only on LANs you control.

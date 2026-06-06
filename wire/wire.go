@@ -27,10 +27,13 @@ import (
 // 64 KiB leaves ample headroom and bounds the worst case.
 const MaxFrameBytes = 64 * 1024
 
-// ReadFrame reads one length-prefixed frame from r and unmarshals it
-// into env. Returns io.EOF cleanly when the peer closes before any
-// header byte. A partial header read returns io.ErrUnexpectedEOF.
-func ReadFrame(r io.Reader, env *Envelope) error {
+// ReadMessage reads one length-prefixed frame from r and unmarshals it
+// into m. Returns io.EOF cleanly when the peer closes before any header
+// byte. A partial header read returns io.ErrUnexpectedEOF. It works for
+// any proto.Message — the Envelope-typed ReadFrame delegates to it, and
+// daemons with their own frame schema (e.g. recoveryd's AccessRequest/
+// AccessResponse) reuse it directly so the framing lives in one place.
+func ReadMessage(r io.Reader, m proto.Message) error {
 	var hdr [4]byte
 	if _, err := io.ReadFull(r, hdr[:]); err != nil {
 		return err
@@ -46,20 +49,20 @@ func ReadFrame(r io.Reader, env *Envelope) error {
 	if _, err := io.ReadFull(r, body); err != nil {
 		return fmt.Errorf("wire: short read on %d-byte body: %w", n, err)
 	}
-	// Reset env before unmarshal so stale oneof state doesn't leak
-	// from prior frames when the same struct is reused.
-	proto.Reset(env)
-	if err := proto.Unmarshal(body, env); err != nil {
+	// Reset m before unmarshal so stale oneof state doesn't leak from
+	// prior frames when the same struct is reused.
+	proto.Reset(m)
+	if err := proto.Unmarshal(body, m); err != nil {
 		return fmt.Errorf("wire: proto: %w", err)
 	}
 	return nil
 }
 
-// WriteFrame marshals env and writes it to w as a length-prefixed
-// frame. Not safe for concurrent calls on the same w — callers
-// serialise via a single goroutine or a mutex.
-func WriteFrame(w io.Writer, env *Envelope) error {
-	body, err := proto.Marshal(env)
+// WriteMessage marshals m and writes it to w as a length-prefixed frame.
+// Not safe for concurrent calls on the same w — callers serialise via a
+// single goroutine or a mutex.
+func WriteMessage(w io.Writer, m proto.Message) error {
+	body, err := proto.Marshal(m)
 	if err != nil {
 		return fmt.Errorf("wire: marshal: %w", err)
 	}
@@ -75,4 +78,16 @@ func WriteFrame(w io.Writer, env *Envelope) error {
 		return err
 	}
 	return nil
+}
+
+// ReadFrame reads one length-prefixed frame into env. It is the
+// Envelope-typed convenience over ReadMessage.
+func ReadFrame(r io.Reader, env *Envelope) error {
+	return ReadMessage(r, env)
+}
+
+// WriteFrame marshals env and writes it to w as a length-prefixed frame.
+// It is the Envelope-typed convenience over WriteMessage.
+func WriteFrame(w io.Writer, env *Envelope) error {
+	return WriteMessage(w, env)
 }

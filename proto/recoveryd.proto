@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+// Package recoveryd.v1 is the wire schema between a local client
+// (ecu-web) and recoveryd, the daemon that owns the box's SSH access
+// plane. Framing is the same 4-byte BE length prefix used by busmgr
+// (wire.ReadFrame/WriteFrame, 64 KiB cap).
+package recoveryd.v1;
+
+option go_package = "github.com/bolkedebruin/openaps/wire;wire";
+
+// AccessRequest is the single top-level message a client sends. Exactly
+// one op is set per request.
+message AccessRequest {
+  oneof op {
+    ListKeysOp  list_keys  = 1;
+    AddKeyOp    add_key    = 2;
+    RemoveKeyOp remove_key = 3;
+    StatusOp    status     = 4;
+  }
+}
+
+// ListKeysOp returns the current key list and provider state.
+message ListKeysOp {}
+
+// AddKeyOp validates and appends an authorized key. The pubkey is the
+// full OpenSSH single-line form (e.g. "ssh-ed25519 AAAA... comment").
+// comment overrides any trailing comment in pubkey when non-empty.
+message AddKeyOp {
+  string pubkey  = 1;
+  string comment = 2;
+}
+
+// RemoveKeyOp removes the key whose SHA256 fingerprint matches.
+message RemoveKeyOp {
+  string fingerprint = 1;
+}
+
+// StatusOp returns provider/host-user/key-count without the full list.
+message StatusOp {}
+
+// SshKey is one authorized key in the list.
+message SshKey {
+  // Pubkey is the normalised single-line OpenSSH form recoveryd renders
+  // into authorized_keys.
+  string pubkey = 1;
+  // Comment is the operator-facing label (key origin/owner).
+  string comment = 2;
+  // AddedMs is the wall-clock add time in epoch milliseconds.
+  int64 added_ms = 3;
+  // Fingerprint is the ssh.FingerprintSHA256 of the key (the stable id
+  // used by RemoveKeyOp).
+  string fingerprint = 4;
+}
+
+// AccessResponse is recoveryd's reply to any AccessRequest.
+message AccessResponse {
+  bool   ok    = 1;
+  string error = 2;
+
+  // Provider is "openaps", "host", or "off".
+  string provider = 3;
+  // HostUser is the unix user whose authorized_keys is rendered under
+  // the "host" provider; empty otherwise.
+  string host_user = 4;
+  // Keys is the full list (set on ListKeys; empty on Status).
+  repeated SshKey keys = 5;
+  // KeyCount is the number of keys (always set).
+  uint32 key_count = 6;
+}

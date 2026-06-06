@@ -27,6 +27,7 @@ var version = "dev"
 func main() {
 	listen := flag.String("listen", ":443", "HTTPS listen address")
 	sock := flag.String("invdriver-sock", "/var/run/inv-driver.sock", "inv-driver UDS path")
+	recoverySock := flag.String("recoveryd-sock", "/run/recoveryd.sock", "recoveryd UDS path (SSH access plane)")
 	stateDir := flag.String("state-dir", "/var/lib/ecu-web", "dir for TLS cert/key and auth credentials")
 	backend := flag.String("backend", "ecu-web", "Hello backend identity reported to inv-driver")
 	pushRate := flag.Duration("push-rate", time.Second, "minimum interval between SSE fleet frames")
@@ -65,6 +66,7 @@ func main() {
 		Version:    version,
 		Hostname:   hostname,
 	}
+	rec := &uds.Recovery{SocketPath: *recoverySock}
 
 	srv := httpserver.New(httpserver.Config{
 		Listen:        *listen,
@@ -81,6 +83,9 @@ func main() {
 		GridProfileFn: ctrl.GridProfile,
 		SendFrame:     ctrl.Send,
 		PairingFn:     ctrl.Pairing,
+		SSHKeysList:   rec.ListKeys,
+		SSHKeyAdd:     rec.AddKey,
+		SSHKeyRemove:  rec.RemoveKey,
 	})
 	snap.SetOnChange(srv.MarkDirty)
 

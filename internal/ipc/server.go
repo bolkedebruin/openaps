@@ -21,6 +21,7 @@ import (
 	"github.com/bolkedebruin/openaps/internal/events"
 	"github.com/bolkedebruin/openaps/internal/ingest"
 	"github.com/bolkedebruin/openaps/internal/store"
+	"github.com/bolkedebruin/openaps/internal/udsutil"
 	"github.com/bolkedebruin/openaps/wire"
 )
 
@@ -164,7 +165,7 @@ func (s *Server) Serve(ctx context.Context) error {
 		s.SocketMode = 0o600
 	}
 
-	if err := removeStaleSocket(s.SocketPath); err != nil {
+	if err := udsutil.RemoveStaleSocket(s.SocketPath); err != nil {
 		return fmt.Errorf("ipc.Serve: %w", err)
 	}
 
@@ -236,7 +237,7 @@ func (s *Server) handleConn(ctx context.Context, id uint64, c net.Conn) {
 		log.Printf("ipc %s: closed", tag)
 	}()
 
-	peerUID := peerUIDFromConn(c)
+	peerUID := udsutil.PeerUID(c)
 
 	// First frame must be Hello, within helloDeadline.
 	_ = c.SetReadDeadline(time.Now().Add(helloDeadline))
@@ -814,23 +815,3 @@ ORDER  BY uid`)
 	return nil
 }
 
-// removeStaleSocket unlinks an existing UDS at path if (and only if)
-// it is in fact a socket. Refuses to clobber regular files / dirs /
-// symlinks so a misconfigured -socket arg can't delete unrelated data.
-// Uses Lstat so a symlinked-to-socket is also refused.
-func removeStaleSocket(path string) error {
-	st, err := os.Lstat(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return fmt.Errorf("stat %s: %w", path, err)
-	}
-	if st.Mode()&os.ModeSocket == 0 {
-		return fmt.Errorf("refusing to remove non-socket at %s (mode=%s)", path, st.Mode())
-	}
-	if err := os.Remove(path); err != nil {
-		return fmt.Errorf("remove stale socket %s: %w", path, err)
-	}
-	return nil
-}

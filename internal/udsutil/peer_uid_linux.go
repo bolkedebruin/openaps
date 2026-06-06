@@ -1,17 +1,17 @@
 //go:build linux
 
-package ipc
+package udsutil
 
 import (
 	"net"
 	"syscall"
 )
 
-// peerUIDFromConn returns the OS user-id of the peer of a Unix-domain
-// socket via SO_PEERCRED. Returns -1 on any error (caller treats that as
-// "unknown" — the ingest gate skips its UID check when the value is -1
-// and ControllerUIDs is empty).
-func peerUIDFromConn(c net.Conn) int {
+// PeerUID returns the OS user-id of the UDS peer via SO_PEERCRED, or -1
+// on any error. Callers that gate on uid-0 treat -1 as "unknown" — the
+// peer-cred check is only enforced on the Linux target where the daemons
+// actually run.
+func PeerUID(c net.Conn) int {
 	uc, ok := c.(*net.UnixConn)
 	if !ok {
 		return -1

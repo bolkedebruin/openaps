@@ -9,9 +9,10 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/bolkedebruin/openaps/internal/atomicfile"
 )
 
 // DefaultChannel is the ZigBee channel used when Settings.Channel is unset.
@@ -73,26 +74,16 @@ func (st *Store) Get() Settings {
 	return st.s
 }
 
-// Save replaces the settings and persists them atomically (write temp +
-// rename).
+// Save replaces the settings and persists them durably (atomicfile.Write
+// fsyncs the temp file and directory around the rename). 0o600: the file
+// holds operator identifiers and the MAC override; only root reads it.
 func (st *Store) Save(s Settings) error {
 	b, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return err
 	}
-	if dir := filepath.Dir(st.path); dir != "" {
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			return err
-		}
-	}
-	tmp := st.path + ".tmp"
-	// 0o600: the settings file holds operator identifiers and the MAC
-	// override; only root needs to read it.
-	if err := os.WriteFile(tmp, append(b, '\n'), 0o600); err != nil {
-		return fmt.Errorf("settings: write %s: %w", tmp, err)
-	}
-	if err := os.Rename(tmp, st.path); err != nil {
-		return fmt.Errorf("settings: rename %s: %w", st.path, err)
+	if err := atomicfile.Write(st.path, append(b, '\n'), 0o600); err != nil {
+		return fmt.Errorf("settings: save %s: %w", st.path, err)
 	}
 	st.mu.Lock()
 	st.s = s

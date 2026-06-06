@@ -271,6 +271,25 @@ export interface OverlayQueuedResponse {
   failed?: { uid: string; error: string }[];
 }
 
+// --- SSH access plane (recoveryd) ---
+
+export interface SshKey {
+  pubkey: string;
+  comment?: string;
+  added_ms: number;
+  fingerprint: string;
+}
+
+// AccessState is the response shape of the /api/access/ssh-keys endpoints:
+// the active provider plus the full authorized-key list. `error` is set when
+// recoveryd rejected the request (the list may then be empty).
+export interface AccessState {
+  provider: string; // "openaps" | "host" | "off"
+  host_user?: string;
+  keys: SshKey[];
+  error?: string;
+}
+
 // --- Pairing ---
 
 // PairingStage is the coarse phase of an in-flight pairing op. "" / "done" /
@@ -423,6 +442,14 @@ export const api = {
     postJSONResult<PairingResp>("/api/pairing/change-channel", { channel }),
   pairingAbort: () => postJSONResult<PairingResp>("/api/pairing/abort", {}),
   pairingStatus: () => getJSON<PairingResp>("/api/pairing/status"),
+  // --- SSH access plane (recoveryd) ---
+  sshKeys: () => getJSON<AccessState>("/api/access/ssh-keys"),
+  addSshKey: (pubkey: string, comment: string) =>
+    postJSONResult<AccessState>("/api/access/ssh-keys", { pubkey, comment }),
+  // removeSshKey is step-up-gated server-side: the caller must verifyPassword
+  // (POST /api/auth/verify) within the step-up window first, or this 403s.
+  removeSshKey: (fingerprint: string) =>
+    delJSON<AccessState>("/api/access/ssh-keys", { fingerprint }),
 };
 
 /**

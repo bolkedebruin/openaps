@@ -7,6 +7,7 @@ import "./views/alarms-view.ts";
 import "./views/events-view.ts";
 import "./views/profiles-view.ts";
 import "./views/settings-view.ts";
+import "./views/security-view.ts";
 import "./components/app-nav.ts";
 import type { NavItem } from "./components/app-nav.ts";
 
@@ -17,6 +18,7 @@ const NAV: NavItem[] = [
   { id: "events", label: "Events", icon: "≣" },
   { id: "profiles", label: "Profiles", icon: "⛭" },
   { id: "settings", label: "Settings", icon: "⚙" },
+  { id: "security", label: "Security", icon: "⚿" },
 ];
 
 /**
@@ -250,6 +252,8 @@ export class EcuApp extends LitElement {
         return html`<profiles-view></profiles-view>`;
       case "settings":
         return html`<settings-view></settings-view>`;
+      case "security":
+        return html`<security-view></security-view>`;
       default:
         return html`<dashboard-view
           .fleet=${this.fleet}

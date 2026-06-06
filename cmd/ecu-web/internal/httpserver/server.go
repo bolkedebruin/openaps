@@ -63,6 +63,13 @@ type Config struct {
 	// to inv-driver. Nil makes the POST /api/pairing/* endpoints return a
 	// 503 and GET /api/pairing/status report unavailable.
 	PairingFn func(context.Context, *wire.PairingRequest) (*wire.PairingResponse, error)
+	// SSHKeysList/SSHKeyAdd/SSHKeyRemove talk to recoveryd (the SSH-access
+	// plane owner) over its own local UDS. Nil makes the matching
+	// /api/access/ssh-keys method return a 503. recoveryd, not inv-driver,
+	// owns authorized_keys; these are wired to a separate recoveryd client.
+	SSHKeysList  func(context.Context) (*wire.AccessResponse, error)
+	SSHKeyAdd    func(ctx context.Context, pubkey, comment string) (*wire.AccessResponse, error)
+	SSHKeyRemove func(ctx context.Context, fingerprint string) (*wire.AccessResponse, error)
 	// HistoryInterval is the power-history sample period (default 60s);
 	// HistoryWindow is how far back the chart keeps (default 48h).
 	HistoryInterval time.Duration
@@ -159,6 +166,11 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/pairing/change-channel", s.cfg.Auth.Require(http.HandlerFunc(s.handlePairingChangeChannel)))
 	mux.Handle("POST /api/pairing/abort", s.cfg.Auth.Require(http.HandlerFunc(s.handlePairingAbort)))
 	mux.Handle("GET /api/pairing/status", s.cfg.Auth.Require(http.HandlerFunc(s.handlePairingStatus)))
+	// SSH access plane (recoveryd). DELETE is step-up-gated like the
+	// sensitive settings writes — removing a key is high-impact.
+	mux.Handle("GET /api/access/ssh-keys", s.cfg.Auth.Require(http.HandlerFunc(s.handleListSSHKeys)))
+	mux.Handle("POST /api/access/ssh-keys", s.cfg.Auth.Require(http.HandlerFunc(s.handleAddSSHKey)))
+	mux.Handle("DELETE /api/access/ssh-keys", s.cfg.Auth.Require(http.HandlerFunc(s.handleRemoveSSHKey)))
 	mux.Handle("GET /api/stream", s.cfg.Auth.Require(s.hub))
 
 	// Static SPA (public so the login page can load).

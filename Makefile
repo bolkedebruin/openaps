@@ -12,6 +12,7 @@ INV_DRIVER_PKG       := ./cmd/inv-driver
 ECU_WEB_PKG          := ./cmd/ecu-web
 ECU_ZB_PKG           := ./cmd/ecu-zb
 ECU_SUNSPEC_PKG      := ./cmd/ecu-sunspec
+RECOVERYD_PKG        := ./cmd/recoveryd
 
 INV_DRIVER_BIN       := $(BUILD_DIR)/inv-driver
 INV_DRIVER_ARMV7     := $(BUILD_DIR)/inv-driver-armv7
@@ -21,6 +22,8 @@ ECU_ZB_BIN           := $(BUILD_DIR)/ecu-zb
 ECU_ZB_ARMV7         := $(BUILD_DIR)/ecu-zb-armv7
 ECU_SUNSPEC_BIN      := $(BUILD_DIR)/ecu-sunspec
 ECU_SUNSPEC_ARMV7    := $(BUILD_DIR)/ecu-sunspec-armv7
+RECOVERYD_BIN        := $(BUILD_DIR)/recoveryd
+RECOVERYD_ARMV7      := $(BUILD_DIR)/recoveryd-armv7
 
 ECU_WEB_DIR_SRC      := cmd/ecu-web/web
 
@@ -49,6 +52,7 @@ DROPBEAR_DIR ?= $(BUILD_DIR)/dropbear-armv7
         build-ecu-web build-ecu-web-arm \
         build-ecu-zb build-ecu-zb-arm \
         build-ecu-sunspec build-ecu-sunspec-arm \
+        build-recoveryd build-recoveryd-arm \
         deploy-inv-driver deploy-ecu-web deploy-ecu-zb deploy-ecu-sunspec \
         install-init-zb uninstall-init-zb \
         package-zb package-sunspec package-sunspec-with-dropbear \
@@ -61,11 +65,15 @@ all: build-all-arm
 
 # ---------------- host builds ----------------
 
-build-all: build-inv-driver build-ecu-web build-ecu-zb build-ecu-sunspec
+build-all: build-inv-driver build-ecu-web build-ecu-zb build-ecu-sunspec build-recoveryd
 
 build-inv-driver:
 	mkdir -p $(BUILD_DIR)
 	CGO_ENABLED=0 go build -ldflags '$(LDFLAGS_HOST)' -o $(INV_DRIVER_BIN) $(INV_DRIVER_PKG)
+
+build-recoveryd:
+	mkdir -p $(BUILD_DIR)
+	CGO_ENABLED=0 go build -ldflags '$(LDFLAGS_HOST)' -o $(RECOVERYD_BIN) $(RECOVERYD_PKG)
 
 build-ecu-web:
 	mkdir -p $(BUILD_DIR)
@@ -81,13 +89,19 @@ build-ecu-sunspec:
 
 # ---------------- ARMv7 builds ----------------
 
-build-all-arm: build-inv-driver-arm build-ecu-web-arm build-ecu-zb-arm build-ecu-sunspec-arm
+build-all-arm: build-inv-driver-arm build-ecu-web-arm build-ecu-zb-arm build-ecu-sunspec-arm build-recoveryd-arm
 
 build-inv-driver-arm:
 	mkdir -p $(BUILD_DIR)
 	GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 \
 		go build $(GOFLAGS_ARM) -ldflags '$(LDFLAGS_ARM)' -o $(INV_DRIVER_ARMV7) $(INV_DRIVER_PKG)
 	@echo "built $(INV_DRIVER_ARMV7) ($$(wc -c <$(INV_DRIVER_ARMV7)) bytes)"
+
+build-recoveryd-arm:
+	mkdir -p $(BUILD_DIR)
+	GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 \
+		go build $(GOFLAGS_ARM) -ldflags '$(LDFLAGS_ARM)' -o $(RECOVERYD_ARMV7) $(RECOVERYD_PKG)
+	@echo "built $(RECOVERYD_ARMV7) ($$(wc -c <$(RECOVERYD_ARMV7)) bytes)"
 
 build-ecu-web-arm:
 	mkdir -p $(BUILD_DIR)
@@ -109,10 +123,11 @@ build-ecu-sunspec-arm:
 
 # ---------------- proto + web ----------------
 
-# proto is a manual prerequisite. It overwrites wire/busmgr.pb.go.
-# Run `make proto` after editing proto/busmgr.proto.
+# proto is a manual prerequisite. It overwrites wire/busmgr.pb.go and
+# wire/recoveryd.pb.go. Run `make proto` after editing a proto/*.proto.
 proto:
 	$(PROTOC) -I proto --go_out=wire --go_opt=paths=source_relative proto/busmgr.proto
+	$(PROTOC) -I proto --go_out=wire --go_opt=paths=source_relative proto/recoveryd.proto
 
 # web rebuilds the embedded SPA bundle. dist/ is committed so cross builds
 # don't require Bun. Run `make web` after editing the frontend.
@@ -309,10 +324,12 @@ package-openaps: build-all-arm $(DROPBEAR_DIR)/dropbear
 	@cp $(ECU_ZB_ARMV7)      $(BUILD_DIR)/pkgroot-openaps/update/applications/ecu-zb
 	@cp $(ECU_WEB_ARMV7)     $(BUILD_DIR)/pkgroot-openaps/update/applications/ecu-web
 	@cp $(ECU_SUNSPEC_ARMV7) $(BUILD_DIR)/pkgroot-openaps/update/applications/ecu-sunspec
+	@cp $(RECOVERYD_ARMV7)   $(BUILD_DIR)/pkgroot-openaps/update/applications/recoveryd
 	@chmod 0755 $(BUILD_DIR)/pkgroot-openaps/update/applications/*
 	@cp packaging/S48-inv-driver $(BUILD_DIR)/pkgroot-openaps/update/rcS.d/S48-inv-driver
 	@cp packaging/S53-ecu-zb     $(BUILD_DIR)/pkgroot-openaps/update/rcS.d/S53-ecu-zb
 	@cp packaging/S54-ecu-web    $(BUILD_DIR)/pkgroot-openaps/update/rcS.d/S54-ecu-web
+	@cp packaging/S97-recoveryd  $(BUILD_DIR)/pkgroot-openaps/update/rcS.d/S97-recoveryd
 	@cp packaging/S98-dropbear   $(BUILD_DIR)/pkgroot-openaps/update/rcS.d/S98-dropbear
 	@cp packaging/S99-sunspec    $(BUILD_DIR)/pkgroot-openaps/update/rcS.d/S99-sunspec
 	@chmod 0755 $(BUILD_DIR)/pkgroot-openaps/update/rcS.d/*

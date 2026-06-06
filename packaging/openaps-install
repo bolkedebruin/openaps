@@ -161,20 +161,78 @@ if [ -d "$SRC/dropbear" ] && [ -f "$SRC/dropbear/dropbear" ]; then
         echo "  + /etc/dropbear/dropbear_rsa_host_key (generated)"
     fi
 
+    # recoveryd owns authorized_keys. Install its binary + init script so
+    # it renders the key list at boot (before S98-dropbear), then SEED
+    # /etc/recoveryd/access.json from the operator's bundled key instead of
+    # writing /root/.ssh/authorized_keys directly. recoveryd renders the
+    # file on its next start.
+    if [ -f "$SRC/applications/recoveryd" ]; then
+        mkdir -p /home/applications/recoveryd
+        cp -f "$SRC/applications/recoveryd" /home/applications/recoveryd/recoveryd.new
+        chmod 0755 /home/applications/recoveryd/recoveryd.new
+        mv /home/applications/recoveryd/recoveryd.new /home/applications/recoveryd/recoveryd
+        echo "  + /home/applications/recoveryd/recoveryd"
+    fi
+    if [ -f "$SRC/rcS.d/S97-recoveryd" ]; then
+        cp -f "$SRC/rcS.d/S97-recoveryd" /etc/rcS.d/S97-recoveryd.new
+        chmod 0755 /etc/rcS.d/S97-recoveryd.new
+        mv /etc/rcS.d/S97-recoveryd.new /etc/rcS.d/S97-recoveryd
+        echo "  + /etc/rcS.d/S97-recoveryd"
+    fi
+
     if [ -f "$SRC/dropbear/authorized_keys" ]; then
-        ROOT_HOME=$(awk -F: '$1=="root"{print $6; exit}' /etc/passwd 2>/dev/null)
-        [ -n "$ROOT_HOME" ] || ROOT_HOME=/root
-        chown root:root "$ROOT_HOME" 2>/dev/null || true
-        mkdir -p "$ROOT_HOME/.ssh"
-        chown root:root "$ROOT_HOME/.ssh"
-        chmod 700 "$ROOT_HOME/.ssh"
-        touch "$ROOT_HOME/.ssh/authorized_keys"
-        cat "$SRC/dropbear/authorized_keys" >> "$ROOT_HOME/.ssh/authorized_keys"
-        awk '!seen[$0]++' "$ROOT_HOME/.ssh/authorized_keys" > /tmp/.ak.tmp \
-            && mv /tmp/.ak.tmp "$ROOT_HOME/.ssh/authorized_keys"
-        chown root:root "$ROOT_HOME/.ssh/authorized_keys"
-        chmod 600 "$ROOT_HOME/.ssh/authorized_keys"
-        echo "  + $ROOT_HOME/.ssh/authorized_keys"
+        if [ -x /home/applications/recoveryd/recoveryd ]; then
+            mkdir -p /etc/recoveryd
+            # Seed access.json (merge, idempotent). recoveryd validates and
+            # fingerprints each key; it renders /root/.ssh/authorized_keys on
+            # its next start.
+            if /home/applications/recoveryd/recoveryd seed \
+                    -access /etc/recoveryd/access.json \
+                    -provider openaps \
+                    -from "$SRC/dropbear/authorized_keys"; then
+                echo "  + /etc/recoveryd/access.json (seeded from bundled key)"
+            else
+                echo "FATAL: recoveryd seed failed — refusing to continue without a recovery key"
+                echo "  rollback: tar -xzf $BACKUP_PATH -C /"
+                exit 1
+            fi
+        else
+            # No recoveryd binary in this package — fall back to writing
+            # authorized_keys directly so the recovery path still exists.
+            ROOT_HOME=$(awk -F: '$1=="root"{print $6; exit}' /etc/passwd 2>/dev/null)
+            [ -n "$ROOT_HOME" ] || ROOT_HOME=/root
+            chown root:root "$ROOT_HOME" 2>/dev/null || true
+            mkdir -p "$ROOT_HOME/.ssh"
+            chown root:root "$ROOT_HOME/.ssh"
+            chmod 700 "$ROOT_HOME/.ssh"
+            touch "$ROOT_HOME/.ssh/authorized_keys"
+            cat "$SRC/dropbear/authorized_keys" >> "$ROOT_HOME/.ssh/authorized_keys"
+            awk '!seen[$0]++' "$ROOT_HOME/.ssh/authorized_keys" > /tmp/.ak.tmp \
+                && mv /tmp/.ak.tmp "$ROOT_HOME/.ssh/authorized_keys"
+            chown root:root "$ROOT_HOME/.ssh/authorized_keys"
+            chmod 600 "$ROOT_HOME/.ssh/authorized_keys"
+            echo "  + $ROOT_HOME/.ssh/authorized_keys (no recoveryd — direct write)"
+        fi
+    fi
+
+    # Start recoveryd so it renders authorized_keys + ensures the host key
+    # BEFORE dropbear binds. We don't abort the install if it fails to come
+    # up (dropbear's own host-key gen below is the backstop and the key was
+    # already seeded into access.json, so a later reboot's boot-render
+    # recovers), but a silent boot-render failure shouldn't pass unnoticed:
+    # check the exit status and that the socket appeared, and warn loudly.
+    if [ -x /etc/rcS.d/S97-recoveryd ]; then
+        if /etc/rcS.d/S97-recoveryd start; then
+            if [ -S /run/recoveryd.sock ]; then
+                echo "  recoveryd up — authorized_keys rendered, socket ready"
+            else
+                echo "  WARNING: recoveryd start returned ok but /run/recoveryd.sock is absent"
+            fi
+        else
+            echo "  WARNING: recoveryd failed to start (boot-render may not have run)."
+            echo "           access.json was seeded; a reboot's boot-render is the backstop."
+            echo "           dropbear host-key gen below also still runs. Check the recoveryd log."
+        fi
     fi
 
     if [ -f "$SRC/rcS.d/S98-dropbear" ]; then
@@ -277,7 +335,7 @@ put_atomic() {
 }
 
 mkdir -p /home/applications/inv-driver /home/applications/ecu-zb/run /home/applications/ecu-zb/log
-mkdir -p /home/applications/ecu-web
+mkdir -p /home/applications/ecu-web /home/applications/recoveryd
 # NOTE: ecu-sunspec is a BARE binary at /home/applications/ecu-sunspec (matching
 # S99-sunspec's BIN=). Do NOT mkdir that path — it would turn the binary's
 # destination into a directory and put_atomic's `mv` would drop the binary
@@ -288,8 +346,12 @@ put_atomic "$SRC/applications/inv-driver"  /home/applications/inv-driver/inv-dri
 put_atomic "$SRC/applications/ecu-zb"      /home/applications/ecu-zb/ecu-zb            0755
 put_atomic "$SRC/applications/ecu-web"     /home/applications/ecu-web/ecu-web          0755
 put_atomic "$SRC/applications/ecu-sunspec" /home/applications/ecu-sunspec              0755
+# recoveryd owns the SSH access plane. Step 3 already installs+starts it when a
+# dropbear bundle is present; install here too so it ships on every package.
+[ -f "$SRC/applications/recoveryd" ] && \
+    put_atomic "$SRC/applications/recoveryd" /home/applications/recoveryd/recoveryd 0755
 
-for s in S48-inv-driver S53-ecu-zb S54-ecu-web S99-sunspec; do
+for s in S48-inv-driver S53-ecu-zb S54-ecu-web S97-recoveryd S99-sunspec; do
     if [ -f "$SRC/rcS.d/$s" ]; then
         put_atomic "$SRC/rcS.d/$s" "/etc/rcS.d/$s" 0755
     fi

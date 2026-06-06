@@ -1,0 +1,102 @@
+#!/bin/sh
+#
+# S97-recoveryd — start recoveryd BEFORE S98-dropbear so authorized_keys
+# and the dropbear host key are rendered from /etc/recoveryd/access.json
+# before dropbear binds :22. recoveryd is the single writer of
+# authorized_keys; it boot-renders the key list on startup (the anti-brick
+# guarantee) and serves a root-only local UDS for the web console.
+#
+# Install:
+#   ssh ecu 'cat > /etc/rcS.d/S97-recoveryd' < S97-recoveryd
+#   ssh ecu 'chmod +x /etc/rcS.d/S97-recoveryd'
+#
+# State paths:
+#   /etc/recoveryd/access.json   key list (mode 0600), recoveryd-owned
+#   /run/recoveryd.sock          UDS endpoint (mode 0600, root-only)
+#   /home/applications/recoveryd/recoveryd.log   stdout/stderr
+
+BIN=/home/applications/recoveryd/recoveryd
+ACCESS=/etc/recoveryd/access.json
+SOCK=/run/recoveryd.sock
+RUN=/home/applications/recoveryd
+LOG=$RUN/recoveryd.log
+PIDFILE=$RUN/recoveryd.pid
+ARGS="-access $ACCESS -socket $SOCK"
+
+start() {
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "recoveryd already running (pid $(cat "$PIDFILE"))"
+        return 0
+    fi
+    [ -x "$BIN" ] || { echo "$BIN missing or not executable"; return 1; }
+    mkdir -p "$RUN" /etc/recoveryd
+
+    # nohup-sh-exec wrapper: same pattern as S48-inv-driver / S98-dropbear,
+    # so the daemon survives both init(1) boot context and a PHP-FPM
+    # upgrade-endpoint context. The inner exec replaces the wrapper sh with
+    # recoveryd so the captured PID is the right one.
+    nohup sh -c "echo \$\$ > '$PIDFILE'; exec '$BIN' $ARGS" \
+        </dev/null >> "$LOG" 2>&1 &
+    sleep 1
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "recoveryd started (pid $(cat "$PIDFILE"))"
+    else
+        echo "recoveryd failed to stay up; check $LOG"
+        return 1
+    fi
+
+    # Wait for the socket so the web console can connect.
+    i=0
+    while [ $i -lt 10 ]; do
+        if [ -S "$SOCK" ]; then
+            echo "recoveryd ready: $SOCK"
+            return 0
+        fi
+        sleep 1
+        i=$((i+1))
+    done
+    echo "recoveryd did not publish socket within 10s"
+    return 1
+}
+
+stop() {
+    if [ -f "$PIDFILE" ]; then
+        PID=$(cat "$PIDFILE")
+        kill "$PID" 2>/dev/null
+        sleep 2
+        kill -9 "$PID" 2>/dev/null
+        rm -f "$PIDFILE"
+        echo "recoveryd stopped"
+    else
+        P=$(pidof recoveryd 2>/dev/null)
+        if [ -n "$P" ]; then
+            kill $P 2>/dev/null
+            sleep 2
+            kill -9 $P 2>/dev/null
+            echo "recoveryd stopped (no pidfile, used pidof)"
+        else
+            echo "recoveryd not running"
+        fi
+    fi
+    rm -f "$SOCK"
+}
+
+status() {
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "running (pid $(cat "$PIDFILE"))"
+    else
+        echo "stopped"
+        exit 1
+    fi
+}
+
+case "$1" in
+    start)   start ;;
+    stop)    stop ;;
+    restart) stop; sleep 1; start ;;
+    status)  status ;;
+    *)
+        echo "usage: $0 {start|stop|restart|status}"
+        exit 2
+        ;;
+esac
