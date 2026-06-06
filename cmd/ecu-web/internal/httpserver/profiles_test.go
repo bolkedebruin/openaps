@@ -273,11 +273,15 @@ func TestDeleteOverlay(t *testing.T) {
 	body := `{"id":"victron-shift","uids":["999900000001","999900000003"]}`
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, withCookies(jsonReq("DELETE", "/api/profiles/overlay", body), cookies))
-	if rec.Code != http.StatusOK {
+	// Clear is async (reconcile queued): 202 Accepted, not 200.
+	if rec.Code != http.StatusAccepted {
 		t.Fatalf("delete overlay => %d (%s)", rec.Code, rec.Body)
 	}
 	if len(cleared) != 2 {
 		t.Errorf("want clear_overlay for 2 uids, got %v", cleared)
+	}
+	if !strings.Contains(rec.Body.String(), `"status":"reconciling"`) {
+		t.Errorf("want status=reconciling; got %s", rec.Body)
 	}
 }
 
@@ -294,8 +298,12 @@ func TestSelectBase(t *testing.T) {
 	})
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, withCookies(jsonReq("POST", "/api/profiles/base", `{"id":"EN50549-1"}`), cookies))
-	if rec.Code != http.StatusOK || gotID != "EN50549-1" {
+	// Select is async (fleet reconcile queued): 202 Accepted, not 200.
+	if rec.Code != http.StatusAccepted || gotID != "EN50549-1" {
 		t.Fatalf("select base => %d, id=%q", rec.Code, gotID)
+	}
+	if !strings.Contains(rec.Body.String(), `"status":"reconciling"`) {
+		t.Errorf("want status=reconciling; got %s", rec.Body)
 	}
 }
 

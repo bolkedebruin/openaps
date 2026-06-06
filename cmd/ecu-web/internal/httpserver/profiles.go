@@ -14,7 +14,7 @@ import (
 // (resp, err) pair returned by GridProfileFn: if inv-driver attached a
 // structured error message, prefer that; otherwise fall back to the raw
 // transport error. Shared across handleSelectBase, handlePutOverlay, and
-// toApplyResult so an empty/missing inv-driver error never erases the
+// handleDeleteOverlay so an empty/missing inv-driver error never erases the
 // transport error.
 func gridProfileErrMsg(resp *wire.GridProfileResponse, err error) string {
 	if resp != nil && resp.GetError() != "" {
@@ -226,7 +226,11 @@ func (s *Server) fleetTargets() []profileInvDTO {
 }
 
 // handleSelectBase sets the active fleet-wide base profile (moved here from the
-// Settings screen). Reconcile failures return 400 with inv-driver's summary.
+// Settings screen). inv-driver persists the active base synchronously and runs
+// the fleet-wide reconcile asynchronously, returning at once; progress lands as
+// audit events under by="inv-driver" (profile_apply_started / per-uid
+// overlay_apply_* / profile_apply_complete). This handler returns 202 Accepted
+// once the reconcile is queued. Validation / round-trip errors return 400.
 func (s *Server) handleSelectBase(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.GridProfileFn == nil {
 		http.Error(w, "grid profile unavailable", http.StatusServiceUnavailable)
@@ -245,11 +249,11 @@ func (s *Server) handleSelectBase(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := s.cfg.GridProfileFn(r.Context(), &wire.GridProfileRequest{
 		Op: &wire.GridProfileRequest_SelectBase{SelectBase: &wire.SelectBase{Id: body.ID}}})
-	if err != nil {
+	if err != nil || !resp.GetOk() {
 		http.Error(w, gridProfileErrMsg(resp, err), http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"active_base": body.ID})
+	writeJSON(w, http.StatusAccepted, map[string]string{"active_base": body.ID, "status": "reconciling"})
 }
 
 // overlayWriteReq is the PUT /api/profiles/overlay body.
@@ -260,13 +264,6 @@ type overlayWriteReq struct {
 		ApsCode string  `json:"aps_code"`
 		Value   float64 `json:"value"`
 	} `json:"points"`
-}
-
-// applyResult is one inverter's outcome from a per-UID overlay apply/clear.
-type applyResult struct {
-	UID   string `json:"uid"`
-	OK    bool   `json:"ok"`
-	Error string `json:"error,omitempty"`
 }
 
 // overlayQueuedResp is the 202 Accepted body of PUT /api/profiles/overlay.
@@ -342,18 +339,15 @@ func (s *Server) handlePutOverlay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Cap EACH inv-driver round-trip at 5 s (was one shared ctx for the whole
-	// loop; a slow first uid would starve later ones, and one error bailed
-	// the entire request — earlier-queued uids vanished from the response).
-	// Per-iteration ctx with a deferred cancel inside the loop bounds each
-	// call independently AND lets every uid get a result.
+	// Each SetOverlay roundtrip persists-and-queues and returns immediately, so
+	// the request context (bounded by the controller read deadline) is the only
+	// timeout needed — same as handleDeleteOverlay. A per-uid error is recorded
+	// in failed[] so one bad uid never bails the others out of the response.
 	queued := make([]string, 0, len(body.UIDs))
 	failed := make([]overlayFailedUID, 0)
 	for _, uid := range body.UIDs {
-		reqCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-		resp, err := s.cfg.GridProfileFn(reqCtx, &wire.GridProfileRequest{
+		resp, err := s.cfg.GridProfileFn(r.Context(), &wire.GridProfileRequest{
 			Op: &wire.GridProfileRequest_SetOverlay{SetOverlay: &wire.OverlaySet{Uid: uid, OverlayJson: raw}}})
-		cancel()
 		if err != nil {
 			failed = append(failed, overlayFailedUID{UID: uid, Error: gridProfileErrMsg(resp, err)})
 			continue
@@ -375,6 +369,11 @@ func (s *Server) handlePutOverlay(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleDeleteOverlay removes a Local Site profile from each of its targets.
+// inv-driver clears each overlay row synchronously and queues the per-UID
+// reconcile-to-base asynchronously, returning at once; progress lands as audit
+// events (overlay_apply_*). This handler returns 202 Accepted with the queued
+// uids; the operator watches the events log for outcomes. A per-uid persist/
+// queue failure is reported in failed[]; if every uid fails, 400.
 func (s *Server) handleDeleteOverlay(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.GridProfileFn == nil {
 		http.Error(w, "grid profile unavailable", http.StatusServiceUnavailable)
@@ -392,26 +391,20 @@ func (s *Server) handleDeleteOverlay(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "uids are required", http.StatusBadRequest)
 		return
 	}
-	results := s.applyPerUID(body.UIDs, func(uid string) (*wire.GridProfileResponse, error) {
-		return s.cfg.GridProfileFn(r.Context(), &wire.GridProfileRequest{
+	queued := make([]string, 0, len(body.UIDs))
+	failed := make([]overlayFailedUID, 0)
+	for _, uid := range body.UIDs {
+		resp, err := s.cfg.GridProfileFn(r.Context(), &wire.GridProfileRequest{
 			Op: &wire.GridProfileRequest_ClearOverlay{ClearOverlay: &wire.ClearOverlay{Uid: uid}}})
-	})
-	writeJSON(w, http.StatusOK, map[string]any{"id": body.ID, "results": results})
-}
-
-// applyPerUID runs op for each uid and collects a per-inverter result.
-func (s *Server) applyPerUID(uids []string, op func(uid string) (*wire.GridProfileResponse, error)) []applyResult {
-	results := make([]applyResult, 0, len(uids))
-	for _, uid := range uids {
-		resp, err := op(uid)
-		results = append(results, toApplyResult(uid, resp, err))
+		if err != nil || !resp.GetOk() {
+			failed = append(failed, overlayFailedUID{UID: uid, Error: gridProfileErrMsg(resp, err)})
+			continue
+		}
+		queued = append(queued, uid)
 	}
-	return results
-}
-
-func toApplyResult(uid string, resp *wire.GridProfileResponse, err error) applyResult {
-	if err != nil {
-		return applyResult{UID: uid, OK: false, Error: gridProfileErrMsg(resp, err)}
+	status := http.StatusAccepted
+	if len(queued) == 0 {
+		status = http.StatusBadRequest
 	}
-	return applyResult{UID: uid, OK: resp.GetOk(), Error: resp.GetError()}
+	writeJSON(w, status, overlayQueuedResp{ID: body.ID, Status: "reconciling", UIDs: queued, Failed: failed})
 }

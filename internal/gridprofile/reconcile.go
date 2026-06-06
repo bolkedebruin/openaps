@@ -415,17 +415,14 @@ func (r *Reconciler) ReconcileUID(ctx context.Context, uid string) (ReconcileRep
 	return rpt, nil
 }
 
-// ReconcileAll calls ReconcileUID for every inverter that has a model code
-// registered.  Inverter UIDs are discovered by looking at the set of
-// overlays plus all inverters known to modelOf.  The caller-supplied
-// uidList determines the set of UIDs to reconcile.
-//
-// Passing nil uses a best-effort scan of the overlay table.
-func (r *Reconciler) ReconcileAll(ctx context.Context) ([]ReconcileReport, error) {
-	// Enumerate all UIDs with overlays stored.
+// FleetUIDs enumerates the inverters a fleet-wide reconcile targets: every UID
+// with an overlay row, plus every inverter known to the daemon via KnownUIDs.
+// Duplicates and empty UIDs are dropped. The order is overlay UIDs first, then
+// any additional known UIDs.
+func (r *Reconciler) FleetUIDs(ctx context.Context) ([]string, error) {
 	rows, err := r.st.db.QueryContext(ctx, `SELECT uid FROM gp_overlays`)
 	if err != nil {
-		return nil, fmt.Errorf("ReconcileAll: query overlays: %w", err)
+		return nil, fmt.Errorf("FleetUIDs: query overlays: %w", err)
 	}
 	seen := map[string]bool{}
 	var uids []string
@@ -439,13 +436,13 @@ func (r *Reconciler) ReconcileAll(ctx context.Context) ([]ReconcileReport, error
 		var uid string
 		if err := rows.Scan(&uid); err != nil {
 			rows.Close()
-			return nil, fmt.Errorf("ReconcileAll: scan uid: %w", err)
+			return nil, fmt.Errorf("FleetUIDs: scan uid: %w", err)
 		}
 		add(uid)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("ReconcileAll: rows.Err: %w", err)
+		return nil, fmt.Errorf("FleetUIDs: rows.Err: %w", err)
 	}
 	// Include every known inverter so a base change reaches inverters without
 	// an overlay (ReconcileUID no-ops where there is no desired state).
@@ -453,6 +450,20 @@ func (r *Reconciler) ReconcileAll(ctx context.Context) ([]ReconcileReport, error
 		for _, uid := range r.KnownUIDs(ctx) {
 			add(uid)
 		}
+	}
+	return uids, nil
+}
+
+// ReconcileAll calls ReconcileUID for every inverter that has a model code
+// registered.  Inverter UIDs are discovered by looking at the set of
+// overlays plus all inverters known to modelOf.  The caller-supplied
+// uidList determines the set of UIDs to reconcile.
+//
+// Passing nil uses a best-effort scan of the overlay table.
+func (r *Reconciler) ReconcileAll(ctx context.Context) ([]ReconcileReport, error) {
+	uids, err := r.FleetUIDs(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	var reports []ReconcileReport

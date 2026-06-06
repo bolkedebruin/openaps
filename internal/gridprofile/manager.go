@@ -151,16 +151,23 @@ func (m *Manager) refreshProfiles(ctx context.Context) *wire.GridProfileResponse
 	return m.listProfiles(ctx)
 }
 
-// selectBase sets the active base profile and triggers reconciliation of all
-// known inverters.
+// selectBase sets the active base profile and queues an async fleet-wide
+// reconcile, returning immediately.
 //
-// When BroadcastEnabled is true and BroadcastSender is configured, it applies
-// the base profile via ApplyBaseBroadcast (broadcast whole-profile push). Points
-// that return "unsupported_broadcast" are then reconciled via unicast ReconcileAll.
-// When BroadcastEnabled is false (default), unicast ReconcileAll is used directly.
+// The reconcile runs on the background applier (the same mechanism SetOverlay
+// uses): each inverter is reconciled through the per-uid serialization, so a
+// base-select reconcile never races an overlapping overlay apply. Progress is
+// reported via the events stream (profile_apply_started / per-uid
+// overlay_apply_* / profile_apply_complete), not the synchronous response — a
+// fleet reconcile blocks for tens of seconds (per-point ReadSettle waits), far
+// past the controller's read deadline, so it MUST NOT block the IPC roundtrip.
 //
-// Either way apply-then-read confirmation is performed; encode errors are
-// fail-closed.
+// When BroadcastEnabled is true and BroadcastSender is configured, the base
+// profile is pushed via broadcast on the SAME background applier: the broadcast
+// push and its unicast follow-up run in a background goroutine that acquires the
+// BusLock for its lifetime, and the call returns promptly. A "bus busy"
+// rejection surfaces as a profile_apply_complete warn event rather than a
+// blocking error.
 func (m *Manager) selectBase(ctx context.Context, id string) *wire.GridProfileResponse {
 	if id == "" {
 		return errResp("SelectBase: id is empty")
@@ -176,59 +183,42 @@ func (m *Manager) selectBase(ctx context.Context, id string) *wire.GridProfileRe
 	}
 
 	if m.BroadcastEnabled && m.BroadcastSender != nil && len(m.BroadcastModelCodes) > 0 {
-		// Broadcast disrupts the fleet bus; serialise against pairing.
-		if m.BusLock != nil {
-			if ok, owner := m.BusLock.TryAcquire("gridprofile-broadcast"); !ok {
-				return errResp(fmt.Sprintf("ZigBee bus is busy with %s; please retry in a few seconds", owner))
-			}
-			defer m.BusLock.Release()
-		}
-		return m.selectBaseViaBroadcast(ctx)
+		// Queue the broadcast push + unicast follow-up on the background applier.
+		// The BusLock is acquired inside the goroutine so the IPC roundtrip
+		// returns at once even when the bus disruption runs for tens of seconds.
+		m.asyncApplier().enqueueBroadcastFleet(m.applyParent(), broadcastJob{
+			sender:     m.BroadcastSender,
+			modelCodes: m.BroadcastModelCodes,
+			lock:       m.BusLock,
+			label:      fmt.Sprintf("base select (broadcast): %s", id),
+		})
+		return m.reconcilingResp(id, nil)
 	}
 
-	// Default: unicast ReconcileAll.
-	reports, err := m.Reconciler.ReconcileAll(ctx)
+	// Queue the fleet reconcile on the background applier and return at once.
+	m.asyncApplier().enqueueFleet(m.applyParent(), m.Reconciler, fmt.Sprintf("base select: %s", id))
+	return m.reconcilingResp(id, nil)
+}
+
+// reconcilingResp is the immediate JSON payload of an async base-select /
+// overlay-clear: the active state is persisted, the reconcile runs in the
+// background, and progress is reported via the events log. It mirrors
+// overlayQueuedResp's shape so the controller treats both async paths alike.
+func (m *Manager) reconcilingResp(id string, uids []string) *wire.GridProfileResponse {
+	raw, err := json.Marshal(overlayQueuedResp{Status: "reconciling", ID: id, UIDs: uids})
 	if err != nil {
-		return errResp(fmt.Sprintf("SelectBase: ReconcileAll: %v", err))
-	}
-	raw, err := json.Marshal(reports)
-	if err != nil {
-		return errResp(fmt.Sprintf("SelectBase: marshal reports: %v", err))
-	}
-	if summary := reconcileFailedSummary(reports); summary != "" {
-		return &wire.GridProfileResponse{Ok: false, Json: raw,
-			Error: "SelectBase: one or more points not confirmed: " + summary}
+		return errResp(fmt.Sprintf("marshal reconciling: %v", err))
 	}
 	return okResp(raw)
 }
 
-// selectBaseViaBroadcast applies the active base profile via broadcast, then
-// falls back to unicast ReconcileAll for any points marked "unsupported_broadcast".
-func (m *Manager) selectBaseViaBroadcast(ctx context.Context) *wire.GridProfileResponse {
-	bcastRpt, err := m.Reconciler.ApplyBaseBroadcast(ctx, m.BroadcastSender, m.BroadcastModelCodes...)
-	if err != nil {
-		return errResp(fmt.Sprintf("SelectBase broadcast: %v", err))
+// applyParent returns the cancellation root for async applies, defaulting to
+// context.Background when ApplyParent is unset (in-process tests).
+func (m *Manager) applyParent() context.Context {
+	if m.ApplyParent != nil {
+		return m.ApplyParent
 	}
-
-	// Also run unicast ReconcileAll to cover unsupported-broadcast points and
-	// confirm the full effective state.
-	uniReports, err := m.Reconciler.ReconcileAll(ctx)
-	if err != nil {
-		return errResp(fmt.Sprintf("SelectBase broadcast (unicast follow-up): %v", err))
-	}
-
-	combined := struct {
-		Broadcast interface{} `json:"broadcast"`
-		Unicast   interface{} `json:"unicast"`
-	}{
-		Broadcast: bcastRpt,
-		Unicast:   uniReports,
-	}
-	raw, err := json.Marshal(combined)
-	if err != nil {
-		return errResp(fmt.Sprintf("SelectBase: marshal combined report: %v", err))
-	}
-	return okResp(raw)
+	return context.Background()
 }
 
 // setOverlay validates and upserts a per-inverter overlay, then queues an
@@ -293,11 +283,7 @@ func (m *Manager) setOverlay(ctx context.Context, uid string, overlayJSON []byte
 	// Apply asynchronously: spawn one goroutine per uid (bounded), emit
 	// per-point events to the audit log, return immediately. The caller
 	// surfaces progress via the events stream.
-	parent := m.ApplyParent
-	if parent == nil {
-		parent = context.Background()
-	}
-	m.asyncApplier().enqueueWithPoints(parent, uid, o.ID, overlayCodes(o.Points))
+	m.asyncApplier().enqueueWithPoints(m.applyParent(), uid, o.ID, overlayCodes(o.Points))
 
 	raw, err := json.Marshal(overlayQueuedResp{Status: "queued", ID: o.ID, UIDs: []string{uid}})
 	if err != nil {
@@ -345,11 +331,7 @@ func (m *Manager) ReconcileOverlaysForUID(ctx context.Context, uid string) error
 		}
 		return fmt.Errorf("ReconcileOverlaysForUID %q: %w", uid, err)
 	}
-	parent := m.ApplyParent
-	if parent == nil {
-		parent = context.Background()
-	}
-	m.asyncApplier().enqueueWithPoints(parent, uid, o.ID, overlayCodes(o.Points))
+	m.asyncApplier().enqueueWithPoints(m.applyParent(), uid, o.ID, overlayCodes(o.Points))
 	return nil
 }
 
@@ -395,10 +377,7 @@ func (m *Manager) ReconcileAllOverlays(ctx context.Context) error {
 		// order may legitimately race the first telemetry.
 		return nil
 	}
-	parent := m.ApplyParent
-	if parent == nil {
-		parent = context.Background()
-	}
+	parent := m.applyParent()
 	app := m.asyncApplier()
 	for _, o := range overlays {
 		codes := overlayCodes(o.Points)
@@ -412,7 +391,13 @@ func (m *Manager) ReconcileAllOverlays(ctx context.Context) error {
 	return nil
 }
 
-// clearOverlay removes the overlay for an inverter and triggers reconciliation.
+// clearOverlay removes the overlay for an inverter and queues an async
+// reconcile of that inverter back to the base profile, returning immediately.
+//
+// The reconcile runs on the background applier (the same per-uid mechanism
+// SetOverlay uses), so the call returns at once and progress is reported via
+// the events stream (overlay_apply_* rows) rather than blocking the IPC
+// roundtrip on the per-point ReadSettle waits.
 func (m *Manager) clearOverlay(ctx context.Context, uid string) *wire.GridProfileResponse {
 	if uid == "" {
 		return errResp("ClearOverlay: uid is empty")
@@ -428,19 +413,10 @@ func (m *Manager) clearOverlay(ctx context.Context, uid string) *wire.GridProfil
 		// overlay is the write — the next startup will reconcile.
 		return okResp(nil)
 	}
-	report, err := m.Reconciler.ReconcileUID(ctx, uid)
-	if err != nil {
-		return errResp(fmt.Sprintf("ClearOverlay: ReconcileUID: %v", err))
-	}
-	raw, err := json.Marshal(report)
-	if err != nil {
-		return errResp(fmt.Sprintf("ClearOverlay: marshal report: %v", err))
-	}
-	if summary := pointFailedSummary(report.Points); summary != "" {
-		return &wire.GridProfileResponse{Ok: false, Json: raw,
-			Error: "ClearOverlay: one or more points not confirmed: " + summary}
-	}
-	return okResp(raw)
+	// Queue a per-uid reconcile (scopedCodes==nil → emit every reconciled
+	// point) so the inverter returns to the base profile in the background.
+	m.asyncApplier().enqueueInternal(m.applyParent(), uid, fmt.Sprintf("overlay clear: %s", uid), 0, nil)
+	return m.reconcilingResp("", []string{uid})
 }
 
 // getEffective computes and returns the effective profile for one inverter.
@@ -657,38 +633,6 @@ func okResp(jsonBytes []byte) *wire.GridProfileResponse {
 // errResp constructs a failure response with the given error message.
 func errResp(msg string) *wire.GridProfileResponse {
 	return &wire.GridProfileResponse{Ok: false, Error: msg}
-}
-
-// pointFailedSummary returns a non-empty summary string when any point
-// in the list is not in a confirmed state (in_sync or applied).
-// An empty string means all points are confirmed.
-func pointFailedSummary(points []PointResult) string {
-	var failed []string
-	for _, pr := range points {
-		if pr.Result != "in_sync" && pr.Result != "applied" && pr.Result != "unknown" {
-			failed = append(failed, fmt.Sprintf("%s=%s", pr.ApsCode, pr.Result))
-		}
-	}
-	if len(failed) == 0 {
-		return ""
-	}
-	s := ""
-	for i, f := range failed {
-		if i > 0 {
-			s += ", "
-		}
-		s += f
-	}
-	return s
-}
-
-// reconcileFailedSummary aggregates failed points across all ReconcileReports.
-func reconcileFailedSummary(reports []ReconcileReport) string {
-	var all []PointResult
-	for _, r := range reports {
-		all = append(all, r.Points...)
-	}
-	return pointFailedSummary(all)
 }
 
 // overlayContainsUID reports whether the overlay's uids[] list includes uid.

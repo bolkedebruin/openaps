@@ -1,5 +1,5 @@
 import { LitElement, html, css, nothing } from "lit";
-import { api, type ProfilesState, type LocalSiteProfile, type ApplyResult } from "../api.ts";
+import { api, type ProfilesState, type LocalSiteProfile } from "../api.ts";
 import { fmtNum } from "../format.ts";
 import { validateOverlay } from "../schemas/overlay.ts";
 import "../components/grid-profile-form.ts";
@@ -116,7 +116,9 @@ export class ProfilesView extends LitElement {
     try {
       await api.selectBase(id);
       await this.load(); // refresh before showing the result so load() can't clobber it
-      this.notice = `Base profile "${id}" applied.`;
+      // The fleet reconcile runs asynchronously on inv-driver; progress and the
+      // per-inverter outcome land in the Events log, not this HTTP response.
+      this.notice = `Base profile "${id}" selected — reconciling the fleet now. See Events for per-inverter progress and results.`;
     } catch (err) {
       this.error = (err as Error).message;
     } finally {
@@ -214,27 +216,21 @@ export class ProfilesView extends LitElement {
       const resp = await api.deleteOverlay(p.id, p.uids);
       if (this.editing?.id === p.id) this.editing = null;
       await this.load(); // refresh before reporting so load() can't clobber the result
-      this.reportResults(p.id, resp.results, "cleared");
+      // Clearing reconciles each inverter back to the base asynchronously on
+      // inv-driver; outcomes land in the Events log.
+      const n = resp.uids.length;
+      let note = `Profile "${p.id}" cleared from ${n} inverter${n === 1 ? "" : "s"} — reconciling back to the base profile now. See Events for results.`;
+      if (resp.failed && resp.failed.length > 0) {
+        const detail = resp.failed.map((f) => `${this.invName(f.uid)}: ${f.error || "rejected"}`).join("; ");
+        note += ` Not queued on ${resp.failed.length} inverter(s): ${detail}`;
+      }
+      this.notice = note;
     } catch (err) {
       this.error = (err as Error).message;
     } finally {
       this.overlayBusy = false;
     }
   };
-
-  private reportResults(id: string, results: ApplyResult[], verb = "applied") {
-    const bad = results.filter((r) => !r.ok);
-    if (bad.length === 0) {
-      this.notice = `Profile "${id}" ${verb} to ${results.length} inverter(s).`;
-    } else {
-      // The change is persisted on the ECU; the per-inverter apply just could
-      // not be confirmed (e.g. the inverter is offline). That's expected, not
-      // an error — report it in the notice, not the red error banner.
-      const act = verb === "cleared" ? "Clearing" : "Applying";
-      const detail = bad.map((r) => `${this.invName(r.uid)}: ${r.error || "unconfirmed"}`).join("; ");
-      this.notice = `Profile "${id}" saved. ${act} not confirmed on ${bad.length} of ${results.length} inverter(s) now — it is stored as the desired state and applied automatically when each inverter is next reached. ${detail}`;
-    }
-  }
 
   private renderBase() {
     const b = this.data?.base;

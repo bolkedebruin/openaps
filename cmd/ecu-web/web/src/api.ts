@@ -244,31 +244,29 @@ export interface ProfilesState {
   error?: string;
 }
 
-export interface ApplyResult {
-  uid: string;
-  ok: boolean;
-  error?: string;
-}
-
-// OverlayApplyResponse is the synchronous response shape of DELETE
-// /api/profiles/overlay: one per-UID outcome per target inverter.
-export interface OverlayApplyResponse {
-  id: string;
-  results: ApplyResult[];
-}
-
-// OverlayQueuedResponse is the asynchronous response shape of PUT
-// /api/profiles/overlay (HTTP 202): the overlay is persisted, the per-UID
-// reconcile runs in the background on inv-driver, and outcomes land in the
-// audit-events log under by="inv-driver". `failed` carries any uids whose
-// persist-and-queue step itself errored (so the response is "partial": some
-// uids queued, others rejected up front). When `uids` is empty the response
-// is HTTP 400 with the same shape.
+// OverlayQueuedResponse is the asynchronous response shape of PUT and DELETE
+// /api/profiles/overlay (HTTP 202): the overlay is persisted/cleared and the
+// per-UID reconcile runs in the background on inv-driver; outcomes land in the
+// audit-events log under by="inv-driver" (overlay_apply_started /
+// overlay_param_written / overlay_param_failed / overlay_apply_complete).
+// `status` is "queued" for a PUT and "reconciling" for a DELETE. `failed`
+// carries any uids whose persist-and-queue step itself errored (so the response
+// is "partial": some uids queued, others rejected up front). When `uids` is
+// empty the response is HTTP 400 with the same shape.
 export interface OverlayQueuedResponse {
   id: string;
-  status: "queued";
+  status: "queued" | "reconciling";
   uids: string[];
   failed?: { uid: string; error: string }[];
+}
+
+// SelectBaseResponse is the asynchronous response of POST /api/profiles/base
+// (HTTP 202): the active base is persisted and the fleet-wide reconcile runs in
+// the background on inv-driver. Progress lands in the audit-events log
+// (profile_apply_started / per-uid overlay_apply_* / profile_apply_complete).
+export interface SelectBaseResponse {
+  active_base: string;
+  status: "reconciling";
 }
 
 // --- SSH access plane (recoveryd) ---
@@ -425,11 +423,12 @@ export const api = {
     postJSONResult<PowerResult>("/api/power", req),
   profiles: () => getJSON<ProfilesState>("/api/profiles"),
   overlays: () => getJSON<LocalSiteProfile[]>("/api/overlays"),
-  selectBase: (id: string) => postJSON("/api/profiles/base", { id }),
+  selectBase: (id: string) =>
+    postJSONResult<SelectBaseResponse>("/api/profiles/base", { id }),
   saveOverlay: (p: { id: string; uids: string[]; points: OverlayPoint[] }) =>
     putJSON<OverlayQueuedResponse>("/api/profiles/overlay", p),
   deleteOverlay: (id: string, uids: string[]) =>
-    delJSON<OverlayApplyResponse>("/api/profiles/overlay", { id, uids }),
+    delJSON<OverlayQueuedResponse>("/api/profiles/overlay", { id, uids }),
   // --- Pairing ---
   pairingScan: (req: { slow?: boolean; chan_lo?: number; chan_hi?: number; dwell_ms?: number } = {}) =>
     postJSONResult<PairingResp>("/api/pairing/scan", req),

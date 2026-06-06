@@ -51,11 +51,29 @@ func (r *recordingSink) kinds() []string {
 
 // stubRunner simulates a reconciler. ReconcileUID blocks for delay, then
 // returns the configured report or error. Cancelling ctx aborts immediately.
+// fleetUIDs (when set) is what FleetUIDs returns, so the stub also satisfies
+// fleetRunner for the base-select async path.
 type stubRunner struct {
-	calls  atomic.Int64
-	delay  time.Duration
-	report ReconcileReport
-	err    error
+	calls      atomic.Int64
+	bcastCalls atomic.Int64
+	delay      time.Duration
+	report     ReconcileReport
+	err        error
+	fleetUIDs  []string
+	fleetErr   error
+	bcastErr   error
+}
+
+func (s *stubRunner) FleetUIDs(context.Context) ([]string, error) {
+	return s.fleetUIDs, s.fleetErr
+}
+
+// ApplyBaseBroadcast lets the stub satisfy broadcastRunner for the
+// base-select-via-broadcast async path. It records the call and returns
+// bcastErr (nil by default = success).
+func (s *stubRunner) ApplyBaseBroadcast(context.Context, Broadcaster, ...uint8) (BroadcastReport, error) {
+	s.bcastCalls.Add(1)
+	return BroadcastReport{}, s.bcastErr
 }
 
 func (s *stubRunner) ReconcileUID(ctx context.Context, uid string) (ReconcileReport, error) {

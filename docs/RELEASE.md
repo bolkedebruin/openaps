@@ -1,3 +1,50 @@
+# OpenAPS v1.0.12
+
+Applying a grid profile from the web console no longer times out. A base-profile
+select (and an overlay clear) now reconciles the fleet **asynchronously**: the
+HTTP request returns immediately once the reconcile is queued, and progress
+flows to the Events log — the same pattern overlay saves already used.
+
+## Changed
+
+- **Base-profile select and overlay clear are now async (inv-driver).**
+  `selectBase` persists the active base and enqueues a fleet-wide reconcile onto
+  the existing per-uid background applier, then returns `{"status":"reconciling"}`
+  at once; `clearOverlay` clears the row and queues a per-uid reconcile-to-base
+  the same way. Neither blocks on the per-point `ReadSettle` waits anymore.
+  Previously both ran the reconcile synchronously inside the IPC handler — a
+  single drifted point already exceeded ecu-web's 8 s UDS read deadline, and a
+  fleet blocked for tens of seconds, so the web console reported
+  `read unix @->/var/run/inv-driver.sock: i/o timeout`.
+- **Fleet reconcile reuses the per-uid serialization.** Each inverter is
+  reconciled through the same keyed applier the overlay path uses, so a
+  base-select reconcile never races an overlapping overlay apply for the same
+  inverter (newer job supersedes older, per uid). Two new fleet-level audit
+  events bracket the run: `profile_apply_started` / `profile_apply_complete`,
+  alongside the per-uid `overlay_apply_started` / `overlay_param_written` /
+  `overlay_param_failed` / `overlay_apply_complete` rows and the existing
+  `profile_select` row.
+- **The broadcast base-select path (`-gridprofile-broadcast`) is async too.**
+  The opt-in broadcast push and its unicast follow-up reconcile now run as a
+  fleet job on the same background applier: the goroutine acquires the bus lock
+  for its lifetime, broadcasts the active base, then reconciles each inverter
+  through the per-uid applier. The IPC roundtrip returns `{"status":"reconciling"}`
+  immediately, so a broadcast-enabled ECU no longer hits the read timeout either.
+  A "bus busy" rejection (pairing holds the lock) is surfaced as a
+  `profile_apply_complete` warn event rather than a synchronous error.
+- **ecu-web returns 202 Accepted.** `POST /api/profiles/base` and
+  `DELETE /api/profiles/overlay` now answer `202` with
+  `{"status":"reconciling"}` instead of waiting for a synchronous pass/fail. The
+  ineffective per-call timeout wrapper on the overlay-clear loop is gone; the 8 s
+  controller read deadline is unchanged (responses are immediate now).
+- **Web console UI is event-driven for profile applies.** Selecting a base or
+  clearing a Local Site profile shows "reconciling — see Events" and the operator
+  watches the Events stream for per-inverter outcomes, matching how overlay saves
+  already reported. Any uid whose persist/queue step failed up front is still
+  surfaced inline.
+
+---
+
 # OpenAPS v1.0.11
 
 `recoveryd` now treats `authorized_keys` as the **single source of truth**.

@@ -3,6 +3,7 @@ package gridprofile
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -321,11 +322,12 @@ func TestGetEffective_ClampedMatchesApplied(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Manager Ok=false on unconfirmed points
-// ---------------------------------------------------------------------------
-
-func TestManager_OkFalse_OnUnconfirmed(t *testing.T) {
+// TestManager_SelectBase_ReturnsReconcilingImmediately asserts the async
+// contract: selectBase persists the active base and returns ok=true with a
+// "reconciling" status WITHOUT blocking on the per-point ReadSettle waits, even
+// when the reconcile would take seconds. The reconcile itself runs on the
+// background applier.
+func TestManager_SelectBase_ReturnsReconcilingImmediately(t *testing.T) {
 	db, done := openTestDB(t)
 	defer done()
 	s := NewStore(db)
@@ -333,8 +335,6 @@ func TestManager_OkFalse_OnUnconfirmed(t *testing.T) {
 
 	uid := "999900000001"
 	_ = s.UpsertProfile(ctx, testProfileDD(), "")
-	_ = s.SetActiveBase(ctx, "test-dd")
-
 	ov := Overlay{
 		Schema: "invdriver.gridprofile/v1",
 		ID:     "ov-unconf",
@@ -343,55 +343,155 @@ func TestManager_OkFalse_OnUnconfirmed(t *testing.T) {
 	}
 	_ = s.UpsertOverlay(ctx, uid, ov)
 
-	snd := &fakeSender{}
-	rb := newFakeReadback(true, map[string]float64{"DD": 10.0})
-	rec := NewReconciler(s, snd, rb, modelDS3, fastOpts())
+	// A runner whose ReconcileUID would block 5 s proves selectBase does not
+	// wait on the reconcile. The applier is rooted at a context cancelled on
+	// cleanup so the stub goroutine never outlives the test.
+	applyCtx, cancelApply := context.WithCancel(context.Background())
+	t.Cleanup(cancelApply)
+	runner := &stubRunner{delay: 5 * time.Second, fleetUIDs: []string{uid}}
+	sink := &recordingSink{}
+	mgr := &Manager{Store: s, Reconciler: NewReconciler(s, &fakeSender{}, newFakeReadback(true, nil), modelDS3, fastOpts()), ApplyParent: applyCtx}
+	mgr.applierInst = newApplier(runner, sink)
+	mgr.applierOnce.Do(func() {})
 
-	reports, _ := rec.ReconcileAll(ctx)
-	summary := reconcileFailedSummary(reports)
-	if summary == "" {
-		t.Log("reconcileFailedSummary empty (timing-dependent)")
+	t0 := time.Now()
+	resp := mgr.selectBase(ctx, "test-dd")
+	elapsed := time.Since(t0)
+
+	if resp == nil || !resp.Ok {
+		t.Fatalf("selectBase: want ok=true reconciling; got %+v", resp)
 	}
-	_ = snd
+	if elapsed > 100*time.Millisecond {
+		t.Fatalf("selectBase blocked for %v; want immediate return (async apply)", elapsed)
+	}
+	if !strings.Contains(string(resp.Json), `"status":"reconciling"`) {
+		t.Errorf("response should carry status=reconciling; got %s", resp.Json)
+	}
+	// The fleet reconcile runs on the applier: ReconcileUID is invoked for the
+	// one fleet uid.
+	if got := waitForCalls(t, runner, 1, 2*time.Second); got != 1 {
+		t.Errorf("expected the background applier to reconcile 1 uid; got %d calls", got)
+	}
+	// A fleet-level started event is emitted.
+	foundStarted := false
+	for _, e := range sink.snapshot() {
+		if e.kind == "profile_apply_started" {
+			foundStarted = true
+		}
+	}
+	if !foundStarted {
+		t.Errorf("expected profile_apply_started event; got kinds=%v", sink.kinds())
+	}
 }
 
-func TestManager_SelectBase_OkFalse_OnUnconfirmed(t *testing.T) {
+// TestManager_ClearOverlay_ReturnsReconcilingImmediately asserts clearOverlay
+// clears the row then returns immediately, with the reconcile running on the
+// background applier rather than blocking the response.
+func TestManager_ClearOverlay_ReturnsReconcilingImmediately(t *testing.T) {
 	db, done := openTestDB(t)
 	defer done()
 	s := NewStore(db)
 	ctx := context.Background()
 
 	uid := "999900000001"
-
 	_ = s.UpsertProfile(ctx, testProfileDD(), "")
-	// No active base yet — set it via selectBase.
-
-	// Overlay so ReconcileAll finds this UID.
 	ov := Overlay{
 		Schema: "invdriver.gridprofile/v1",
-		ID:     "ov-unconf",
+		ID:     "ov-clear",
 		UIDs:   []string{uid},
 		Points: []PointEntry{},
 	}
-	_ = s.UpsertOverlay(ctx, uid, ov)
-
-	snd := &fakeSender{}
-	// Readback far from desired → unconfirmed.
-	rb := newFakeReadback(true, map[string]float64{"DD": 1.0})
-	rec := NewReconciler(s, snd, rb, modelDS3, fastOpts())
-
-	mgr := &Manager{Store: s, Reconciler: rec}
-	resp := mgr.selectBase(ctx, "test-dd")
-	// resp.Ok must be false when any point is not confirmed.
-	// (It might be ok if the send happened to confirm in the brief settle window,
-	// but with rb fixed at 1.0 it should always be unconfirmed.)
-	if resp == nil {
-		t.Fatal("expected non-nil response")
+	if err := s.UpsertOverlay(ctx, uid, ov); err != nil {
+		t.Fatalf("seed overlay: %v", err)
 	}
-	if resp.Ok {
-		// Check if there are actually any unconfirmed points in the JSON.
-		// If the report is empty (no writable points for the UID) it may return Ok=true.
-		t.Logf("resp.Ok=true (may be no writable points or timing); json=%s", resp.Json)
+
+	applyCtx, cancelApply := context.WithCancel(context.Background())
+	t.Cleanup(cancelApply)
+	runner := &stubRunner{delay: 5 * time.Second}
+	sink := &recordingSink{}
+	mgr := &Manager{Store: s, Reconciler: NewReconciler(s, &fakeSender{}, newFakeReadback(true, nil), modelDS3, fastOpts()), ApplyParent: applyCtx}
+	mgr.applierInst = newApplier(runner, sink)
+	mgr.applierOnce.Do(func() {})
+
+	t0 := time.Now()
+	resp := mgr.clearOverlay(ctx, uid)
+	elapsed := time.Since(t0)
+
+	if resp == nil || !resp.Ok {
+		t.Fatalf("clearOverlay: want ok=true reconciling; got %+v", resp)
+	}
+	if elapsed > 100*time.Millisecond {
+		t.Fatalf("clearOverlay blocked for %v; want immediate return (async apply)", elapsed)
+	}
+	if !strings.Contains(string(resp.Json), `"status":"reconciling"`) {
+		t.Errorf("response should carry status=reconciling; got %s", resp.Json)
+	}
+	// The overlay row is gone.
+	if _, err := s.GetOverlay(ctx, uid); err == nil {
+		t.Errorf("overlay should be cleared")
+	}
+	// The reconcile runs on the applier (one ReconcileUID for this uid).
+	if got := waitForCalls(t, runner, 1, 2*time.Second); got != 1 {
+		t.Errorf("expected background reconcile of 1 uid; got %d calls", got)
+	}
+}
+
+// TestManager_SelectBase_Broadcast_ReturnsReconcilingImmediately asserts the
+// broadcast-enabled selectBase (the -gridprofile-broadcast path) ALSO returns
+// immediately: the broadcast push and its unicast follow-up run on the
+// background applier, not the IPC roundtrip, so a fleet that blocks for tens of
+// seconds never trips ecu-web's read deadline.
+func TestManager_SelectBase_Broadcast_ReturnsReconcilingImmediately(t *testing.T) {
+	db, done := openTestDB(t)
+	defer done()
+	s := NewStore(db)
+	ctx := context.Background()
+
+	uid := "999900000001"
+	_ = s.UpsertProfile(ctx, testProfileDD(), "")
+
+	// The stub's ReconcileUID blocks 5 s (unicast follow-up) and its
+	// ApplyBaseBroadcast records the push. The applier is rooted at a
+	// cleanup-cancelled context so no goroutine outlives the test.
+	applyCtx, cancelApply := context.WithCancel(context.Background())
+	t.Cleanup(cancelApply)
+	runner := &stubRunner{delay: 5 * time.Second, fleetUIDs: []string{uid}}
+	sink := &recordingSink{}
+	mgr := &Manager{
+		Store:               s,
+		Reconciler:          NewReconciler(s, &fakeSender{}, newFakeReadback(true, nil), modelDS3, fastOpts()),
+		ApplyParent:         applyCtx,
+		BroadcastEnabled:    true,
+		BroadcastSender:     &fakeBroadcaster{},
+		BroadcastModelCodes: []uint8{codec.ModelDS3},
+	}
+	mgr.applierInst = newApplier(runner, sink)
+	mgr.applierOnce.Do(func() {})
+
+	t0 := time.Now()
+	resp := mgr.selectBase(ctx, "test-dd")
+	elapsed := time.Since(t0)
+
+	if resp == nil || !resp.Ok {
+		t.Fatalf("broadcast selectBase: want ok=true reconciling; got %+v", resp)
+	}
+	if elapsed > 100*time.Millisecond {
+		t.Fatalf("broadcast selectBase blocked for %v; want immediate return (async apply)", elapsed)
+	}
+	if !strings.Contains(string(resp.Json), `"status":"reconciling"`) {
+		t.Errorf("response should carry status=reconciling; got %s", resp.Json)
+	}
+	// The broadcast push runs on the applier.
+	deadline := time.Now().Add(2 * time.Second)
+	for runner.bcastCalls.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if runner.bcastCalls.Load() == 0 {
+		t.Errorf("expected ApplyBaseBroadcast to run on the background applier")
+	}
+	// The unicast follow-up reconciles the one fleet uid.
+	if got := waitForCalls(t, runner, 1, 2*time.Second); got != 1 {
+		t.Errorf("expected background unicast follow-up of 1 uid; got %d calls", got)
 	}
 }
 
