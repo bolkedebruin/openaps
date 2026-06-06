@@ -814,4 +814,3 @@ ORDER  BY uid`)
 		fleet.GetLifetimeWh(), fleet.GetTodayWh())
 	return nil
 }
-
