@@ -344,12 +344,17 @@ echo "--- step 6: disable stock supervisors ---"
 DISABLED_LIST="$STATE_DIR/disabled-apps.list"
 : > "$DISABLED_LIST"
 
+# NOTE: idwriter is deliberately NOT in this list. It is the stock provisioning
+# daemon on TCP :4540 (unauthenticated root command surface — the `A108:` shell
+# verb). We keep it running so the migrated box retains a LAN recovery path if
+# dropbear ever fails to come up. This is an intentional trade-off: it leaves an
+# unauthenticated root surface on the LAN. Remove it from the box (or add it
+# here) if that is not acceptable for a given deployment.
 DISABLE_SET="
 monitor.exe
 clientmonitor
 control_client_monitor
 gprsmonitor
-idwriter
 mqtt_monitor.exe
 phone_server_monitor
 phone_server_app_monitor

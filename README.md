@@ -130,7 +130,7 @@ The orchestrator script inside the tarball:
 - Installs SSH (`dropbear`) **first** as a recovery path and verifies it's listening
 - Installs the four OpenAPS binaries + `S48..S99` init scripts
 - Seeds the inverter inventory from the stock DB and installs the base grid-profile library, so the console is populated on first boot (no waiting for the next dawn re-announce)
-- Disables every stock APsystems supervisor (cloud uplink, unauthenticated stock endpoints, the broken `mqtt.exe` CPU-spinner, the auto-update path) by moving their binaries out of the manager's launch path
+- Disables the stock APsystems supervisors (cloud uplink, the broken `mqtt.exe` CPU-spinner, the auto-update path) by moving their binaries out of the manager's launch path — but **keeps `idwriter` (`:4540`) as a LAN recovery shell** (an unauthenticated root surface; remove it if that's unacceptable for your deployment)
 - Starts OpenAPS + smoke-checks it, installs the rollback CLI, then removes the stock `lighttpd` / CodeIgniter web UI **only after** SSH is confirmed reachable
 - **Reboots** so OpenAPS comes up cleanly via init — the console returns in ~1-2 minutes
 
