@@ -32,6 +32,20 @@ start() {
     [ -x "$BIN" ] || { echo "$BIN missing or not executable"; return 1; }
     mkdir -p "$RUN"
 
+    # Ensure root's home dir is root-owned and not group/other-writable before
+    # dropbear authenticates against ~/.ssh/authorized_keys. dropbear (like
+    # OpenSSH StrictModes) rejects a key when the home dir CONTAINING .ssh is
+    # owned by another uid or is group/other-writable — recoveryd ensures .ssh
+    # and authorized_keys themselves, but not the directory above them. A box
+    # whose /home/root was chowned to an app user silently falls through to
+    # password despite a correct key; fixing it here self-heals on every boot.
+    ROOT_HOME=$(awk -F: '$1=="root"{print $6; exit}' /etc/passwd 2>/dev/null)
+    [ -n "$ROOT_HOME" ] || ROOT_HOME=/home/root
+    if [ -d "$ROOT_HOME" ]; then
+        chown root:root "$ROOT_HOME" 2>/dev/null || true
+        chmod go-w "$ROOT_HOME" 2>/dev/null || true
+    fi
+
     # nohup-sh-exec wrapper: same pattern as S48-inv-driver / S98-dropbear,
     # so the daemon survives both init(1) boot context and a PHP-FPM
     # upgrade-endpoint context. The inner exec replaces the wrapper sh with
