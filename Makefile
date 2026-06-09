@@ -507,12 +507,17 @@ ipk-tls-proxy: build-openaps-tls-proxy-arm build-mkipk
 	@rm -rf $(IPKROOT)/openaps-tls-proxy
 	@mkdir -p $(IPKROOT)/openaps-tls-proxy/home/applications/openaps-tls-proxy
 	@mkdir -p $(IPKROOT)/openaps-tls-proxy/etc/rcS.d
+	@mkdir -p $(IPKROOT)/openaps-tls-proxy/etc/opkg
+	@mkdir -p $(IPKROOT)/openaps-tls-proxy/etc/openaps
 	@cp $(TLS_PROXY_ARMV7) $(IPKROOT)/openaps-tls-proxy/home/applications/openaps-tls-proxy/openaps-tls-proxy
 	@chmod 0755 $(IPKROOT)/openaps-tls-proxy/home/applications/openaps-tls-proxy/openaps-tls-proxy
-	@cp packaging/opkg-openaps.conf $(IPKROOT)/openaps-tls-proxy/home/applications/openaps-tls-proxy/opkg-openaps.conf
-	@chmod 0644 $(IPKROOT)/openaps-tls-proxy/home/applications/openaps-tls-proxy/opkg-openaps.conf
-	@cp packaging/feed.conf.sample $(IPKROOT)/openaps-tls-proxy/home/applications/openaps-tls-proxy/feed.conf.sample
-	@chmod 0644 $(IPKROOT)/openaps-tls-proxy/home/applications/openaps-tls-proxy/feed.conf.sample
+	@# Ship the opkg feed config + operator-editable upstream as their final-path
+	@# data files so opkg tracks them as conffiles (preserved on upgrade); the
+	@# conffiles manifest lists these exact paths.
+	@cp packaging/opkg-openaps.conf $(IPKROOT)/openaps-tls-proxy/etc/opkg/openaps.conf
+	@chmod 0644 $(IPKROOT)/openaps-tls-proxy/etc/opkg/openaps.conf
+	@cp packaging/feed.conf.sample $(IPKROOT)/openaps-tls-proxy/etc/openaps/feed.conf
+	@chmod 0644 $(IPKROOT)/openaps-tls-proxy/etc/openaps/feed.conf
 	@cp packaging/S47-openaps-tls-proxy $(IPKROOT)/openaps-tls-proxy/etc/rcS.d/S47-openaps-tls-proxy
 	@chmod 0755 $(IPKROOT)/openaps-tls-proxy/etc/rcS.d/S47-openaps-tls-proxy
 	$(call call_mkipk,openaps-tls-proxy,$(IPK_ARCH))

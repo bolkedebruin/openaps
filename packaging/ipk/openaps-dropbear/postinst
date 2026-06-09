@@ -22,10 +22,12 @@ if [ ! -f "$HOSTKEY" ]; then
     fi
 fi
 
-# StrictModes: /home/root must be owned root:root, .ssh 0700, and (if present)
-# authorized_keys 0600. Without this dropbear silently refuses pubkey auth.
+# StrictModes: /home/root must be owned root:root and NOT group/other-writable,
+# .ssh 0700, and (if present) authorized_keys 0600. Without this dropbear
+# silently refuses pubkey auth.
 mkdir -p "$ROOT_HOME/.ssh"
 chown root:root "$ROOT_HOME" 2>/dev/null || true
+chmod go-w "$ROOT_HOME" 2>/dev/null || true
 chown root:root "$ROOT_HOME/.ssh" 2>/dev/null || true
 chmod 0700 "$ROOT_HOME/.ssh" 2>/dev/null || true
 if [ -f "$ROOT_HOME/.ssh/authorized_keys" ]; then
