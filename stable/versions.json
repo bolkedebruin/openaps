@@ -1,0 +1,39 @@
+{
+  "packages": {
+    "openaps-base": {
+      "version": "v1.1.0",
+      "fingerprint": "202b0014383cf859a5c5feb6094a06eac43c4fd41d7a17b3393cd04d05de21de",
+      "filename": "openaps-base_v1.1.0_all.ipk"
+    },
+    "openaps-dropbear": {
+      "version": "v1.1.0",
+      "fingerprint": "adce2a4ff284b454da47c1ff896eb491f4014242bcfcac1c1b04315cdb663e81",
+      "filename": "openaps-dropbear_v1.1.0_armv7ahf-vfp-neon.ipk"
+    },
+    "openaps-ecu-sunspec": {
+      "version": "v1.1.0",
+      "fingerprint": "a98b4f79aae5ddbea102c109ca2f9350c486404488faa0c2c3989e6515abe890",
+      "filename": "openaps-ecu-sunspec_v1.1.0_armv7ahf-vfp-neon.ipk"
+    },
+    "openaps-ecu-web": {
+      "version": "v1.1.0",
+      "fingerprint": "66b45bf9523d3458e5db4bab171fdceee21a6a2f6695447bde05f76b05b8345b",
+      "filename": "openaps-ecu-web_v1.1.0_armv7ahf-vfp-neon.ipk"
+    },
+    "openaps-ecu-zb": {
+      "version": "v1.1.0",
+      "fingerprint": "813e023ecf5879ad0306049ca1d5cea3f938ac113005c11e3d707a464b00dc5e",
+      "filename": "openaps-ecu-zb_v1.1.0_armv7ahf-vfp-neon.ipk"
+    },
+    "openaps-inv-driver": {
+      "version": "v1.1.0",
+      "fingerprint": "ddc184fd94bd3db0fdcb72f5ee77bf0201f21e06a05a4fa8c151e5d57215b312",
+      "filename": "openaps-inv-driver_v1.1.0_armv7ahf-vfp-neon.ipk"
+    },
+    "openaps-tls-proxy": {
+      "version": "v1.1.0",
+      "fingerprint": "655db8aca889846c2663fe197d00bd395f0469ba518f5ab00a1e4f7cc892d3aa",
+      "filename": "openaps-tls-proxy_v1.1.0_armv7ahf-vfp-neon.ipk"
+    }
+  }
+}
