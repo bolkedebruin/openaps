@@ -2,13 +2,14 @@
 #
 # S53-ecu-zb — start the ecu-zb ZigBee proxy.
 #
-# main.exe is retired on this ECU (monitor.exe is a sleeper stub), so the
-# old reason to run early (claim /dev/ttyO2's pty before main.exe opened it)
-# no longer applies. ecu-zb autodetects the ZigBee coordinator PAN: it reads
-# the provisioned MAC config /etc/yuneng/ecu_eth0_mac.conf if present
-# (authoritative and readable from early boot), else falls back to the live
-# eth0 MAC. So boot ordering is NOT critical for the PAN. It runs at S53
-# (after S50ecu_init) only because nothing needs it earlier now and
+# ecu-zb owns /dev/ttyO2 and cannot share it with the stock main.exe. start()
+# refuses to run while the stock inverter stack (main.exe/monitor.exe) is up —
+# disable stock first (opkg remove apsystems-stock). opkg 0.1.8 ignores the
+# Conflicts field, so this start-time guard is the enforcement.
+#
+# ecu-zb autodetects the ZigBee coordinator PAN from /etc/yuneng/ecu_eth0_mac.conf
+# (authoritative and readable from early boot), else the live eth0 MAC, so boot
+# ordering is not critical for the PAN. It runs at S53 (after S50ecu_init) where
 # /dev/reset + kernel modules are up for the radio hardware-reset bring-up.
 #
 # Install (one-time):
@@ -24,6 +25,13 @@ ARGS="--proxy --tty /dev/ttyO2 --pty $RUN/zb-pty --tap-sock $RUN/pcap.sock --tap
 start() {
     if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
         echo "ecu-zb already running (pid $(cat "$PIDFILE"))"
+        return 0
+    fi
+    # Guard: the stock inverter stack must be disabled first — main.exe and
+    # ecu-zb cannot both own /dev/ttyO2. Refuse rather than fight for the bus.
+    if pidof main.exe monitor.exe >/dev/null 2>&1; then
+        echo "ecu-zb: stock inverter stack (main.exe/monitor.exe) is running and owns /dev/ttyO2 — NOT starting."
+        echo "  Disable stock first:  opkg remove apsystems-stock  (then reboot), then: $0 start"
         return 0
     fi
     [ -x "$BIN" ] || { echo "$BIN missing or not executable"; return 1; }
