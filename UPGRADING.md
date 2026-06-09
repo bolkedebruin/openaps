@@ -22,7 +22,7 @@ It is a one-time manual migration (a v1.0.x box has no opkg feed configured yet)
 The box can't reach the feed yet (no proxy, and its `release.pub` is the v1.0.0
 placeholder). Copy `openaps-base` and `openaps-tls-proxy` from a workstation —
 download them from the [latest release](https://github.com/bolkedebruin/openaps/releases/latest)
-or build them (`make package-ipks VERSION=v1.1.1 ROOT_PW=openaps`):
+or build them (`make package-ipks VERSION=v1.1.1`):
 
 ```sh
 # from your workstation
@@ -67,9 +67,9 @@ Future releases are picked up the same way — the feed is content-addressed, so
 
 ## Notes
 
-- **Root password:** installing `openaps-dropbear` sets root's password to the
-  known default `openaps` (once — it won't clobber a later `passwd` change).
-  Change it on first login: `passwd`.
+- **Root password:** this upgrade does not change it — your existing v1.0.x
+  access (SSH key / password) is unaffected. The root password is set only by
+  the first-time bootstrap, not by the packages, so `opkg upgrade` never touches it.
 - **recoveryd:** v1.1.x no longer ships a recoveryd package, but a v1.0.x box's
   recoveryd keeps running and keeps managing root's `authorized_keys` — leave it
   in place; removing it is optional and unnecessary.

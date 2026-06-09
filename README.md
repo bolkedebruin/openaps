@@ -122,9 +122,8 @@ make package-bootstrap ROOT_PW='choose-a-strong-password'
 #   (add AUTHORIZED_KEYS=~/.ssh/id_ed25519.pub to also bundle your SSH key)
 ```
 
-> The root password is baked into the bundled `openaps-dropbear` package from
-> `ROOT_PW` (default `openaps`); it's the known credential SSH/console use until
-> you change it.
+> The bootstrap sets the root password from `ROOT_PW` (default `openaps`); it's
+> the known credential SSH/console use until you change it.
 
 **2. Push it to the ECU** over the stock local-upgrade endpoint:
 
@@ -140,10 +139,10 @@ curl -H "Expect:" \
 
 The bootstrap is **purely additive** — it does not disable stock or remove anything:
 
-- plants the release-signing key (`/etc/openaps/release.pub`)
-- installs `dropbear` (reboot-persistent SSH) — which sets the known default root
-  password (`openaps`, change on first login) — + the loopback TLS feed proxy from
-  bundled `.ipk`s (no network needed), and wires `opkg` to the signed GitHub feed
+- sets a known root password (default `openaps` — change on first login) and
+  plants the release-signing key (`/etc/openaps/release.pub`)
+- installs `dropbear` (reboot-persistent SSH) + the loopback TLS feed proxy from
+  bundled `.ipk`s (no network needed) and wires `opkg` to the signed GitHub feed
 - adopts the stock firmware into opkg (`apsystems-stock`) so it can be disabled later
 - the stock stack keeps running; `lighttpd` and `idwriter` stay up as recovery surfaces
 
@@ -212,7 +211,7 @@ git clone https://github.com/bolkedebruin/openaps
 cd openaps
 make web                                       # build the SPA bundle (Bun)
 make build-all-arm                             # cross-compile the ARMv7 binaries
-make package-ipks VERSION=v1.1.1 ROOT_PW=openaps      # build all .ipk packages
+make package-ipks VERSION=v1.1.1                       # build all .ipk packages
 make package-bootstrap VERSION=v1.1.1 ROOT_PW=openaps # build the bootstrap tarball
 ```
 

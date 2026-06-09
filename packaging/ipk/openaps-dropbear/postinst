@@ -35,29 +35,6 @@ if [ -f "$ROOT_HOME/.ssh/authorized_keys" ]; then
     chmod 0600 "$ROOT_HOME/.ssh/authorized_keys" 2>/dev/null || true
 fi
 
-# Root password — established ONCE so SSH/console access works out of the box.
-# Operators are told to change it on first login (`passwd`). The marker gates it:
-# it is never re-applied, so it won't clobber a changed password. The hash is the
-# crypt($6$) of the build-time ROOT_PW (default "openaps"), substituted into
-# __ROOT_PW_HASH__ at package time — never hardcoded here. opkg ships no hashing
-# tool on the ECU, so the hash is precomputed at build.
-PW_MARK=/etc/openaps/.root-pw-initialized
-PW_HASH='__ROOT_PW_HASH__'
-if [ ! -f "$PW_MARK" ] && [ -f /etc/shadow ]; then
-    SHTMP=/etc/shadow.openaps-dropbear.$$
-    if awk -F: -v OFS=: -v h="$PW_HASH" '$1=="root"{$2=h} {print}' /etc/shadow > "$SHTMP" \
-        && [ -s "$SHTMP" ] && grep -q '^root:\$6\$' "$SHTMP"; then
-        chmod 0600 "$SHTMP"
-        chown root:root "$SHTMP" 2>/dev/null || true
-        mv "$SHTMP" /etc/shadow
-        mkdir -p "$(dirname "$PW_MARK")"; : > "$PW_MARK"
-        echo "openaps-dropbear: root password set to the default 'openaps' — CHANGE IT on first login:  passwd"
-    else
-        rm -f "$SHTMP"
-        echo "openaps-dropbear: WARNING: could not set the default root password (rewrite of /etc/shadow failed)" >&2
-    fi
-fi
-
 # Start dropbear via its shipped init (same as the service packages start).
 [ -x /etc/rcS.d/S98-dropbear ] && /etc/rcS.d/S98-dropbear start || true
 
