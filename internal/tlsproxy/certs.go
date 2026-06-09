@@ -1,8 +1,8 @@
 package tlsproxy
 
 import (
-	_ "embed"
 	"crypto/x509"
+	_ "embed"
 	"fmt"
 	"os"
 )
