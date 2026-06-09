@@ -20,23 +20,27 @@ It is a one-time manual migration (a v1.0.x box has no opkg feed configured yet)
 ## 1. Copy the two "feed bootstrap" packages onto the box
 
 The box can't reach the feed yet (no proxy, and its `release.pub` is the v1.0.0
-placeholder). Copy `openaps-base` and `openaps-tls-proxy` from a workstation —
-download them from the [latest release](https://github.com/bolkedebruin/openaps/releases/latest)
-or build them (`make package-ipks VERSION=v1.1.1`):
+placeholder), and it can't fetch over HTTPS itself (the whole reason for the
+proxy). So pull `openaps-base` + `openaps-tls-proxy` from the release **on your
+workstation** (which has modern TLS) and stream each over `ssh` — `cat`-ing it to
+disk on the ECU. No `scp` is needed (dropbear ships none):
 
 ```sh
-# from your workstation
-scp openaps-base_<ver>_all.ipk \
-    openaps-tls-proxy_<ver>_armv7ahf-vfp-neon.ipk \
-    root@<ECU-IP>:/home/
+# on your workstation
+V=v1.1.3
+REL="https://github.com/bolkedebruin/openaps/releases/download/$V"
+curl -fsSL "$REL/openaps-base_${V}_all.ipk" \
+    | ssh root@<ECU-IP> 'cat > /home/openaps-base.ipk'
+curl -fsSL "$REL/openaps-tls-proxy_${V}_armv7ahf-vfp-neon.ipk" \
+    | ssh root@<ECU-IP> 'cat > /home/openaps-tls-proxy.ipk'
 ```
 
 ## 2. Install the trust anchor + feed proxy (local install)
 
 ```sh
 ssh root@<ECU-IP>
-opkg install /home/openaps-base_<ver>_all.ipk
-opkg install /home/openaps-tls-proxy_<ver>_armv7ahf-vfp-neon.ipk
+opkg install /home/openaps-base.ipk
+opkg install /home/openaps-tls-proxy.ipk
 ```
 
 `openaps-base` replaces the v1.0.0 **placeholder** `/etc/openaps/release.pub`
