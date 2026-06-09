@@ -6,12 +6,13 @@
 # exec_upgrade_ecu_app (POST /index.php/management/exec_upgrade_ecu_app),
 # which extracts this tarball and runs the script named "assist" at its root.
 #
-# This is the brownfield foothold: it plants the trust anchor + root access,
-# brings up dropbear and the openaps-tls-proxy from LOCAL .ipks (no network),
-# wires up the networked opkg feed, disables the stock supervisors, and removes
-# the stock lighttpd/CodeIgniter UI LAST. It does NOT install the OpenAPS
-# firmware packages themselves — it leaves the operator a one-liner to do that
-# over the now-authenticated opkg feed.
+# This is the brownfield foothold and it is PURELY ADDITIVE: it plants the trust
+# anchor + root access, brings up dropbear and the openaps-tls-proxy from LOCAL
+# .ipks (no network), and wires up the networked opkg feed. It does NOT touch the
+# stock firmware — it does not disable the stock supervisors and does not remove
+# lighttpd/CodeIgniter; the stock stack keeps running alongside. It also does not
+# install the OpenAPS firmware packages — it leaves the operator a one-liner to
+# do that over the now-authenticated opkg feed (which is what disables stock).
 #
 # Payload layout (siblings of this script at the tarball root):
 #   assist
@@ -29,12 +30,11 @@
 set -eu
 
 # This orchestrator is launched by PHP under lighttpd (the stock
-# exec_upgrade_ecu_app endpoint), so it is a member of lighttpd's process
-# group. Killing lighttpd tears down that group and would otherwise deliver a
-# signal to this script and terminate it. Ignore HUP and TERM so the bootstrap
-# runs to completion regardless of who launched us. (KILL is uncatchable, which
-# is why the lighttpd removal is deliberately the LAST step.) Re-armed below
-# alongside the lock-cleanup EXIT trap once $STATE_DIR exists.
+# exec_upgrade_ecu_app endpoint), so it is a member of lighttpd's process group.
+# If lighttpd is restarted/reloaded mid-run, the group teardown would otherwise
+# signal and terminate this script. Ignore HUP and TERM so the bootstrap runs to
+# completion regardless of who launched us. Re-armed below alongside the
+# lock-cleanup EXIT trap once $STATE_DIR exists.
 trap '' HUP TERM
 
 # Stamped by `make package-bootstrap` (sed-substitutes this line with the build
@@ -147,13 +147,17 @@ printf '%s\n' "$$" > "$LOCK/pid" 2>/dev/null || true
 trap 'rm -f "$LOCK/pid" 2>/dev/null; rmdir "$LOCK" 2>/dev/null' EXIT
 
 # Backup. BusyBox tar (v1.20.x) has NO -P flag and ships NO bzip2 compressor;
-# use gzip (always present). Only back up paths that exist so a missing optional
-# dir doesn't abort. /etc/shadow and /etc/opkg are captured so the access/feed
-# edits below are reversible.
+# use gzip (always present). The bootstrap is purely additive: the ONLY existing
+# file it modifies is /etc/shadow (the root password). So back up just
+# /etc/shadow + /etc/passwd — small and fast. Everything else the bootstrap adds
+# (release.pub, the opkg conf, the .ipk-installed files) is removed with `opkg
+# remove` + rm, not by this rollback. (Do NOT back up /home/applications: it is
+# ~20 MB of stock binaries the bootstrap never touches, and gzip'ing it pegs the
+# ECU for minutes.)
 BACKUP_STAMP=$(date -u +%Y%m%dT%H%M%S)
 BACKUP_PATH=/home/openaps-bootstrap-backup-${BACKUP_STAMP}.tar.gz
 BACKUP_SRC=""
-for d in /etc/shadow /etc/passwd /etc/opkg /etc/rcS.d /etc/init.d /home/applications; do
+for d in /etc/shadow /etc/passwd; do
     [ -e "$d" ] && BACKUP_SRC="$BACKUP_SRC $d"
 done
 tar -czf "$BACKUP_PATH" $BACKUP_SRC 2>/dev/null || {
@@ -341,123 +345,13 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 4 — disable stock supervisors (idwriter kept)
+# Step 4 — next-steps banner
 # ---------------------------------------------------------------------------
-# The manager binary system()-spawns each stock app ONCE at boot; each
-# supervisor (*monitor*) is its own respawn loop. Disable by killing the running
-# process and removing the binary so the next-boot spawn no-ops. Restored from
-# the backup tarball by rollback.
-echo "--- step 4: disable stock supervisors ---"
-
-DISABLED_LIST="$STATE_DIR/disabled-apps.list"
-: > "$DISABLED_LIST"
-
-# NOTE: idwriter is deliberately NOT in this list — it is the ONLY stock daemon
-# kept enabled (LAN recovery surface on TCP :4540) per the locked design.
-DISABLE_SET="
-monitor.exe
-clientmonitor
-control_client_monitor
-gprsmonitor
-mqtt_monitor.exe
-phone_server_monitor
-phone_server_app_monitor
-lancommClientMonitor
-single_update_monitor
-updatemanager
-autoupdate2
-autoupdate_restart
-AutoUpInver2
-AutoUpInver
-autoupdate
-autoupdate_main_restart
-resmonitor
-usbTest
-quectel_monitor.exe
-4gmonitor.exe
-diagnosis_network
-slave485
-"
-
-for app in $DISABLE_SET; do
-    if pidof "$app" >/dev/null 2>&1; then
-        killall -q "$app" 2>/dev/null || true
-        sleep 1
-        killall -q -9 "$app" 2>/dev/null || true
-    fi
-
-    BIN_PATH=/home/applications/$app
-    if [ -f "$BIN_PATH" ]; then
-        # Copy-then-remove so a failed cross-device move can't delete the only
-        # copy; these are also in the step-1 tarball.
-        mkdir -p "$STATE_DIR/disabled-bin"
-        cp -f "$BIN_PATH" "$STATE_DIR/disabled-bin/$app"
-        rm -f "$BIN_PATH"
-        echo "$app" >> "$DISABLED_LIST"
-        echo "  disabled: $app"
-    fi
-done
-
-# Also kill direct children of the now-defunct supervisors.
-for child in main.exe client control_client gprs mqtt.exe phone_server lancommClient single_update autoupdate quectel-CM; do
-    if pidof "$child" >/dev/null 2>&1; then
-        killall -q "$child" 2>/dev/null || true
-    fi
-done
-
-# ---------------------------------------------------------------------------
-# Step 5 — remove lighttpd / CodeIgniter (stock UI) — DELIBERATELY LAST
-# ---------------------------------------------------------------------------
-# assist is a member of lighttpd's process group (PHP under lighttpd launched
-# us). Killing lighttpd tears down that group, and a KILL/group teardown is
-# uncatchable — the trap at the top can't save us. So this is the LAST thing we
-# do: dropbear is up and verified, root access is planted, the feed is wired, so
-# a death at the killall below loses nothing. We neutralize lighttpd on disk
-# BEFORE the killall: move the binary aside and disable any rcS.d/init.d entry
-# first, so even if assist dies at the killall, lighttpd is gone from the boot
-# path and won't come back.
-echo "--- step 5: remove lighttpd / CodeIgniter ---"
-
-if ! netstat -ltn 2>/dev/null | grep -q ':22 '; then
-    echo "FATAL: dropbear not listening on :22; refusing to touch lighttpd"
-    exit 1
-fi
-
-LIGHTTPD_BIN=/usr/local/lighttpd/sbin/lighttpd
-if [ -f "$LIGHTTPD_BIN" ]; then
-    mkdir -p "$STATE_DIR/disabled-bin"
-    # Non-destructive: copy first, remove only once the copy lands. No `|| rm -f`
-    # fallback — under set -e a copy failure aborts rather than deleting the sole
-    # binary (rollback restores lighttpd ONLY from disabled-bin/).
-    cp -f "$LIGHTTPD_BIN" "$STATE_DIR/disabled-bin/lighttpd"
-    rm -f "$LIGHTTPD_BIN"
-    echo "lighttpd" >> "$DISABLED_LIST"
-    echo "  disabled: lighttpd"
-fi
-
-for f in /etc/rcS.d/S*lighttpd* /etc/init.d/lighttpd* /etc/init.d/S*lighttpd*; do
-    [ -e "$f" ] || continue
-    mkdir -p "$STATE_DIR/disabled-init"
-    mv "$f" "$STATE_DIR/disabled-init/$(basename "$f")" 2>/dev/null || rm -f "$f"
-    echo "  disabled init: $f"
-done
-
-# Binary and boot entries are gone; NOW kill the running process. If this kills
-# assist too, the bootstrap is already complete and persistent. Release the lock
-# first: a SIGKILL at the killall would skip the EXIT trap and leave a stale lock
-# that blocks re-runs, and the concurrency window is over by this point.
-echo "  bootstrap complete and persistent; killing lighttpd (assist may not survive)"
-rm -f "$LOCK/pid" 2>/dev/null || true
-rmdir "$LOCK" 2>/dev/null || true
-if pidof lighttpd >/dev/null 2>&1; then
-    killall -q lighttpd 2>/dev/null || true
-    sleep 1
-    killall -q -9 lighttpd 2>/dev/null || true
-fi
-
-# ---------------------------------------------------------------------------
-# Step 6 — next-steps banner
-# ---------------------------------------------------------------------------
+# The bootstrap is purely additive: it plants trust + access and brings up
+# dropbear + the opkg proxy. It deliberately does NOT touch the stock firmware
+# — no disabling supervisors, no removing lighttpd. The stock stack keeps
+# running; installing the OpenAPS firmware over the opkg feed is what disables
+# the stock supervisors, and that is the operator's explicit next step.
 echo "=== $(date) openaps-bootstrap $VERSION done ==="
 echo
 echo "============================================================"
@@ -473,7 +367,9 @@ echo "   opkg update"
 echo "   opkg install openaps-base openaps-inv-driver openaps-ecu-zb \\"
 echo "                openaps-ecu-web openaps-ecu-sunspec"
 echo
-echo " Rollback (if needed):  tar -xzf $BACKUP_PATH -C /"
+echo " Rollback (if needed):"
+echo "   opkg remove openaps-tls-proxy openaps-dropbear   # remove added pkgs"
+echo "   tar -xzf $BACKUP_PATH -C /   # restore original root password"
 echo "============================================================"
 echo
 exit 0
