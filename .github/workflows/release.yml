@@ -166,3 +166,55 @@ jobs:
           destination_dir: ${{ env.CHANNEL }}
           keep_files: false
           commit_message: "feed: ${{ env.CHANNEL }} ${{ env.VERSION }}"
+
+  # Build the openaps-bootstrap tarball — the payload a first-time operator
+  # uploads via the stock exec_upgrade_ecu_app endpoint to convert a box: it
+  # installs dropbear + tls-proxy, wires opkg to the feed, plants the operator
+  # key, and sets a KNOWN root password. The root password and the authorized
+  # key are baked from `release`-environment secrets, so this job is gated and
+  # never exposes them to the build job's third-party (bun/make) steps. The make
+  # target FAILS if ROOT_PW is empty, and this job asserts it too — a bootstrap
+  # without a known root password could brick a box once stock is removed.
+  bootstrap:
+    needs: release
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: fetch dropbear ARMv7 (bundled in the bootstrap)
+        run: ./packaging/fetch-dropbear.sh build/dropbear-armv7
+
+      - name: write operator authorized_keys from secret
+        env:
+          AUTHORIZED_KEYS: ${{ secrets.OPENAPS_BOOTSTRAP_AUTHORIZED_KEYS }}
+        run: |
+          [ -n "$AUTHORIZED_KEYS" ] || { echo "::error::OPENAPS_BOOTSTRAP_AUTHORIZED_KEYS is empty — set the operator SSH public key"; exit 1; }
+          umask 077
+          printf '%s\n' "$AUTHORIZED_KEYS" > operator.pub
+
+      - name: build openaps-bootstrap (root pw + key baked from secrets)
+        env:
+          # ROOT_PW reaches make via the environment (the Makefile reads it and
+          # hashes via openssl -stdin), so it is never on argv / in process list.
+          ROOT_PW: ${{ secrets.OPENAPS_BOOTSTRAP_ROOT_PW }}
+        run: |
+          [ -n "$ROOT_PW" ] || { echo "::error::OPENAPS_BOOTSTRAP_ROOT_PW is empty — refusing to build a bootstrap with no known root password"; exit 1; }
+          make package-bootstrap VERSION="${GITHUB_REF_NAME}" AUTHORIZED_KEYS="$PWD/operator.pub"
+          shred -u operator.pub 2>/dev/null || rm -f operator.pub
+
+      - name: attach bootstrap to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" \
+            build/openaps-bootstrap-*.tar.gz --clobber
