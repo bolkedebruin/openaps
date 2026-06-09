@@ -101,48 +101,90 @@ where RF eavesdropping is the only realistic threat.
 
 ## Install
 
-> v1.0 supports brownfield migration of an existing APsystems **ECU-R-Pro** or **ECU-C**. The RTOS-based ECU-R / ECU-B are NOT compatible (no Linux userspace). Pi support is on the roadmap.
+> v1.1 migrates an existing APsystems **ECU-R-Pro** or **ECU-C** onto OpenAPS via a
+> signed **opkg** feed. The RTOS-based ECU-R / ECU-B are NOT compatible (no Linux
+> userspace). Pi support is on the roadmap. **Upgrading a v1.0.x box?** See
+> [`UPGRADING.md`](UPGRADING.md).
 
-**1. Download the installer tarball** from the [latest release](https://github.com/bolkedebruin/openaps/releases/latest):
+Install is two phases: a small **bootstrap** (pushed over the stock firmware's
+local-upgrade endpoint) brings up SSH + the signed opkg feed **without touching
+the stock firmware**; then you install the firmware over `opkg` and disable stock
+when you're ready.
 
+**1. Get the bootstrap.** Download `openaps-bootstrap-<version>.tar.gz` from the
+[release page](https://github.com/bolkedebruin/openaps/releases/latest) — its root
+password is the default **`openaps`** (change it on first login). Or build one with
+your own password (from a checkout — see [Build from source](#build-from-source)):
+
+```sh
+make package-bootstrap ROOT_PW='choose-a-strong-password'
+#   -> build/openaps-bootstrap-<version>.tar.gz
+#   (add AUTHORIZED_KEYS=~/.ssh/id_ed25519.pub to also bundle your SSH key)
 ```
-openaps-<version>-ecu.tar.bz2
-```
 
-**2. Push it to your ECU** over the stock firmware's existing local-upgrade endpoint:
+> The root password is baked into the bundled `openaps-dropbear` package from
+> `ROOT_PW` (default `openaps`); it's the known credential SSH/console use until
+> you change it.
+
+**2. Push it to the ECU** over the stock local-upgrade endpoint:
 
 ```sh
 curl -H "Expect:" \
-     -F "file=@openaps-<version>-ecu.tar.bz2" \
+     -F "file=@build/openaps-bootstrap-<version>.tar.gz" \
      http://<ECU-IP>/index.php/management/exec_upgrade_ecu_app
 ```
 
-> The `-H "Expect:"` is required: the stock ECU runs lighttpd 1.4.35, which
-> rejects curl's automatic `Expect: 100-continue` header on a large upload with
-> **`417 Expectation Failed`**. Disabling that header makes the POST succeed.
-> A `{"res":0}` reply means the tarball was received and unpacked and the
-> installer was launched — watch its progress in `/home/openaps-install.log` on
-> the ECU (the install runs in the background after the HTTP reply returns).
+> `-H "Expect:"` is required — stock lighttpd 1.4.35 rejects curl's automatic
+> `Expect: 100-continue` with **`417`**. A `{"res":0}` reply means the bootstrap
+> ran; watch `/home/openaps-bootstrap.log` on the ECU.
 
-The orchestrator script inside the tarball:
+The bootstrap is **purely additive** — it does not disable stock or remove anything:
 
-- Takes a full backup of `/home/applications`, `/etc/rcS.d`, `/etc/init.d`, `/etc/yuneng`
-- Installs SSH (`dropbear`) **first** as a recovery path and verifies it's listening
-- Installs the four OpenAPS binaries + `S48..S99` init scripts
-- Seeds the inverter inventory from the stock DB and installs the base grid-profile library, so the console is populated on first boot (no waiting for the next dawn re-announce)
-- Disables the stock APsystems supervisors (cloud uplink, the broken `mqtt.exe` CPU-spinner, the auto-update path) by moving their binaries out of the manager's launch path — but **keeps `idwriter` (`:4540`) as a LAN recovery shell** (an unauthenticated root surface; remove it if that's unacceptable for your deployment)
-- Starts OpenAPS + smoke-checks it, installs the rollback CLI, then removes the stock `lighttpd` / CodeIgniter web UI **only after** SSH is confirmed reachable
-- **Reboots** so OpenAPS comes up cleanly via init — the console returns in ~1-2 minutes
+- plants the release-signing key (`/etc/openaps/release.pub`)
+- installs `dropbear` (reboot-persistent SSH) — which sets the known default root
+  password (`openaps`, change on first login) — + the loopback TLS feed proxy from
+  bundled `.ipk`s (no network needed), and wires `opkg` to the signed GitHub feed
+- adopts the stock firmware into opkg (`apsystems-stock`) so it can be disabled later
+- the stock stack keeps running; `lighttpd` and `idwriter` stay up as recovery surfaces
 
-**3. Open `https://<ECU-IP>/`** in a browser (give the ECU ~1-2 minutes to reboot first), accept the self-signed cert, set an operator password, and start using the console.
-
-**Roll back at any time** with:
+**3. Install the OpenAPS firmware over opkg:**
 
 ```sh
-ssh root@<ECU-IP> /usr/local/bin/openaps-rollback
+ssh root@<ECU-IP>          # default password: openaps  (or your ROOT_PW / SSH key)
+passwd                     # change the root password now
+opkg update
+opkg install openaps-base openaps-inv-driver openaps-ecu-zb \
+             openaps-ecu-web openaps-ecu-sunspec
 ```
 
-> The bundled `dropbear` predates the algorithms modern OpenSSH ships enabled by default — drop the snippet from [`docs/SSH-CONFIG.md`](docs/SSH-CONFIG.md) into your `~/.ssh/config` on first connection.
+**4. Switch off the stock firmware** (when you're ready to hand the bus to OpenAPS):
+
+```sh
+opkg remove apsystems-stock    # comments the stock manager launch + stops it
+/sbin/reboot                   # stock no longer starts; OpenAPS owns /dev/ttyO2
+```
+
+> `opkg remove apsystems-stock` refuses unless `openaps-dropbear` (persistent SSH)
+> and the eth0 MAC-setter are in place — disabling the stock manager also stops
+> `idwriter` and `macapp`, so this guard prevents locking yourself out.
+
+**5. Open `https://<ECU-IP>/`**, accept the self-signed cert, set a console password.
+
+**Roll back to stock** at any time:
+
+```sh
+opkg remove openaps-ecu-zb openaps-ecu-web openaps-ecu-sunspec openaps-inv-driver
+opkg install apsystems-stock    # restores the stock manager launch
+/sbin/reboot
+```
+
+**Update later:** `opkg update && opkg upgrade` pulls only the packages whose
+content actually changed (the feed is content-addressed). The proxy verifies the
+release-key signature on the index and the SHA-256 of every `.ipk` before opkg
+sees it.
+
+> The bundled `dropbear` predates algorithms modern OpenSSH enables by default —
+> drop the snippet from [`docs/SSH-CONFIG.md`](docs/SSH-CONFIG.md) into `~/.ssh/config`.
 
 ### What's preserved when you migrate from stock firmware
 
@@ -150,7 +192,7 @@ The install is a near-zero-config drop-in. Inverters, grid profile, and power ca
 
 | Thing | Inherited? | How |
 |---|:--:|---|
-| ZigBee PAN, channel, ECU ID, ECU MAC | ✅ | Read from `/etc/yuneng/*.conf` during install. Same PAN your fleet is paired against. |
+| ZigBee PAN, channel, ECU ID, ECU MAC | ✅ | Provisioned into `settings.json` from `/etc/yuneng/*.conf` by the `openaps-base` postinst. Same PAN your fleet is paired against. |
 | Paired inverter inventory | ✅ | Auto-discovered from the first telemetry frame each inverter sends after the radio comes up — usually within 1-3 minutes. |
 | Active grid profile per inverter | ✅ | Reverse-identified from the inverter's own protection-register read-back (e.g. matches `EN 50549-1` against shipped base profiles). |
 | Output power caps | ✅ | Persisted in inverter NVRAM (DA code, both DS3 and QS1A), read back on first contact. |
@@ -168,12 +210,16 @@ Requires Go 1.26+ and [Bun](https://bun.sh) for the web UI bundle.
 ```sh
 git clone https://github.com/bolkedebruin/openaps
 cd openaps
-make web                   # build the SPA bundle (Bun)
-make build-all-arm         # cross-compile the four ARMv7 binaries
-make package-openaps       # produce the brownfield ECU installer tarball
+make web                                       # build the SPA bundle (Bun)
+make build-all-arm                             # cross-compile the ARMv7 binaries
+make package-ipks VERSION=v1.1.1 ROOT_PW=openaps      # build all .ipk packages
+make package-bootstrap VERSION=v1.1.1 ROOT_PW=openaps # build the bootstrap tarball
 ```
 
-Output lands in `build/`. `make test` runs the full suite (`go test -race ./...` + `bun test`).
+Output lands in `build/` (`build/ipk/*.ipk`, `build/openaps-bootstrap-*.tar.gz`).
+`make test` runs the full suite (`go test -race ./...` + `bun test`). Releases
+are cut by tagging `v*`; CI builds the `.ipk`s, signs the feed index with the
+release key, and publishes it to GitHub Pages (`…github.io/openaps/stable/`).
 
 ## License
 

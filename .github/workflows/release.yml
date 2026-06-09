@@ -11,6 +11,11 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # `release` environment so this job can read the OPENAPS_BOOTSTRAP_ROOT_PW
+    # scoped secret to bake the dropbear root password (no protection rules -> no
+    # gate). Only secrets this job references are injected; the signing key is
+    # used solely in publish-feed.
+    environment: release
     steps:
       - uses: actions/checkout@v5
         with:
@@ -52,7 +57,14 @@ jobs:
         run: ./packaging/fetch-dropbear.sh build/dropbear-armv7
 
       - name: build .ipk packages
-        run: make package-ipks VERSION="${GITHUB_REF_NAME}"
+        # openaps-dropbear bakes the default root password from ROOT_PW (fed to
+        # openssl via stdin in the Makefile). Defaults to "openaps" if the secret
+        # is unavailable here; users change it on first login.
+        env:
+          ROOT_PW: ${{ secrets.OPENAPS_BOOTSTRAP_ROOT_PW }}
+        run: |
+          [ -n "$ROOT_PW" ] || { echo "::error::OPENAPS_BOOTSTRAP_ROOT_PW is empty/unreadable here — make it a repository secret so this job can read it (a known root password must be baked into openaps-dropbear)"; exit 1; }
+          make package-ipks VERSION="${GITHUB_REF_NAME}"
 
       - name: stage bootstrap assets (operators build the tarball locally)
         run: |
@@ -169,12 +181,11 @@ jobs:
 
   # Build the openaps-bootstrap tarball — the payload a first-time operator
   # uploads via the stock exec_upgrade_ecu_app endpoint to convert a box: it
-  # installs dropbear + tls-proxy, wires opkg to the feed, and sets a KNOWN root
-  # password (baked from the OPENAPS_BOOTSTRAP_ROOT_PW secret). Uses the `release`
-  # environment for that scoped secret (no protection rules, so no gate). Kept
-  # separate from the build job so the password is only injected here. The make
-  # target FAILS if ROOT_PW is empty, and this job asserts it too — a bootstrap
-  # with no known root password could brick a box.
+  # installs dropbear + tls-proxy and wires opkg to the feed. The KNOWN root
+  # password is baked into the bundled openaps-dropbear .ipk (from ROOT_PW =
+  # OPENAPS_BOOTSTRAP_ROOT_PW, default "openaps"); a known password is always set
+  # so disabling stock later can't lock the operator out. Uses the `release`
+  # environment for that scoped secret (no protection rules, so no gate).
   bootstrap:
     needs: release
     runs-on: ubuntu-latest
@@ -194,13 +205,14 @@ jobs:
       - name: fetch dropbear ARMv7 (bundled in the bootstrap)
         run: ./packaging/fetch-dropbear.sh build/dropbear-armv7
 
-      - name: build openaps-bootstrap (root pw baked from secret)
+      - name: build openaps-bootstrap (root pw baked into openaps-dropbear)
         env:
-          # ROOT_PW reaches make via the environment (the Makefile reads it and
-          # hashes via openssl -stdin), so it is never on argv / in process list.
+          # ROOT_PW reaches make via the environment (the Makefile hashes it via
+          # openssl -stdin into the openaps-dropbear postinst), so it is never on
+          # argv / in the process list. Empty -> Makefile default "openaps".
           ROOT_PW: ${{ secrets.OPENAPS_BOOTSTRAP_ROOT_PW }}
         run: |
-          [ -n "$ROOT_PW" ] || { echo "::error::OPENAPS_BOOTSTRAP_ROOT_PW is empty — refusing to build a bootstrap with no known root password"; exit 1; }
+          [ -n "$ROOT_PW" ] || { echo "::error::OPENAPS_BOOTSTRAP_ROOT_PW is empty — refusing to build without a known root password (disabling stock would lock the box out)"; exit 1; }
           # No bundled SSH key: first login is root + the baked password; the
           # operator adds their own key after first login.
           make package-bootstrap VERSION="${GITHUB_REF_NAME}"

@@ -16,12 +16,12 @@
 #
 # Payload layout (siblings of this script at the tarball root):
 #   assist
-#   ipks/openaps-dropbear_<ver>_armv7ahf-vfp-neon.ipk
+#   ipks/openaps-dropbear_<ver>_armv7ahf-vfp-neon.ipk   (carries the root password)
 #   ipks/openaps-tls-proxy_<ver>_armv7ahf-vfp-neon.ipk
+#   ipks/apsystems-stock_<ver>_all.ipk
 #   release.pub          -> /etc/openaps/release.pub
-#   authorized_keys      -> /home/root/.ssh/authorized_keys
+#   authorized_keys      -> /home/root/.ssh/authorized_keys (optional)
 #   opkg-openaps.conf    -> /etc/opkg/openaps.conf
-#   root.shadow.hash     ($6$ SHA-512 crypt hash, one line)
 #
 # Idempotent: re-running over the same box is safe.
 #
@@ -248,56 +248,8 @@ else
     echo "  (no bundled authorized_keys — first login is root + the baked password)"
 fi
 
-# Root password: replace root's /etc/shadow hash field with the baked $6$ hash.
-# The unknown stock password is replaced, not discovered. Atomic via temp + mv.
-# shadow line = name:hash:lastchg:min:max:warn:inactive:expire:flag — we rewrite
-# only field 2, keeping the rest.
-if [ -f "$BOOT_DIR/root.shadow.hash" ] && [ -f /etc/shadow ]; then
-    NEWHASH=$(head -n 1 "$BOOT_DIR/root.shadow.hash" | tr -d '\r\n')
-    case "$NEWHASH" in
-        '$6$'*) : ;;
-        *) echo "FATAL: root.shadow.hash is not a \$6\$ SHA-512 crypt hash"; exit 1 ;;
-    esac
-    SHADOW_TMP=/etc/shadow.openaps.$$
-    SHADOW_ORIG_LINES=$(wc -l < /etc/shadow 2>/dev/null | tr -d ' ')
-    [ -n "$SHADOW_ORIG_LINES" ] || SHADOW_ORIG_LINES=0
-    # NEWHASH may contain '/' and '$', so pass it via awk -v (not sed s///).
-    if awk -F: -v OFS=: -v h="$NEWHASH" \
-        '$1=="root"{$2=h; seen=1} {print} END{if(!seen) exit 3}' \
-        /etc/shadow > "$SHADOW_TMP"; then
-        # Sanity-check the rewrite before the irreversible mv: it must be
-        # non-empty, keep every original account line, and still carry a
-        # well-formed root $6$ entry. A corrupt/short shadow locks the box out.
-        SHADOW_NEW_LINES=$(wc -l < "$SHADOW_TMP" 2>/dev/null | tr -d ' ')
-        [ -n "$SHADOW_NEW_LINES" ] || SHADOW_NEW_LINES=0
-        if [ ! -s "$SHADOW_TMP" ]; then
-            rm -f "$SHADOW_TMP"
-            echo "FATAL: rewritten /etc/shadow is empty — refusing to install it"
-            exit 1
-        fi
-        if [ "$SHADOW_NEW_LINES" -lt "$SHADOW_ORIG_LINES" ]; then
-            rm -f "$SHADOW_TMP"
-            echo "FATAL: rewritten /etc/shadow lost lines ($SHADOW_NEW_LINES < $SHADOW_ORIG_LINES) — refusing to install it"
-            exit 1
-        fi
-        if ! grep -q '^root:\$6\$' "$SHADOW_TMP"; then
-            rm -f "$SHADOW_TMP"
-            echo "FATAL: rewritten /etc/shadow has no well-formed root:\$6\$ line — refusing to install it"
-            exit 1
-        fi
-        chmod 0600 "$SHADOW_TMP"
-        chown root:root "$SHADOW_TMP" 2>/dev/null || true
-        mv "$SHADOW_TMP" /etc/shadow
-        echo "  + /etc/shadow root password set from baked hash"
-    else
-        rm -f "$SHADOW_TMP"
-        echo "FATAL: could not rewrite root entry in /etc/shadow (no root: line?)"
-        exit 1
-    fi
-else
-    echo "FATAL: root.shadow.hash or /etc/shadow missing — refusing to proceed"
-    exit 1
-fi
+# Root password is set by the openaps-dropbear package's postinst (installed in
+# step 3), which bakes the hash from the build-time ROOT_PW. Nothing to do here.
 
 # ---------------------------------------------------------------------------
 # Step 3 — bring up dropbear + tls-proxy from LOCAL .ipks, then wire opkg feed

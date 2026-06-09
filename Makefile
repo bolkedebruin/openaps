@@ -541,7 +541,14 @@ ipk-tls-proxy: build-openaps-tls-proxy-arm build-mkipk
 
 # (g) openaps-dropbear — armv7ahf-vfp-neon, Depends: none. Bundles the
 #     dropbear ARMv7 binaries (fetched into $(DROPBEAR_DIR)) + S98 init script.
+# ROOT_PW (the root password baked into the postinst) reaches the recipe via the
+# environment and is hashed through `openssl passwd -6 -stdin`, so it is never on
+# argv / in the process list. REQUIRED — there is no silent default: a box must
+# always get a KNOWN password, or disabling stock (which stops idwriter) locks it
+# out. The release CI sets it from the OPENAPS_BOOTSTRAP_ROOT_PW secret ("openaps").
+ipk-dropbear: export ROOT_PW := $(ROOT_PW)
 ipk-dropbear: build-mkipk $(DROPBEAR_DIR)/dropbear
+	@[ -n "$$ROOT_PW" ] || { echo "ERROR: ROOT_PW is required (e.g. ROOT_PW=openaps) — openaps-dropbear must bake a known root password or disabling stock locks the box out"; exit 1; }
 	@rm -rf $(IPKROOT)/openaps-dropbear
 	@mkdir -p $(IPKROOT)/openaps-dropbear/usr/local/sbin
 	@mkdir -p $(IPKROOT)/openaps-dropbear/etc/rcS.d
@@ -553,7 +560,12 @@ ipk-dropbear: build-mkipk $(DROPBEAR_DIR)/dropbear
 	done
 	@cp packaging/S98-dropbear $(IPKROOT)/openaps-dropbear/etc/rcS.d/S98-dropbear
 	@chmod 0755 $(IPKROOT)/openaps-dropbear/etc/rcS.d/S98-dropbear
+	@# Bake the root-password hash into the postinst (substitute __ROOT_PW_HASH__).
+	@H=$$(printf '%s' "$$ROOT_PW" | openssl passwd -6 -stdin); \
+		case "$$H" in \$$6\$$*) ;; *) echo "ERROR: openssl passwd -6 did not produce a \$$6\$$ hash"; exit 1 ;; esac; \
+		sed "s|__ROOT_PW_HASH__|$$H|" $(IPK_META)/openaps-dropbear/postinst > $(IPK_DIR)/.gen-openaps-dropbear-postinst
 	$(call call_mkipk,openaps-dropbear,$(IPK_ARCH))
+	@rm -f $(IPK_DIR)/.gen-openaps-dropbear-postinst
 
 # package-ipks — build all 7 .ipks, then mirror them into build/ipks/ (the dir
 # the bootstrap tarball and a published feed both consume).
@@ -571,16 +583,16 @@ package-ipks: ipk-all
 #
 # Layout (assist at the tarball ROOT, siblings beside it):
 #   assist                                                  (orchestrator)
-#   ipks/openaps-dropbear_<ver>_armv7ahf-vfp-neon.ipk
+#   ipks/openaps-dropbear_<ver>_armv7ahf-vfp-neon.ipk       (carries the root password)
 #   ipks/openaps-tls-proxy_<ver>_armv7ahf-vfp-neon.ipk
+#   ipks/apsystems-stock_<ver>_all.ipk
 #   release.pub          -> /etc/openaps/release.pub
-#   authorized_keys      -> /home/root/.ssh/authorized_keys
+#   authorized_keys      -> /home/root/.ssh/authorized_keys (optional)
 #   opkg-openaps.conf    -> /etc/opkg/openaps.conf
-#   root.shadow.hash     ($6$ SHA-512 crypt hash, baked from ROOT_PW)
 #
-# REQUIRED make vars:
-#   ROOT_PW          — plaintext root password; hashed at build time with
-#                      `openssl passwd -6` into root.shadow.hash (FAIL if unset).
+# The root password is NOT set here — the bundled openaps-dropbear .ipk bakes it
+# (see ROOT_PW under ipk-dropbear; defaults to "openaps", change on first login).
+#
 # OPTIONAL make vars:
 #   AUTHORIZED_KEYS  — path to an SSH public-key file to bundle. Omitted for a
 #                      generally distributed bootstrap: first login is root + the
@@ -589,14 +601,8 @@ package-ipks: ipk-all
 # BusyBox-compatible tar: gzip, no -P, assist at the root.
 BOOTSTRAP_PKG_NAME := openaps-bootstrap-$(VERSION).tar.gz
 AUTHORIZED_KEYS    ?=
-ROOT_PW            ?=
 
-# ROOT_PW is exported into the recipe environment so it is hashed via openssl's
-# -stdin (never interpolated into a command line or visible in argv/ps), which
-# also keeps arbitrary quote/$ characters in the password intact.
-package-bootstrap: export ROOT_PW := $(ROOT_PW)
 package-bootstrap: ipk-dropbear ipk-tls-proxy ipk-apsystems-stock
-	@[ -n "$$ROOT_PW" ] || { echo "ERROR: ROOT_PW is required (e.g. make package-bootstrap ROOT_PW=...)"; exit 1; }
 	@echo "+ packaging openaps-bootstrap $(VERSION)"
 	@rm -rf $(BUILD_DIR)/pkgroot-bootstrap
 	@mkdir -p $(BUILD_DIR)/pkgroot-bootstrap/ipks
@@ -617,12 +623,8 @@ package-bootstrap: ipk-dropbear ipk-tls-proxy ipk-apsystems-stock
 	else \
 		echo "  (no AUTHORIZED_KEYS bundled — first login is root + the baked password)"; \
 	fi
-	@printf '%s' "$$ROOT_PW" | openssl passwd -6 -stdin > $(BUILD_DIR)/pkgroot-bootstrap/root.shadow.hash; \
-		case "$$(cat $(BUILD_DIR)/pkgroot-bootstrap/root.shadow.hash)" in \
-			\$$6\$$*) ;; \
-			*) echo "ERROR: root.shadow.hash is not a \$$6\$$ SHA-512 crypt hash"; exit 1 ;; \
-		esac
-	@chmod 0600 $(BUILD_DIR)/pkgroot-bootstrap/root.shadow.hash
+	@# No root.shadow.hash: the bundled openaps-dropbear .ipk carries the baked
+	@# password (set by its postinst), so the bootstrap does not set it.
 	@(cd $(BUILD_DIR)/pkgroot-bootstrap && tar -czf ../$(BOOTSTRAP_PKG_NAME) .)
 	@rm -rf $(BUILD_DIR)/pkgroot-bootstrap
 	@echo "=== built $(BUILD_DIR)/$(BOOTSTRAP_PKG_NAME) ==="
