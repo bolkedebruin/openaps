@@ -1,0 +1,12 @@
+#!/bin/sh
+# preinst — openaps-ecu-sunspec
+#
+# v1.0.x installed ecu-sunspec as a BARE FILE at /home/applications/ecu-sunspec,
+# but this package needs that path to be a DIRECTORY (.../ecu-sunspec/ecu-sunspec).
+# opkg runs preinst before unpacking, so remove the stray file here — otherwise
+# the unpack fails with "Cannot make dir … File exists". (Removing a running
+# binary's path is fine on Linux; the postinst's init restart replaces it.)
+if [ -e /home/applications/ecu-sunspec ] && [ ! -d /home/applications/ecu-sunspec ]; then
+    rm -f /home/applications/ecu-sunspec
+fi
+exit 0
