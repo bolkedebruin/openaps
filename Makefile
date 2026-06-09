@@ -13,6 +13,7 @@ ECU_WEB_PKG          := ./cmd/ecu-web
 ECU_ZB_PKG           := ./cmd/ecu-zb
 ECU_SUNSPEC_PKG      := ./cmd/ecu-sunspec
 RECOVERYD_PKG        := ./cmd/recoveryd
+TLS_PROXY_PKG        := ./cmd/openaps-tls-proxy
 
 INV_DRIVER_BIN       := $(BUILD_DIR)/inv-driver
 INV_DRIVER_ARMV7     := $(BUILD_DIR)/inv-driver-armv7
@@ -24,6 +25,8 @@ ECU_SUNSPEC_BIN      := $(BUILD_DIR)/ecu-sunspec
 ECU_SUNSPEC_ARMV7    := $(BUILD_DIR)/ecu-sunspec-armv7
 RECOVERYD_BIN        := $(BUILD_DIR)/recoveryd
 RECOVERYD_ARMV7      := $(BUILD_DIR)/recoveryd-armv7
+TLS_PROXY_BIN        := $(BUILD_DIR)/openaps-tls-proxy
+TLS_PROXY_ARMV7      := $(BUILD_DIR)/openaps-tls-proxy-armv7
 
 ECU_WEB_DIR_SRC      := cmd/ecu-web/web
 
@@ -53,6 +56,7 @@ DROPBEAR_DIR ?= $(BUILD_DIR)/dropbear-armv7
         build-ecu-zb build-ecu-zb-arm \
         build-ecu-sunspec build-ecu-sunspec-arm \
         build-recoveryd build-recoveryd-arm \
+        build-openaps-tls-proxy build-openaps-tls-proxy-arm \
         deploy-inv-driver deploy-ecu-web deploy-ecu-zb deploy-ecu-sunspec \
         install-init-zb uninstall-init-zb \
         package-zb package-sunspec package-sunspec-with-dropbear \
@@ -65,7 +69,7 @@ all: build-all-arm
 
 # ---------------- host builds ----------------
 
-build-all: build-inv-driver build-ecu-web build-ecu-zb build-ecu-sunspec build-recoveryd
+build-all: build-inv-driver build-ecu-web build-ecu-zb build-ecu-sunspec build-recoveryd build-openaps-tls-proxy
 
 build-inv-driver:
 	mkdir -p $(BUILD_DIR)
@@ -74,6 +78,10 @@ build-inv-driver:
 build-recoveryd:
 	mkdir -p $(BUILD_DIR)
 	CGO_ENABLED=0 go build -ldflags '$(LDFLAGS_HOST)' -o $(RECOVERYD_BIN) $(RECOVERYD_PKG)
+
+build-openaps-tls-proxy:
+	mkdir -p $(BUILD_DIR)
+	CGO_ENABLED=0 go build -ldflags '$(LDFLAGS_HOST)' -o $(TLS_PROXY_BIN) $(TLS_PROXY_PKG)
 
 build-ecu-web:
 	mkdir -p $(BUILD_DIR)
@@ -89,7 +97,7 @@ build-ecu-sunspec:
 
 # ---------------- ARMv7 builds ----------------
 
-build-all-arm: build-inv-driver-arm build-ecu-web-arm build-ecu-zb-arm build-ecu-sunspec-arm build-recoveryd-arm
+build-all-arm: build-inv-driver-arm build-ecu-web-arm build-ecu-zb-arm build-ecu-sunspec-arm build-recoveryd-arm build-openaps-tls-proxy-arm
 
 build-inv-driver-arm:
 	mkdir -p $(BUILD_DIR)
@@ -102,6 +110,12 @@ build-recoveryd-arm:
 	GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 \
 		go build $(GOFLAGS_ARM) -ldflags '$(LDFLAGS_ARM)' -o $(RECOVERYD_ARMV7) $(RECOVERYD_PKG)
 	@echo "built $(RECOVERYD_ARMV7) ($$(wc -c <$(RECOVERYD_ARMV7)) bytes)"
+
+build-openaps-tls-proxy-arm:
+	mkdir -p $(BUILD_DIR)
+	GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 \
+		go build $(GOFLAGS_ARM) -ldflags '$(LDFLAGS_ARM)' -o $(TLS_PROXY_ARMV7) $(TLS_PROXY_PKG)
+	@echo "built $(TLS_PROXY_ARMV7) ($$(wc -c <$(TLS_PROXY_ARMV7)) bytes)"
 
 build-ecu-web-arm:
 	mkdir -p $(BUILD_DIR)
