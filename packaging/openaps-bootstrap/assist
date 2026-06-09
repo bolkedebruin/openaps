@@ -186,10 +186,13 @@ else
     exit 1
 fi
 
-# Operator pubkey -> root's authorized_keys. ROOT_HOME is /home/root on this
-# ECU (NOT /root). StrictModes requires /home/root owned root:root and
-# .ssh 0700 / authorized_keys 0600. The temp lives in .ssh (same filesystem as
-# the target) so the mv is an atomic same-fs rename.
+# Optional bundled operator pubkey -> root's authorized_keys (only if the
+# bootstrap shipped one). The guaranteed access path is the baked root password
+# (set below, FATAL if it can't be); a bundled key is a convenience, so its
+# absence is not fatal. ROOT_HOME is /home/root on this ECU (NOT /root).
+# StrictModes requires /home/root owned root:root and .ssh 0700 /
+# authorized_keys 0600. The temp lives in .ssh (same filesystem as the target)
+# so the mv is an atomic same-fs rename.
 if [ -f "$BOOT_DIR/authorized_keys" ]; then
     ROOT_HOME=$(awk -F: '$1=="root"{print $6; exit}' /etc/passwd 2>/dev/null)
     [ -n "$ROOT_HOME" ] || ROOT_HOME=/home/root
@@ -227,8 +230,7 @@ if [ -f "$BOOT_DIR/authorized_keys" ]; then
         exit 1
     fi
 else
-    echo "FATAL: $BOOT_DIR/authorized_keys missing — refusing to proceed without pubkey access"
-    exit 1
+    echo "  (no bundled authorized_keys — first login is root + the baked password)"
 fi
 
 # Root password: replace root's /etc/shadow hash field with the baked $6$ hash.

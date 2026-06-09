@@ -564,7 +564,10 @@ package-ipks: ipk-all
 # REQUIRED make vars:
 #   ROOT_PW          — plaintext root password; hashed at build time with
 #                      `openssl passwd -6` into root.shadow.hash (FAIL if unset).
-#   AUTHORIZED_KEYS  — path to the operator's SSH public-key file (FAIL if unset).
+# OPTIONAL make vars:
+#   AUTHORIZED_KEYS  — path to an SSH public-key file to bundle. Omitted for a
+#                      generally distributed bootstrap: first login is root + the
+#                      baked password, after which the operator adds their key.
 #
 # BusyBox-compatible tar: gzip, no -P, assist at the root.
 BOOTSTRAP_PKG_NAME := openaps-bootstrap-$(VERSION).tar.gz
@@ -576,9 +579,7 @@ ROOT_PW            ?=
 # also keeps arbitrary quote/$ characters in the password intact.
 package-bootstrap: export ROOT_PW := $(ROOT_PW)
 package-bootstrap: ipk-dropbear ipk-tls-proxy
-	@[ -n "$$ROOT_PW" ] || { echo "ERROR: ROOT_PW is required (e.g. make package-bootstrap ROOT_PW=... AUTHORIZED_KEYS=~/.ssh/id_ed25519.pub)"; exit 1; }
-	@[ -n "$(AUTHORIZED_KEYS)" ] || { echo "ERROR: AUTHORIZED_KEYS is required (path to operator pubkey)"; exit 1; }
-	@[ -f "$(AUTHORIZED_KEYS)" ] || { echo "ERROR: AUTHORIZED_KEYS file not found: $(AUTHORIZED_KEYS)"; exit 1; }
+	@[ -n "$$ROOT_PW" ] || { echo "ERROR: ROOT_PW is required (e.g. make package-bootstrap ROOT_PW=...)"; exit 1; }
 	@echo "+ packaging openaps-bootstrap $(VERSION)"
 	@rm -rf $(BUILD_DIR)/pkgroot-bootstrap
 	@mkdir -p $(BUILD_DIR)/pkgroot-bootstrap/ipks
@@ -588,8 +589,16 @@ package-bootstrap: ipk-dropbear ipk-tls-proxy
 	@cp $(IPK_DIR)/openaps-tls-proxy_$(VERSION)_$(IPK_ARCH).ipk  $(BUILD_DIR)/pkgroot-bootstrap/ipks/
 	@cp packaging/release.pub       $(BUILD_DIR)/pkgroot-bootstrap/release.pub
 	@cp packaging/opkg-openaps.conf $(BUILD_DIR)/pkgroot-bootstrap/opkg-openaps.conf
-	@cp "$(AUTHORIZED_KEYS)"        $(BUILD_DIR)/pkgroot-bootstrap/authorized_keys
-	@chmod 0644 $(BUILD_DIR)/pkgroot-bootstrap/release.pub $(BUILD_DIR)/pkgroot-bootstrap/opkg-openaps.conf $(BUILD_DIR)/pkgroot-bootstrap/authorized_keys
+	@chmod 0644 $(BUILD_DIR)/pkgroot-bootstrap/release.pub $(BUILD_DIR)/pkgroot-bootstrap/opkg-openaps.conf
+	@# Optional bundled key. Omitted -> first login is root + the baked password.
+	@if [ -n "$(AUTHORIZED_KEYS)" ]; then \
+		[ -f "$(AUTHORIZED_KEYS)" ] || { echo "ERROR: AUTHORIZED_KEYS file not found: $(AUTHORIZED_KEYS)"; exit 1; }; \
+		cp "$(AUTHORIZED_KEYS)" $(BUILD_DIR)/pkgroot-bootstrap/authorized_keys; \
+		chmod 0644 $(BUILD_DIR)/pkgroot-bootstrap/authorized_keys; \
+		echo "  + authorized_keys (bundled operator key)"; \
+	else \
+		echo "  (no AUTHORIZED_KEYS bundled — first login is root + the baked password)"; \
+	fi
 	@printf '%s' "$$ROOT_PW" | openssl passwd -6 -stdin > $(BUILD_DIR)/pkgroot-bootstrap/root.shadow.hash; \
 		case "$$(cat $(BUILD_DIR)/pkgroot-bootstrap/root.shadow.hash)" in \
 			\$$6\$$*) ;; \

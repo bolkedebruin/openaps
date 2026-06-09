@@ -194,23 +194,16 @@ jobs:
       - name: fetch dropbear ARMv7 (bundled in the bootstrap)
         run: ./packaging/fetch-dropbear.sh build/dropbear-armv7
 
-      - name: write operator authorized_keys from secret
-        env:
-          AUTHORIZED_KEYS: ${{ secrets.OPENAPS_BOOTSTRAP_AUTHORIZED_KEYS }}
-        run: |
-          [ -n "$AUTHORIZED_KEYS" ] || { echo "::error::OPENAPS_BOOTSTRAP_AUTHORIZED_KEYS is empty — set the operator SSH public key"; exit 1; }
-          umask 077
-          printf '%s\n' "$AUTHORIZED_KEYS" > operator.pub
-
-      - name: build openaps-bootstrap (root pw + key baked from secrets)
+      - name: build openaps-bootstrap (root pw baked from secret)
         env:
           # ROOT_PW reaches make via the environment (the Makefile reads it and
           # hashes via openssl -stdin), so it is never on argv / in process list.
           ROOT_PW: ${{ secrets.OPENAPS_BOOTSTRAP_ROOT_PW }}
         run: |
           [ -n "$ROOT_PW" ] || { echo "::error::OPENAPS_BOOTSTRAP_ROOT_PW is empty — refusing to build a bootstrap with no known root password"; exit 1; }
-          make package-bootstrap VERSION="${GITHUB_REF_NAME}" AUTHORIZED_KEYS="$PWD/operator.pub"
-          shred -u operator.pub 2>/dev/null || rm -f operator.pub
+          # No bundled SSH key: first login is root + the baked password; the
+          # operator adds their own key after first login.
+          make package-bootstrap VERSION="${GITHUB_REF_NAME}"
 
       - name: attach bootstrap to the release
         env:
