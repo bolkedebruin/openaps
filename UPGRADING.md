@@ -64,16 +64,6 @@ v1.1.x and restarting each service. The box is now fully opkg-managed.
 (`openaps-dropbear` reinstalls dropbear under opkg with its reboot-persistent
 `S98` init; the host key is unchanged, so your `known_hosts` still matches.)
 
-> **`ecu-sunspec` layout migration:** v1.0.x put `ecu-sunspec` as a bare file at
-> `/home/applications/ecu-sunspec`, but v1.1.x needs that path to be a directory.
-> The package's preinst clears the stray file automatically. If your opkg still
-> errors with `Cannot make dir /home/applications/ecu-sunspec … File exists`, run:
->
-> ```sh
-> rm -f /home/applications/ecu-sunspec
-> opkg install --force-reinstall openaps-ecu-sunspec
-> ```
-
 ## 4. From here on
 
 ```sh
