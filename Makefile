@@ -536,6 +536,7 @@ ipk-dropbear: build-mkipk $(DROPBEAR_DIR)/dropbear
 # package-ipks — build all 7 .ipks, then mirror them into build/ipks/ (the dir
 # the bootstrap tarball and a published feed both consume).
 package-ipks: ipk-all
+	@rm -rf $(BUILD_DIR)/ipks
 	@mkdir -p $(BUILD_DIR)/ipks
 	@cp $(IPK_DIR)/*_$(VERSION)_*.ipk $(BUILD_DIR)/ipks/
 	@echo "=== built .ipks ==="
