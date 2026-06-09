@@ -1,17 +1,11 @@
 #!/bin/sh
 #
-# S99-sunspec — start/stop the apsystems-sunspec Modbus TCP adapter.
+# S99-sunspec — start/stop the ecu-sunspec Modbus TCP adapter.
 #
-# Stock APsystems firmware uses BusyBox-style init.d scripts; everything
-# under /etc/init.d/S* is run on boot in lexical order. S99 puts us last,
-# after main.exe and friends have settled.
-#
-# ecu-sunspec subscribes to inv-driver over UDS for per-inverter
-# telemetry (5s cadence). The SQLite reader against /home/database.db
-# still supplies event bits, signal strength, per-inverter limit, and
-# windowed energy aggregates.
+# ecu-sunspec subscribes to inv-driver over UDS (its sole telemetry source)
+# and serves SunSpec over Modbus TCP on :502.
 
-BIN=/home/applications/ecu-sunspec
+BIN=/home/applications/ecu-sunspec/ecu-sunspec
 PIDOF="pidof ecu-sunspec"
 LOG=/home/ecu-sunspec.log
 ARGS="--bind tcp://0.0.0.0:502 --invdriver-sock /var/run/inv-driver.sock --log-file $LOG --log-max-size 5 --log-max-backups 3"

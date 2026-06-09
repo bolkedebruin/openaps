@@ -21,8 +21,10 @@ import (
 	"github.com/bolkedebruin/openaps/cmd/ecu-web/web"
 )
 
-// version is overridden at build time via -ldflags "-X main.version=...".
+// version and gitHash are overridden at build time via
+// -ldflags "-X main.version=... -X main.gitHash=...".
 var version = "dev"
+var gitHash = ""
 
 func main() {
 	listen := flag.String("listen", ":443", "HTTPS listen address")
@@ -70,6 +72,8 @@ func main() {
 
 	srv := httpserver.New(httpserver.Config{
 		Listen:        *listen,
+		Version:       version,
+		Commit:        gitHash,
 		StateDir:      *stateDir,
 		Assets:        assets,
 		Snap:          snap,

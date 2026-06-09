@@ -39,10 +39,11 @@ ECU_WEB_ECU_DIR      ?= /home/applications/ecu-web
 ECU_ZB_ECU_DIR       ?= /home/applications/ecu-zb
 ECU_SUNSPEC_ECU_DIR  ?= /home/applications/ecu-sunspec
 
-VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+VERSION  := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+GIT_HASH := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 
-LDFLAGS_HOST := -X main.version=$(VERSION)
-LDFLAGS_ARM  := -s -w -X main.version=$(VERSION)
+LDFLAGS_HOST := -X main.version=$(VERSION) -X main.gitHash=$(GIT_HASH)
+LDFLAGS_ARM  := -s -w -X main.version=$(VERSION) -X main.gitHash=$(GIT_HASH)
 GOFLAGS_ARM  := -trimpath
 
 PROTOC ?= protoc

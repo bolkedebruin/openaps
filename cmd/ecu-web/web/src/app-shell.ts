@@ -277,6 +277,8 @@ export class EcuApp extends LitElement {
           .items=${NAV}
           .route=${this.route}
           .open=${this.navOpen}
+          .version=${this.system?.web_version ?? ""}
+          .commit=${this.system?.web_commit ?? ""}
           @close=${() => (this.navOpen = false)}
         ></app-nav>
         <main>

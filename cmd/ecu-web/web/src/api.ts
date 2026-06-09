@@ -77,6 +77,8 @@ export interface Peer {
 export interface SystemStatus {
   invdriver_connected: boolean;
   sse_clients: number;
+  web_version?: string;
+  web_commit?: string;
   ecu?: EcuIdentity;
   peers: Peer[];
   status_error?: string;

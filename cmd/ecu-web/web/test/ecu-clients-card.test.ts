@@ -35,8 +35,10 @@ describe("<ecu-clients-card>", () => {
 
   test("lists peers with roles", async () => {
     const el = await mount(sample);
-    expect(el.shadowRoot?.querySelectorAll(".peer").length).toBe(2);
+    // the inv-driver hub row plus the two client peers
+    expect(el.shadowRoot?.querySelectorAll(".peer").length).toBe(3);
     const t = text(el);
+    expect(t).toContain("inv-driver");
     expect(t).toContain("ecu-zb");
     expect(t).toContain("ecu-web");
   });
@@ -53,8 +55,17 @@ describe("<ecu-clients-card>", () => {
     expect(el.shadowRoot?.querySelector(".warn")).not.toBeNull();
   });
 
-  test("empty peers shows placeholder", async () => {
+  test("shows the inv-driver hub row even with no client peers", async () => {
     const el = await mount({ invdriver_connected: true, sse_clients: 0, peers: [] });
-    expect(text(el)).toContain("No peers connected");
+    expect(el.shadowRoot?.querySelectorAll(".peer").length).toBe(1);
+    const t = text(el);
+    expect(t).toContain("inv-driver");
+    expect(t).toContain("hub");
+  });
+
+  test("marks the hub offline when inv-driver is disconnected", async () => {
+    const el = await mount({ invdriver_connected: false, sse_clients: 0, peers: [] });
+    expect(text(el)).toContain("offline");
+    expect(el.shadowRoot?.querySelector(".dot.off")).not.toBeNull();
   });
 });

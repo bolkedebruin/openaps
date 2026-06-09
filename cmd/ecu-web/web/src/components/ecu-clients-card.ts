@@ -45,6 +45,7 @@ export class EcuClientsCard extends LitElement {
       padding: 1px 7px;
     }
     .ctl { color: var(--accent); border-color: var(--accent); }
+    .hub { color: var(--ok); border-color: var(--ok); }
     .ver { color: var(--muted); font-size: 11px; font-family: var(--mono); min-width: 0; }
     .warn { color: var(--warn); font-size: 12px; margin-top: 10px; }
     .empty { color: var(--muted); font-size: 13px; }
@@ -83,17 +84,21 @@ export class EcuClientsCard extends LitElement {
         : nothing}
 
       <div class="peers">
-        ${clients.length
-          ? clients.map(
-              (c) => html`<div class="peer">
-                <span class="dot on"></span>
-                <span class="name">${c.backend || "(unnamed)"}</span>
-                ${c.controller ? html`<span class="role ctl">ctrl</span>` : nothing}
-                ${c.conns > 1 ? html`<span class="role">${c.conns} conns</span>` : nothing}
-                <span class="ver">${c.version || ""}</span>
-              </div>`,
-            )
-          : html`<div class="empty">No peers connected.</div>`}
+        <div class="peer">
+          <span class="dot ${sys?.invdriver_connected ? "on" : "off"}"></span>
+          <span class="name">inv-driver</span>
+          <span class="role hub">hub</span>
+          ${!sys?.invdriver_connected ? html`<span class="role">offline</span>` : nothing}
+        </div>
+        ${clients.map(
+          (c) => html`<div class="peer">
+            <span class="dot on"></span>
+            <span class="name">${c.backend || "(unnamed)"}</span>
+            ${c.controller ? html`<span class="role ctl">ctrl</span>` : nothing}
+            ${c.conns > 1 ? html`<span class="role">${c.conns} conns</span>` : nothing}
+            <span class="ver">${c.version || ""}</span>
+          </div>`,
+        )}
       </div>
 
       ${sys?.status_error

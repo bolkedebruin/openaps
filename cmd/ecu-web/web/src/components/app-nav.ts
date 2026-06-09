@@ -17,17 +17,23 @@ export class AppNav extends LitElement {
     items: { attribute: false },
     route: { type: String },
     open: { type: Boolean },
+    version: { type: String },
+    commit: { type: String },
   };
 
   declare items: NavItem[];
   declare route: string;
   declare open: boolean;
+  declare version: string;
+  declare commit: string;
 
   constructor() {
     super();
     this.items = [];
     this.route = "dashboard";
     this.open = false;
+    this.version = "";
+    this.commit = "";
   }
 
   private close = () => {
@@ -42,6 +48,19 @@ export class AppNav extends LitElement {
       background: var(--surface);
       border-right: 1px solid var(--border);
       padding: 20px 12px;
+      display: flex;
+      flex-direction: column;
+    }
+    .foot {
+      margin-top: auto;
+      padding: 14px 12px 2px;
+      font-size: 11px;
+      line-height: 1.4;
+      color: var(--muted);
+      font-family: var(--mono);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .brand {
       font-weight: 800;
@@ -94,6 +113,11 @@ export class AppNav extends LitElement {
             @click=${this.close}
           ><span class="ic">${n.icon}</span>${n.label}</a>`,
         )}
+        ${this.version || this.commit
+          ? html`<div class="foot" title="OpenAPS ecu-web ${this.version}${this.commit ? ` (${this.commit})` : ""}">
+              ${this.version || "—"}${this.commit ? html` · ${this.commit}` : nothing}
+            </div>`
+          : nothing}
       </nav>
       ${this.open ? html`<div class="scrim" @click=${this.close}></div>` : nothing}
     `;

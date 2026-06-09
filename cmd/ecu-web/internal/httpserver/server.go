@@ -32,6 +32,8 @@ import (
 // Config parameterises the server.
 type Config struct {
 	Listen   string // e.g. ":8443"
+	Version  string // ecu-web build version (reported to the UI)
+	Commit   string // ecu-web short git hash (reported to the UI)
 	StateDir string // TLS material lives here
 	Assets   fs.FS  // embedded SPA (already Sub'd to the dist root)
 	Snap     *snapshot.Snapshot
@@ -562,6 +564,8 @@ type peerDTO struct {
 type systemDTO struct {
 	InvdriverConnected bool      `json:"invdriver_connected"`
 	SSEClients         int       `json:"sse_clients"`
+	WebVersion         string    `json:"web_version,omitempty"`
+	WebCommit          string    `json:"web_commit,omitempty"`
 	ECU                *ecuDTO   `json:"ecu,omitempty"`
 	Peers              []peerDTO `json:"peers"`
 	StatusError        string    `json:"status_error,omitempty"`
@@ -574,6 +578,8 @@ type systemDTO struct {
 func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 	out := systemDTO{
 		SSEClients: s.hub.clientCount(),
+		WebVersion: s.cfg.Version,
+		WebCommit:  s.cfg.Commit,
 		Peers:      []peerDTO{},
 	}
 	if s.cfg.Conn != nil {
