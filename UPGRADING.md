@@ -25,13 +25,15 @@ proxy). So pull `openaps-base` + `openaps-tls-proxy` from the release **on your
 workstation** (which has modern TLS) and stream each over `ssh` — `cat`-ing it to
 disk on the ECU. No `scp` is needed (dropbear ships none):
 
-Set your ECU target and the version once (no angle brackets — `<…>` are
-redirections in zsh), then paste the rest:
+Set your ECU target once (no angle brackets — `<…>` are redirections in zsh);
+`V` resolves to the latest release automatically, then paste the rest:
 
 ```sh
 # on your workstation
 ECU=root@192.168.1.50   # <-- edit: your ECU's ssh target
-V=v1.1.3
+V=$(curl -fsSL https://api.github.com/repos/bolkedebruin/openaps/releases/latest \
+      | grep -m1 '"tag_name"' | cut -d'"' -f4)
+echo "latest release: $V"
 REL="https://github.com/bolkedebruin/openaps/releases/download/$V"
 curl -fsSL "$REL/openaps-base_${V}_all.ipk" | ssh "$ECU" 'cat > /home/openaps-base.ipk'
 curl -fsSL "$REL/openaps-tls-proxy_${V}_armv7ahf-vfp-neon.ipk" | ssh "$ECU" 'cat > /home/openaps-tls-proxy.ipk'
