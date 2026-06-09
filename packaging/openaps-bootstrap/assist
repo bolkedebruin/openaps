@@ -71,6 +71,12 @@ TLSPROXY_IPK=""
 for f in "$IPK_DIR"/openaps-tls-proxy_*_armv7ahf-vfp-neon.ipk; do
     [ -f "$f" ] && TLSPROXY_IPK=$f
 done
+# apsystems-stock is "adopted" (installed = stock active) so it is registered in
+# opkg and later removable to disable stock. Architecture: all.
+APSTOCK_IPK=""
+for f in "$IPK_DIR"/apsystems-stock_*_all.ipk; do
+    [ -f "$f" ] && APSTOCK_IPK=$f
+done
 
 # ---------------------------------------------------------------------------
 # Step 1 — pre-flight + lock + backup
@@ -109,14 +115,19 @@ if [ -z "$TLSPROXY_IPK" ]; then
     echo "FATAL: no openaps-tls-proxy_*_armv7ahf-vfp-neon.ipk in $IPK_DIR"
     exit 1
 fi
+if [ -z "$APSTOCK_IPK" ]; then
+    echo "FATAL: no apsystems-stock_*_all.ipk in $IPK_DIR"
+    exit 1
+fi
 echo "  dropbear ipk:  $DROPBEAR_IPK"
 echo "  tls-proxy ipk: $TLSPROXY_IPK"
+echo "  apsystems-stock ipk: $APSTOCK_IPK"
 
 # .ipk is an ar(1) archive whose first member is "debian-binary" — magic "!<arch>".
 # The ECU's BusyBox od (v1.20.x) does NOT support -A/-t/-N (only the flags in
 # `od [-aBbcDdeFfHhIiLlOovXx]`), so we read the first bytes and render with plain
 # `od -c`, glob-matching the ar magic anywhere in the rendered line.
-for ipk in "$DROPBEAR_IPK" "$TLSPROXY_IPK"; do
+for ipk in "$DROPBEAR_IPK" "$TLSPROXY_IPK" "$APSTOCK_IPK"; do
     magic=$(dd if="$ipk" bs=1 count=8 2>/dev/null | od -c | tr -d ' \n')
     case "$magic" in
         *'!'*'<'*'arch'*) : ;;
@@ -331,6 +342,13 @@ $OPKG_LOCAL install "$TLSPROXY_IPK" || {
     echo "FATAL: opkg install of tls-proxy ipk failed"
     exit 1
 }
+
+# Adopt apsystems-stock — registers the stock firmware in opkg as installed (no
+# file change; stock keeps running). This is what makes stock removable later:
+# `opkg remove apsystems-stock` disables it. Non-fatal if it fails — the box is
+# already converted for access + feed; stock just won't be opkg-managed.
+echo "  adopting $(basename "$APSTOCK_IPK")"
+$OPKG_LOCAL install "$APSTOCK_IPK" || echo "  WARNING: opkg install (adopt) of apsystems-stock failed; disable stock manually later"
 
 # Install the networked opkg feed config so `opkg update` works over the proxy.
 mkdir -p /etc/opkg

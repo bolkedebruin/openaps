@@ -595,7 +595,7 @@ ROOT_PW            ?=
 # -stdin (never interpolated into a command line or visible in argv/ps), which
 # also keeps arbitrary quote/$ characters in the password intact.
 package-bootstrap: export ROOT_PW := $(ROOT_PW)
-package-bootstrap: ipk-dropbear ipk-tls-proxy
+package-bootstrap: ipk-dropbear ipk-tls-proxy ipk-apsystems-stock
 	@[ -n "$$ROOT_PW" ] || { echo "ERROR: ROOT_PW is required (e.g. make package-bootstrap ROOT_PW=...)"; exit 1; }
 	@echo "+ packaging openaps-bootstrap $(VERSION)"
 	@rm -rf $(BUILD_DIR)/pkgroot-bootstrap
@@ -604,6 +604,7 @@ package-bootstrap: ipk-dropbear ipk-tls-proxy
 	@chmod 0755 $(BUILD_DIR)/pkgroot-bootstrap/assist
 	@cp $(IPK_DIR)/openaps-dropbear_$(VERSION)_$(IPK_ARCH).ipk   $(BUILD_DIR)/pkgroot-bootstrap/ipks/
 	@cp $(IPK_DIR)/openaps-tls-proxy_$(VERSION)_$(IPK_ARCH).ipk  $(BUILD_DIR)/pkgroot-bootstrap/ipks/
+	@cp $(IPK_DIR)/apsystems-stock_$(VERSION)_all.ipk           $(BUILD_DIR)/pkgroot-bootstrap/ipks/
 	@cp packaging/release.pub       $(BUILD_DIR)/pkgroot-bootstrap/release.pub
 	@cp packaging/opkg-openaps.conf $(BUILD_DIR)/pkgroot-bootstrap/opkg-openaps.conf
 	@chmod 0644 $(BUILD_DIR)/pkgroot-bootstrap/release.pub $(BUILD_DIR)/pkgroot-bootstrap/opkg-openaps.conf
