@@ -25,20 +25,22 @@ proxy). So pull `openaps-base` + `openaps-tls-proxy` from the release **on your
 workstation** (which has modern TLS) and stream each over `ssh` — `cat`-ing it to
 disk on the ECU. No `scp` is needed (dropbear ships none):
 
+Set your ECU target and the version once (no angle brackets — `<…>` are
+redirections in zsh), then paste the rest:
+
 ```sh
 # on your workstation
+ECU=root@192.168.1.50   # <-- edit: your ECU's ssh target
 V=v1.1.3
 REL="https://github.com/bolkedebruin/openaps/releases/download/$V"
-curl -fsSL "$REL/openaps-base_${V}_all.ipk" \
-    | ssh root@<ECU-IP> 'cat > /home/openaps-base.ipk'
-curl -fsSL "$REL/openaps-tls-proxy_${V}_armv7ahf-vfp-neon.ipk" \
-    | ssh root@<ECU-IP> 'cat > /home/openaps-tls-proxy.ipk'
+curl -fsSL "$REL/openaps-base_${V}_all.ipk" | ssh "$ECU" 'cat > /home/openaps-base.ipk'
+curl -fsSL "$REL/openaps-tls-proxy_${V}_armv7ahf-vfp-neon.ipk" | ssh "$ECU" 'cat > /home/openaps-tls-proxy.ipk'
 ```
 
 ## 2. Install the trust anchor + feed proxy (local install)
 
 ```sh
-ssh root@<ECU-IP>
+ssh "$ECU"
 opkg install /home/openaps-base.ipk
 opkg install /home/openaps-tls-proxy.ipk
 ```
@@ -52,7 +54,7 @@ with the production key — this is required, or the proxy can't verify the feed
 ```sh
 opkg update          # the proxy fetches + verifies the signed feed from GitHub
 opkg install openaps-dropbear openaps-inv-driver openaps-ecu-zb \
-             openaps-ecu-web openaps-ecu-sunspec
+             openaps-ecu-web openaps-ecu-sunspec openaps-recoveryd
 ```
 
 These install over the running v1.0.x binaries, registering them in opkg at
@@ -74,9 +76,9 @@ Future releases are picked up the same way — the feed is content-addressed, so
 - **Root password:** this upgrade does not change it — your existing v1.0.x
   access (SSH key / password) is unaffected. The root password is set only by
   the first-time bootstrap, not by the packages, so `opkg upgrade` never touches it.
-- **recoveryd:** v1.1.x no longer ships a recoveryd package, but a v1.0.x box's
-  recoveryd keeps running and keeps managing root's `authorized_keys` — leave it
-  in place; removing it is optional and unnecessary.
+- **recoveryd:** `openaps-recoveryd` installs the same recovery surface under
+  opkg (it's pulled in automatically by `openaps-ecu-web`), replacing the v1.0.x
+  recoveryd — same role: owns root's `authorized_keys` and is the SSH access plane.
 - **Verification:** the proxy verifies the release-key signature on the feed
   index and the SHA-256 of every `.ipk` before opkg sees it (opkg 0.1.8 itself
   can't — it enforces only MD5 and ignores signatures, which is why the proxy does it).

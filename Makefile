@@ -468,7 +468,7 @@ define call_mkipk
 	@ls -lh $(IPK_DIR)/$(1)_$(VERSION)_$(2).ipk
 endef
 
-ipk-all: ipk-base ipk-inv-driver ipk-ecu-zb ipk-ecu-web ipk-ecu-sunspec ipk-tls-proxy ipk-dropbear ipk-apsystems-stock
+ipk-all: ipk-base ipk-inv-driver ipk-ecu-zb ipk-ecu-web ipk-ecu-sunspec ipk-recoveryd ipk-tls-proxy ipk-dropbear ipk-apsystems-stock
 
 # (a) openaps-base — Architecture: all, no Depends. Ships release.pub +
 #     openaps-rollback; postinst provisions settings.json from /etc/yuneng.
@@ -515,6 +515,9 @@ ipk-ecu-web: build-ecu-web-arm build-mkipk
 # (e) openaps-ecu-sunspec — armv7ahf-vfp-neon, Depends: openaps-base, openaps-inv-driver.
 ipk-ecu-sunspec: build-ecu-sunspec-arm build-mkipk
 	$(call stage_service,openaps-ecu-sunspec,$(ECU_SUNSPEC_ARMV7),S99-sunspec)
+
+ipk-recoveryd: build-recoveryd-arm build-mkipk
+	$(call stage_service,openaps-recoveryd,$(RECOVERYD_ARMV7),S97-recoveryd)
 
 # (f) openaps-tls-proxy — armv7ahf-vfp-neon, Depends: none. Ships the proxy
 #     binary + opkg feed config + the upstream feed.conf sample + the S47

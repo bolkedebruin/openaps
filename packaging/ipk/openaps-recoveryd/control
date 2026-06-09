@@ -1,0 +1,12 @@
+Package: openaps-recoveryd
+Version: __OPENAPS_VERSION__
+Architecture: armv7ahf-vfp-neon
+Maintainer: OpenAPS <bdbruin@gmail.com>
+Section: utils
+Priority: optional
+Depends: openaps-base
+Description: OpenAPS recoveryd — SSH access plane and recovery surface.
+ Installs /home/applications/recoveryd/recoveryd and its /etc/rcS.d/S97 BusyBox
+ init script. recoveryd owns root's authorized_keys (the source of truth for SSH
+ access) and ensures the dropbear host key, providing an out-of-band recovery
+ path and the SSH-key management surface the ecu-web console uses.

@@ -128,9 +128,9 @@ make package-bootstrap ROOT_PW='choose-a-strong-password'
 **2. Push it to the ECU** over the stock local-upgrade endpoint:
 
 ```sh
-curl -H "Expect:" \
-     -F "file=@build/openaps-bootstrap-<version>.tar.gz" \
-     http://<ECU-IP>/index.php/management/exec_upgrade_ecu_app
+ECU_IP=192.168.1.50   # <-- edit: your ECU's IP (no <…>, those are redirections in zsh)
+BS=$(ls build/openaps-bootstrap-*.tar.gz | head -1)   # the tarball you downloaded/built
+curl -H "Expect:" -F "file=@$BS" "http://$ECU_IP/index.php/management/exec_upgrade_ecu_app"
 ```
 
 > `-H "Expect:"` is required — stock lighttpd 1.4.35 rejects curl's automatic
@@ -149,11 +149,11 @@ The bootstrap is **purely additive** — it does not disable stock or remove any
 **3. Install the OpenAPS firmware over opkg:**
 
 ```sh
-ssh root@<ECU-IP>          # default password: openaps  (or your ROOT_PW / SSH key)
+ssh root@$ECU_IP           # default password: openaps  (or your ROOT_PW / SSH key)
 passwd                     # change the root password now
 opkg update
 opkg install openaps-base openaps-inv-driver openaps-ecu-zb \
-             openaps-ecu-web openaps-ecu-sunspec
+             openaps-ecu-web openaps-ecu-sunspec openaps-recoveryd
 ```
 
 **4. Switch off the stock firmware** (when you're ready to hand the bus to OpenAPS):
