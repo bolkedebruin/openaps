@@ -468,7 +468,7 @@ define call_mkipk
 	@ls -lh $(IPK_DIR)/$(1)_$(VERSION)_$(2).ipk
 endef
 
-ipk-all: ipk-base ipk-inv-driver ipk-ecu-zb ipk-ecu-web ipk-ecu-sunspec ipk-tls-proxy ipk-dropbear
+ipk-all: ipk-base ipk-inv-driver ipk-ecu-zb ipk-ecu-web ipk-ecu-sunspec ipk-tls-proxy ipk-dropbear ipk-apsystems-stock
 
 # (a) openaps-base — Architecture: all, no Depends. Ships release.pub +
 #     openaps-rollback; postinst provisions settings.json from /etc/yuneng.
@@ -476,12 +476,29 @@ ipk-base: build-mkipk
 	@rm -rf $(IPKROOT)/openaps-base
 	@mkdir -p $(IPKROOT)/openaps-base/etc/openaps
 	@mkdir -p $(IPKROOT)/openaps-base/etc/inv-driver
+	@mkdir -p $(IPKROOT)/openaps-base/etc/rcS.d
 	@mkdir -p $(IPKROOT)/openaps-base/usr/bin
 	@cp packaging/release.pub $(IPKROOT)/openaps-base/etc/openaps/release.pub
 	@chmod 0644 $(IPKROOT)/openaps-base/etc/openaps/release.pub
 	@cp packaging/openaps-rollback $(IPKROOT)/openaps-base/usr/bin/openaps-rollback
 	@chmod 0755 $(IPKROOT)/openaps-base/usr/bin/openaps-rollback
+	@# S39 sets eth0's provisioned MAC before networking, so the box keeps its
+	@# DHCP IP when the stock manager (macapp) is disabled. Harmless when stock
+	@# is active. Shipped in base so it is present before apsystems-stock disable.
+	@cp packaging/S39-openaps-macaddr $(IPKROOT)/openaps-base/etc/rcS.d/S39-openaps-macaddr
+	@chmod 0755 $(IPKROOT)/openaps-base/etc/rcS.d/S39-openaps-macaddr
 	$(call call_mkipk,openaps-base,all)
+
+# apsystems-stock — wraps the stock firmware: installed = active, removed =
+# disabled (prerm comments the manager launch + stops it; postinst restores).
+# All control logic is in the package's prerm/postinst; the data is just a doc.
+ipk-apsystems-stock: build-mkipk
+	@rm -rf $(IPKROOT)/apsystems-stock
+	@mkdir -p $(IPKROOT)/apsystems-stock/usr/share/doc/apsystems-stock
+	@printf 'apsystems-stock: installed=stock active; remove to disable the stock\nmanager (reversible). See the package Description.\n' \
+		> $(IPKROOT)/apsystems-stock/usr/share/doc/apsystems-stock/README
+	@chmod 0644 $(IPKROOT)/apsystems-stock/usr/share/doc/apsystems-stock/README
+	$(call call_mkipk,apsystems-stock,all)
 
 # (b) openaps-inv-driver — armv7ahf-vfp-neon, Depends: openaps-base.
 ipk-inv-driver: build-inv-driver-arm build-mkipk

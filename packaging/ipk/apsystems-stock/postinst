@@ -1,0 +1,20 @@
+#!/bin/sh
+# postinst — apsystems-stock: stock is ACTIVE while this package is installed.
+#
+# First install over running factory stock = adopt (no file change). If a prior
+# removal disabled stock, restore the manager launch from the backup.
+set -e
+
+INIT=/etc/rcS.d/S50ecu_init
+BACKUP=/etc/openaps/S50ecu_init.stock-backup
+MARK=/etc/openaps/stock-disabled
+
+if [ -f "$MARK" ] && [ -f "$BACKUP" ]; then
+    cp -f "$BACKUP" "$INIT"
+    chmod 0755 "$INIT"
+    rm -f "$MARK"
+    echo "apsystems-stock: stock RE-ENABLED — restored $INIT. Run /sbin/reboot to relaunch the stock manager."
+else
+    echo "apsystems-stock: adopted (stock active)."
+fi
+exit 0

@@ -1,0 +1,28 @@
+#!/bin/sh
+# S39-openaps-macaddr — set eth0 to the provisioned MAC BEFORE S40networking.
+#
+# The stock manager's `macapp` is what normally sets eth0 to the provisioned
+# MAC (so the box gets its reserved DHCP lease). When the stock manager is
+# disabled, macapp no longer runs, and eth0 would fall back to the SoC MAC and
+# pick up a different lease. This runs at S39 (before networking) and applies
+# the provisioned MAC itself, so the address is stable with stock disabled.
+#
+# Idempotent and harmless when stock is still active: it sets the same value
+# macapp would, just earlier in boot.
+LOG=/home/openaps-s39.log
+CONF=/etc/yuneng/ecu_eth0_mac.conf
+
+case "$1" in
+    start|"")
+        [ -f "$CONF" ] || exit 0
+        MAC=$(tr 'A-F' 'a-f' < "$CONF" | tr -d '[:space:]')
+        case "$MAC" in
+            *[!0-9a-f:]* | "") echo "$(date) S39: bad MAC in $CONF" >> "$LOG"; exit 0 ;;
+        esac
+        ip link set eth0 down 2>/dev/null
+        ip link set eth0 address "$MAC" 2>/dev/null
+        ip link set eth0 up 2>/dev/null
+        echo "$(date) S39: set eth0 -> $MAC" >> "$LOG"
+        ;;
+esac
+exit 0

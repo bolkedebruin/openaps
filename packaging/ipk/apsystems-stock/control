@@ -1,0 +1,16 @@
+Package: apsystems-stock
+Version: __OPENAPS_VERSION__
+Architecture: all
+Maintainer: OpenAPS <bdbruin@gmail.com>
+Section: utils
+Priority: optional
+Depends:
+Description: Wraps the stock APsystems firmware so it can be disabled and restored.
+ Installed = stock active (the factory default). Removing this package DISABLES
+ the stock firmware: it comments the manager launch in /etc/rcS.d/S50ecu_init
+ (so no stock app starts at boot) and stops the running manager + its inverter
+ and web supervisors (monitor.exe/main.exe, lighttpd, thttpd, mqtt.exe).
+ Reinstalling restores the manager launch (reboot to relaunch stock).
+ Disabling the manager also stops idwriter and macapp, so the prerm refuses
+ unless reboot-persistent dropbear (openaps-dropbear / S98) and the S39 eth0
+ MAC-setter are already installed.

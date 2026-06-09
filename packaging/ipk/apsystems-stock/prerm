@@ -1,0 +1,49 @@
+#!/bin/sh
+# prerm — apsystems-stock: DISABLE the stock firmware (runs on `opkg remove`).
+#
+# Comments the manager launch in S50ecu_init so no stock app starts at the next
+# boot, and stops the running manager + its inverter/web supervisors now.
+# Reversible: reinstalling apsystems-stock restores S50ecu_init from the backup.
+set -e
+
+INIT=/etc/rcS.d/S50ecu_init
+BACKUP=/etc/openaps/S50ecu_init.stock-backup
+MARK=/etc/openaps/stock-disabled
+
+# Disabling the manager also stops idwriter (the :4540 recovery backdoor) and
+# macapp (which sets eth0's provisioned MAC). Refuse unless reboot-persistent
+# dropbear and the MAC-setter are already in place — otherwise the next reboot
+# could leave the box with no SSH and/or a changed IP (lockout).
+if [ ! -x /etc/rcS.d/S98-dropbear ]; then
+    echo "apsystems-stock: REFUSING to disable — openaps-dropbear (S98, persistent SSH) is not installed; disabling the manager would risk lockout. Install openaps-dropbear first."
+    exit 1
+fi
+if [ ! -x /etc/rcS.d/S39-openaps-macaddr ]; then
+    echo "apsystems-stock: REFUSING to disable — the S39 eth0 MAC-setter is not installed; without it eth0 loses its provisioned MAC on reboot and the DHCP IP may change."
+    exit 1
+fi
+if [ ! -f "$INIT" ]; then
+    echo "apsystems-stock: $INIT not found — nothing to disable."
+    exit 0
+fi
+
+mkdir -p /etc/openaps
+[ -f "$BACKUP" ] || cp -f "$INIT" "$BACKUP"
+
+# Comment the manager launch line so the next boot starts no stock app.
+sed -i '/\/home\/applications\/manager[[:space:]]*&/s/^/# OPENAPS-DISABLED /' "$INIT"
+touch "$MARK"
+
+# Stop the running stock now: the manager (stop respawns) + the inverter/web
+# supervisors. idwriter/macapp/network are left for this session; on reboot none
+# start because the manager launch is commented out.
+killall -q manager 2>/dev/null || true
+sleep 1
+for p in monitor.exe main.exe lighttpd thttpd mqtt.exe; do killall -q "$p" 2>/dev/null || true; done
+sleep 1
+for p in monitor.exe main.exe lighttpd thttpd; do killall -q -9 "$p" 2>/dev/null || true; done
+
+echo "apsystems-stock: stock DISABLED — manager launch commented in $INIT, processes stopped."
+echo "  SSH persists via openaps-dropbear (S98). idwriter (:4540) stops at the next reboot."
+echo "  Reboot to fully drop stock; reinstall apsystems-stock to restore it."
+exit 0
