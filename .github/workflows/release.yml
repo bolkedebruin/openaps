@@ -94,11 +94,13 @@ jobs:
           fi
 
   # Sign the opkg feed index with the release key and publish it to gh-pages.
-  # A separate job from the build (which runs bun/make/third-party code), so the
-  # signing key is only injected here, not into the build steps.
+  # Uses the `release` environment for its scoped secret (OPENAPS_RELEASE_KEY);
+  # the environment has no protection rules, so it does not gate/pause the job.
+  # Kept separate from the build job so the key is only injected here.
   publish-feed:
     needs: release
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
     steps:
@@ -168,13 +170,15 @@ jobs:
   # Build the openaps-bootstrap tarball — the payload a first-time operator
   # uploads via the stock exec_upgrade_ecu_app endpoint to convert a box: it
   # installs dropbear + tls-proxy, wires opkg to the feed, and sets a KNOWN root
-  # password (baked from the OPENAPS_BOOTSTRAP_ROOT_PW secret). A separate job
-  # from the build so the password never reaches the build's third-party
-  # (bun/make) steps. The make target FAILS if ROOT_PW is empty, and this job
-  # asserts it too — a bootstrap with no known root password could brick a box.
+  # password (baked from the OPENAPS_BOOTSTRAP_ROOT_PW secret). Uses the `release`
+  # environment for that scoped secret (no protection rules, so no gate). Kept
+  # separate from the build job so the password is only injected here. The make
+  # target FAILS if ROOT_PW is empty, and this job asserts it too — a bootstrap
+  # with no known root password could brick a box.
   bootstrap:
     needs: release
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
     steps:
