@@ -1,0 +1,32 @@
+#!/bin/sh
+# postinst — openaps-tls-proxy
+#
+# Wire opkg to the persistent loopback proxy feed, seed the operator-editable
+# upstream config, and keep opkg scratch/cache on /home (the 3.5G root fs) so
+# the 16 MiB /tmp tmpfs never overflows. Then bring the proxy up.
+set -e
+
+CONF_SRC=/home/applications/openaps-tls-proxy/opkg-openaps.conf
+CONF_DST=/etc/opkg/openaps.conf
+FEED_SRC=/home/applications/openaps-tls-proxy/feed.conf.sample
+FEED_DST=/etc/openaps/feed.conf
+
+# opkg scratch + cache on /home; release key + feed config dir.
+mkdir -p /home/openaps/opkg-tmp /home/openaps/opkg-cache /etc/openaps
+
+# Seed the upstream feed config only if absent, so an operator's edit to the
+# upstream URL survives a package upgrade.
+if [ ! -f "$FEED_DST" ] && [ -f "$FEED_SRC" ]; then
+    cp "$FEED_SRC" "$FEED_DST"
+fi
+
+# Point opkg at the proxy feed.
+mkdir -p /etc/opkg
+if [ -f "$CONF_SRC" ]; then
+    cp "$CONF_SRC" "$CONF_DST"
+fi
+
+# Bring the persistent proxy up now (it also starts at boot via rcS.d S47).
+[ -x /etc/rcS.d/S47-openaps-tls-proxy ] && /etc/rcS.d/S47-openaps-tls-proxy start
+
+exit 0

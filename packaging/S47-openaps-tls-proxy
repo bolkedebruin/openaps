@@ -1,0 +1,111 @@
+#!/bin/sh
+#
+# S47-openaps-tls-proxy — start the loopback opkg feed front-end.
+#
+# Runs openaps-tls-proxy persistently on 127.0.0.1:8071. opkg speaks plain
+# HTTP to the proxy; the proxy upstreams to the GitHub-hosted OpenAPS feed
+# over modern TLS and verifies the release-key signature on the index and on
+# every .ipk before opkg sees it. Numbered S47 so it is up before
+# S48-inv-driver, so package operations that touch a running daemon find the
+# feed already serving.
+#
+# GOMAXPROCS=1 + GOMEMLIMIT cap the Go runtime's footprint: this device has a
+# 16 MiB /tmp tmpfs and a small RAM budget, and the proxy is I/O bound.
+#
+# Install (one-time):
+#   ssh ecu 'cat > /etc/rcS.d/S47-openaps-tls-proxy' < S47-openaps-tls-proxy
+#   ssh ecu 'chmod +x /etc/rcS.d/S47-openaps-tls-proxy'
+
+BIN=/home/applications/openaps-tls-proxy/openaps-tls-proxy
+RUN=/home/applications/openaps-tls-proxy
+LOG=$RUN/openaps-tls-proxy.log
+PIDFILE=$RUN/openaps-tls-proxy.pid
+LISTEN=127.0.0.1:8071
+PUBKEY=/etc/openaps/release.pub
+CACHE=/home/openaps/opkg-cache
+FEEDCONF=/etc/openaps/feed.conf
+
+# Upstream feed base comes from /etc/openaps/feed.conf (UPSTREAM=...). The
+# conf is a conffile so an operator can repoint the feed without a rebuild.
+UPSTREAM=
+if [ -f "$FEEDCONF" ]; then
+    . "$FEEDCONF"
+fi
+
+ARGS="-listen $LISTEN -upstream $UPSTREAM -idle-timeout 0 -pubkey $PUBKEY -cache-dir $CACHE"
+
+start() {
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "openaps-tls-proxy already running (pid $(cat "$PIDFILE"))"
+        return 0
+    fi
+    [ -x "$BIN" ] || { echo "$BIN missing or not executable"; return 1; }
+    [ -n "$UPSTREAM" ] || { echo "UPSTREAM not set in $FEEDCONF"; return 1; }
+    mkdir -p "$RUN" "$CACHE"
+
+    # nohup-sh-exec wrapper: same pattern as S48-inv-driver, so the daemon
+    # survives both init(1) boot context and PHP-FPM upgrade-endpoint context.
+    # The inner exec lets the wrapper sh be replaced by the proxy so the
+    # captured PID is the right one. GOMAXPROCS/GOMEMLIMIT cap runtime RAM.
+    nohup sh -c "GOMAXPROCS=1 GOMEMLIMIT=16MiB exec '$BIN' $ARGS" \
+        </dev/null >> "$LOG" 2>&1 &
+    sleep 1
+    P=$(pidof openaps-tls-proxy 2>/dev/null | tr ' ' '\n' | head -n 1)
+    if [ -n "$P" ] && kill -0 "$P" 2>/dev/null; then
+        echo "$P" > "$PIDFILE"
+        echo "openaps-tls-proxy started (pid $P)"
+    else
+        echo "openaps-tls-proxy failed to stay up; check $LOG"
+        return 1
+    fi
+
+    # Wait for the loopback port to accept connections so dependent steps can
+    # drive opkg. netstat -ltn is BusyBox-safe.
+    i=0
+    while [ $i -lt 10 ]; do
+        if netstat -ltn 2>/dev/null | grep -q '127.0.0.1:8071 '; then
+            echo "openaps-tls-proxy ready: $LISTEN"
+            return 0
+        fi
+        sleep 1
+        i=$((i+1))
+    done
+    echo "openaps-tls-proxy did not bind $LISTEN within 10s"
+    return 1
+}
+
+stop() {
+    if [ -f "$PIDFILE" ]; then
+        PID=$(cat "$PIDFILE")
+        kill "$PID" 2>/dev/null
+        rm -f "$PIDFILE"
+    fi
+    for P in $(pidof openaps-tls-proxy 2>/dev/null); do
+        kill "$P" 2>/dev/null
+    done
+    sleep 2
+    for P in $(pidof openaps-tls-proxy 2>/dev/null); do
+        kill -9 "$P" 2>/dev/null
+    done
+    echo "openaps-tls-proxy stopped"
+}
+
+status() {
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "running (pid $(cat "$PIDFILE"))"
+    else
+        echo "stopped"
+        exit 1
+    fi
+}
+
+case "$1" in
+    start)   start ;;
+    stop)    stop ;;
+    restart) stop; sleep 1; start ;;
+    status)  status ;;
+    *)
+        echo "usage: $0 {start|stop|restart|status}"
+        exit 2
+        ;;
+esac

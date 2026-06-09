@@ -1,0 +1,11 @@
+Package: openaps-ecu-sunspec
+Version: __OPENAPS_VERSION__
+Architecture: armv7ahf-vfp-neon
+Maintainer: OpenAPS <bdbruin@gmail.com>
+Section: utils
+Priority: optional
+Depends: openaps-base, openaps-inv-driver
+Description: OpenAPS ecu-sunspec — Modbus/TCP + RTU SunSpec frontend.
+ Installs /home/applications/ecu-sunspec/ecu-sunspec and its /etc/rcS.d/S99
+ BusyBox init script. Exposes the fleet as SunSpec models over Modbus :502,
+ subscribing to inv-driver telemetry over UDS.

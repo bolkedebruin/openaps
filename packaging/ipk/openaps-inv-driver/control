@@ -1,0 +1,11 @@
+Package: openaps-inv-driver
+Version: __OPENAPS_VERSION__
+Architecture: armv7ahf-vfp-neon
+Maintainer: OpenAPS <bdbruin@gmail.com>
+Section: utils
+Priority: optional
+Depends: openaps-base
+Description: OpenAPS inv-driver — bus owner, codec, ingest, gridprofile, IPC server.
+ Installs /home/applications/inv-driver/inv-driver and its /etc/rcS.d/S48
+ BusyBox init script. The bus-owning daemon every other OpenAPS service
+ talks to over UDS.

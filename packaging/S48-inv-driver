@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# S48-inv-driver — start inv-driver before S49-ecu-zb so its UDS socket
+# S48-inv-driver — start inv-driver before S53-ecu-zb so its UDS socket
 # is available when ecu-zb's busmgr client first dials. Ordering is not
 # strictly required (busmgr retries with backoff), but starting first
 # avoids the first dial cycle's backoff log line.
@@ -35,7 +35,7 @@ start() {
     [ -x "$BIN" ] || { echo "$BIN missing or not executable"; return 1; }
     mkdir -p "$DATA" "$RUN"
 
-    # nohup-sh-exec wrapper: same pattern as S49-ecu-zb, so the daemon
+    # nohup-sh-exec wrapper: same pattern as S53-ecu-zb, so the daemon
     # survives both init(1) boot context and PHP-FPM upgrade-endpoint
     # context. The inner exec lets the wrapper sh be replaced by
     # inv-driver so the captured PID is the right one.

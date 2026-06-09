@@ -1,0 +1,4 @@
+# OpenAPS opkg feed upstream. S47-openaps-tls-proxy reads this file and points
+# the loopback TLS proxy at this HTTPS base. opkg itself never sees this URL;
+# it talks plain HTTP to 127.0.0.1:8071 and the proxy upstreams here over TLS.
+UPSTREAM=https://bolkedebruin.github.io/openaps/stable

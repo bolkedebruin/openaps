@@ -1,0 +1,39 @@
+#!/bin/sh
+# postinst — openaps-dropbear
+#
+# Generate the dropbear RSA host key if absent, enforce StrictModes ownership
+# on the ECU root home (/home/root, NOT /root), then start dropbear via its
+# shipped init.
+set -e
+
+DBEARKEY=/usr/local/sbin/dropbearkey
+HOSTKEY=/etc/dropbear/dropbear_rsa_host_key
+ROOT_HOME=/home/root
+
+# Host key — the bundled dropbear 2012.55 has no -R (auto-generate), so the
+# key must exist before start; generate it once here.
+if [ ! -f "$HOSTKEY" ]; then
+    mkdir -p "$(dirname "$HOSTKEY")"
+    if [ -x "$DBEARKEY" ]; then
+        "$DBEARKEY" -t rsa -f "$HOSTKEY" >/dev/null 2>&1 \
+            || echo "openaps-dropbear: dropbearkey failed to generate $HOSTKEY" >&2
+    else
+        echo "openaps-dropbear: $DBEARKEY missing; cannot generate host key" >&2
+    fi
+fi
+
+# StrictModes: /home/root must be owned root:root, .ssh 0700, and (if present)
+# authorized_keys 0600. Without this dropbear silently refuses pubkey auth.
+mkdir -p "$ROOT_HOME/.ssh"
+chown root:root "$ROOT_HOME" 2>/dev/null || true
+chown root:root "$ROOT_HOME/.ssh" 2>/dev/null || true
+chmod 0700 "$ROOT_HOME/.ssh" 2>/dev/null || true
+if [ -f "$ROOT_HOME/.ssh/authorized_keys" ]; then
+    chown root:root "$ROOT_HOME/.ssh/authorized_keys" 2>/dev/null || true
+    chmod 0600 "$ROOT_HOME/.ssh/authorized_keys" 2>/dev/null || true
+fi
+
+# Start dropbear via its shipped init (same as the service packages start).
+[ -x /etc/rcS.d/S98-dropbear ] && /etc/rcS.d/S98-dropbear start || true
+
+exit 0

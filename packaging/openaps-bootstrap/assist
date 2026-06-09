@@ -1,0 +1,477 @@
+#!/bin/sh
+#
+# assist — OpenAPS bootstrap orchestrator. POSIX sh, BusyBox-safe.
+#
+# Run by the stock APsystems lighttpd/CodeIgniter hidden endpoint
+# exec_upgrade_ecu_app (POST /index.php/management/exec_upgrade_ecu_app),
+# which extracts this tarball and runs the script named "assist" at its root.
+#
+# This is the brownfield foothold: it plants the trust anchor + root access,
+# brings up dropbear and the openaps-tls-proxy from LOCAL .ipks (no network),
+# wires up the networked opkg feed, disables the stock supervisors, and removes
+# the stock lighttpd/CodeIgniter UI LAST. It does NOT install the OpenAPS
+# firmware packages themselves — it leaves the operator a one-liner to do that
+# over the now-authenticated opkg feed.
+#
+# Payload layout (siblings of this script at the tarball root):
+#   assist
+#   ipks/openaps-dropbear_<ver>_armv7ahf-vfp-neon.ipk
+#   ipks/openaps-tls-proxy_<ver>_armv7ahf-vfp-neon.ipk
+#   release.pub          -> /etc/openaps/release.pub
+#   authorized_keys      -> /home/root/.ssh/authorized_keys
+#   opkg-openaps.conf    -> /etc/opkg/openaps.conf
+#   root.shadow.hash     ($6$ SHA-512 crypt hash, one line)
+#
+# Idempotent: re-running over the same box is safe.
+#
+# Logs to /home/openaps-bootstrap.log.
+
+set -eu
+
+# This orchestrator is launched by PHP under lighttpd (the stock
+# exec_upgrade_ecu_app endpoint), so it is a member of lighttpd's process
+# group. Killing lighttpd tears down that group and would otherwise deliver a
+# signal to this script and terminate it. Ignore HUP and TERM so the bootstrap
+# runs to completion regardless of who launched us. (KILL is uncatchable, which
+# is why the lighttpd removal is deliberately the LAST step.) Re-armed below
+# alongside the lock-cleanup EXIT trap once $STATE_DIR exists.
+trap '' HUP TERM
+
+# Stamped by `make package-bootstrap` (sed-substitutes this line with the build
+# version). The literal default is the fallback when run unpackaged.
+VERSION="__OPENAPS_VERSION__"
+case "$VERSION" in __OPENAPS_VERSION__|"") VERSION="dev" ;; esac
+
+LOG=/home/openaps-bootstrap.log
+STATE_DIR=/etc/openaps
+RELEASE_KEY=$STATE_DIR/release.pub
+MAC_CONF=/etc/yuneng/ecu_eth0_mac.conf
+OPKG_CONF=/etc/opkg/openaps.conf
+NEED_KB=51200    # ~50 MB in /home (opkg scratch lives here, not /tmp)
+NEED_ETC_KB=256  # rootfs headroom for the /etc/shadow + /etc/opkg temp+mv edits
+
+exec >> "$LOG" 2>&1
+echo
+echo "=== $(date) openaps-bootstrap $VERSION starting ==="
+
+BOOT_DIR=$(cd "$(dirname "$0")" && pwd)
+IPK_DIR=$BOOT_DIR/ipks
+
+if [ ! -d "$IPK_DIR" ]; then
+    echo "FATAL: payload directory $IPK_DIR not found"
+    exit 1
+fi
+
+# Resolve the two bundled .ipks by glob so the build version isn't hardcoded.
+DROPBEAR_IPK=""
+for f in "$IPK_DIR"/openaps-dropbear_*_armv7ahf-vfp-neon.ipk; do
+    [ -f "$f" ] && DROPBEAR_IPK=$f
+done
+TLSPROXY_IPK=""
+for f in "$IPK_DIR"/openaps-tls-proxy_*_armv7ahf-vfp-neon.ipk; do
+    [ -f "$f" ] && TLSPROXY_IPK=$f
+done
+
+# ---------------------------------------------------------------------------
+# Step 1 — pre-flight + lock + backup
+# ---------------------------------------------------------------------------
+echo "--- step 1: pre-flight + lock + backup ---"
+
+# Disk: BusyBox df -k. Available column = 4th field on the data line.
+AVAIL=$(df -k /home 2>/dev/null | awk 'NR==2 {print $4}')
+if [ -z "$AVAIL" ] || [ "$AVAIL" -lt "$NEED_KB" ]; then
+    echo "FATAL: insufficient free space in /home (have ${AVAIL:-0} KB, need $NEED_KB KB)"
+    exit 1
+fi
+echo "  disk ok: ${AVAIL} KB free in /home"
+
+# The /etc edits (shadow + opkg) write a temp on the same filesystem as /etc
+# before the atomic mv, so the rootfs needs its own headroom; the /home check
+# above does not cover it when /etc is a separate mount.
+AVAIL_ETC=$(df -k /etc 2>/dev/null | awk 'NR==2 {print $4}')
+if [ -z "$AVAIL_ETC" ] || [ "$AVAIL_ETC" -lt "$NEED_ETC_KB" ]; then
+    echo "FATAL: insufficient free space on the /etc filesystem (have ${AVAIL_ETC:-0} KB, need $NEED_ETC_KB KB)"
+    exit 1
+fi
+echo "  disk ok: ${AVAIL_ETC} KB free on the /etc filesystem"
+
+if [ ! -f "$MAC_CONF" ]; then
+    echo "FATAL: $MAC_CONF missing — ECU not provisioned"
+    exit 1
+fi
+echo "  $MAC_CONF present"
+
+if [ -z "$DROPBEAR_IPK" ]; then
+    echo "FATAL: no openaps-dropbear_*_armv7ahf-vfp-neon.ipk in $IPK_DIR"
+    exit 1
+fi
+if [ -z "$TLSPROXY_IPK" ]; then
+    echo "FATAL: no openaps-tls-proxy_*_armv7ahf-vfp-neon.ipk in $IPK_DIR"
+    exit 1
+fi
+echo "  dropbear ipk:  $DROPBEAR_IPK"
+echo "  tls-proxy ipk: $TLSPROXY_IPK"
+
+# .ipk is an ar(1) archive whose first member is "debian-binary" — magic "!<arch>".
+# The ECU's BusyBox od (v1.20.x) does NOT support -A/-t/-N (only the flags in
+# `od [-aBbcDdeFfHhIiLlOovXx]`), so we read the first bytes and render with plain
+# `od -c`, glob-matching the ar magic anywhere in the rendered line.
+for ipk in "$DROPBEAR_IPK" "$TLSPROXY_IPK"; do
+    magic=$(dd if="$ipk" bs=1 count=8 2>/dev/null | od -c | tr -d ' \n')
+    case "$magic" in
+        *'!'*'<'*'arch'*) : ;;
+        *) echo "FATAL: $ipk does not look like an ar/.ipk archive (magic=$magic)"; exit 1 ;;
+    esac
+    echo "  $(basename "$ipk"): ar magic ok"
+done
+
+# Single-instance guard. exec_upgrade_ecu_app is unauthenticated and stays
+# callable for the whole bootstrap. A second POST would spawn a concurrent
+# assist that races the first on opkg, the supervisor-disable rewrite and the
+# shadow edit. mkdir is atomic on this fs, so it serves as the lock. Clean it
+# up on a normal EXIT.
+mkdir -p "$STATE_DIR"
+LOCK=$STATE_DIR/bootstrap.lock
+if ! mkdir "$LOCK" 2>/dev/null; then
+    # Stale-lock tolerant: a previous assist that was SIGKILLed (e.g. by the
+    # lighttpd process-group teardown) leaves the lock dir behind. Read the PID
+    # it recorded; if that process is gone, reclaim the lock instead of failing.
+    LOCK_PID=$(cat "$LOCK/pid" 2>/dev/null || true)
+    if [ -n "$LOCK_PID" ] && kill -0 "$LOCK_PID" 2>/dev/null; then
+        echo "FATAL: another openaps-bootstrap is running (pid $LOCK_PID, $LOCK)"
+        exit 1
+    fi
+    echo "  stale lock $LOCK (owner pid ${LOCK_PID:-unknown} not alive) — reclaiming"
+fi
+printf '%s\n' "$$" > "$LOCK/pid" 2>/dev/null || true
+trap 'rm -f "$LOCK/pid" 2>/dev/null; rmdir "$LOCK" 2>/dev/null' EXIT
+
+# Backup. BusyBox tar (v1.20.x) has NO -P flag and ships NO bzip2 compressor;
+# use gzip (always present). Only back up paths that exist so a missing optional
+# dir doesn't abort. /etc/shadow and /etc/opkg are captured so the access/feed
+# edits below are reversible.
+BACKUP_STAMP=$(date -u +%Y%m%dT%H%M%S)
+BACKUP_PATH=/home/openaps-bootstrap-backup-${BACKUP_STAMP}.tar.gz
+BACKUP_SRC=""
+for d in /etc/shadow /etc/passwd /etc/opkg /etc/rcS.d /etc/init.d /home/applications; do
+    [ -e "$d" ] && BACKUP_SRC="$BACKUP_SRC $d"
+done
+tar -czf "$BACKUP_PATH" $BACKUP_SRC 2>/dev/null || {
+    echo "FATAL: backup tar failed"
+    exit 1
+}
+if [ ! -s "$BACKUP_PATH" ]; then
+    echo "FATAL: backup archive is empty ($BACKUP_PATH) — refusing to proceed"
+    exit 1
+fi
+echo "$BACKUP_PATH" > "$STATE_DIR/last-backup"
+echo "  backup written: $BACKUP_PATH"
+
+# ---------------------------------------------------------------------------
+# Step 2 — plant trust + access FIRST (recovery path before anything destructive)
+# ---------------------------------------------------------------------------
+echo "--- step 2: plant trust anchor + root access ---"
+
+# Trust anchor: the release public key the openaps-tls-proxy uses to verify the
+# RSA signature on the opkg feed index (opkg itself enforces only MD5Sum and
+# can't check signatures, so authenticity lives in the proxy).
+mkdir -p "$STATE_DIR"
+if [ -f "$BOOT_DIR/release.pub" ]; then
+    cp -f "$BOOT_DIR/release.pub" "$RELEASE_KEY.new"
+    chmod 0644 "$RELEASE_KEY.new"
+    mv "$RELEASE_KEY.new" "$RELEASE_KEY"
+    echo "  + $RELEASE_KEY"
+else
+    echo "FATAL: $BOOT_DIR/release.pub missing — refusing to proceed without trust anchor"
+    exit 1
+fi
+
+# Operator pubkey -> root's authorized_keys. ROOT_HOME is /home/root on this
+# ECU (NOT /root). StrictModes requires /home/root owned root:root and
+# .ssh 0700 / authorized_keys 0600. The temp lives in .ssh (same filesystem as
+# the target) so the mv is an atomic same-fs rename.
+if [ -f "$BOOT_DIR/authorized_keys" ]; then
+    ROOT_HOME=$(awk -F: '$1=="root"{print $6; exit}' /etc/passwd 2>/dev/null)
+    [ -n "$ROOT_HOME" ] || ROOT_HOME=/home/root
+    mkdir -p "$ROOT_HOME"
+    chown root:root "$ROOT_HOME" 2>/dev/null || true
+    # StrictModes rejects the key file if the home dir is group/other-writable.
+    chmod go-w "$ROOT_HOME" 2>/dev/null || true
+    mkdir -p "$ROOT_HOME/.ssh"
+    chown root:root "$ROOT_HOME/.ssh" 2>/dev/null || true
+    chmod 700 "$ROOT_HOME/.ssh"
+    AK="$ROOT_HOME/.ssh/authorized_keys"
+    AK_TMP="$ROOT_HOME/.ssh/.ak.$$"
+    # Build the deduped file via temp+mv only — no pre-touch, so there is never a
+    # 0644-default authorized_keys window. Whole-line dedup against any existing
+    # file (concatenate only files that exist) so re-running doesn't duplicate
+    # the operator key.
+    AK_SRC="$BOOT_DIR/authorized_keys"
+    [ -f "$AK" ] && AK_SRC="$AK $AK_SRC"
+    if cat $AK_SRC | awk 'NF && !/^#/ && !seen[$0]++' > "$AK_TMP"; then
+        # The recovery path must be proven before anything destructive: assert the
+        # deduped file is non-empty and holds at least one plausible pubkey line.
+        if [ ! -s "$AK_TMP" ] \
+            || ! grep -Eq '^(ssh-|ecdsa-|sk-)' "$AK_TMP"; then
+            rm -f "$AK_TMP"
+            echo "FATAL: deduped authorized_keys is empty or has no plausible key line (ssh-/ecdsa-/sk-)"
+            exit 1
+        fi
+        chown root:root "$AK_TMP" 2>/dev/null || true
+        chmod 600 "$AK_TMP"
+        mv "$AK_TMP" "$AK"
+        echo "  + $AK (operator key, deduped)"
+    else
+        rm -f "$AK_TMP"
+        echo "FATAL: could not write $AK"
+        exit 1
+    fi
+else
+    echo "FATAL: $BOOT_DIR/authorized_keys missing — refusing to proceed without pubkey access"
+    exit 1
+fi
+
+# Root password: replace root's /etc/shadow hash field with the baked $6$ hash.
+# The unknown stock password is replaced, not discovered. Atomic via temp + mv.
+# shadow line = name:hash:lastchg:min:max:warn:inactive:expire:flag — we rewrite
+# only field 2, keeping the rest.
+if [ -f "$BOOT_DIR/root.shadow.hash" ] && [ -f /etc/shadow ]; then
+    NEWHASH=$(head -n 1 "$BOOT_DIR/root.shadow.hash" | tr -d '\r\n')
+    case "$NEWHASH" in
+        '$6$'*) : ;;
+        *) echo "FATAL: root.shadow.hash is not a \$6\$ SHA-512 crypt hash"; exit 1 ;;
+    esac
+    SHADOW_TMP=/etc/shadow.openaps.$$
+    SHADOW_ORIG_LINES=$(wc -l < /etc/shadow 2>/dev/null | tr -d ' ')
+    [ -n "$SHADOW_ORIG_LINES" ] || SHADOW_ORIG_LINES=0
+    # NEWHASH may contain '/' and '$', so pass it via awk -v (not sed s///).
+    if awk -F: -v OFS=: -v h="$NEWHASH" \
+        '$1=="root"{$2=h; seen=1} {print} END{if(!seen) exit 3}' \
+        /etc/shadow > "$SHADOW_TMP"; then
+        # Sanity-check the rewrite before the irreversible mv: it must be
+        # non-empty, keep every original account line, and still carry a
+        # well-formed root $6$ entry. A corrupt/short shadow locks the box out.
+        SHADOW_NEW_LINES=$(wc -l < "$SHADOW_TMP" 2>/dev/null | tr -d ' ')
+        [ -n "$SHADOW_NEW_LINES" ] || SHADOW_NEW_LINES=0
+        if [ ! -s "$SHADOW_TMP" ]; then
+            rm -f "$SHADOW_TMP"
+            echo "FATAL: rewritten /etc/shadow is empty — refusing to install it"
+            exit 1
+        fi
+        if [ "$SHADOW_NEW_LINES" -lt "$SHADOW_ORIG_LINES" ]; then
+            rm -f "$SHADOW_TMP"
+            echo "FATAL: rewritten /etc/shadow lost lines ($SHADOW_NEW_LINES < $SHADOW_ORIG_LINES) — refusing to install it"
+            exit 1
+        fi
+        if ! grep -q '^root:\$6\$' "$SHADOW_TMP"; then
+            rm -f "$SHADOW_TMP"
+            echo "FATAL: rewritten /etc/shadow has no well-formed root:\$6\$ line — refusing to install it"
+            exit 1
+        fi
+        chmod 0600 "$SHADOW_TMP"
+        chown root:root "$SHADOW_TMP" 2>/dev/null || true
+        mv "$SHADOW_TMP" /etc/shadow
+        echo "  + /etc/shadow root password set from baked hash"
+    else
+        rm -f "$SHADOW_TMP"
+        echo "FATAL: could not rewrite root entry in /etc/shadow (no root: line?)"
+        exit 1
+    fi
+else
+    echo "FATAL: root.shadow.hash or /etc/shadow missing — refusing to proceed"
+    exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Step 3 — bring up dropbear + tls-proxy from LOCAL .ipks, then wire opkg feed
+# ---------------------------------------------------------------------------
+echo "--- step 3: local opkg install (dropbear, tls-proxy) + feed config ---"
+
+if ! command -v opkg >/dev/null 2>&1; then
+    echo "FATAL: opkg not found on PATH — cannot install bootstrap packages"
+    exit 1
+fi
+
+# opkg scratch MUST be on /home (/tmp is a 16MB tmpfs). These dirs are also the
+# ones the networked feed config below uses, so create them up front.
+mkdir -p /home/openaps/opkg-tmp /home/openaps/opkg-lists
+OPKG_LOCAL="opkg --tmp-dir /home/openaps/opkg-tmp"
+
+# dropbear first — it is the recovery path. LOCAL file install, no network.
+echo "  installing $(basename "$DROPBEAR_IPK")"
+$OPKG_LOCAL install "$DROPBEAR_IPK" || {
+    echo "FATAL: opkg install of dropbear ipk failed"
+    exit 1
+}
+
+# The dropbear .ipk postinst starts dropbear; give it a moment and verify :22.
+sleep 2
+if ! netstat -ltn 2>/dev/null | grep -q ':22 '; then
+    # Postinst may have deferred the start; try the shipped init script.
+    [ -x /etc/rcS.d/S98-dropbear ] && /etc/rcS.d/S98-dropbear start || true
+    sleep 2
+fi
+if netstat -ltn 2>/dev/null | grep -q ':22 '; then
+    echo "  dropbear listening on :22 — recovery path verified"
+else
+    echo "FATAL: dropbear failed to bind :22 — aborting BEFORE touching the stock UI"
+    echo "  rollback: tar -xzf $BACKUP_PATH -C /"
+    exit 1
+fi
+
+# tls-proxy next — its S47 rcS.d init serves the persistent loopback feed.
+echo "  installing $(basename "$TLSPROXY_IPK")"
+$OPKG_LOCAL install "$TLSPROXY_IPK" || {
+    echo "FATAL: opkg install of tls-proxy ipk failed"
+    exit 1
+}
+
+# Install the networked opkg feed config so `opkg update` works over the proxy.
+mkdir -p /etc/opkg
+if [ -f "$BOOT_DIR/opkg-openaps.conf" ]; then
+    cp -f "$BOOT_DIR/opkg-openaps.conf" "$OPKG_CONF.new"
+    chmod 0644 "$OPKG_CONF.new"
+    mv "$OPKG_CONF.new" "$OPKG_CONF"
+    echo "  + $OPKG_CONF"
+else
+    echo "FATAL: $BOOT_DIR/opkg-openaps.conf missing — networked feed not configured"
+    exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Step 4 — disable stock supervisors (idwriter kept)
+# ---------------------------------------------------------------------------
+# The manager binary system()-spawns each stock app ONCE at boot; each
+# supervisor (*monitor*) is its own respawn loop. Disable by killing the running
+# process and removing the binary so the next-boot spawn no-ops. Restored from
+# the backup tarball by rollback.
+echo "--- step 4: disable stock supervisors ---"
+
+DISABLED_LIST="$STATE_DIR/disabled-apps.list"
+: > "$DISABLED_LIST"
+
+# NOTE: idwriter is deliberately NOT in this list — it is the ONLY stock daemon
+# kept enabled (LAN recovery surface on TCP :4540) per the locked design.
+DISABLE_SET="
+monitor.exe
+clientmonitor
+control_client_monitor
+gprsmonitor
+mqtt_monitor.exe
+phone_server_monitor
+phone_server_app_monitor
+lancommClientMonitor
+single_update_monitor
+updatemanager
+autoupdate2
+autoupdate_restart
+AutoUpInver2
+AutoUpInver
+autoupdate
+autoupdate_main_restart
+resmonitor
+usbTest
+quectel_monitor.exe
+4gmonitor.exe
+diagnosis_network
+slave485
+"
+
+for app in $DISABLE_SET; do
+    if pidof "$app" >/dev/null 2>&1; then
+        killall -q "$app" 2>/dev/null || true
+        sleep 1
+        killall -q -9 "$app" 2>/dev/null || true
+    fi
+
+    BIN_PATH=/home/applications/$app
+    if [ -f "$BIN_PATH" ]; then
+        # Copy-then-remove so a failed cross-device move can't delete the only
+        # copy; these are also in the step-1 tarball.
+        mkdir -p "$STATE_DIR/disabled-bin"
+        cp -f "$BIN_PATH" "$STATE_DIR/disabled-bin/$app"
+        rm -f "$BIN_PATH"
+        echo "$app" >> "$DISABLED_LIST"
+        echo "  disabled: $app"
+    fi
+done
+
+# Also kill direct children of the now-defunct supervisors.
+for child in main.exe client control_client gprs mqtt.exe phone_server lancommClient single_update autoupdate quectel-CM; do
+    if pidof "$child" >/dev/null 2>&1; then
+        killall -q "$child" 2>/dev/null || true
+    fi
+done
+
+# ---------------------------------------------------------------------------
+# Step 5 — remove lighttpd / CodeIgniter (stock UI) — DELIBERATELY LAST
+# ---------------------------------------------------------------------------
+# assist is a member of lighttpd's process group (PHP under lighttpd launched
+# us). Killing lighttpd tears down that group, and a KILL/group teardown is
+# uncatchable — the trap at the top can't save us. So this is the LAST thing we
+# do: dropbear is up and verified, root access is planted, the feed is wired, so
+# a death at the killall below loses nothing. We neutralize lighttpd on disk
+# BEFORE the killall: move the binary aside and disable any rcS.d/init.d entry
+# first, so even if assist dies at the killall, lighttpd is gone from the boot
+# path and won't come back.
+echo "--- step 5: remove lighttpd / CodeIgniter ---"
+
+if ! netstat -ltn 2>/dev/null | grep -q ':22 '; then
+    echo "FATAL: dropbear not listening on :22; refusing to touch lighttpd"
+    exit 1
+fi
+
+LIGHTTPD_BIN=/usr/local/lighttpd/sbin/lighttpd
+if [ -f "$LIGHTTPD_BIN" ]; then
+    mkdir -p "$STATE_DIR/disabled-bin"
+    # Non-destructive: copy first, remove only once the copy lands. No `|| rm -f`
+    # fallback — under set -e a copy failure aborts rather than deleting the sole
+    # binary (rollback restores lighttpd ONLY from disabled-bin/).
+    cp -f "$LIGHTTPD_BIN" "$STATE_DIR/disabled-bin/lighttpd"
+    rm -f "$LIGHTTPD_BIN"
+    echo "lighttpd" >> "$DISABLED_LIST"
+    echo "  disabled: lighttpd"
+fi
+
+for f in /etc/rcS.d/S*lighttpd* /etc/init.d/lighttpd* /etc/init.d/S*lighttpd*; do
+    [ -e "$f" ] || continue
+    mkdir -p "$STATE_DIR/disabled-init"
+    mv "$f" "$STATE_DIR/disabled-init/$(basename "$f")" 2>/dev/null || rm -f "$f"
+    echo "  disabled init: $f"
+done
+
+# Binary and boot entries are gone; NOW kill the running process. If this kills
+# assist too, the bootstrap is already complete and persistent. Release the lock
+# first: a SIGKILL at the killall would skip the EXIT trap and leave a stale lock
+# that blocks re-runs, and the concurrency window is over by this point.
+echo "  bootstrap complete and persistent; killing lighttpd (assist may not survive)"
+rm -f "$LOCK/pid" 2>/dev/null || true
+rmdir "$LOCK" 2>/dev/null || true
+if pidof lighttpd >/dev/null 2>&1; then
+    killall -q lighttpd 2>/dev/null || true
+    sleep 1
+    killall -q -9 lighttpd 2>/dev/null || true
+fi
+
+# ---------------------------------------------------------------------------
+# Step 6 — next-steps banner
+# ---------------------------------------------------------------------------
+echo "=== $(date) openaps-bootstrap $VERSION done ==="
+echo
+echo "============================================================"
+echo " OpenAPS bootstrap complete."
+echo
+echo " Root access (both methods):"
+echo "   ssh root@<ECU-IP>            # operator pubkey OR baked password"
+echo
+echo " Install the OpenAPS firmware over the authenticated opkg feed:"
+echo
+echo "   ssh root@<ECU-IP>"
+echo "   opkg update"
+echo "   opkg install openaps-base openaps-inv-driver openaps-ecu-zb \\"
+echo "                openaps-ecu-web openaps-ecu-sunspec"
+echo
+echo " Rollback (if needed):  tar -xzf $BACKUP_PATH -C /"
+echo "============================================================"
+echo
+exit 0

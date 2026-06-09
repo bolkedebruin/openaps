@@ -1,0 +1,12 @@
+Package: openaps-base
+Version: __OPENAPS_VERSION__
+Architecture: all
+Maintainer: OpenAPS <bdbruin@gmail.com>
+Section: utils
+Priority: optional
+Depends:
+Description: OpenAPS base layout — release key, rollback CLI, settings provisioning.
+ Ships /etc/openaps/release.pub (the OTA release-signing public key) and
+ /usr/bin/openaps-rollback. Its postinst provisions
+ /etc/inv-driver/settings.json from /etc/yuneng/*.conf when absent. Every
+ OpenAPS service package depends on this one.

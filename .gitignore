@@ -8,3 +8,11 @@ build/
 
 # host-built smoke-test binary (see _smoke/fakedriver)
 /fakedriver
+
+# Release signing PRIVATE key — never commit. The public half (packaging/release.pub)
+# is committed and shipped; the private key lives offline + as the OPENAPS_RELEASE_KEY CI secret.
+release.key
+*.priv.pem
+
+# host-built ipk tool
+/mkipk

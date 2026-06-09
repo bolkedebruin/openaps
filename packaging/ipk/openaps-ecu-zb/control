@@ -1,0 +1,11 @@
+Package: openaps-ecu-zb
+Version: __OPENAPS_VERSION__
+Architecture: armv7ahf-vfp-neon
+Maintainer: OpenAPS <bdbruin@gmail.com>
+Section: utils
+Priority: optional
+Depends: openaps-base, openaps-inv-driver
+Description: OpenAPS ecu-zb — ZigBee modem proxy and bus manager.
+ Installs /home/applications/ecu-zb/ecu-zb and its /etc/rcS.d/S53 BusyBox
+ init script. Drives the CC2530 modem on /dev/ttyO2 and proxies the
+ 802.15.4 link for inv-driver.

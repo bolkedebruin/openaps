@@ -1,0 +1,17 @@
+#!/bin/sh
+#
+# Service postinst template — start (and thereby enable) the service. The init
+# script lives in /etc/rcS.d, so it already runs at every boot in lexical
+# order; here we (re)start it now so the package is live without a reboot.
+# Idempotent: the init script no-ops if the daemon is already running.
+#
+# __INIT__ is substituted with the absolute init-script path at package time.
+set -e
+
+INIT=__INIT__
+
+if [ -x "$INIT" ]; then
+    "$INIT" restart || "$INIT" start || true
+fi
+
+exit 0

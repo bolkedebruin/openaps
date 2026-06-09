@@ -14,6 +14,7 @@ ECU_ZB_PKG           := ./cmd/ecu-zb
 ECU_SUNSPEC_PKG      := ./cmd/ecu-sunspec
 RECOVERYD_PKG        := ./cmd/recoveryd
 TLS_PROXY_PKG        := ./cmd/openaps-tls-proxy
+MKIPK_PKG            := ./cmd/mkipk
 
 INV_DRIVER_BIN       := $(BUILD_DIR)/inv-driver
 INV_DRIVER_ARMV7     := $(BUILD_DIR)/inv-driver-armv7
@@ -27,6 +28,7 @@ RECOVERYD_BIN        := $(BUILD_DIR)/recoveryd
 RECOVERYD_ARMV7      := $(BUILD_DIR)/recoveryd-armv7
 TLS_PROXY_BIN        := $(BUILD_DIR)/openaps-tls-proxy
 TLS_PROXY_ARMV7      := $(BUILD_DIR)/openaps-tls-proxy-armv7
+MKIPK_BIN            := $(BUILD_DIR)/mkipk
 
 ECU_WEB_DIR_SRC      := cmd/ecu-web/web
 
@@ -57,10 +59,13 @@ DROPBEAR_DIR ?= $(BUILD_DIR)/dropbear-armv7
         build-ecu-sunspec build-ecu-sunspec-arm \
         build-recoveryd build-recoveryd-arm \
         build-openaps-tls-proxy build-openaps-tls-proxy-arm \
+        build-mkipk \
         deploy-inv-driver deploy-ecu-web deploy-ecu-zb deploy-ecu-sunspec \
         install-init-zb uninstall-init-zb \
         package-zb package-sunspec package-sunspec-with-dropbear \
         package-openaps package-all fetch-dropbear \
+        ipk-all ipk-base ipk-inv-driver ipk-ecu-zb ipk-ecu-web ipk-ecu-sunspec \
+        ipk-tls-proxy ipk-dropbear package-ipks package-bootstrap \
         web web-test proto \
         test vet fmt clean
 
@@ -94,6 +99,11 @@ build-ecu-zb:
 build-ecu-sunspec:
 	mkdir -p $(BUILD_DIR)
 	CGO_ENABLED=0 go build -ldflags '$(LDFLAGS_HOST)' -o $(ECU_SUNSPEC_BIN) $(ECU_SUNSPEC_PKG)
+
+# mkipk is host-only build tooling (assembles .ipk packages); never cross-built.
+build-mkipk:
+	mkdir -p $(BUILD_DIR)
+	CGO_ENABLED=0 go build -ldflags '$(LDFLAGS_HOST)' -o $(MKIPK_BIN) $(MKIPK_PKG)
 
 # ---------------- ARMv7 builds ----------------
 
@@ -387,6 +397,203 @@ package-openaps: build-all-arm $(DROPBEAR_DIR)/dropbear
 	@echo "=== built $(BUILD_DIR)/$(OPENAPS_PKG_NAME) ==="
 	@ls -lh $(BUILD_DIR)/$(OPENAPS_PKG_NAME)
 	@(cd $(BUILD_DIR) && (sha256sum $(OPENAPS_PKG_NAME) 2>/dev/null || shasum -a 256 $(OPENAPS_PKG_NAME)))
+
+# ---------------- .ipk packaging (opkg) ----------------
+#
+# Real Debian-format .ipk packages installable by opkg on the ECU. Each .ipk
+# is an `ar` archive of: debian-binary, control.tar.gz, data.tar.gz, assembled
+# by the host-only cmd/mkipk tool.
+#
+# opkg on this device enforces ONLY MD5Sum (it ignores SHA256sum and cannot
+# verify signatures); authenticity comes from openaps-tls-proxy verifying the
+# release-key RSA signature on the feed index, NOT from the .ipk itself.
+#
+# Metadata (control + maintainer scripts) lives under packaging/ipk/<pkg>/.
+# Payload is staged into build/ipkroot/<pkg> by each target, then packed.
+#
+# Architecture: binaries -> armv7ahf-vfp-neon ; config/script-only -> all.
+# The .ipk Version field is stamped from $(VERSION) at build time.
+
+IPK_DIR        := $(BUILD_DIR)/ipk
+IPKROOT        := $(BUILD_DIR)/ipkroot
+IPK_META       := packaging/ipk
+IPK_ARCH       := armv7ahf-vfp-neon
+
+# stage_service,<pkg>,<armv7-binary-path>,<init-basename> — lay out a service
+# package's data tree (ARMv7 daemon under /home/applications + its rcS.d init),
+# generate its postinst from _service-postinst.in with the init path stamped in,
+# then pack it. The service dir name is the package minus its openaps- prefix.
+define stage_service
+	@rm -rf $(IPKROOT)/$(1)
+	@mkdir -p $(IPKROOT)/$(1)/home/applications/$(patsubst openaps-%,%,$(1))
+	@mkdir -p $(IPKROOT)/$(1)/etc/rcS.d
+	@cp $(2) $(IPKROOT)/$(1)/home/applications/$(patsubst openaps-%,%,$(1))/$(patsubst openaps-%,%,$(1))
+	@chmod 0755 $(IPKROOT)/$(1)/home/applications/$(patsubst openaps-%,%,$(1))/$(patsubst openaps-%,%,$(1))
+	@cp packaging/$(3) $(IPKROOT)/$(1)/etc/rcS.d/$(3)
+	@chmod 0755 $(IPKROOT)/$(1)/etc/rcS.d/$(3)
+	@mkdir -p $(IPK_DIR)
+	@sed 's|__INIT__|/etc/rcS.d/$(3)|' $(IPK_META)/_service-postinst.in > $(IPK_DIR)/.gen-$(1)-postinst
+	$(call call_mkipk,$(1),$(IPK_ARCH))
+	@rm -f $(IPK_DIR)/.gen-$(1)-postinst
+endef
+
+# call_mkipk,<pkg>,<arch> — stamp control Version/Architecture, gather the
+# package's maintainer scripts into a scripts dir (kept SEPARATE from the
+# control file so mkipk emits ./control exactly once), and run mkipk to pack
+# build/ipkroot/<pkg> into $(IPK_DIR)/<pkg>_<version>_<arch>.ipk.
+define call_mkipk
+	@echo "+ ipk: $(1) ($(2)) $(VERSION)"
+	@rm -rf $(IPK_DIR)/.ctl-$(1)
+	@mkdir -p $(IPK_DIR)/.ctl-$(1)/scripts $(IPK_DIR) $(IPKROOT)/$(1)
+	@sed 's|^Version: __OPENAPS_VERSION__|Version: $(VERSION)|; s|^Architecture: .*|Architecture: $(2)|' \
+		$(IPK_META)/$(1)/control > $(IPK_DIR)/.ctl-$(1)/control
+	@chmod 0644 $(IPK_DIR)/.ctl-$(1)/control
+	@for s in postinst preinst prerm postrm conffiles; do \
+		if [ -f $(IPK_META)/$(1)/$$s ]; then \
+			cp $(IPK_META)/$(1)/$$s $(IPK_DIR)/.ctl-$(1)/scripts/$$s; \
+			[ "$$s" = conffiles ] && chmod 0644 $(IPK_DIR)/.ctl-$(1)/scripts/$$s || chmod 0755 $(IPK_DIR)/.ctl-$(1)/scripts/$$s; \
+		fi; \
+	done
+	@if [ -f $(IPK_DIR)/.gen-$(1)-postinst ]; then \
+		cp $(IPK_DIR)/.gen-$(1)-postinst $(IPK_DIR)/.ctl-$(1)/scripts/postinst; \
+		chmod 0755 $(IPK_DIR)/.ctl-$(1)/scripts/postinst; \
+	fi
+	@rm -f $(IPK_DIR)/$(1)_$(VERSION)_$(2).ipk
+	@$(MKIPK_BIN) \
+		-control $(IPK_DIR)/.ctl-$(1)/control \
+		-data    $(IPKROOT)/$(1) \
+		-scripts $(IPK_DIR)/.ctl-$(1)/scripts \
+		-out     $(IPK_DIR)/$(1)_$(VERSION)_$(2).ipk
+	@rm -rf $(IPK_DIR)/.ctl-$(1)
+	@ls -lh $(IPK_DIR)/$(1)_$(VERSION)_$(2).ipk
+endef
+
+ipk-all: ipk-base ipk-inv-driver ipk-ecu-zb ipk-ecu-web ipk-ecu-sunspec ipk-tls-proxy ipk-dropbear
+
+# (a) openaps-base — Architecture: all, no Depends. Ships release.pub +
+#     openaps-rollback; postinst provisions settings.json from /etc/yuneng.
+ipk-base: build-mkipk
+	@rm -rf $(IPKROOT)/openaps-base
+	@mkdir -p $(IPKROOT)/openaps-base/etc/openaps
+	@mkdir -p $(IPKROOT)/openaps-base/etc/inv-driver
+	@mkdir -p $(IPKROOT)/openaps-base/usr/bin
+	@cp packaging/release.pub $(IPKROOT)/openaps-base/etc/openaps/release.pub
+	@chmod 0644 $(IPKROOT)/openaps-base/etc/openaps/release.pub
+	@cp packaging/openaps-rollback $(IPKROOT)/openaps-base/usr/bin/openaps-rollback
+	@chmod 0755 $(IPKROOT)/openaps-base/usr/bin/openaps-rollback
+	$(call call_mkipk,openaps-base,all)
+
+# (b) openaps-inv-driver — armv7ahf-vfp-neon, Depends: openaps-base.
+ipk-inv-driver: build-inv-driver-arm build-mkipk
+	$(call stage_service,openaps-inv-driver,$(INV_DRIVER_ARMV7),S48-inv-driver)
+
+# (c) openaps-ecu-zb — armv7ahf-vfp-neon, Depends: openaps-base, openaps-inv-driver.
+ipk-ecu-zb: build-ecu-zb-arm build-mkipk
+	$(call stage_service,openaps-ecu-zb,$(ECU_ZB_ARMV7),S53-ecu-zb)
+
+# (d) openaps-ecu-web — armv7ahf-vfp-neon, Depends: openaps-base, openaps-inv-driver.
+ipk-ecu-web: build-ecu-web-arm build-mkipk
+	$(call stage_service,openaps-ecu-web,$(ECU_WEB_ARMV7),S54-ecu-web)
+
+# (e) openaps-ecu-sunspec — armv7ahf-vfp-neon, Depends: openaps-base, openaps-inv-driver.
+ipk-ecu-sunspec: build-ecu-sunspec-arm build-mkipk
+	$(call stage_service,openaps-ecu-sunspec,$(ECU_SUNSPEC_ARMV7),S99-sunspec)
+
+# (f) openaps-tls-proxy — armv7ahf-vfp-neon, Depends: none. Ships the proxy
+#     binary + opkg feed config + the upstream feed.conf sample + the S47
+#     rcS.d init that runs the proxy persistently; postinst seeds
+#     /etc/openaps/feed.conf, points opkg at the loopback feed, and starts it.
+ipk-tls-proxy: build-openaps-tls-proxy-arm build-mkipk
+	@rm -rf $(IPKROOT)/openaps-tls-proxy
+	@mkdir -p $(IPKROOT)/openaps-tls-proxy/home/applications/openaps-tls-proxy
+	@mkdir -p $(IPKROOT)/openaps-tls-proxy/etc/rcS.d
+	@cp $(TLS_PROXY_ARMV7) $(IPKROOT)/openaps-tls-proxy/home/applications/openaps-tls-proxy/openaps-tls-proxy
+	@chmod 0755 $(IPKROOT)/openaps-tls-proxy/home/applications/openaps-tls-proxy/openaps-tls-proxy
+	@cp packaging/opkg-openaps.conf $(IPKROOT)/openaps-tls-proxy/home/applications/openaps-tls-proxy/opkg-openaps.conf
+	@chmod 0644 $(IPKROOT)/openaps-tls-proxy/home/applications/openaps-tls-proxy/opkg-openaps.conf
+	@cp packaging/feed.conf.sample $(IPKROOT)/openaps-tls-proxy/home/applications/openaps-tls-proxy/feed.conf.sample
+	@chmod 0644 $(IPKROOT)/openaps-tls-proxy/home/applications/openaps-tls-proxy/feed.conf.sample
+	@cp packaging/S47-openaps-tls-proxy $(IPKROOT)/openaps-tls-proxy/etc/rcS.d/S47-openaps-tls-proxy
+	@chmod 0755 $(IPKROOT)/openaps-tls-proxy/etc/rcS.d/S47-openaps-tls-proxy
+	$(call call_mkipk,openaps-tls-proxy,$(IPK_ARCH))
+
+# (g) openaps-dropbear — armv7ahf-vfp-neon, Depends: none. Bundles the
+#     dropbear ARMv7 binaries (fetched into $(DROPBEAR_DIR)) + S98 init script.
+ipk-dropbear: build-mkipk $(DROPBEAR_DIR)/dropbear
+	@rm -rf $(IPKROOT)/openaps-dropbear
+	@mkdir -p $(IPKROOT)/openaps-dropbear/usr/local/sbin
+	@mkdir -p $(IPKROOT)/openaps-dropbear/etc/rcS.d
+	@for f in dropbear dropbearkey dbclient dropbearconvert; do \
+		if [ -f "$(DROPBEAR_DIR)/$$f" ]; then \
+			cp "$(DROPBEAR_DIR)/$$f" $(IPKROOT)/openaps-dropbear/usr/local/sbin/$$f; \
+			chmod 0755 $(IPKROOT)/openaps-dropbear/usr/local/sbin/$$f; \
+		fi; \
+	done
+	@cp packaging/S98-dropbear $(IPKROOT)/openaps-dropbear/etc/rcS.d/S98-dropbear
+	@chmod 0755 $(IPKROOT)/openaps-dropbear/etc/rcS.d/S98-dropbear
+	$(call call_mkipk,openaps-dropbear,$(IPK_ARCH))
+
+# package-ipks — build all 7 .ipks, then mirror them into build/ipks/ (the dir
+# the bootstrap tarball and a published feed both consume).
+package-ipks: ipk-all
+	@mkdir -p $(BUILD_DIR)/ipks
+	@cp $(IPK_DIR)/*_$(VERSION)_*.ipk $(BUILD_DIR)/ipks/
+	@echo "=== built .ipks ==="
+	@ls -lh $(BUILD_DIR)/ipks/*.ipk
+
+# ---------------- bootstrap tarball (stock exec_upgrade_ecu_app foothold) ----
+#
+# openaps-bootstrap-<ver>.tar.gz delivered via the stock hidden endpoint
+# (exec_upgrade_ecu_app extracts the tarball and runs the root-level "assist").
+#
+# Layout (assist at the tarball ROOT, siblings beside it):
+#   assist                                                  (orchestrator)
+#   ipks/openaps-dropbear_<ver>_armv7ahf-vfp-neon.ipk
+#   ipks/openaps-tls-proxy_<ver>_armv7ahf-vfp-neon.ipk
+#   release.pub          -> /etc/openaps/release.pub
+#   authorized_keys      -> /home/root/.ssh/authorized_keys
+#   opkg-openaps.conf    -> /etc/opkg/openaps.conf
+#   root.shadow.hash     ($6$ SHA-512 crypt hash, baked from ROOT_PW)
+#
+# REQUIRED make vars:
+#   ROOT_PW          — plaintext root password; hashed at build time with
+#                      `openssl passwd -6` into root.shadow.hash (FAIL if unset).
+#   AUTHORIZED_KEYS  — path to the operator's SSH public-key file (FAIL if unset).
+#
+# BusyBox-compatible tar: gzip, no -P, assist at the root.
+BOOTSTRAP_PKG_NAME := openaps-bootstrap-$(VERSION).tar.gz
+AUTHORIZED_KEYS    ?=
+ROOT_PW            ?=
+
+# ROOT_PW is exported into the recipe environment so it is hashed via openssl's
+# -stdin (never interpolated into a command line or visible in argv/ps), which
+# also keeps arbitrary quote/$ characters in the password intact.
+package-bootstrap: export ROOT_PW := $(ROOT_PW)
+package-bootstrap: ipk-dropbear ipk-tls-proxy
+	@[ -n "$$ROOT_PW" ] || { echo "ERROR: ROOT_PW is required (e.g. make package-bootstrap ROOT_PW=... AUTHORIZED_KEYS=~/.ssh/id_ed25519.pub)"; exit 1; }
+	@[ -n "$(AUTHORIZED_KEYS)" ] || { echo "ERROR: AUTHORIZED_KEYS is required (path to operator pubkey)"; exit 1; }
+	@[ -f "$(AUTHORIZED_KEYS)" ] || { echo "ERROR: AUTHORIZED_KEYS file not found: $(AUTHORIZED_KEYS)"; exit 1; }
+	@echo "+ packaging openaps-bootstrap $(VERSION)"
+	@rm -rf $(BUILD_DIR)/pkgroot-bootstrap
+	@mkdir -p $(BUILD_DIR)/pkgroot-bootstrap/ipks
+	@sed 's|^VERSION="__OPENAPS_VERSION__"|VERSION="$(VERSION)"|' packaging/openaps-bootstrap/assist > $(BUILD_DIR)/pkgroot-bootstrap/assist
+	@chmod 0755 $(BUILD_DIR)/pkgroot-bootstrap/assist
+	@cp $(IPK_DIR)/openaps-dropbear_$(VERSION)_$(IPK_ARCH).ipk   $(BUILD_DIR)/pkgroot-bootstrap/ipks/
+	@cp $(IPK_DIR)/openaps-tls-proxy_$(VERSION)_$(IPK_ARCH).ipk  $(BUILD_DIR)/pkgroot-bootstrap/ipks/
+	@cp packaging/release.pub       $(BUILD_DIR)/pkgroot-bootstrap/release.pub
+	@cp packaging/opkg-openaps.conf $(BUILD_DIR)/pkgroot-bootstrap/opkg-openaps.conf
+	@cp "$(AUTHORIZED_KEYS)"        $(BUILD_DIR)/pkgroot-bootstrap/authorized_keys
+	@chmod 0644 $(BUILD_DIR)/pkgroot-bootstrap/release.pub $(BUILD_DIR)/pkgroot-bootstrap/opkg-openaps.conf $(BUILD_DIR)/pkgroot-bootstrap/authorized_keys
+	@printf '%s' "$$ROOT_PW" | openssl passwd -6 -stdin > $(BUILD_DIR)/pkgroot-bootstrap/root.shadow.hash; \
+		case "$$(cat $(BUILD_DIR)/pkgroot-bootstrap/root.shadow.hash)" in \
+			\$$6\$$*) ;; \
+			*) echo "ERROR: root.shadow.hash is not a \$$6\$$ SHA-512 crypt hash"; exit 1 ;; \
+		esac
+	@chmod 0600 $(BUILD_DIR)/pkgroot-bootstrap/root.shadow.hash
+	@(cd $(BUILD_DIR)/pkgroot-bootstrap && tar -czf ../$(BOOTSTRAP_PKG_NAME) .)
+	@rm -rf $(BUILD_DIR)/pkgroot-bootstrap
+	@echo "=== built $(BUILD_DIR)/$(BOOTSTRAP_PKG_NAME) ==="
+	@ls -lh $(BUILD_DIR)/$(BOOTSTRAP_PKG_NAME)
 
 # ---------------- common ----------------
 

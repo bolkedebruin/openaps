@@ -1,0 +1,65 @@
+#!/bin/sh
+#
+# openaps-base postinst — provision /etc/inv-driver/settings.json from the
+# stock /etc/yuneng/*.conf provisioning files when absent. Idempotent: an
+# existing settings.json is left untouched (operator-edited config wins).
+# Logic ported from packaging/openaps-install step 4.
+set -e
+
+SETTINGS_PATH=/etc/inv-driver/settings.json
+MAC_CONF=/etc/yuneng/ecu_eth0_mac.conf
+ECUID_CONF=/etc/yuneng/ecuid.conf
+
+mkdir -p /etc/openaps /etc/inv-driver
+
+if [ -f "$SETTINGS_PATH" ]; then
+    echo "openaps-base: $SETTINGS_PATH already exists — keeping operator-edited config"
+    exit 0
+fi
+
+if [ ! -f "$MAC_CONF" ]; then
+    echo "openaps-base: $MAC_CONF missing — settings.json left for first-run autodetect"
+    exit 0
+fi
+
+# Build a fresh settings.json from /etc/yuneng/ecu_eth0_mac.conf +
+# /etc/yuneng/ecuid.conf. Format expected by inv-driver internal/settings.
+MAC_RAW=$(cat "$MAC_CONF" 2>/dev/null | tr -d '[:space:]' | head -c 32)
+MAC_HEX=$(echo "$MAC_RAW" | tr -d ':-' | tr 'A-F' 'a-f')
+if [ -z "$MAC_HEX" ] || [ ${#MAC_HEX} -lt 12 ]; then
+    echo "openaps-base: $MAC_CONF content unparseable; settings.json left for first-run autodetect"
+    exit 0
+fi
+
+# Lower 16 bits of MAC -> PAN override (uppercase hex, 4 chars).
+PAN_HEX=$(echo "$MAC_HEX" | tail -c 5 | tr 'a-f' 'A-F')
+# Re-format MAC as colon-separated for cosmetics.
+MAC_FMT=$(echo "$MAC_HEX" | sed 's/\(..\)/\1:/g;s/:$//')
+ECU_ID=""
+if [ -f "$ECUID_CONF" ]; then
+    ECU_ID=$(cat "$ECUID_CONF" 2>/dev/null | tr -d '[:space:]')
+fi
+
+# Allowlist each yuneng-derived value substituted UNQUOTED into JSON: reject
+# anything outside [0-9A-Za-z_-] (so quotes, backslashes, control chars or
+# whitespace can never malform/inject the generated settings.json). Same
+# allowlist guards the provisioning in packaging/openaps-install — keep both
+# in sync.
+case "$ECU_ID" in *[!0-9A-Za-z_-]*) ECU_ID= ;; esac
+case "$PAN_HEX" in *[!0-9A-Za-z_-]*) PAN_HEX= ;; esac
+case "$MAC_FMT" in *[!0-9A-Za-z:_-]*) MAC_FMT= ;; esac
+
+cat > "$SETTINGS_PATH.new" <<EOF
+{
+  "ecu_id": "$ECU_ID",
+  "mac": "$MAC_FMT",
+  "pan_override": "$PAN_HEX",
+  "zigbee_type": "apsystems",
+  "channel": 16
+}
+EOF
+chmod 0600 "$SETTINGS_PATH.new"
+mv "$SETTINGS_PATH.new" "$SETTINGS_PATH"
+echo "openaps-base: + $SETTINGS_PATH (ecu_id=$ECU_ID mac=$MAC_FMT pan=$PAN_HEX)"
+
+exit 0

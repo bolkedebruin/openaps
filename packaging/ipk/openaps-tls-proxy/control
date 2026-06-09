@@ -1,0 +1,14 @@
+Package: openaps-tls-proxy
+Version: __OPENAPS_VERSION__
+Architecture: armv7ahf-vfp-neon
+Maintainer: Bolke de Bruin <bdbruin@gmail.com>
+Section: net
+Priority: optional
+Depends:
+Description: OpenAPS loopback TLS proxy and opkg feed front-end.
+ Terminates a plain-HTTP opkg feed on 127.0.0.1 and upstreams it to the
+ GitHub-hosted OpenAPS feed over modern TLS. Verifies the release-key RSA
+ signature on the feed index and on every .ipk before opkg sees it, which is
+ the only authenticity check on this device (opkg enforces MD5Sum only and
+ cannot verify signatures itself). Ships the opkg config that points opkg at
+ the proxy and keeps opkg scratch on /home (the 16 MiB /tmp tmpfs overflows).

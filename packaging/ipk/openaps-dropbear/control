@@ -1,0 +1,14 @@
+Package: openaps-dropbear
+Version: __OPENAPS_VERSION__
+Architecture: armv7ahf-vfp-neon
+Maintainer: Bolke de Bruin <bdbruin@gmail.com>
+Section: net
+Priority: optional
+Depends:
+Description: Dropbear SSH server for OpenAPS root access.
+ Bundles the dropbear 2012.55 (Debian wheezy, armhf/glibc 2.15) server and
+ helper binaries (dropbear, dropbearkey, dbclient, dropbearconvert) plus an
+ rcS.d init script that starts dropbear on :22 at boot. Root login is allowed
+ by BOTH public key and password. The postinst generates an RSA host key if
+ absent and enforces dropbear StrictModes ownership on /home/root and
+ /home/root/.ssh.
