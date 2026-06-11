@@ -6,13 +6,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"net"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/bolkedebruin/openaps/codec"
 	"github.com/bolkedebruin/openaps/internal/store"
+	"github.com/bolkedebruin/openaps/internal/udsutil"
 	"github.com/bolkedebruin/openaps/wire"
 )
 
@@ -193,14 +193,9 @@ func lookupInverter(dbPath, uid string) (modelCode uint8, err error) {
 // hello, or write error is surfaced to the caller, who treats it as
 // "not delivered" but not as a fatal CLI error.
 func sendEnvelopeOverUDS(socketPath string, env *wire.Envelope) error {
-	d := net.Dialer{Timeout: 1500 * time.Millisecond}
-	conn, err := d.Dial("unix", socketPath)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	_ = conn.SetWriteDeadline(time.Now().Add(1500 * time.Millisecond))
+	// Budget matches the former per-step deadlines: 1.5 s dial + 1.5 s writes.
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 	hostname, _ := os.Hostname()
 	hello := &wire.Envelope{Body: &wire.Envelope_Hello{Hello: &wire.Hello{
 		Backend:     "inv-driver-cli",
@@ -208,11 +203,6 @@ func sendEnvelopeOverUDS(socketPath string, env *wire.Envelope) error {
 		Hostname:    hostname,
 		StartedAtMs: time.Now().UnixMilli(),
 	}}}
-	if err := wire.WriteFrame(conn, hello); err != nil {
-		return fmt.Errorf("hello: %w", err)
-	}
-	if err := wire.WriteFrame(conn, env); err != nil {
-		return fmt.Errorf("envelope: %w", err)
-	}
-	return nil
+	_, err := udsutil.Roundtrip(ctx, socketPath, hello, nil, env)
+	return err
 }

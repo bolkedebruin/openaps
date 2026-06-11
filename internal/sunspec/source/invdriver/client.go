@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/bolkedebruin/openaps/internal/udsutil"
 	"github.com/bolkedebruin/openaps/wire"
 )
 
@@ -208,20 +209,11 @@ func (c *Client) Send(ctx context.Context, uid string, frame []byte) error {
 // one envelope, and closes. Any dial/hello/write error is surfaced to
 // the caller.
 func (c *Client) sendControl(ctx context.Context, env *wire.Envelope) error {
-	d := net.Dialer{Timeout: controlDialTimeout}
-	conn, err := d.DialContext(ctx, "unix", c.socketPath)
-	if err != nil {
-		return fmt.Errorf("invdriver: dial %s: %w", c.socketPath, err)
-	}
-	defer conn.Close()
-
-	_ = conn.SetWriteDeadline(time.Now().Add(controlDialTimeout))
+	ctx, cancel := context.WithTimeout(ctx, controlDialTimeout)
+	defer cancel()
 	hello := &wire.Envelope{Body: &wire.Envelope_Hello{Hello: c.newHello(wire.Role_ROLE_UNSPECIFIED)}}
-	if err := wire.WriteFrame(conn, hello); err != nil {
-		return fmt.Errorf("invdriver: control hello: %w", err)
-	}
-	if err := wire.WriteFrame(conn, env); err != nil {
-		return fmt.Errorf("invdriver: control send: %w", err)
+	if _, err := udsutil.Roundtrip(ctx, c.socketPath, hello, nil, env); err != nil {
+		return fmt.Errorf("invdriver: control: %w", err)
 	}
 	return nil
 }

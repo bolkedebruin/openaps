@@ -3,9 +3,9 @@ package uds
 import (
 	"context"
 	"fmt"
-	"net"
 	"time"
 
+	"github.com/bolkedebruin/openaps/internal/udsutil"
 	"github.com/bolkedebruin/openaps/wire"
 )
 
@@ -24,53 +24,25 @@ type Controller struct {
 
 const controllerTimeout = 8 * time.Second
 
-func (c *Controller) dialHello(ctx context.Context) (net.Conn, error) {
-	var d net.Dialer
-	conn, err := d.DialContext(ctx, "unix", c.SocketPath)
-	if err != nil {
-		return nil, err
-	}
-	// ROLE_UNSPECIFIED runs the publisher loop, which is where the
-	// request/response handlers live.
-	hello := &wire.Envelope{Body: &wire.Envelope_Hello{Hello: &wire.Hello{
+// hello builds the Hello envelope for a one-shot connection.
+// ROLE_UNSPECIFIED runs the publisher loop, which is where the
+// request/response handlers live.
+func (c *Controller) hello() *wire.Envelope {
+	return &wire.Envelope{Body: &wire.Envelope_Hello{Hello: &wire.Hello{
 		Backend:     c.Backend,
 		Version:     c.Version,
 		Hostname:    c.Hostname,
 		StartedAtMs: time.Now().UnixMilli(),
 	}}}
-	_ = conn.SetWriteDeadline(time.Now().Add(controllerTimeout))
-	if err := wire.WriteFrame(conn, hello); err != nil {
-		_ = conn.Close()
-		return nil, fmt.Errorf("hello: %w", err)
-	}
-	return conn, nil
 }
 
 // roundtrip dials, writes one request envelope, and returns the first
 // response envelope for which match returns true. Unrelated frames are
 // skipped until the deadline.
 func (c *Controller) roundtrip(ctx context.Context, req *wire.Envelope, match func(*wire.Envelope) bool) (*wire.Envelope, error) {
-	conn, err := c.dialHello(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
-	_ = conn.SetWriteDeadline(time.Now().Add(controllerTimeout))
-	if err := wire.WriteFrame(conn, req); err != nil {
-		return nil, fmt.Errorf("write request: %w", err)
-	}
-	deadline := time.Now().Add(controllerTimeout)
-	for {
-		_ = conn.SetReadDeadline(deadline)
-		var env wire.Envelope
-		if err := wire.ReadFrame(conn, &env); err != nil {
-			return nil, fmt.Errorf("read response: %w", err)
-		}
-		if match(&env) {
-			return &env, nil
-		}
-	}
+	ctx, cancel := context.WithTimeout(ctx, controllerTimeout)
+	defer cancel()
+	return udsutil.Roundtrip(ctx, c.SocketPath, c.hello(), match, req)
 }
 
 // Send injects one L2 frame addressed to a single inverter (by peer_uid)
@@ -84,14 +56,8 @@ func (c *Controller) Send(ctx context.Context, uid string, frame []byte) error {
 	if len(frame) == 0 {
 		return fmt.Errorf("uds: empty frame")
 	}
-	conn, err := c.dialHello(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	_ = conn.SetWriteDeadline(time.Now().Add(controllerTimeout))
 	env := &wire.Envelope{Body: &wire.Envelope_Send{Send: &wire.Send{PeerUid: uid, Frame: frame}}}
-	if err := wire.WriteFrame(conn, env); err != nil {
+	if _, err := c.roundtrip(ctx, env, nil); err != nil {
 		return fmt.Errorf("uds: send: %w", err)
 	}
 	return nil

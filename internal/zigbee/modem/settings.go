@@ -3,12 +3,12 @@ package modem
 import (
 	"context"
 	"log"
-	"net"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/bolkedebruin/openaps/internal/udsutil"
 	"github.com/bolkedebruin/openaps/wire"
 )
 
@@ -28,49 +28,23 @@ func FetchSettings(ctx context.Context, sockPath, backend string) (panHex string
 	ctx, cancel := context.WithTimeout(ctx, settingsTimeout)
 	defer cancel()
 
-	var d net.Dialer
-	conn, err := d.DialContext(ctx, "unix", sockPath)
-	if err != nil {
-		log.Printf("modem: settings fetch skipped, dial %s: %v", sockPath, err)
-		return "", 0, false
-	}
-	defer conn.Close()
-
-	deadline, _ := ctx.Deadline()
-	_ = conn.SetDeadline(deadline)
-
 	host, _ := os.Hostname()
 	hello := &wire.Envelope{Body: &wire.Envelope_Hello{Hello: &wire.Hello{
 		Backend:     backend,
 		Hostname:    host,
 		StartedAtMs: time.Now().UnixMilli(),
 	}}}
-	if err := wire.WriteFrame(conn, hello); err != nil {
-		log.Printf("modem: settings fetch skipped, hello: %v", err)
-		return "", 0, false
-	}
-
 	req := &wire.Envelope{Body: &wire.Envelope_SettingsReq{SettingsReq: &wire.SettingsRequest{
 		Op: &wire.SettingsRequest_Get{Get: &wire.Empty{}},
 	}}}
-	if err := wire.WriteFrame(conn, req); err != nil {
-		log.Printf("modem: settings fetch skipped, request: %v", err)
+	env, err := udsutil.Roundtrip(ctx, sockPath, hello,
+		func(e *wire.Envelope) bool { return e.GetSettingsResp() != nil }, req)
+	if err != nil {
+		log.Printf("modem: settings fetch skipped, %s: %v", sockPath, err)
 		return "", 0, false
 	}
-
-	for {
-		var env wire.Envelope
-		if err := wire.ReadFrame(conn, &env); err != nil {
-			log.Printf("modem: settings fetch skipped, response: %v", err)
-			return "", 0, false
-		}
-		resp := env.GetSettingsResp()
-		if resp == nil {
-			continue
-		}
-		s := resp.GetSettings()
-		return s.GetPanOverride(), s.GetChannel(), true
-	}
+	s := env.GetSettingsResp().GetSettings()
+	return s.GetPanOverride(), s.GetChannel(), true
 }
 
 // ParsePANHex parses a 16-bit PAN from a hex string, tolerating an

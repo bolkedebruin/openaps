@@ -8,9 +8,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"time"
 
+	"github.com/bolkedebruin/openaps/internal/udsutil"
 	"github.com/bolkedebruin/openaps/wire"
 )
 
@@ -31,36 +31,21 @@ type ProfileSummary struct {
 // gridProfileCall opens a one-shot control connection, sends Hello +
 // one GridProfileRequest envelope, reads exactly one GridProfileResponse
 // envelope, and returns it. The connection is closed on return.
-//
-// Honor controlDialTimeout for both dial and the combined write+read.
 func (c *Client) gridProfileCall(ctx context.Context, req *wire.GridProfileRequest) (*wire.GridProfileResponse, error) {
-	// Give the round-trip a small budget beyond the dial timeout.
 	const callTimeout = 5 * time.Second
-
-	d := net.Dialer{Timeout: controlDialTimeout}
-	conn, err := d.DialContext(ctx, "unix", c.socketPath)
-	if err != nil {
-		return nil, fmt.Errorf("invdriver: gridprofile dial: %w", err)
-	}
-	defer conn.Close()
-
-	_ = conn.SetDeadline(time.Now().Add(callTimeout))
+	ctx, cancel := context.WithTimeout(ctx, callTimeout)
+	defer cancel()
 
 	hello := &wire.Envelope{Body: &wire.Envelope_Hello{Hello: c.newHello(wire.Role_ROLE_UNSPECIFIED)}}
-	if err := wire.WriteFrame(conn, hello); err != nil {
-		return nil, fmt.Errorf("invdriver: gridprofile hello: %w", err)
-	}
-
 	reqEnv := &wire.Envelope{Body: &wire.Envelope_GridProfileReq{GridProfileReq: req}}
-	if err := wire.WriteFrame(conn, reqEnv); err != nil {
-		return nil, fmt.Errorf("invdriver: gridprofile write req: %w", err)
+	// Accept the first frame whatever it is: a control conn must answer a
+	// GridProfileRequest with a GridProfileResponse, so anything else is an
+	// error, not a frame to skip.
+	respEnv, err := udsutil.Roundtrip(ctx, c.socketPath, hello,
+		func(*wire.Envelope) bool { return true }, reqEnv)
+	if err != nil {
+		return nil, fmt.Errorf("invdriver: gridprofile: %w", err)
 	}
-
-	var respEnv wire.Envelope
-	if err := wire.ReadFrame(conn, &respEnv); err != nil {
-		return nil, fmt.Errorf("invdriver: gridprofile read resp: %w", err)
-	}
-
 	resp := respEnv.GetGridProfileResp()
 	if resp == nil {
 		return nil, fmt.Errorf("invdriver: gridprofile: unexpected response type %T", respEnv.GetBody())

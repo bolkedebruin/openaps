@@ -19,14 +19,15 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
-	"net"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/bolkedebruin/openaps/codec"
+	"github.com/bolkedebruin/openaps/internal/udsutil"
 	"github.com/bolkedebruin/openaps/wire"
 )
 
@@ -106,31 +107,35 @@ func run(args []string) error {
 	}
 	fmt.Println()
 
-	conn, err := dialDaemon(*socket)
-	if err != nil {
-		return fmt.Errorf("dial %s: %w", *socket, err)
-	}
-	defer conn.Close()
-
-	if err := sendHello(conn); err != nil {
-		return err
-	}
-
-	for i, f := range frames {
-		var env *wire.Envelope
+	envs := make([]*wire.Envelope, 0, len(frames))
+	for _, f := range frames {
 		if *broadcast {
-			env = &wire.Envelope{Body: &wire.Envelope_Broadcast{
+			envs = append(envs, &wire.Envelope{Body: &wire.Envelope_Broadcast{
 				Broadcast: &wire.Broadcast{Frame: f},
-			}}
+			}})
 		} else {
-			env = &wire.Envelope{Body: &wire.Envelope_Send{
+			envs = append(envs, &wire.Envelope{Body: &wire.Envelope_Send{
 				Send: &wire.Send{PeerUid: strings.ToLower(*uid), Frame: f},
-			}}
+			}})
 		}
-		_ = conn.SetWriteDeadline(time.Now().Add(1500 * time.Millisecond))
-		if err := wire.WriteFrame(conn, env); err != nil {
-			return fmt.Errorf("write frame %d: %w", i, err)
-		}
+	}
+
+	// Budget matches the former per-step deadlines: dial + hello + one
+	// write per frame, 1.5 s each.
+	budget := time.Duration(2+len(envs)) * 1500 * time.Millisecond
+	ctx, cancel := context.WithTimeout(context.Background(), budget)
+	defer cancel()
+	hostname, _ := os.Hostname()
+	hello := &wire.Envelope{Body: &wire.Envelope_Hello{Hello: &wire.Hello{
+		Backend:     "inv-driver-cli",
+		Version:     "protbcast",
+		Hostname:    hostname,
+		StartedAtMs: time.Now().UnixMilli(),
+	}}}
+	if _, err := udsutil.Roundtrip(ctx, *socket, hello, nil, envs...); err != nil {
+		return fmt.Errorf("send via %s: %w", *socket, err)
+	}
+	for i := range frames {
 		fmt.Printf("frame %d delivered to daemon\n", i)
 	}
 
@@ -193,28 +198,4 @@ func isValidUID(s string) bool {
 		}
 	}
 	return true
-}
-
-// dialDaemon opens a Unix-domain socket connection to the inv-driver daemon.
-func dialDaemon(socketPath string) (net.Conn, error) {
-	d := net.Dialer{Timeout: 1500 * time.Millisecond}
-	return d.Dial("unix", socketPath)
-}
-
-// sendHello writes the Hello envelope that identifies this client as a
-// controller backend (inv-driver-cli is the default controller-backends
-// value in the daemon's -controller-backends flag).
-func sendHello(conn net.Conn) error {
-	_ = conn.SetWriteDeadline(time.Now().Add(1500 * time.Millisecond))
-	hostname, _ := os.Hostname()
-	hello := &wire.Envelope{Body: &wire.Envelope_Hello{Hello: &wire.Hello{
-		Backend:     "inv-driver-cli",
-		Version:     "protbcast",
-		Hostname:    hostname,
-		StartedAtMs: time.Now().UnixMilli(),
-	}}}
-	if err := wire.WriteFrame(conn, hello); err != nil {
-		return fmt.Errorf("hello: %w", err)
-	}
-	return nil
 }
