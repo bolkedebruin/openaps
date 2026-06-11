@@ -183,14 +183,24 @@ provider openaps/host/off), plus the `ecu-web` Security page to manage keys.
 
 ## Install / upgrade
 
+Upload the bootstrap, then install the firmware over the authenticated opkg feed:
+
 ```sh
-curl -H "Expect:" -F "file=@openaps-v1.0.10-ecu.tar.bz2" \
+curl -H "Expect:" -F "file=@openaps-bootstrap-<version>.tar.bz2" \
      http://<ECU-IP>/index.php/management/exec_upgrade_ecu_app
+
+ssh root@<ECU-IP>            # baked password (default: openaps), change it
+opkg update
+opkg install openaps-base openaps-inv-driver openaps-ecu-zb \
+             openaps-ecu-web openaps-ecu-sunspec
 ```
 
-`{"res":0}` = received + launched; watch `/home/openaps-install.log` until the
-reboot, then open `https://<ECU-IP>/` after ~1-2 minutes. Roll back with
-`ssh root@<ECU-IP> /usr/local/bin/openaps-rollback`.
+`{"res":0,"value":0}` = received + extracted + launched (it is the success
+response, not an error); watch `/home/openaps-bootstrap.log`. The bootstrap is
+purely additive — it plants root access + the opkg trust anchor and leaves stock
+running; the `opkg install` above is what brings up OpenAPS. Roll back the
+bootstrap with `opkg remove openaps-tls-proxy openaps-dropbear` and restoring
+the `/home/openaps-bootstrap-backup-*.tar.gz` it wrote.
 
 ## Still deferred
 
@@ -201,8 +211,10 @@ reboot, then open `https://<ECU-IP>/` after ~1-2 minutes. Roll back with
 
 ## Artifacts
 
-- `openaps-v1.0.10-ecu.tar.bz2` — brownfield installer.
-- `SHA256SUMS`.
+- `openaps-bootstrap-<version>.tar.bz2` — brownfield bootstrap (upload via the
+  stock endpoint; plants access + opkg feed). bzip2, assist nested under
+  `update_localweb/` to match the stock `tar xjvf` extractor.
+- `*.ipk` + `SHA256SUMS` — firmware packages served by the opkg feed.
 
 ## Install caveats
 

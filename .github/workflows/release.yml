@@ -40,9 +40,6 @@ jobs:
       - name: build all ARMv7 binaries
         run: make build-all-arm
 
-      - name: build OpenAPS installer tarball
-        run: make package-openaps
-
       - name: build per-binary tarballs
         run: |
           make package-zb
@@ -54,12 +51,6 @@ jobs:
       - name: build .ipk packages
         run: make package-ipks VERSION="${GITHUB_REF_NAME}"
 
-      - name: stage bootstrap assets (operators build the tarball locally)
-        run: |
-          mkdir -p build/bootstrap-assets
-          cp packaging/openaps-bootstrap/assist build/bootstrap-assets/
-          cp build/ipks/openaps-dropbear_*.ipk build/ipks/openaps-tls-proxy_*.ipk build/bootstrap-assets/
-
       - name: upload .ipks for the feed-publish job
         uses: actions/upload-artifact@v5
         with:
@@ -69,7 +60,7 @@ jobs:
       - name: generate SHA256SUMS
         working-directory: build
         run: |
-          sha256sum openaps-v*-ecu.tar.bz2 ipks/*.ipk | sort -k 2 > SHA256SUMS
+          sha256sum ipks/*.ipk | sort -k 2 > SHA256SUMS
           cat SHA256SUMS
 
       - name: upload release artifacts (create release if missing)
@@ -78,16 +69,12 @@ jobs:
         run: |
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
             gh release upload "${GITHUB_REF_NAME}" \
-              build/openaps-v*-ecu.tar.bz2 \
               build/ipks/*.ipk \
-              build/bootstrap-assets/assist \
               build/SHA256SUMS \
               --clobber
           else
             gh release create "${GITHUB_REF_NAME}" \
-              build/openaps-v*-ecu.tar.bz2 \
               build/ipks/*.ipk \
-              build/bootstrap-assets/assist \
               build/SHA256SUMS \
               --title "OpenAPS ${GITHUB_REF_NAME}" \
               --notes-file docs/RELEASE.md
@@ -210,4 +197,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release upload "${GITHUB_REF_NAME}" \
-            build/openaps-bootstrap-*.tar.gz --clobber
+            build/openaps-bootstrap-*.tar.bz2 --clobber

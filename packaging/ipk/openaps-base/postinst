@@ -3,7 +3,6 @@
 # openaps-base postinst — provision /etc/inv-driver/settings.json from the
 # stock /etc/yuneng/*.conf provisioning files when absent. Idempotent: an
 # existing settings.json is left untouched (operator-edited config wins).
-# Logic ported from packaging/openaps-install step 4.
 set -e
 
 SETTINGS_PATH=/etc/inv-driver/settings.json
@@ -42,9 +41,7 @@ fi
 
 # Allowlist each yuneng-derived value substituted UNQUOTED into JSON: reject
 # anything outside [0-9A-Za-z_-] (so quotes, backslashes, control chars or
-# whitespace can never malform/inject the generated settings.json). Same
-# allowlist guards the provisioning in packaging/openaps-install — keep both
-# in sync.
+# whitespace can never malform/inject the generated settings.json).
 case "$ECU_ID" in *[!0-9A-Za-z_-]*) ECU_ID= ;; esac
 case "$PAN_HEX" in *[!0-9A-Za-z_-]*) PAN_HEX= ;; esac
 case "$MAC_FMT" in *[!0-9A-Za-z:_-]*) MAC_FMT= ;; esac

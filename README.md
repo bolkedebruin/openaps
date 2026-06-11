@@ -111,14 +111,14 @@ local-upgrade endpoint) brings up SSH + the signed opkg feed **without touching
 the stock firmware**; then you install the firmware over `opkg` and disable stock
 when you're ready.
 
-**1. Get the bootstrap.** Download `openaps-bootstrap-<version>.tar.gz` from the
+**1. Get the bootstrap.** Download `openaps-bootstrap-<version>.tar.bz2` from the
 [release page](https://github.com/bolkedebruin/openaps/releases/latest) — its root
 password is the default **`openaps`** (change it on first login). Or build one with
 your own password (from a checkout — see [Build from source](#build-from-source)):
 
 ```sh
 make package-bootstrap ROOT_PW='choose-a-strong-password'
-#   -> build/openaps-bootstrap-<version>.tar.gz
+#   -> build/openaps-bootstrap-<version>.tar.bz2
 #   (add AUTHORIZED_KEYS=~/.ssh/id_ed25519.pub to also bundle your SSH key)
 ```
 
@@ -129,7 +129,7 @@ make package-bootstrap ROOT_PW='choose-a-strong-password'
 
 ```sh
 ECU_IP=192.168.1.50   # <-- edit: your ECU's IP (no <…>, those are redirections in zsh)
-BS=$(ls build/openaps-bootstrap-*.tar.gz | head -1)   # the tarball you downloaded/built
+BS=$(ls build/openaps-bootstrap-*.tar.bz2 | head -1)   # the tarball you downloaded/built
 curl -H "Expect:" -F "file=@$BS" "http://$ECU_IP/index.php/management/exec_upgrade_ecu_app"
 ```
 
@@ -200,7 +200,7 @@ The install is a near-zero-config drop-in. Inverters, grid profile, and power ca
 | Historical pre-install energy timeseries | ❌ | Stock per-day/per-month/per-year history isn't imported. The backup tarball preserves `/home/database.db` so a future importer is feasible. Per-inverter lifetime counters on the inverter itself are unaffected — totals stay correct. |
 | Operator account (web UI password) | ❌ | Fresh install prompts you to set a new password + generates a one-time recovery code. |
 
-Full install reference: [`docs/INSTALL-ECU.md`](docs/INSTALL-ECU.md). Release notes: [`docs/RELEASE.md`](docs/RELEASE.md).
+Release notes: [`docs/RELEASE.md`](docs/RELEASE.md). SSH/key setup: [`docs/SSH-CONFIG.md`](docs/SSH-CONFIG.md).
 
 ## Build from source
 
@@ -215,7 +215,7 @@ make package-ipks VERSION=v1.1.1                       # build all .ipk packages
 make package-bootstrap VERSION=v1.1.1 ROOT_PW=openaps # build the bootstrap tarball
 ```
 
-Output lands in `build/` (`build/ipk/*.ipk`, `build/openaps-bootstrap-*.tar.gz`).
+Output lands in `build/` (`build/ipk/*.ipk`, `build/openaps-bootstrap-*.tar.bz2`).
 `make test` runs the full suite (`go test -race ./...` + `bun test`). Releases
 are cut by tagging `v*`; CI builds the `.ipk`s, signs the feed index with the
 release key, and publishes it to GitHub Pages (`…github.io/openaps/stable/`).

@@ -3,8 +3,8 @@
 # assist — OpenAPS bootstrap orchestrator. POSIX sh, BusyBox-safe.
 #
 # Run by the stock APsystems lighttpd/CodeIgniter hidden endpoint
-# exec_upgrade_ecu_app (POST /index.php/management/exec_upgrade_ecu_app),
-# which extracts this tarball and runs the script named "assist" at its root.
+# exec_upgrade_ecu_app (POST /index.php/management/exec_upgrade_ecu_app), which
+# extracts this tarball (`tar xjvf`, bzip2) and runs update_localweb/assist.
 #
 # This is the brownfield foothold and it is PURELY ADDITIVE: it plants the trust
 # anchor + root access, brings up dropbear and the openaps-tls-proxy from LOCAL
@@ -14,15 +14,16 @@
 # install the OpenAPS firmware packages — it leaves the operator a one-liner to
 # do that over the now-authenticated opkg feed (which is what disables stock).
 #
-# Payload layout (siblings of this script at the tarball root):
-#   assist
-#   ipks/openaps-dropbear_<ver>_armv7ahf-vfp-neon.ipk
-#   ipks/openaps-tls-proxy_<ver>_armv7ahf-vfp-neon.ipk
-#   ipks/apsystems-stock_<ver>_all.ipk
-#   release.pub          -> /etc/openaps/release.pub
-#   authorized_keys      -> /home/root/.ssh/authorized_keys (optional)
-#   opkg-openaps.conf    -> /etc/opkg/openaps.conf
-#   root.shadow.hash     ($6$ SHA-512 crypt hash, baked from ROOT_PW)
+# Payload layout (this script + siblings under update_localweb/ in the tarball;
+# resolved at runtime via dirname "$0", so the dir name itself does not matter):
+#   update_localweb/assist
+#   update_localweb/ipks/openaps-dropbear_<ver>_armv7ahf-vfp-neon.ipk
+#   update_localweb/ipks/openaps-tls-proxy_<ver>_armv7ahf-vfp-neon.ipk
+#   update_localweb/ipks/apsystems-stock_<ver>_all.ipk
+#   update_localweb/release.pub          -> /etc/openaps/release.pub
+#   update_localweb/authorized_keys      -> /home/root/.ssh/authorized_keys (optional)
+#   update_localweb/opkg-openaps.conf    -> /etc/opkg/openaps.conf
+#   update_localweb/root.shadow.hash     ($6$ SHA-512 crypt hash, baked from ROOT_PW)
 #
 # Idempotent: re-running over the same box is safe.
 #

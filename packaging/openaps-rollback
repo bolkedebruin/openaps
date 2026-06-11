@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 # openaps-rollback — restore the stock APsystems firmware from the
-# pre-install backup created by openaps-install. POSIX sh, BusyBox-safe.
+# pre-install backup recorded in /etc/openaps/installed.json. POSIX sh, BusyBox-safe.
 #
 # Usage: openaps-rollback [--backup /home/openaps-backup-<ts>.tar.gz]
 #

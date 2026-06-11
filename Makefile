@@ -50,7 +50,7 @@ PROTOC ?= protoc
 
 # DROPBEAR_DIR holds extracted dropbear ARMv7 binaries.
 # - package-sunspec-with-dropbear requires it as an explicit operator arg.
-# - package-openaps auto-fetches into $(BUILD_DIR)/dropbear-armv7 if unset.
+# - ipk-dropbear / fetch-dropbear auto-fetch into $(BUILD_DIR)/dropbear-armv7 if unset.
 DROPBEAR_DIR ?= $(BUILD_DIR)/dropbear-armv7
 
 .PHONY: all build-all build-all-arm \
@@ -64,7 +64,7 @@ DROPBEAR_DIR ?= $(BUILD_DIR)/dropbear-armv7
         deploy-inv-driver deploy-ecu-web deploy-ecu-zb deploy-ecu-sunspec \
         install-init-zb uninstall-init-zb \
         package-zb package-sunspec package-sunspec-with-dropbear \
-        package-openaps package-all fetch-dropbear \
+        package-all fetch-dropbear \
         ipk-all ipk-base ipk-inv-driver ipk-ecu-zb ipk-ecu-web ipk-ecu-sunspec \
         ipk-tls-proxy ipk-dropbear package-ipks package-bootstrap \
         web web-test proto \
@@ -315,90 +315,6 @@ $(DROPBEAR_DIR)/dropbear:
 
 package-all: package-zb package-sunspec
 
-# package-openaps — single master installer tarball for brownfield ECU
-# install via stock POST /index.php/management/exec_upgrade_ecu_app.
-#
-# Layout:
-#   openaps-$(VERSION)-ecu.tar.bz2
-#   ├── update_localweb/
-#   │   └── assist                       (master orchestrator)
-#   └── update/
-#       ├── applications/{inv-driver,ecu-zb,ecu-web,ecu-sunspec}
-#       ├── rcS.d/{S48,S53,S54,S98,S99}-*
-#       ├── dropbear/                    (optional, DROPBEAR_DIR=)
-#       ├── etc-openaps/{release.pub,release.pub.README,git-sha}
-#       ├── etc-inv-driver/settings.json.sample
-#       └── openaps-rollback             (rollback CLI)
-#
-# Deterministic: --sort by file name, fixed mtime (git commit ts by default).
-SOURCE_DATE_EPOCH ?= $(shell git log -1 --format=%ct 2>/dev/null || echo 1700000000)
-GIT_SHA           ?= $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
-OPENAPS_PKG_NAME  := openaps-$(VERSION)-ecu.tar.bz2
-
-package-openaps: build-all-arm $(DROPBEAR_DIR)/dropbear
-	@echo "+ packaging openaps $(VERSION) (sha=$(GIT_SHA))"
-	@rm -rf $(BUILD_DIR)/pkgroot-openaps
-	@mkdir -p $(BUILD_DIR)/pkgroot-openaps/update_localweb
-	@mkdir -p $(BUILD_DIR)/pkgroot-openaps/update/applications
-	@mkdir -p $(BUILD_DIR)/pkgroot-openaps/update/rcS.d
-	@mkdir -p $(BUILD_DIR)/pkgroot-openaps/update/etc-openaps
-	@mkdir -p $(BUILD_DIR)/pkgroot-openaps/update/etc-inv-driver
-	@sed 's|^VERSION="__OPENAPS_VERSION__"|VERSION="$(VERSION)"|' packaging/openaps-install > $(BUILD_DIR)/pkgroot-openaps/update_localweb/assist
-	@chmod 0755 $(BUILD_DIR)/pkgroot-openaps/update_localweb/assist
-	@cp $(INV_DRIVER_ARMV7)  $(BUILD_DIR)/pkgroot-openaps/update/applications/inv-driver
-	@cp $(ECU_ZB_ARMV7)      $(BUILD_DIR)/pkgroot-openaps/update/applications/ecu-zb
-	@cp $(ECU_WEB_ARMV7)     $(BUILD_DIR)/pkgroot-openaps/update/applications/ecu-web
-	@cp $(ECU_SUNSPEC_ARMV7) $(BUILD_DIR)/pkgroot-openaps/update/applications/ecu-sunspec
-	@cp $(RECOVERYD_ARMV7)   $(BUILD_DIR)/pkgroot-openaps/update/applications/recoveryd
-	@chmod 0755 $(BUILD_DIR)/pkgroot-openaps/update/applications/*
-	@cp packaging/S48-inv-driver $(BUILD_DIR)/pkgroot-openaps/update/rcS.d/S48-inv-driver
-	@cp packaging/S53-ecu-zb     $(BUILD_DIR)/pkgroot-openaps/update/rcS.d/S53-ecu-zb
-	@cp packaging/S54-ecu-web    $(BUILD_DIR)/pkgroot-openaps/update/rcS.d/S54-ecu-web
-	@cp packaging/S97-recoveryd  $(BUILD_DIR)/pkgroot-openaps/update/rcS.d/S97-recoveryd
-	@cp packaging/S98-dropbear   $(BUILD_DIR)/pkgroot-openaps/update/rcS.d/S98-dropbear
-	@cp packaging/S99-sunspec    $(BUILD_DIR)/pkgroot-openaps/update/rcS.d/S99-sunspec
-	@chmod 0755 $(BUILD_DIR)/pkgroot-openaps/update/rcS.d/*
-	@if [ -n "$(DROPBEAR_DIR)" ] && [ -f "$(DROPBEAR_DIR)/dropbear" ]; then \
-		mkdir -p $(BUILD_DIR)/pkgroot-openaps/update/dropbear; \
-		for f in dropbear dropbearkey dropbearconvert dbclient authorized_keys; do \
-			if [ -f "$(DROPBEAR_DIR)/$$f" ]; then \
-				cp "$(DROPBEAR_DIR)/$$f" $(BUILD_DIR)/pkgroot-openaps/update/dropbear/; \
-				echo "  +dropbear/$$f"; \
-			fi; \
-		done; \
-		chmod 0755 $(BUILD_DIR)/pkgroot-openaps/update/dropbear/dropbear* 2>/dev/null || true; \
-	else \
-		echo "  (no DROPBEAR_DIR — installer will require pre-existing dropbear on :22)"; \
-	fi
-	@cp packaging/release.pub        $(BUILD_DIR)/pkgroot-openaps/update/etc-openaps/release.pub
-	@cp packaging/release.pub.README $(BUILD_DIR)/pkgroot-openaps/update/etc-openaps/release.pub.README
-	@echo "$(GIT_SHA)" > $(BUILD_DIR)/pkgroot-openaps/update/etc-openaps/git-sha
-	@chmod 0644 $(BUILD_DIR)/pkgroot-openaps/update/etc-openaps/*
-	@cp packaging/settings.json.sample $(BUILD_DIR)/pkgroot-openaps/update/etc-inv-driver/settings.json.sample
-	@chmod 0644 $(BUILD_DIR)/pkgroot-openaps/update/etc-inv-driver/settings.json.sample
-	@mkdir -p $(BUILD_DIR)/pkgroot-openaps/update/gridprofiles/profiles
-	@cp gridprofiles-seed/profiles/*.json $(BUILD_DIR)/pkgroot-openaps/update/gridprofiles/profiles/
-	@chmod 0644 $(BUILD_DIR)/pkgroot-openaps/update/gridprofiles/profiles/*.json
-	@echo "  +grid profiles: $$(ls gridprofiles-seed/profiles/*.json | wc -l | tr -d ' ')"
-	@cp packaging/openaps-rollback $(BUILD_DIR)/pkgroot-openaps/update/openaps-rollback
-	@chmod 0755 $(BUILD_DIR)/pkgroot-openaps/update/openaps-rollback
-	@# Deterministic tarball: name-sorted file list, fixed mtime via
-	@# touch -t is portable across GNU/BSD tar; uid/gid flag-syntax diverges
-	@# between GNU (--owner=N --group=N) and BSD (--uid N --gid N), so we
-	@# skip the per-host uid/gid normalisation — extraction runs as root on
-	@# the ECU and overwrites ownership anyway.
-	@TS=$$(python3 -c "import datetime; print(datetime.datetime.utcfromtimestamp($(SOURCE_DATE_EPOCH)).strftime('%Y%m%d%H%M.%S'))" 2>/dev/null || date -u -r $(SOURCE_DATE_EPOCH) +%Y%m%d%H%M.%S 2>/dev/null || echo 202311140000.00); \
-	find $(BUILD_DIR)/pkgroot-openaps -exec touch -t $$TS {} +
-	@(cd $(BUILD_DIR)/pkgroot-openaps && \
-		find . ! -path . | LC_ALL=C sort > /tmp/.openaps-files.lst && \
-		tar -cjf ../$(OPENAPS_PKG_NAME) -T /tmp/.openaps-files.lst -n)
-	@rm -f /tmp/.openaps-files.lst
-	@rm -rf $(BUILD_DIR)/pkgroot-openaps
-	@echo
-	@echo "=== built $(BUILD_DIR)/$(OPENAPS_PKG_NAME) ==="
-	@ls -lh $(BUILD_DIR)/$(OPENAPS_PKG_NAME)
-	@(cd $(BUILD_DIR) && (sha256sum $(OPENAPS_PKG_NAME) 2>/dev/null || shasum -a 256 $(OPENAPS_PKG_NAME)))
-
 # ---------------- .ipk packaging (opkg) ----------------
 #
 # Real Debian-format .ipk packages installable by opkg on the ECU. Each .ipk
@@ -570,18 +486,20 @@ package-ipks: ipk-all
 
 # ---------------- bootstrap tarball (stock exec_upgrade_ecu_app foothold) ----
 #
-# openaps-bootstrap-<ver>.tar.gz delivered via the stock hidden endpoint
-# (exec_upgrade_ecu_app extracts the tarball and runs the root-level "assist").
+# openaps-bootstrap-<ver>.tar.bz2 delivered via the stock hidden endpoint.
+# The stock 2.1.29D exec_upgrade_ecu_app extracts the upload with `tar xjvf`
+# (bzip2 ONLY) and runs update_localweb/assist — so the payload is bzip2 and
+# nested under update_localweb/, NOT gzip with assist at the tarball root.
 #
-# Layout (assist at the tarball ROOT, siblings beside it):
-#   assist                                                  (orchestrator)
-#   ipks/openaps-dropbear_<ver>_armv7ahf-vfp-neon.ipk       (carries the root password)
-#   ipks/openaps-tls-proxy_<ver>_armv7ahf-vfp-neon.ipk
-#   ipks/apsystems-stock_<ver>_all.ipk
-#   release.pub          -> /etc/openaps/release.pub
-#   authorized_keys      -> /home/root/.ssh/authorized_keys (optional)
-#   opkg-openaps.conf    -> /etc/opkg/openaps.conf
-#   root.shadow.hash     ($6$ SHA-512 crypt hash, baked from ROOT_PW)
+# Layout (assist + siblings under update_localweb/):
+#   update_localweb/assist                                          (orchestrator)
+#   update_localweb/ipks/openaps-dropbear_<ver>_armv7ahf-vfp-neon.ipk
+#   update_localweb/ipks/openaps-tls-proxy_<ver>_armv7ahf-vfp-neon.ipk
+#   update_localweb/ipks/apsystems-stock_<ver>_all.ipk
+#   update_localweb/release.pub          -> /etc/openaps/release.pub
+#   update_localweb/authorized_keys      -> /home/root/.ssh/authorized_keys (optional)
+#   update_localweb/opkg-openaps.conf    -> /etc/opkg/openaps.conf
+#   update_localweb/root.shadow.hash     ($6$ SHA-512 crypt hash, baked from ROOT_PW)
 #
 # REQUIRED make vars:
 #   ROOT_PW          — plaintext root password (default convention "openaps");
@@ -596,8 +514,10 @@ package-ipks: ipk-all
 #
 # ROOT_PW reaches the recipe via the environment so it is hashed through
 # `openssl passwd -6 -stdin` (never on argv / in the process list).
-# BusyBox-compatible tar: gzip, no -P, assist at the root.
-BOOTSTRAP_PKG_NAME := openaps-bootstrap-$(VERSION).tar.gz
+# Stock 2.1.29D exec_upgrade_ecu_app uses `tar xjvf`: bzip2, no -P, assist nested
+# under update_localweb/ (the path the endpoint runs after extraction).
+BOOTSTRAP_PKG_NAME := openaps-bootstrap-$(VERSION).tar.bz2
+BOOTSTRAP_PAY      := $(BUILD_DIR)/pkgroot-bootstrap/update_localweb
 AUTHORIZED_KEYS    ?=
 ROOT_PW            ?=
 
@@ -606,31 +526,31 @@ package-bootstrap: ipk-dropbear ipk-tls-proxy ipk-apsystems-stock
 	@[ -n "$$ROOT_PW" ] || { echo "ERROR: ROOT_PW is required (e.g. ROOT_PW=openaps) — a bootstrap with no known root password could brick the box when stock is disabled"; exit 1; }
 	@echo "+ packaging openaps-bootstrap $(VERSION)"
 	@rm -rf $(BUILD_DIR)/pkgroot-bootstrap
-	@mkdir -p $(BUILD_DIR)/pkgroot-bootstrap/ipks
-	@sed 's|^VERSION="__OPENAPS_VERSION__"|VERSION="$(VERSION)"|' packaging/openaps-bootstrap/assist > $(BUILD_DIR)/pkgroot-bootstrap/assist
-	@chmod 0755 $(BUILD_DIR)/pkgroot-bootstrap/assist
-	@cp $(IPK_DIR)/openaps-dropbear_$(VERSION)_$(IPK_ARCH).ipk   $(BUILD_DIR)/pkgroot-bootstrap/ipks/
-	@cp $(IPK_DIR)/openaps-tls-proxy_$(VERSION)_$(IPK_ARCH).ipk  $(BUILD_DIR)/pkgroot-bootstrap/ipks/
-	@cp $(IPK_DIR)/apsystems-stock_$(VERSION)_all.ipk           $(BUILD_DIR)/pkgroot-bootstrap/ipks/
-	@cp packaging/release.pub       $(BUILD_DIR)/pkgroot-bootstrap/release.pub
-	@cp packaging/opkg-openaps.conf $(BUILD_DIR)/pkgroot-bootstrap/opkg-openaps.conf
-	@chmod 0644 $(BUILD_DIR)/pkgroot-bootstrap/release.pub $(BUILD_DIR)/pkgroot-bootstrap/opkg-openaps.conf
+	@mkdir -p $(BOOTSTRAP_PAY)/ipks
+	@sed 's|^VERSION="__OPENAPS_VERSION__"|VERSION="$(VERSION)"|' packaging/openaps-bootstrap/assist > $(BOOTSTRAP_PAY)/assist
+	@chmod 0755 $(BOOTSTRAP_PAY)/assist
+	@cp $(IPK_DIR)/openaps-dropbear_$(VERSION)_$(IPK_ARCH).ipk   $(BOOTSTRAP_PAY)/ipks/
+	@cp $(IPK_DIR)/openaps-tls-proxy_$(VERSION)_$(IPK_ARCH).ipk  $(BOOTSTRAP_PAY)/ipks/
+	@cp $(IPK_DIR)/apsystems-stock_$(VERSION)_all.ipk           $(BOOTSTRAP_PAY)/ipks/
+	@cp packaging/release.pub       $(BOOTSTRAP_PAY)/release.pub
+	@cp packaging/opkg-openaps.conf $(BOOTSTRAP_PAY)/opkg-openaps.conf
+	@chmod 0644 $(BOOTSTRAP_PAY)/release.pub $(BOOTSTRAP_PAY)/opkg-openaps.conf
 	@# Optional bundled key. Omitted -> first login is root + the baked password.
 	@if [ -n "$(AUTHORIZED_KEYS)" ]; then \
 		[ -f "$(AUTHORIZED_KEYS)" ] || { echo "ERROR: AUTHORIZED_KEYS file not found: $(AUTHORIZED_KEYS)"; exit 1; }; \
-		cp "$(AUTHORIZED_KEYS)" $(BUILD_DIR)/pkgroot-bootstrap/authorized_keys; \
-		chmod 0644 $(BUILD_DIR)/pkgroot-bootstrap/authorized_keys; \
+		cp "$(AUTHORIZED_KEYS)" $(BOOTSTRAP_PAY)/authorized_keys; \
+		chmod 0644 $(BOOTSTRAP_PAY)/authorized_keys; \
 		echo "  + authorized_keys (bundled operator key)"; \
 	else \
 		echo "  (no AUTHORIZED_KEYS bundled — first login is root + the baked password)"; \
 	fi
-	@printf '%s' "$$ROOT_PW" | openssl passwd -6 -stdin > $(BUILD_DIR)/pkgroot-bootstrap/root.shadow.hash; \
-		case "$$(cat $(BUILD_DIR)/pkgroot-bootstrap/root.shadow.hash)" in \
+	@printf '%s' "$$ROOT_PW" | openssl passwd -6 -stdin > $(BOOTSTRAP_PAY)/root.shadow.hash; \
+		case "$$(cat $(BOOTSTRAP_PAY)/root.shadow.hash)" in \
 			\$$6\$$*) ;; \
 			*) echo "ERROR: root.shadow.hash is not a \$$6\$$ SHA-512 crypt hash"; exit 1 ;; \
 		esac
-	@chmod 0600 $(BUILD_DIR)/pkgroot-bootstrap/root.shadow.hash
-	@(cd $(BUILD_DIR)/pkgroot-bootstrap && tar -czf ../$(BOOTSTRAP_PKG_NAME) .)
+	@chmod 0600 $(BOOTSTRAP_PAY)/root.shadow.hash
+	@(cd $(BUILD_DIR)/pkgroot-bootstrap && tar -cjf ../$(BOOTSTRAP_PKG_NAME) .)
 	@rm -rf $(BUILD_DIR)/pkgroot-bootstrap
 	@echo "=== built $(BUILD_DIR)/$(BOOTSTRAP_PKG_NAME) ==="
 	@ls -lh $(BUILD_DIR)/$(BOOTSTRAP_PKG_NAME)

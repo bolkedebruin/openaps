@@ -39,20 +39,19 @@ After that, `ssh openaps` should connect. The first connection prints the host f
 - `hmac-sha1` MAC — dropbear's default MAC list still works under OpenSSH 9.x; no flag needed.
 - `aes128-cbc` / `aes256-cbc` — dropbear's `aes*-ctr` ciphers work under OpenSSH 9.x without extra config; CBC ciphers are not needed.
 
-## Generating a key for the installer
+## Generating a key for the bootstrap
 
-The installer bundles an `authorized_keys` file from `build/dropbear-armv7/authorized_keys` *if present at packaging time* (see `Makefile` `package-openaps`). To bake in your public key before building the tarball:
+The bootstrap bundles an `authorized_keys` file when you pass `AUTHORIZED_KEYS` at packaging time. To bake in your public key:
 
 ```sh
-cp ~/.ssh/id_rsa.pub build/dropbear-armv7/authorized_keys
-make package-openaps
+make package-bootstrap ROOT_PW=openaps AUTHORIZED_KEYS=~/.ssh/id_rsa.pub
 ```
 
-dropbear 2012.55 accepts RSA, DSS, and ECDSA keys, but **NOT ed25519** — generate an RSA key (`ssh-keygen -t rsa -b 4096`) if you don't already have one. The installer adds the key to `/root/.ssh/authorized_keys` on the ECU and deduplicates lines on re-install.
+dropbear 2012.55 accepts RSA, DSS, and ECDSA keys, but **NOT ed25519** — generate an RSA key (`ssh-keygen -t rsa -b 4096`) if you don't already have one. The bootstrap appends the key to root's real home (`$ROOT_HOME/.ssh/authorized_keys`, derived from `/etc/passwd` — `/home/root` on the ECU) and deduplicates lines on re-run.
 
 ## If you don't pre-bake a key
 
-The installer still installs dropbear, generates an RSA host key, and starts the daemon. You log in with **the root password** the ECU shipped with (no default applies — APsystems ECUs typically have an empty or stock password; on a stock ECU `dropbear` runs with `-B` so password-only is fine). Once in, append your key to `/root/.ssh/authorized_keys` manually.
+The bootstrap still installs dropbear and sets a known root password from `ROOT_PW` (default `openaps`). Log in with that password, change it (`passwd`), then append your key to `~/.ssh/authorized_keys`.
 
 ## Rollback / recovery
 
@@ -63,4 +62,5 @@ telnet <ECU-IP>
 > /usr/local/bin/openaps-rollback
 ```
 
-See [`INSTALL-ECU.md`](INSTALL-ECU.md) for the full rollback story.
+`openaps-rollback` reads `/etc/openaps/installed.json` to find the pre-install
+backup, stops OpenAPS, and restores the stock firmware.
