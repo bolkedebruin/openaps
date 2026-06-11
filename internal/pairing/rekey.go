@@ -149,7 +149,7 @@ func (m *Manager) rekeyRollback(oldPan, ch uint32, cause error) {
 	rbCtx, cancel := context.WithTimeout(context.Background(), defaultCmdTimeout)
 	defer cancel()
 	rbErr := m.Transport.setModulePan(rbCtx, oldPan, ch)
-	msg := cause.Error()
+	var msg string
 	if rbErr != nil {
 		msg = fmt.Sprintf("%v; rollback to PAN 0x%04X also failed: %v", cause, oldPan, rbErr)
 	} else {

@@ -284,6 +284,10 @@ var (
 	}
 )
 
+func init() {
+	protReadTables = append(protReadTables, qs1ReadPageA, qs1ReadPageB, qs1ReadPageC)
+}
+
 // qs1ProtectionPage resolves a QS1 protection reply to its field table;
 // the cmd byte is the page and data base = byte[3].
 func qs1ProtectionPage(_ []byte, cmd byte) ([]protReadField, int, bool) {
@@ -441,7 +445,7 @@ func qs1ModeFrames(value float64, opcode byte) [][]byte {
 //	reg = (panelWatts * setPowerScaleDSP) >> setPowerScaleDSPShift
 const (
 	setPowerScaleDSP      uint32 = 0x1CE3
-	setPowerScaleDSPShift        = 8
+	setPowerScaleDSPShift int    = 8
 	// setPowerQS1ValueLen is the body byte that announces a 2-byte value
 	// follows under sub-code SubMaxPowerQS1.
 	setPowerQS1ValueLen byte = 0x02

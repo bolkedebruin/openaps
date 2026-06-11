@@ -438,18 +438,3 @@ func TestQS1APanelUnpack(t *testing.T) {
 		t.Errorf("panel I: got %v", i)
 	}
 }
-
-func TestLifetimeKWh(t *testing.T) {
-	r := Reply{
-		LifetimeRaw:   []uint64{1000000, 2000000},
-		LifetimeScale: ds3Lifetime,
-	}
-	got := r.LifetimeKWh()
-	if len(got) != 2 {
-		t.Fatalf("len: %d", len(got))
-	}
-	want0 := math.Round(1000000*ds3Lifetime*1000) / 1000
-	if got[0] != want0 {
-		t.Errorf("kWh[0]: got %v want %v", got[0], want0)
-	}
-}

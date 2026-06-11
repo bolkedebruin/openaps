@@ -79,8 +79,3 @@ func (r *Recovery) RemoveKey(ctx context.Context, fingerprint string) (*wire.Acc
 		Fingerprint: fingerprint,
 	}}})
 }
-
-// Status returns provider/host-user/key-count without the full list.
-func (r *Recovery) Status(ctx context.Context) (*wire.AccessResponse, error) {
-	return r.roundtrip(ctx, &wire.AccessRequest{Op: &wire.AccessRequest_Status{Status: &wire.StatusOp{}}})
-}

@@ -138,9 +138,6 @@ const (
 	FreqWattCurveBodyW4Off  uint16 = 18
 
 	// Hz5..W20 — 16 unused (Hz, W) pairs occupy body[19..50] (32 regs).
-	freqWattCurveBodyUnusedStart uint16 = 19
-	freqWattCurveBodyUnusedEnd   uint16 = 50 // inclusive: W20
-
 	freqWattCurveBodyCrvNamStart uint16 = 51 // string[8] → body[51..58]
 	freqWattCurveBodyCrvNamEnd   uint16 = 58
 	freqWattCurveBodyRmpPT1Tms   uint16 = 59

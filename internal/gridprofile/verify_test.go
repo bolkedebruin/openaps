@@ -290,12 +290,9 @@ func TestVerifyStartup_NoReadback(t *testing.T) {
 	snd := &fakeSender{}
 	rec := NewReconciler(s, snd, rb, modelDS3, fastOpts())
 
-	report, err := rec.VerifyStartup(ctx, "999900000001", codec.ModelDS3)
-	// Error is expected when desired state exists but no read-back is available.
-	if err == nil && report.HasDesiredState {
-		// This path is acceptable — some implementations may not error here.
-		// Just verify no frames were sent.
-	}
+	// An error is acceptable when desired state exists but no read-back is
+	// available; either way no frames may be sent.
+	_, _ = rec.VerifyStartup(ctx, "999900000001", codec.ModelDS3)
 	if snd.frameCount() != 0 {
 		t.Errorf("should not send when no read-back available, got %d frames", snd.frameCount())
 	}

@@ -177,7 +177,7 @@ func (r *Reconciler) inventoryUIDs(ctx context.Context, modelCodes []uint8) ([]s
 	if err != nil {
 		return nil, fmt.Errorf("inventoryUIDs: query: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	mcSet := make(map[uint8]bool, len(modelCodes))
 	for _, mc := range modelCodes {

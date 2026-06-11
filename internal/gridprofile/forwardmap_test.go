@@ -1,7 +1,6 @@
 package gridprofile
 
 import (
-	"math"
 	"testing"
 )
 
@@ -14,26 +13,6 @@ func TestLookup_AllMappedCodes(t *testing.T) {
 		if e.Point == "" {
 			t.Errorf("code %q: empty Point", code)
 		}
-	}
-}
-
-func TestLookup_KnownCode(t *testing.T) {
-	e, ok := Lookup("DD")
-	if !ok {
-		t.Fatal("DD not found")
-	}
-	if e.Model != 711 {
-		t.Errorf("DD model: got %d want 711", e.Model)
-	}
-	if e.LongName != "Over_Frequency_Watt_Slope_set" {
-		t.Errorf("DD LongName: got %q", e.LongName)
-	}
-}
-
-func TestLookup_UnknownCode(t *testing.T) {
-	_, ok := Lookup("ZZ")
-	if ok {
-		t.Error("ZZ should not be in forward map")
 	}
 }
 
@@ -108,56 +87,6 @@ func TestLongName_TripCodes(t *testing.T) {
 	}
 }
 
-func TestVToVNomPct_RoundTrip(t *testing.T) {
-	vnom := 230.0
-	cases := []float64{184.0, 230.0, 253.0, 259.0}
-	for _, v := range cases {
-		pct := VToVNomPct(v, vnom)
-		got := VNomPctToV(pct, vnom)
-		if math.Abs(got-v) > 1e-9 {
-			t.Errorf("V %.1f: VToVNomPct→VNomPctToV round trip: got %.6f", v, got)
-		}
-	}
-}
-
-func TestVToVNomPct_Values(t *testing.T) {
-	vnom := 230.0
-	// 230 V = 100 %VNom
-	if pct := VToVNomPct(230.0, vnom); math.Abs(pct-100.0) > 1e-9 {
-		t.Errorf("230V→%%VNom: got %g want 100", pct)
-	}
-	// 0.8 * 230 = 184 V = 80 %VNom
-	if pct := VToVNomPct(184.0, vnom); math.Abs(pct-80.0) > 1e-9 {
-		t.Errorf("184V→%%VNom: got %g want 80", pct)
-	}
-}
-
-func TestEncodeSunSpec_RoundTrip(t *testing.T) {
-	cases := []struct {
-		native float64
-		sf     int
-		want   float64
-	}{
-		{16.7, -1, 167},   // DD droop slope (K_SF=-1, per freq_droop.go)
-		{50.2, -2, 5020},  // frequency Hz
-		{80.87, -2, 8087}, // %VNom for a voltage trip
-		{20.0, 0, 20},     // seconds, unscaled (AG/CG/AS)
-		{51.5, -2, 5150},  // AK threshold
-	}
-	for _, tc := range cases {
-		got := EncodeSunSpec(tc.native, tc.sf)
-		if math.Abs(got-tc.want) > 0.5 {
-			t.Errorf("EncodeSunSpec(%g, %d): got %g want %g", tc.native, tc.sf, got, tc.want)
-		}
-		// Round-trip back
-		back := DecodeSunSpec(got, tc.sf)
-		// allow for rounding loss
-		if math.Abs(back-tc.native) > math.Abs(tc.native)*0.001+0.01 {
-			t.Errorf("DecodeSunSpec(EncodeSunSpec(%g, %d)): got %g", tc.native, tc.sf, back)
-		}
-	}
-}
-
 // TestSFPinnedValues verifies that the three corrected scale factors match
 // the pinned values from the ecu-sunspec emitters (freq_droop.go, enter_service.go).
 func TestSFPinnedValues(t *testing.T) {
@@ -171,7 +100,7 @@ func TestSFPinnedValues(t *testing.T) {
 		{"AS", 0, nil},               // ESRmpTms unscaled per enter_service.go
 	}
 	for _, tc := range cases {
-		e, ok := Lookup(tc.code)
+		e, ok := forwardMap[tc.code]
 		if !ok {
 			t.Errorf("code %q not in forward map", tc.code)
 			continue
@@ -197,7 +126,7 @@ func TestVoltagePctFlag(t *testing.T) {
 	// Voltage trip codes must have IsVoltagePct=true
 	voltCodes := []string{"AC", "AQ", "AD", "AY", "AB", "BN", "BO"}
 	for _, code := range voltCodes {
-		e, ok := Lookup(code)
+		e, ok := forwardMap[code]
 		if !ok {
 			t.Errorf("code %q not in map", code)
 			continue
@@ -210,7 +139,7 @@ func TestVoltagePctFlag(t *testing.T) {
 	// Frequency and time codes must NOT have IsVoltagePct
 	noVoltCodes := []string{"AE", "AJ", "AF", "AK", "BJ", "BH", "BK", "BI", "AG", "DD"}
 	for _, code := range noVoltCodes {
-		e, ok := Lookup(code)
+		e, ok := forwardMap[code]
 		if !ok {
 			t.Errorf("code %q not in map", code)
 			continue

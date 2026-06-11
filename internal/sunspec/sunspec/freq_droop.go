@@ -143,16 +143,6 @@ func emitFreqDroop(bank *Bank, p source.ProtectionParams, rslt uint16, reqCounte
 	bank.put16(freqDroopReadOnlyRW)
 }
 
-// HzStopFromDroopEnd computes the SunSpec-style HzEnd value (when the curve
-// reaches zero output) from the APsystems CC code value. Helper for
-// cross-parameter checks ("HzEnd must sit below OF1 trip with margin").
-func HzStopFromDroopEnd(p source.ProtectionParams) (float64, bool) {
-	if !p.Has["CC"] {
-		return 0, false
-	}
-	return p.OFDroopEnd, true
-}
-
 // lookupWriteRslt returns (rslt, reqCounter) for (uid, modelID), or
 // (COMPLETED, 0) when no tracker is configured. Centralizes the nil-check
 // on Options.WriteRslt so emit functions stay clean.

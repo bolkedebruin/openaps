@@ -6,6 +6,10 @@ import (
 	"github.com/bolkedebruin/openaps/internal/sunspec/source"
 )
 
+func encodePerInverter(inv source.Inverter, ecuid string, unitID uint16, opt Options) Bank {
+	return EncodePerInverterWithProtection(inv, ecuid, unitID, opt, source.ProtectionParams{Has: map[string]bool{}})
+}
+
 func sampleInverter() source.Inverter {
 	return source.Inverter{
 		UID:           "999900000001",
@@ -24,7 +28,7 @@ func sampleInverter() source.Inverter {
 }
 
 func TestEncodePerInverter_BasicShape(t *testing.T) {
-	bank := EncodePerInverter(sampleInverter(), "999999999999", 2, Options{})
+	bank := encodePerInverter(sampleInverter(), "999999999999", 2, Options{})
 
 	// Must contain Common, Inverter101, Multi-MPPT, end (in that order).
 	if _, ok := findModel(bank, CommonModelID); !ok {
@@ -52,7 +56,7 @@ func TestEncodePerInverter_BasicShape(t *testing.T) {
 }
 
 func TestEncodePerInverter_CommonModelFields(t *testing.T) {
-	bank := EncodePerInverter(sampleInverter(), "999999999999", 5, Options{})
+	bank := encodePerInverter(sampleInverter(), "999999999999", 5, Options{})
 
 	mn := readString(bank, BaseRegister+4, 16)
 	if mn != "APsystems" {
@@ -90,7 +94,7 @@ func TestEncodePerInverter_TypeCodeMapsToModelLabel(t *testing.T) {
 			inv := sampleInverter()
 			inv.TypeCode = ty
 			inv.PanelWatts = []int{100, 80}
-			bank := EncodePerInverter(inv, "ECU", 2, Options{})
+			bank := encodePerInverter(inv, "ECU", 2, Options{})
 			got := readString(bank, BaseRegister+20, 16)
 			if got != want {
 				t.Errorf("TypeCode=%q: Md=%q want %q", ty, got, want)
@@ -100,7 +104,7 @@ func TestEncodePerInverter_TypeCodeMapsToModelLabel(t *testing.T) {
 }
 
 func TestEncodePerInverter_InverterModelW(t *testing.T) {
-	bank := EncodePerInverter(sampleInverter(), "ECU", 2, Options{})
+	bank := encodePerInverter(sampleInverter(), "ECU", 2, Options{})
 	invBase, ok := findModel(bank, InverterModelSinglePhase)
 	if !ok {
 		t.Fatal("inverter model missing")
@@ -119,7 +123,7 @@ func TestEncodePerInverter_InverterModelW(t *testing.T) {
 
 func TestEncodePerInverter_MPPTHasOnlyThisInverterPanels(t *testing.T) {
 	// type 01 → 2 panels
-	bank01 := EncodePerInverter(sampleInverter(), "ECU", 2, Options{})
+	bank01 := encodePerInverter(sampleInverter(), "ECU", 2, Options{})
 	mppt, _ := findModel(bank01, MultiMPPTModelID)
 	if got := bank01.At(mppt + 1); got != MultiMPPTFixedBlockLen+MultiMPPTPerModuleLen*2 {
 		t.Errorf("type 01 MPPT L=%d want %d (2 panels)",
@@ -130,7 +134,7 @@ func TestEncodePerInverter_MPPTHasOnlyThisInverterPanels(t *testing.T) {
 	inv := sampleInverter()
 	inv.TypeCode = "03"
 	inv.PanelWatts = []int{100, 80, 70, 50}
-	bank03 := EncodePerInverter(inv, "ECU", 2, Options{})
+	bank03 := encodePerInverter(inv, "ECU", 2, Options{})
 	mppt, _ = findModel(bank03, MultiMPPTModelID)
 	if got := bank03.At(mppt + 1); got != MultiMPPTFixedBlockLen+MultiMPPTPerModuleLen*4 {
 		t.Errorf("type 03 MPPT L=%d want %d (4 panels)",
@@ -141,7 +145,7 @@ func TestEncodePerInverter_MPPTHasOnlyThisInverterPanels(t *testing.T) {
 func TestEncodePerInverter_OfflineHasStSleep(t *testing.T) {
 	inv := sampleInverter()
 	inv.Online = false
-	bank := EncodePerInverter(inv, "ECU", 2, Options{})
+	bank := encodePerInverter(inv, "ECU", 2, Options{})
 	invBase, _ := findModel(bank, InverterModelSinglePhase)
 	body := invBase + 2
 	if got := bank.At(body + 36); got != StSleep {

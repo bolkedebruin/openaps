@@ -13,52 +13,6 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// SF pinned-value round-trip at corrected scale factors
-// ---------------------------------------------------------------------------
-
-func TestSFRoundTrip_DD_sf_minus1(t *testing.T) {
-	// DD: K_SF=-1; 16.7 %Pref/Hz → sunspec 167 → back 16.7
-	e, _ := Lookup("DD")
-	if e.SF != -1 {
-		t.Fatalf("DD SF: got %d want -1", e.SF)
-	}
-	encoded := EncodeSunSpec(16.7, e.SF)
-	if encoded != 167 {
-		t.Errorf("DD EncodeSunSpec(16.7, -1): got %g want 167", encoded)
-	}
-	decoded := DecodeSunSpec(encoded, e.SF)
-	if decoded != 16.7 {
-		t.Errorf("DD DecodeSunSpec(167, -1): got %g want 16.7", decoded)
-	}
-}
-
-func TestSFRoundTrip_CG_sf0(t *testing.T) {
-	// CG: RspTms_SF=0 (whole seconds); 5.0 s → sunspec 5 → back 5.0
-	e, _ := Lookup("CG")
-	if e.SF != 0 {
-		t.Fatalf("CG SF: got %d want 0", e.SF)
-	}
-	if e.SFRef != nil {
-		t.Errorf("CG SFRef: got %v want nil (unscaled)", *e.SFRef)
-	}
-	encoded := EncodeSunSpec(5.0, e.SF)
-	if encoded != 5 {
-		t.Errorf("CG EncodeSunSpec(5.0, 0): got %g want 5", encoded)
-	}
-}
-
-func TestSFRoundTrip_AS_sf0(t *testing.T) {
-	// AS: ESRmpTms unscaled (sf=0, SFRef=nil)
-	e, _ := Lookup("AS")
-	if e.SF != 0 {
-		t.Fatalf("AS SF: got %d want 0", e.SF)
-	}
-	if e.SFRef != nil {
-		t.Errorf("AS SFRef: got %v want nil (unscaled)", *e.SFRef)
-	}
-}
-
-// ---------------------------------------------------------------------------
 // Overlay range intersection — overlay cannot widen the base envelope
 // ---------------------------------------------------------------------------
 

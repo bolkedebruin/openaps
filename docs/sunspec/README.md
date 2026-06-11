@@ -181,16 +181,15 @@ ssh-keygen -t rsa -b 4096 -N "" -f ~/.ssh/ecu_id_rsa
 # and ship ecu_id_rsa.pub as authorized_keys in the dropbear bundle.
 ```
 
-## Running as a sidecar
+## Running
 
-If you don't want to deploy on the ECU, run the binary anywhere with read access to the ECU's `/home` (NFS, rsync mirror, SSHFS) and `/tmp/parameters_app.conf`:
+ecu-sunspec sources all telemetry from the inv-driver Unix socket (`--invdriver-sock`, default `/var/run/inv-driver.sock`), so it runs on the ECU alongside inv-driver:
 
 ```sh
 ./ecu-sunspec \
     --bind tcp://0.0.0.0:502 \
-    --db-dir /mnt/ecu/home \
-    --params-file /mnt/ecu/tmp/parameters_app.conf \
-    --yuneng-dir /mnt/ecu/etc/yuneng
+    --invdriver-sock /var/run/inv-driver.sock \
+    --yuneng-dir /etc/yuneng
 ```
 
 All configuration is via flags — see `--help`.

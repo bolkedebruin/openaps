@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+func boolPtr(b bool) *bool { return &b }
+
 func TestLoad_MissingFile(t *testing.T) {
 	c, err := Load("/nonexistent/path/sunspec.json")
 	if err != nil {
@@ -87,12 +89,12 @@ func TestAllowsWrite_LocalNetwork(t *testing.T) {
 	}{
 		{"default (nil) allows local", nil, "10.0.0.42:5555", true},
 		{"default (nil) blocks remote", nil, "8.8.8.8:5555", false},
-		{"explicit true allows local", BoolPtr(true), "10.0.0.42:5555", true},
-		{"explicit false blocks local", BoolPtr(false), "10.0.0.42:5555", false},
+		{"explicit true allows local", boolPtr(true), "10.0.0.42:5555", true},
+		{"explicit false blocks local", boolPtr(false), "10.0.0.42:5555", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			cfg := Config{Writes: WritesConfig{Enabled: BoolPtr(true), AllowLocalNetwork: c.allowLN}}
+			cfg := Config{Writes: WritesConfig{Enabled: boolPtr(true), AllowLocalNetwork: c.allowLN}}
 
 			if got := cfg.AllowsWrite(c.remote); got != c.want {
 				t.Errorf("got %v want %v", got, c.want)
@@ -109,36 +111,36 @@ func TestAllowsWrite(t *testing.T) {
 		want   bool
 	}{
 		{"writes off",
-			Config{Writes: WritesConfig{Enabled: BoolPtr(false), AllowList: []string{"10.0.0.1"}}},
+			Config{Writes: WritesConfig{Enabled: boolPtr(false), AllowList: []string{"10.0.0.1"}}},
 			"10.0.0.1:5555", false},
 
 		{"loopback always allowed when enabled",
-			Config{Writes: WritesConfig{Enabled: BoolPtr(true)}},
+			Config{Writes: WritesConfig{Enabled: boolPtr(true)}},
 			"127.0.0.1:5555", true},
 		{"loopback not allowed when disabled",
-			Config{Writes: WritesConfig{Enabled: BoolPtr(false)}},
+			Config{Writes: WritesConfig{Enabled: boolPtr(false)}},
 			"127.0.0.1:5555", false},
 
 		{"exact IP match",
-			Config{Writes: WritesConfig{Enabled: BoolPtr(true), AllowList: []string{"10.0.0.1"}}},
+			Config{Writes: WritesConfig{Enabled: boolPtr(true), AllowList: []string{"10.0.0.1"}}},
 			"10.0.0.1:5555", true},
 		{"exact IP no match",
-			Config{Writes: WritesConfig{Enabled: BoolPtr(true), AllowList: []string{"10.0.0.1"}}},
+			Config{Writes: WritesConfig{Enabled: boolPtr(true), AllowList: []string{"10.0.0.1"}}},
 			"10.0.0.2:5555", false},
 
 		{"CIDR match",
-			Config{Writes: WritesConfig{Enabled: BoolPtr(true), AllowList: []string{"10.0.0.0/24"}}},
+			Config{Writes: WritesConfig{Enabled: boolPtr(true), AllowList: []string{"10.0.0.0/24"}}},
 			"10.0.0.42:5555", true},
 		{"CIDR no match",
-			Config{Writes: WritesConfig{Enabled: BoolPtr(true), AllowList: []string{"10.0.0.0/24"}}},
+			Config{Writes: WritesConfig{Enabled: boolPtr(true), AllowList: []string{"10.0.0.0/24"}}},
 			"10.0.1.42:5555", false},
 
 		{"empty allowlist denies non-loopback",
-			Config{Writes: WritesConfig{Enabled: BoolPtr(true), AllowList: nil}},
+			Config{Writes: WritesConfig{Enabled: boolPtr(true), AllowList: nil}},
 			"10.0.0.1:5555", false},
 
 		{"address without port still parses",
-			Config{Writes: WritesConfig{Enabled: BoolPtr(true), AllowList: []string{"10.0.0.1"}}},
+			Config{Writes: WritesConfig{Enabled: boolPtr(true), AllowList: []string{"10.0.0.1"}}},
 			"10.0.0.1", true},
 	}
 	for _, c := range cases {

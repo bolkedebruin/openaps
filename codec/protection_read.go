@@ -52,18 +52,22 @@ type protReadField struct {
 	fn    func(f []byte, base int) (float64, bool)
 }
 
-// AllProtectionCodes returns every 2-letter code the protection decoder can
-// emit, across all DS3 and QS1 reply pages, in first-seen order with no
-// duplicates. It lets the publish layer guard against silently dropping a
-// decoded code: a code that is neither mapped to the wire.Protection message
-// nor explicitly listed as deliberately-unpublished is a bug.
+// protReadTables collects every family's protection read pages. Each
+// family file registers its own tables in init(), keeping page knowledge
+// out of this file; registration order follows source file name order
+// (ds3.go before qs1a.go), so enumeration is deterministic.
+var protReadTables [][]protReadField
+
+// AllProtectionCodes returns every 2-letter code the protection decoder
+// can emit, across all registered family reply pages, in first-seen order
+// with no duplicates. It lets the publish layer guard against silently
+// dropping a decoded code: a code that is neither mapped to the
+// wire.Protection message nor explicitly listed as deliberately-unpublished
+// is a bug.
 func AllProtectionCodes() []string {
 	seen := make(map[string]bool)
 	var out []string
-	for _, tbl := range [][]protReadField{
-		ds3ReadPageA, ds3ReadPageB,
-		qs1ReadPageA, qs1ReadPageB, qs1ReadPageC,
-	} {
+	for _, tbl := range protReadTables {
 		for _, f := range tbl {
 			if !seen[f.code] {
 				seen[f.code] = true

@@ -33,7 +33,7 @@ func splitWS(s string) []string {
 	var out, cur []rune
 	_ = cur
 	res := []string{}
-	for _, f := range []rune(s) {
+	for _, f := range s {
 		if f == ' ' {
 			if len(out) > 0 {
 				res = append(res, string(out))

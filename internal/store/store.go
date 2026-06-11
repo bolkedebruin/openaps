@@ -587,7 +587,7 @@ ON CONFLICT(inverter_uid, channel_idx) DO UPDATE SET
 	if err != nil {
 		return fmt.Errorf("WritePanels: prepare: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 	for _, p := range panels {
 		if _, err := stmt.ExecContext(ctx, uid, p.ChannelIdx,
 			nullableFloat(p.DCV), nullableFloat(p.DCI), nullableFloat(p.W), tsMs); err != nil {
@@ -633,7 +633,7 @@ func (s *Store) WriteEnergyLifetime(ctx context.Context, uid string, tsMs int64,
 	if err != nil {
 		return fmt.Errorf("WriteEnergyLifetime: prep select: %w", err)
 	}
-	defer selStmt.Close()
+	defer func() { _ = selStmt.Close() }()
 	insStmt, err := tx.PrepareContext(ctx, `
 INSERT INTO energy_lifetime (inverter_uid, channel_idx, cumulative_wh, prev_raw, scale, last_update_ms)
 VALUES (?, ?, ?, ?, ?, ?)
@@ -646,7 +646,7 @@ ON CONFLICT(inverter_uid, channel_idx) DO UPDATE SET
 	if err != nil {
 		return fmt.Errorf("WriteEnergyLifetime: prep upsert: %w", err)
 	}
-	defer insStmt.Close()
+	defer func() { _ = insStmt.Close() }()
 
 	for _, e := range perChannel {
 		var prevRaw sql.NullInt64

@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"bytes"
 	"context"
 	"net"
 	"os"
@@ -94,7 +95,7 @@ func TestProbe_IteratesNullModelCode_Only(t *testing.T) {
 	}
 	// Frame is the 13-byte info-query L2 body (outer envelope is
 	// wrapped by the backend, not the probe).
-	if !codec.MatchOutboundInfoQuery(got[0].GetSend().GetFrame()) {
+	if !bytes.Equal(got[0].GetSend().GetFrame(), codec.OutboundInfoQueryL2()) {
 		t.Fatalf("frame is not the info-query L2: % X", got[0].GetSend().GetFrame())
 	}
 }
@@ -262,7 +263,7 @@ func TestProbe_ColdStart_EndToEnd(t *testing.T) {
 	if send.GetPeerUid() != "uidProbe1" {
 		t.Fatalf("peer_uid: %q want uidProbe1", send.GetPeerUid())
 	}
-	if !codec.MatchOutboundInfoQuery(send.GetFrame()) {
+	if !bytes.Equal(send.GetFrame(), codec.OutboundInfoQueryL2()) {
 		t.Fatalf("frame is not info-query L2: % X", send.GetFrame())
 	}
 

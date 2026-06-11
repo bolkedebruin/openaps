@@ -59,12 +59,6 @@ func (w WritesConfig) IsEnabled() bool {
 	return *w.Enabled
 }
 
-// BoolPtr returns a pointer to b. Convenience for programmatic config
-// construction (tests, sidecar config, etc.):
-//
-//	cfg.Writes.Enabled = config.BoolPtr(false)
-func BoolPtr(b bool) *bool { return &b }
-
 // LocalAllowed reports the effective value of AllowLocalNetwork — defaulting
 // to true when the field is omitted.
 func (w WritesConfig) LocalAllowed() bool {

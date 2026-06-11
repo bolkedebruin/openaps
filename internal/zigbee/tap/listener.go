@@ -104,7 +104,7 @@ func (s *Server) acceptLoop(ctx context.Context, l net.Listener, label string) {
 
 func (s *Server) serveConn(label string, conn net.Conn) {
 	defer s.wg.Done()
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	s.connsMu.Lock()
 	s.activeConns[conn] = struct{}{}
@@ -148,8 +148,5 @@ func (s *Server) Stop() {
 }
 
 func isClosedErr(err error) bool {
-	if errors.Is(err, net.ErrClosed) {
-		return true
-	}
-	return false
+	return errors.Is(err, net.ErrClosed)
 }

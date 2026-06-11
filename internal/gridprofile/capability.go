@@ -33,7 +33,6 @@ func family(modelCode uint8) string {
 	return ""
 }
 
-func isDS3Family(modelCode uint8) bool { return codec.FamilyOf(modelCode) == codec.FamilyDS3 }
 func isQS1Family(modelCode uint8) bool { return codec.FamilyOf(modelCode) == codec.FamilyQS1 }
 
 // unsupportedReason returns a human-readable explanation for why a code is

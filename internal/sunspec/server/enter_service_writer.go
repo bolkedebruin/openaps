@@ -56,7 +56,7 @@ func (esw *EnterServiceWriter) Apply(ctx context.Context, addrOffset uint16, reg
 	if esw.uid <= 1 {
 		// Aggregate writes don't make sense for ESDlyTms — refuse rather
 		// than silently broadcast.
-		return fmt.Errorf("Model 703 writes only valid on per-inverter unit IDs (2..N+1)")
+		return fmt.Errorf("model 703 writes only valid on per-inverter unit IDs (2..N+1)")
 	}
 	idx := int(esw.uid) - 2
 	if idx < 0 || idx >= len(esw.snap.Inverters) {
@@ -72,7 +72,7 @@ func (esw *EnterServiceWriter) Apply(ctx context.Context, addrOffset uint16, reg
 	const esDlyOffset = 7
 	const esDlyLen = 2
 	if addrOffset != esDlyOffset || len(regs) != esDlyLen {
-		return fmt.Errorf("Model 703 only ESDlyTms is writable; expect write at offset=%d len=%d, got offset=%d len=%d",
+		return fmt.Errorf("model 703 only ESDlyTms is writable; expect write at offset=%d len=%d, got offset=%d len=%d",
 			esDlyOffset, esDlyLen, addrOffset, len(regs))
 	}
 

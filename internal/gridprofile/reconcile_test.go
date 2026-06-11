@@ -37,12 +37,11 @@ func (f *fakeSender) frameCount() int {
 	return len(f.frames)
 }
 
-// fakeReadback provides a static map of code→value and counts TriggerRead calls.
+// fakeReadback provides a static map of code→value.
 type fakeReadback struct {
-	mu       sync.Mutex
-	values   map[string]float64
-	triggers int
-	present  bool
+	mu      sync.Mutex
+	values  map[string]float64
+	present bool
 }
 
 func newFakeReadback(present bool, values map[string]float64) *fakeReadback {
@@ -55,17 +54,7 @@ func (f *fakeReadback) ReadbackNative(_ string) (map[string]float64, bool) {
 	return f.values, f.present
 }
 
-func (f *fakeReadback) TriggerRead(_ string) {
-	f.mu.Lock()
-	f.triggers++
-	f.mu.Unlock()
-}
-
-func (f *fakeReadback) triggerCount() int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.triggers
-}
+func (f *fakeReadback) TriggerRead(_ string) {}
 
 // testProfile with a writable DD code for DS3.
 func testProfileDD() Profile {
@@ -743,13 +732,12 @@ func TestNewReconciler_ZeroOptionsDefaultsApplied(t *testing.T) {
 	rb := newFakeReadback(false, nil)
 	// Zero Options struct — constructor should fill in defaults.
 	rec := NewReconciler(s, snd, rb, modelDS3, Options{})
-	if rec.opts.AutoReassert {
-		// default is true, so zero Options means AutoReassert should be set
-		// by the default logic — but only if all fields are zero.
-		// (The constructor gates on "all zero" to preserve explicit false.)
+	if !rec.opts.AutoReassert {
+		t.Error("zero Options: AutoReassert should default to true")
 	}
-	// Just ensure construction doesn't panic.
-	_ = rec
+	if rec.opts.ReadSettle == 0 {
+		t.Error("zero Options: ReadSettle should default to non-zero")
+	}
 }
 
 // ---------------------------------------------------------------------------

@@ -98,7 +98,7 @@ ORDER  BY id ASC`
 	if err != nil {
 		return nil, fmt.Errorf("read stock id table: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []StockRow
 	for rows.Next() {
 		var (

@@ -1,7 +1,8 @@
 // Package udsutil holds the small shared helpers for the local
-// Unix-domain-socket servers in this repo: the SO_PEERCRED peer-uid
-// resolver used by the root-only gates and the stale-socket cleanup that
-// refuses to clobber non-socket paths.
+// Unix-domain-socket servers and clients in this repo: the SO_PEERCRED
+// peer-uid resolver used by the root-only gates, the stale-socket cleanup
+// that refuses to clobber non-socket paths, and the short-lived
+// dial+Hello request Roundtrip.
 package udsutil
 
 import (

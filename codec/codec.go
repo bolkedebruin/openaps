@@ -328,20 +328,6 @@ func be24(b []byte, off int) uint32 {
 	return uint32(b[off])<<16 | uint32(b[off+1])<<8 | uint32(b[off+2])
 }
 
-// LifetimeKWh returns the per-panel lifetime energy in kWh using
-// the model's scale. Convenience for callers; equivalent to
-// raw * Reply.LifetimeScale, rounded to 3 decimals.
-func (r Reply) LifetimeKWh() []float64 {
-	if r.LifetimeScale == 0 {
-		return nil
-	}
-	out := make([]float64, len(r.LifetimeRaw))
-	for i, raw := range r.LifetimeRaw {
-		out[i] = math.Round(float64(raw)*r.LifetimeScale*1000) / 1000
-	}
-	return out
-}
-
 // fround rounds to 3 decimals so JSON output stays readable.
 func fround(x float64) float64 {
 	if math.IsNaN(x) || math.IsInf(x, 0) {

@@ -6,22 +6,17 @@ import (
 	"github.com/bolkedebruin/openaps/internal/sunspec/source"
 )
 
-// EncodePerInverter produces a self-contained SunSpec bank for a single
-// microinverter. Layout is the SunSpec equivalent of "one Fronius behind the
-// Datalogger" — Common Model identifies the microinverter, the Inverter Model
-// (101, single-phase) exposes its electrical state, and Multi-MPPT (160) lists
-// its panels.
+// EncodePerInverterWithProtection produces a self-contained SunSpec bank for a
+// single microinverter. Layout is the SunSpec equivalent of "one Fronius
+// behind the Datalogger" — Common Model identifies the microinverter, the
+// Inverter Model (101, single-phase) exposes its electrical state, and
+// Multi-MPPT (160) lists its panels. The IEEE 1547-2018 DER trip + Enter
+// Service models are populated from the supplied protection params for this
+// inverter.
 //
 // The bank is intended to be served at a per-inverter Modbus unit ID, so a
 // SunSpec scanner walking unit IDs 2..N+1 sees N microinverters as separate
 // devices.
-func EncodePerInverter(inv source.Inverter, ecuid string, unitID uint16, opt Options) Bank {
-	return EncodePerInverterWithProtection(inv, ecuid, unitID, opt, source.ProtectionParams{Has: map[string]bool{}})
-}
-
-// EncodePerInverterWithProtection is like EncodePerInverter but also surfaces
-// IEEE 1547-2018 DER trip + Enter Service models populated from the supplied
-// protection params for this inverter.
 func EncodePerInverterWithProtection(inv source.Inverter, ecuid string, unitID uint16, opt Options, prot source.ProtectionParams) Bank {
 	if opt.Manufacturer == "" {
 		opt.Manufacturer = DefaultManufacturer
@@ -196,7 +191,7 @@ func emitPerInverterMPPT(bank *Bank, inv source.Inverter) {
 		bank.put16(uint16(i + 1))
 		bank.putString(panelLabel(inv, i), 8)
 
-		var dca uint16 = notImplU16
+		dca := notImplU16
 		if inv.ACVoltageV > 0 && p >= 0 {
 			amps10 := float64(p) / float64(inv.ACVoltageV) * 10
 			if amps10 < 65535 {

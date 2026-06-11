@@ -86,15 +86,6 @@ func newApplier(rec reconcileRunner, sink EventSink) *applier {
 	}
 }
 
-// enqueue starts an apply for (uid, overlayID) with pointCount overlay points,
-// but WITHOUT the scoped code list. Retained for tests that don't care about
-// per-point filtering (e.g. supersession, shutdown). Production callers MUST
-// use enqueueWithPoints so the per-point emission is scoped to the overlay's
-// own codes — see overlay_async.run() filter.
-func (a *applier) enqueue(parent context.Context, uid, overlayID string, pointCount int) <-chan struct{} {
-	return a.enqueueInternal(parent, uid, overlayID, pointCount, nil)
-}
-
 // enqueueWithPoints is the production entry point. codes lists the overlay's
 // own APS codes (e.g. ["BP","BQ"]); the apply goroutine emits overlay_param_*
 // rows ONLY for those codes — the reconcile report's base-profile points are
@@ -106,8 +97,7 @@ func (a *applier) enqueueWithPoints(parent context.Context, uid, overlayID strin
 }
 
 // enqueueInternal is the shared implementation. scopedCodes==nil disables the
-// filter (all PointResults are emitted) — only used by the bare enqueue() in
-// tests that pre-date the overlay-scoped emission semantics.
+// filter (all PointResults are emitted).
 func (a *applier) enqueueInternal(parent context.Context, uid, overlayID string, pointCount int, scopedCodes []string) <-chan struct{} {
 	// WithCancelCause lets us label why a job was cancelled: supersession sets
 	// cause=errSuperseded (silent drop in run()); shutdown cancels the parent
@@ -267,16 +257,10 @@ func (a *applier) run(ctx context.Context, job *applyJob, uid, overlayID string,
 		fmt.Sprintf("id=%q uid=%s ok=%d failed=%d", overlayID, uid, okCount, failedCount))
 }
 
-// countResults tallies (ok, failed) the same way run() classifies points, so
-// shutdown-abort terminal events can report a coherent partial-apply summary.
-func countResults(points []PointResult) (ok, failed int) {
-	return countResultsScoped(points, func(string) bool { return true })
-}
-
-// countResultsScoped is countResults restricted to codes the inScope predicate
-// accepts — used by run() so an aborted shutdown summary reports only the
-// overlay's own points, not the merged base+overlay set the reconciler
-// returned.
+// countResultsScoped tallies (ok, failed) the same way run() classifies
+// points, restricted to codes the inScope predicate accepts — used by run() so
+// an aborted shutdown summary reports only the overlay's own points, not the
+// merged base+overlay set the reconciler returned.
 func countResultsScoped(points []PointResult, inScope func(string) bool) (ok, failed int) {
 	for _, pr := range points {
 		if !inScope(pr.ApsCode) {

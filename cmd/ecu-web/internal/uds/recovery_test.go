@@ -12,7 +12,7 @@ import (
 // fakeRecoveryd accepts one connection and serves a single raw
 // AccessRequest/AccessResponse exchange (no Hello), using the shared
 // wire framing. It asserts the request matches wantOp ("list"/"add"/
-// "remove"/"status") and replies with resp.
+// "remove") and replies with resp.
 func fakeRecoveryd(t *testing.T, sock, wantOp string, resp *wire.AccessResponse) {
 	t.Helper()
 	ln, err := net.Listen("unix", sock)
@@ -39,8 +39,6 @@ func fakeRecoveryd(t *testing.T, sock, wantOp string, resp *wire.AccessResponse)
 			got = "add"
 		case *wire.AccessRequest_RemoveKey:
 			got = "remove"
-		case *wire.AccessRequest_Status:
-			got = "status"
 		}
 		if got != wantOp {
 			t.Errorf("op = %q, want %q", got, wantOp)
@@ -93,21 +91,6 @@ func TestRecoveryRemoveKey(t *testing.T) {
 	defer cancel()
 	if _, err := rec.RemoveKey(ctx, "SHA256:abc"); err != nil {
 		t.Fatalf("RemoveKey: %v", err)
-	}
-}
-
-func TestRecoveryStatus(t *testing.T) {
-	sock := shortSock(t)
-	fakeRecoveryd(t, sock, "status", &wire.AccessResponse{Ok: true, Provider: "host", HostUser: "ops", KeyCount: 2})
-	rec := &Recovery{SocketPath: sock}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	resp, err := rec.Status(ctx)
-	if err != nil {
-		t.Fatalf("Status: %v", err)
-	}
-	if resp.GetProvider() != "host" || resp.GetHostUser() != "ops" || resp.GetKeyCount() != 2 {
-		t.Errorf("unexpected status: %+v", resp)
 	}
 }
 

@@ -87,7 +87,7 @@ func TestServer_RvrtTms_AutoReverts(t *testing.T) {
 		URL:             "tcp://127.0.0.1:" + strconv.Itoa(port),
 		RefreshInterval: time.Second,
 		InvDriver:       fake,
-		Writes:          config.Config{Writes: config.WritesConfig{Enabled: config.BoolPtr(true)}},
+		Writes:          config.Config{Writes: config.WritesConfig{Enabled: boolPtr(true)}},
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -139,7 +139,7 @@ func TestServer_RvrtTms_RefreshKeepsCap(t *testing.T) {
 	srv := New(fixedProvider{snap}, Config{
 		URL:       "tcp://127.0.0.1:" + strconv.Itoa(port),
 		InvDriver: fake,
-		Writes:    config.Config{Writes: config.WritesConfig{Enabled: config.BoolPtr(true)}},
+		Writes:    config.Config{Writes: config.WritesConfig{Enabled: boolPtr(true)}},
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -193,7 +193,7 @@ func TestServer_RvrtTms_NotImplSentinel(t *testing.T) {
 	srv := New(fixedProvider{snap}, Config{
 		URL:       "tcp://127.0.0.1:" + strconv.Itoa(port),
 		InvDriver: fake,
-		Writes:    config.Config{Writes: config.WritesConfig{Enabled: config.BoolPtr(true)}},
+		Writes:    config.Config{Writes: config.WritesConfig{Enabled: boolPtr(true)}},
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

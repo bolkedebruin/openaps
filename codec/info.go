@@ -37,20 +37,6 @@ func OutboundInfoQueryL2() []byte {
 	return outboundInfoQueryL2
 }
 
-// MatchOutboundInfoQuery reports whether l2 is the canonical 0xDC
-// query body.
-func MatchOutboundInfoQuery(l2 []byte) bool {
-	if len(l2) != len(outboundInfoQueryL2) {
-		return false
-	}
-	for i, b := range outboundInfoQueryL2 {
-		if l2[i] != b {
-			return false
-		}
-	}
-	return true
-}
-
 // DecodeInfoReply parses a 0xDC reply L2 body. Returns
 // ErrUnknownReplyShape if the length is not one of the three known
 // forms (16, 17, 19). Validates the FB FB SOF once up front, then

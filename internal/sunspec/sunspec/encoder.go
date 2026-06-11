@@ -561,7 +561,7 @@ func emitMultiMPPT(bank *Bank, s source.Snapshot) {
 		bank.putString(panelLabel(e.inv, e.channel), 8)
 
 		// DCA derived
-		var dca uint16 = notImplU16
+		dca := notImplU16
 		if e.inv.ACVoltageV > 0 && e.powerW >= 0 {
 			amps10 := float64(e.powerW) / float64(e.inv.ACVoltageV) * 10
 			if amps10 < 65535 {

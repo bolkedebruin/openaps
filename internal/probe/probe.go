@@ -1,8 +1,8 @@
 // Package probe runs identity queries against inverters whose row
 // lacks the full set of identity fields the 0xDC reply carries
 // (model_code / software_version). Replies flow back upstream as
-// RawFrame envelopes; the existing ingest path matches them against
-// codec.MatchOutboundInfoQuery and routes the decoded InfoReply. The
+// RawFrame envelopes; the existing ingest path decodes them via
+// codec.DecodeInfoReply and routes the decoded InfoReply. The
 // phase column is filled by ingest from model_code for single-phase
 // families; three-phase per-leg phase comes from operator config
 // (separate future work) and is not what triggers the probe.
@@ -102,7 +102,7 @@ LIMIT  ?`, limit)
 	if err != nil {
 		return 0, fmt.Errorf("probe: query: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var targets []string
 	for rows.Next() {
@@ -119,7 +119,7 @@ LIMIT  ?`, limit)
 	if err := rows.Err(); err != nil {
 		return 0, fmt.Errorf("probe: rows: %w", err)
 	}
-	rows.Close()
+	_ = rows.Close()
 
 	if len(targets) == 0 {
 		return 0, nil

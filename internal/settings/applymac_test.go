@@ -38,19 +38,6 @@ func stubReadMAC(t *testing.T, fn func() string) {
 	t.Cleanup(func() { readMACFile = orig })
 }
 
-// shortenVerify cuts the verify delay/poll/timeout for tests.
-func shortenVerify(t *testing.T) {
-	t.Helper()
-	origDelay, origTO, origPoll := applyMACVerifyDelay, applyMACVerifyTimeout, applyMACVerifyPoll
-	// Cannot reassign consts; mirror the strategy by overriding the
-	// package vars instead. Re-declared as vars at package level for
-	// test friendliness if needed. For now we don't touch them — the
-	// production 200ms+2s window is acceptable in tests.
-	_ = origDelay
-	_ = origTO
-	_ = origPoll
-}
-
 func TestApplyMAC_HappyPath(t *testing.T) {
 	const wantMAC = "aa:bb:cc:dd:ee:ff"
 	got := stubRunCmd(t, func(call int, name string, args []string) ([]byte, error) {

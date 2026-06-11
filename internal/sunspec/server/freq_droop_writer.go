@@ -95,7 +95,7 @@ func (fdw *FreqDroopWriter) Apply(ctx context.Context, addrOffset uint16, regs [
 		return fmt.Errorf("writes disabled or inv-driver not configured")
 	}
 	if fdw.uid <= 1 {
-		return fmt.Errorf("Model 711 writes only valid on per-inverter unit IDs (2..N+1)")
+		return fmt.Errorf("model 711 writes only valid on per-inverter unit IDs (2..N+1)")
 	}
 	idx := int(fdw.uid) - 2
 	if idx < 0 || idx >= len(fdw.snap.Inverters) {
@@ -135,7 +135,7 @@ func (fdw *FreqDroopWriter) Apply(ctx context.Context, addrOffset uint16, regs [
 		case freqDroopBodyAdptRslt:
 			return fmt.Errorf("AdptCtlRslt is server-published (read-only)")
 		default:
-			return fmt.Errorf("Model 711 body offset %d is read-only "+
+			return fmt.Errorf("model 711 body offset %d is read-only "+
 				"(only Ena, AdptCtlReq, DbOf, KOf, RspTms are writable)", off)
 		}
 	}
@@ -143,7 +143,7 @@ func (fdw *FreqDroopWriter) Apply(ctx context.Context, addrOffset uint16, regs [
 		if wantsReq {
 			return nil // no-op counter bump
 		}
-		return fmt.Errorf("Model 711 write must touch at least one writable field (Ena/DbOf/KOf/RspTms)")
+		return fmt.Errorf("model 711 write must touch at least one writable field (Ena/DbOf/KOf/RspTms)")
 	}
 
 	// Cross-parameter sanity uses the inverter's currently-loaded OF1.

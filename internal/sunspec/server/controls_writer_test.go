@@ -38,7 +38,7 @@ func TestServer_WriteWMaxLimPct_PerInverter(t *testing.T) {
 		RefreshInterval: time.Second,
 		InvDriver:       fake,
 		Writes: config.Config{Writes: config.WritesConfig{
-			Enabled:   config.BoolPtr(true),
+			Enabled:   boolPtr(true),
 			AllowList: nil, // loopback always allowed
 		}},
 	})
@@ -106,7 +106,7 @@ func TestServer_WriteRejectedWhenDisabled(t *testing.T) {
 	srv := New(fixedProvider{snap}, Config{
 		URL:       "tcp://127.0.0.1:" + strconv.Itoa(port),
 		InvDriver: fake,
-		Writes:    config.Config{Writes: config.WritesConfig{Enabled: config.BoolPtr(false)}},
+		Writes:    config.Config{Writes: config.WritesConfig{Enabled: boolPtr(false)}},
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -140,7 +140,7 @@ func TestServer_WriteConn_TurnsOff(t *testing.T) {
 	srv := New(fixedProvider{snap}, Config{
 		URL:       "tcp://127.0.0.1:" + strconv.Itoa(port),
 		InvDriver: fake,
-		Writes:    config.Config{Writes: config.WritesConfig{Enabled: config.BoolPtr(true)}},
+		Writes:    config.Config{Writes: config.WritesConfig{Enabled: boolPtr(true)}},
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

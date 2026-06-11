@@ -202,6 +202,10 @@ var (
 	}
 )
 
+func init() {
+	protReadTables = append(protReadTables, ds3ReadPageA, ds3ReadPageB)
+}
+
 // ds3ProtectionPage resolves a DS3 protection reply (cmd always 0xDD,
 // page tag at byte[4]) to its field table; data base = byte[4].
 func ds3ProtectionPage(f []byte, _ byte) ([]protReadField, int, bool) {

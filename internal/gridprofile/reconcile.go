@@ -435,12 +435,12 @@ func (r *Reconciler) FleetUIDs(ctx context.Context) ([]string, error) {
 	for rows.Next() {
 		var uid string
 		if err := rows.Scan(&uid); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return nil, fmt.Errorf("FleetUIDs: scan uid: %w", err)
 		}
 		add(uid)
 	}
-	rows.Close()
+	_ = rows.Close()
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("FleetUIDs: rows.Err: %w", err)
 	}

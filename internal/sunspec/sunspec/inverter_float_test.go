@@ -111,7 +111,7 @@ func TestEncodePerInverter_EmitsModel111And114(t *testing.T) {
 	}
 	inv := s.Inverters[0]
 
-	bank := EncodePerInverter(inv, s.ECUID, 2, Options{})
+	bank := encodePerInverter(inv, s.ECUID, 2, Options{})
 
 	hdr, ok := findModel(bank, InverterModelSinglePhaseFloat)
 	if !ok {
@@ -148,7 +148,7 @@ func TestModel114_UnusedChannelsAreNaN(t *testing.T) {
 	s := sampleSnapshot()
 	inv := s.Inverters[0]
 
-	bank := EncodePerInverter(inv, s.ECUID, 2, Options{})
+	bank := encodePerInverter(inv, s.ECUID, 2, Options{})
 	dc, ok := findModel(bank, DCDataFloatModelID)
 	if !ok {
 		t.Fatal("Model 114 missing")

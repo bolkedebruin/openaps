@@ -170,10 +170,3 @@ func TestValidate_VnomNegative(t *testing.T) {
 		t.Error("negative vnom_v should be rejected")
 	}
 }
-
-func TestSchemaBytes(t *testing.T) {
-	b := SchemaBytes()
-	if len(b) == 0 {
-		t.Error("SchemaBytes returned empty")
-	}
-}

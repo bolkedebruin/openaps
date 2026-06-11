@@ -5,6 +5,8 @@ import (
 	"sync"
 )
 
+func boolPtr(b bool) *bool { return &b }
+
 // fakeSender stands in for *invdriver.Client in tests, recording every
 // frame dispatched through the Model 123 write path so assertions can
 // compare against the codec's expected bytes.

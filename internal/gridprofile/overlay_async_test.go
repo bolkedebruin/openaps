@@ -107,7 +107,7 @@ func TestOverlayApply_ReturnsQueuedImmediately(t *testing.T) {
 
 	uid := "999900000001"
 	t0 := time.Now()
-	done := a.enqueue(context.Background(), uid, "x", 2)
+	done := a.enqueueInternal(context.Background(), uid, "x", 2, nil)
 	elapsed := time.Since(t0)
 
 	if elapsed > 50*time.Millisecond {
@@ -115,7 +115,7 @@ func TestOverlayApply_ReturnsQueuedImmediately(t *testing.T) {
 	}
 	// The goroutine is still running; cancel via supersede so the test
 	// doesn't leak a 5 s sleep.
-	a.enqueue(context.Background(), uid, "x2", 1)
+	a.enqueueInternal(context.Background(), uid, "x2", 1, nil)
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
@@ -138,7 +138,7 @@ func TestOverlayApply_EmitsStartedThenCompleted(t *testing.T) {
 	a, sink := newTestApplier(t, runner)
 
 	uid := "999900000001"
-	done := a.enqueue(context.Background(), uid, "victron-shift", 2)
+	done := a.enqueueInternal(context.Background(), uid, "victron-shift", 2, nil)
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
@@ -204,7 +204,7 @@ func TestOverlayApply_EmitsParamFailedOnWireError(t *testing.T) {
 	a, sink := newTestApplier(t, runner)
 
 	uid := "999900000003"
-	done := a.enqueue(context.Background(), uid, "p1", 2)
+	done := a.enqueueInternal(context.Background(), uid, "p1", 2, nil)
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
@@ -252,7 +252,7 @@ func TestOverlayApply_EmitsParamFailedOnWireError(t *testing.T) {
 func TestOverlayApply_EmitsParamFailedOnTopLevelError(t *testing.T) {
 	runner := &stubRunner{err: errors.New("model unknown")}
 	a, sink := newTestApplier(t, runner)
-	done := a.enqueue(context.Background(), "999900000001", "p1", 1)
+	done := a.enqueueInternal(context.Background(), "999900000001", "p1", 1, nil)
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
@@ -282,12 +282,12 @@ func TestOverlayApply_Supersedes(t *testing.T) {
 	a, sink := newTestApplier(t, runner)
 
 	uid := "999900000001"
-	d1 := a.enqueue(context.Background(), uid, "old", 1)
+	d1 := a.enqueueInternal(context.Background(), uid, "old", 1, nil)
 
 	// Wait a beat so the started event lands and the first goroutine is
 	// inside ReconcileUID. Then enqueue the supersede.
 	time.Sleep(50 * time.Millisecond)
-	d2 := a.enqueue(context.Background(), uid, "new", 1)
+	d2 := a.enqueueInternal(context.Background(), uid, "new", 1, nil)
 
 	// First goroutine should exit promptly via its cancelled context.
 	select {
@@ -463,7 +463,7 @@ func TestOverlayApply_EmitsCompleteOnShutdown(t *testing.T) {
 
 	parent, cancel := context.WithCancel(context.Background())
 	uid := "999900000001"
-	done := a.enqueue(parent, uid, "ov-shut", 1)
+	done := a.enqueueInternal(parent, uid, "ov-shut", 1, nil)
 
 	// Let the started event land + the goroutine enter ReconcileUID.
 	time.Sleep(100 * time.Millisecond)

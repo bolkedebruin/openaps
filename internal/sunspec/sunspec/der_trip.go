@@ -72,10 +72,7 @@ type trip3Pt struct {
 }
 
 // emitDERTripV emits Model 707 or 708 (low or high voltage trip).
-func emitDERTripV(bank *Bank, modelID uint16, vNom float64, must trip3Pt) {
-	if vNom <= 0 {
-		vNom = derTripVDefault
-	}
+func emitDERTripV(bank *Bank, modelID uint16, must trip3Pt) {
 	bank.put16(modelID, derTripVBodyLen)
 	ena := uint16(0)
 	if must.ActPt > 0 {
@@ -256,8 +253,8 @@ func tripPointsFromProtection(p source.ProtectionParams, vNom float64) (lv, hv, 
 // emitDERTripModels emits Models 707/708/709/710 in order.
 func emitDERTripModels(bank *Bank, p source.ProtectionParams, vNom float64) {
 	lv, hv, lf, hf := tripPointsFromProtection(p, vNom)
-	emitDERTripV(bank, DERTripLVModelID, vNom, lv)
-	emitDERTripV(bank, DERTripHVModelID, vNom, hv)
+	emitDERTripV(bank, DERTripLVModelID, lv)
+	emitDERTripV(bank, DERTripHVModelID, hv)
 	emitDERTripHz(bank, DERTripLFModelID, lf)
 	emitDERTripHz(bank, DERTripHFModelID, hf)
 }

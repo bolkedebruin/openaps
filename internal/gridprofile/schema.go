@@ -95,10 +95,3 @@ func validateRanges(raw []byte) error {
 	}
 	return nil
 }
-
-// SchemaBytes returns the embedded v1 schema JSON for external use.
-func SchemaBytes() []byte {
-	cp := make([]byte, len(v1SchemaJSON))
-	copy(cp, v1SchemaJSON)
-	return cp
-}

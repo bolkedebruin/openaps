@@ -71,7 +71,7 @@ const WMaxLimPctRawFull uint16 = 10000
 // bank.
 //
 // The model is emit-only here; clients accept writes via the server's
-// Modbus-write handler, which dispatches them through internal/source.Writer.
+// Modbus-write handlers in internal/sunspec/server (ControlsWriter).
 func emitControls(bank *Bank, currentPct uint16, ena uint16, conn uint16) {
 	bank.put16(ControlsModelID, ControlsBodyLen)
 

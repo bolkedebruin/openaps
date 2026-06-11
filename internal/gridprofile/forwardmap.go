@@ -2,7 +2,6 @@ package gridprofile
 
 import (
 	"fmt"
-	"math"
 	"sort"
 	"strings"
 )
@@ -155,7 +154,8 @@ func sfRefStr(s string) *string { v := s; return &v }
 //
 // Voltage thresholds (AC/AD/AQ/AY/AB/BN/BO) are stored in the inverter as
 // absolute volts but SunSpec models 707/708/703 express them as %VNom;
-// IsVoltagePct=true triggers the V↔%VNom conversion in helpers below.
+// IsVoltagePct=true marks those codes for the consumers that convert
+// (nativeUnit, defaultRange, and the SunSpec emitters).
 var forwardMap = map[string]mapEntry{
 	// --- Voltage trip LV (Model 707 DERTripLV, MustTrip.Pt[]) ---
 	// Pt[0]: under_voltage_stage_2_90 (AC) + Under_Voltage1_clearance_time (BB)
@@ -231,13 +231,6 @@ var forwardMap = map[string]mapEntry{
 	"CC": {Model: 134, Group: "CrvSet", Index: 0, Point: "Hz4", SFRef: sfRefStr("Hz_SF"), SF: -2, Unit: "Hz", LongName: "Over_frequency_Watt_High_set"},
 }
 
-// Lookup returns the map entry for an APsystems 2-letter code, or
-// (zero, false) if the code is not in the forward map.
-func Lookup(apsCode string) (mapEntry, bool) {
-	e, ok := forwardMap[apsCode]
-	return e, ok
-}
-
 // LongName returns the firmware param name for an APsystems code, or
 // ("", false) if the code has no known encoder.
 func LongName(apsCode string) (string, bool) {
@@ -246,29 +239,4 @@ func LongName(apsCode string) (string, bool) {
 		return "", false
 	}
 	return e.LongName, true
-}
-
-// VToVNomPct converts an absolute voltage to %VNom.
-// vnom must be > 0.
-func VToVNomPct(v, vnom float64) float64 {
-	return v / vnom * 100.0
-}
-
-// VNomPctToV converts %VNom back to an absolute voltage.
-// vnom must be > 0.
-func VNomPctToV(pct, vnom float64) float64 {
-	return pct / 100.0 * vnom
-}
-
-// EncodeSunSpec converts a native value to its SunSpec integer representation:
-// round(native / 10^sf).
-func EncodeSunSpec(native float64, sf int) float64 {
-	scale := math.Pow10(sf)
-	return math.Round(native / scale)
-}
-
-// DecodeSunSpec converts a SunSpec integer back to native units:
-// sunspec_value * 10^sf.
-func DecodeSunSpec(sunspec float64, sf int) float64 {
-	return sunspec * math.Pow10(sf)
 }

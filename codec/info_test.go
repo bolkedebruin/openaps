@@ -5,30 +5,6 @@ import (
 	"testing"
 )
 
-func TestMatchOutboundInfoQuery(t *testing.T) {
-	t.Parallel()
-
-	good := hx(t, "FBFB06DC000000000000E2FEFE")
-	if !MatchOutboundInfoQuery(good) {
-		t.Fatalf("canonical 0xDC query did not match")
-	}
-
-	// One byte mutated.
-	bad := append([]byte(nil), good...)
-	bad[3] = 0xDD
-	if MatchOutboundInfoQuery(bad) {
-		t.Fatalf("mutated cmd byte should not match")
-	}
-
-	// Wrong length.
-	if MatchOutboundInfoQuery(good[:len(good)-1]) {
-		t.Fatalf("short body should not match")
-	}
-	if MatchOutboundInfoQuery(append([]byte(nil), append(good, 0x00)...)) {
-		t.Fatalf("over-long body should not match")
-	}
-}
-
 func TestDecodeInfoReply_FormA(t *testing.T) {
 	t.Parallel()
 	// FB FB 09 DC <model=0x36> <hi=0x0002> 00 <lo=0x01F4=500> 00 00 00 00 FE FE

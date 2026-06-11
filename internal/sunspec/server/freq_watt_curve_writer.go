@@ -63,7 +63,7 @@ func (fwc *FreqWattCurveWriter) Apply(ctx context.Context, addrOffset uint16, re
 		return fmt.Errorf("writes disabled or inv-driver not configured")
 	}
 	if fwc.uid <= 1 {
-		return fmt.Errorf("Model 134 writes only valid on per-inverter unit IDs (2..N+1)")
+		return fmt.Errorf("model 134 writes only valid on per-inverter unit IDs (2..N+1)")
 	}
 	idx := int(fwc.uid) - 2
 	if idx < 0 || idx >= len(fwc.snap.Inverters) {
@@ -88,11 +88,11 @@ func (fwc *FreqWattCurveWriter) Apply(ctx context.Context, addrOffset uint16, re
 			sunspec.FreqWattCurveBodyW2Off,
 			sunspec.FreqWattCurveBodyW3Off,
 			sunspec.FreqWattCurveBodyW4Off:
-			return fmt.Errorf("Model 134 W%% values are intrinsic to the curve role "+
+			return fmt.Errorf("model 134 W%% values are intrinsic to the curve role "+
 				"(0/100/100/0) and cannot be rewritten — only Hz points are writable; "+
 				"offset %d", off)
 		default:
-			return fmt.Errorf("Model 134 body offset %d is read-only "+
+			return fmt.Errorf("model 134 body offset %d is read-only "+
 				"(only Hz1/Hz2/Hz3/Hz4 are writable on this APsystems bridge)", off)
 		}
 	}
@@ -127,7 +127,7 @@ func (fwc *FreqWattCurveWriter) Apply(ctx context.Context, addrOffset uint16, re
 		expected[pt.code] = hz
 	}
 	if !any {
-		return fmt.Errorf("Model 134 write must touch at least one writable field (Hz1..Hz4)")
+		return fmt.Errorf("model 134 write must touch at least one writable field (Hz1..Hz4)")
 	}
 
 	if fwc.tracker != nil && len(expected) > 0 {
