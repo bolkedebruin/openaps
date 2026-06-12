@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -127,6 +129,41 @@ func (a *pairingAdapter) CommitPan(pan uint16, channel byte) error {
 
 func (a *pairingAdapter) BindQuiet(shortAddr uint16) error {
 	return a.withModem(func() error { return a.runner.BindQuiet(shortAddr) })
+}
+
+// Probe pings the module (0x0D) under the pairing lock with the splice
+// redirected, so it neither races the modem→host copy nor overlaps a pairing
+// op. alive reports the 0xAB ack; a dead module is alive=false with nil err.
+func (a *pairingAdapter) Probe(ctx context.Context) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	var alive bool
+	err := a.withModem(func() error {
+		var e error
+		alive, e = a.runner.Ping()
+		return e
+	})
+	return alive, err
+}
+
+// Recover re-arms a wedged radio: a hardware reset pulse followed by re-adopting
+// the operating PAN+channel. Without a known operating PAN there is nothing to
+// re-arm to, so it reports an error rather than resetting blindly. The
+// SetModulePan re-adopt is idempotent on a healthy radio.
+func (a *pairingAdapter) Recover(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return a.withModem(func() error {
+		if a.opPAN == 0 {
+			return fmt.Errorf("recover: no operating PAN to re-arm")
+		}
+		if err := modem.HardwareReset(); err != nil {
+			return err
+		}
+		return a.runner.SetModulePan(a.opPAN, a.opChannel)
+	})
 }
 
 func (a *pairingAdapter) ReportScan(window time.Duration) ([]modem.FoundUnit, error) {

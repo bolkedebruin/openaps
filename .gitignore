@@ -4,6 +4,7 @@ build/
 *.out
 /inv-driver
 /ecu-web
+/ecu-zb
 /protbcast
 
 # host-built smoke-test binary (see _smoke/fakedriver)

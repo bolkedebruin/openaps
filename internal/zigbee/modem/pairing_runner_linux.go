@@ -3,6 +3,7 @@
 package modem
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -170,6 +171,26 @@ func readFrameChan(in <-chan []byte, timeout time.Duration) (frame []byte, encry
 			}
 		}
 	}
+}
+
+// Ping sends a 0x0D liveness ping and reports whether the module acked. A
+// returned ack (first byte 0xAB) means alive; a no-ack within ackTimeout
+// means the module is wedged and is reported as alive=false WITHOUT an error
+// — a dead module is the signal, not a failure. err is only a real
+// transport/write error.
+func (r *PairingRunner) Ping() (alive bool, err error) {
+	if err := r.writeFrame(buildPing(), "ping"); err != nil {
+		return false, err
+	}
+	ack, err := awaitAckChan(r.In, ackTimeout)
+	if err != nil {
+		if errors.Is(err, errNoAck) {
+			return false, nil
+		}
+		return false, fmt.Errorf("ping: %w", err)
+	}
+	log.Printf("pairing: ping ack % X", ack)
+	return true, nil
 }
 
 // SetModulePan parks the local module on pan/channel (op 0x05). pan may be

@@ -39,7 +39,7 @@ func BringupAPsystems(fd int, pan uint16, channel byte) error {
 			break
 		}
 		log.Printf("modem: 0x0D ping failed (attempt %d/3); hardware-resetting radio", attempt)
-		if err := hardwareReset(); err != nil {
+		if err := HardwareReset(); err != nil {
 			log.Printf("modem: hardware reset: %v", err)
 		}
 	}
@@ -146,9 +146,9 @@ func flush(fd int) error {
 	return unix.IoctlSetInt(fd, unix.TCFLSH, unix.TCIOFLUSH)
 }
 
-// hardwareReset pulses the radio's reset GPIO via /dev/reset
+// HardwareReset pulses the radio's reset GPIO via /dev/reset
 // (ioctl(fd,0,0)) and waits for it to settle.
-func hardwareReset() error {
+func HardwareReset() error {
 	fd, err := unix.Open(resetDevice, unix.O_RDONLY, 0)
 	if err != nil {
 		return fmt.Errorf("open %s: %w", resetDevice, err)

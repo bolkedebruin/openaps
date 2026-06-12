@@ -182,17 +182,28 @@ func run(cfg config) error {
 	var hook proxy.Hook = proxy.NoOpHook{}
 	var tracker *proxy.BusTrackerHook
 	var busClient *busmgr.Client
+	// wd is the runtime radio watchdog. It is allocated up front (not where its
+	// Probe/Recover are wired) so the RawReplySink closure below captures a
+	// stable non-nil pointer: NoteInbound runs on the dispatch goroutine and the
+	// wiring runs on this one, so a late assignment would be an unsynchronised
+	// read. NoteInbound on a watchdog whose Run never starts is a harmless
+	// timestamp nobody reads. Run is started later, only under watchdogEnabled.
+	var wd *modem.Watchdog
 
 	if cfg.invDriverSock != "" {
 		tracker = proxy.NewBusTrackerHook()
 		hook = tracker
+		wd = &modem.Watchdog{}
 
 		inv := inventory.NewMap()
 		busClient = busmgr.New(cfg.invDriverSock, "apsystems-stock-zb", version)
 		busClient.Inventory = inv
 
 		pub := &busmgr.Publisher{C: busClient, Inventory: inv}
-		tracker.RawReplySink = pub.RawFrame
+		tracker.RawReplySink = func(sa uint16, l1 []byte) {
+			wd.NoteInbound()
+			pub.RawFrame(sa, l1)
+		}
 		busClient.OnSend = tracker.InjectTracked
 
 		if err := busClient.Start(ctx); err != nil {
@@ -242,8 +253,18 @@ func run(cfg config) error {
 	// Pairing executor: OTA (re)pairing primitives run on the modem fd with
 	// the splice paused for exclusivity. Wired only when inv-driver is
 	// connected (it drives PairingCmd); without it pairing has no client.
+	// The same adapter instance backs the radio watchdog so probe/pairing
+	// share the pairing lock and never race.
+	var pairer *pairingAdapter
 	if busClient != nil {
-		busClient.Pairing = newPairingAdapter(sp, int(modemPort.Fd()), opPAN, opChannel)
+		pairer = newPairingAdapter(sp, int(modemPort.Fd()), opPAN, opChannel)
+		busClient.Pairing = pairer
+		if watchdogEnabled(true, opPAN) {
+			wd.Probe = pairer.Probe
+			wd.Recover = pairer.Recover
+		} else {
+			log.Printf("radio watchdog disabled: no operating PAN")
+		}
 	}
 
 	// 5. Splice + signal handling.
@@ -270,6 +291,16 @@ func run(cfg config) error {
 
 	spDone := make(chan error, 1)
 	go func() { spDone <- sp.Run(ctx) }()
+
+	// Runtime radio recovery: once the splice owns the modem reader, the
+	// watchdog probes the radio through the pairing redirect when the bus goes
+	// silent and re-arms it if it has wedged. Shares ctx so it stops on
+	// shutdown. Started only when its Probe/Recover were wired above (an
+	// inv-driver-backed pairing adapter and a known operating PAN).
+	if wd != nil && wd.Probe != nil {
+		go wd.Run(ctx)
+		log.Printf("radio watchdog running")
+	}
 
 	log.Printf("splice running; %d goroutines, GOMAXPROCS=%d",
 		runtime.NumGoroutine(), runtime.GOMAXPROCS(0))

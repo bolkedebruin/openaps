@@ -22,6 +22,7 @@ type FoundUnit struct {
 	Encrypted bool
 }
 
+func (r *PairingRunner) Ping() (bool, error)                  { return false, errUnsupported }
 func (r *PairingRunner) SetModulePan(uint16, byte) error      { return errUnsupported }
 func (r *PairingRunner) GetShortAddr(string) (uint16, error)  { return 0, errUnsupported }
 func (r *PairingRunner) SetInvPan(string, uint16, byte) error { return errUnsupported }

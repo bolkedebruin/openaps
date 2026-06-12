@@ -11,3 +11,7 @@ var errUnsupported = errors.New("modem bring-up only supported on linux")
 
 // BringupAPsystems is a no-op stub on non-linux builds.
 func BringupAPsystems(_ int, _ uint16, _ byte) error { return errUnsupported }
+
+// HardwareReset is stubbed on non-linux builds; the /dev/reset GPIO pulse is
+// linux-only.
+func HardwareReset() error { return errUnsupported }
