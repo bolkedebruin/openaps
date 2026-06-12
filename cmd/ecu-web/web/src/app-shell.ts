@@ -1,5 +1,5 @@
 import { LitElement, html, css, nothing } from "lit";
-import { api, streamFleet, type Fleet, type SystemStatus, type Settings } from "./api.ts";
+import { api, setUnauthorizedHandler, streamFleet, type Fleet, type SystemStatus, type Settings } from "./api.ts";
 import "./views/login-view.ts";
 import "./views/dashboard-view.ts";
 import "./views/inverters-view.ts";
@@ -123,6 +123,7 @@ export class EcuApp extends LitElement {
   connectedCallback(): void {
     super.connectedCallback();
     window.addEventListener("hashchange", this.onHash);
+    setUnauthorizedHandler(this.onUnauthorized);
     this.onHash();
     void this.init();
   }
@@ -130,8 +131,21 @@ export class EcuApp extends LitElement {
   disconnectedCallback(): void {
     super.disconnectedCallback();
     window.removeEventListener("hashchange", this.onHash);
+    setUnauthorizedHandler(null);
     this.stopStreams();
   }
+
+  // onUnauthorized fires when any API request comes back 401. An in-memory
+  // session was lost (e.g. ecu-web restarted), so drop to the login view to
+  // prompt re-auth. Only acts while currently authed, so a 401 from a wrong
+  // password during login (authed already false) is left to the login view.
+  private onUnauthorized = () => {
+    if (!this.authed) return;
+    this.authed = false;
+    this.stopStreams();
+    this.fleet = null;
+    this.system = null;
+  };
 
   private onHash = () => {
     const id = (location.hash.replace(/^#\/?/, "") || "dashboard").split("/")[0];

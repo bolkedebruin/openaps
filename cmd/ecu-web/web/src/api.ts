@@ -84,6 +84,15 @@ export interface SystemStatus {
   status_error?: string;
 }
 
+// unauthorizedHandler is fired whenever any request comes back 401, just
+// before the error is thrown. The app shell registers it to drop to the login
+// view when an in-memory session is lost (e.g. ecu-web was restarted).
+let unauthorizedHandler: (() => void) | null = null;
+
+export function setUnauthorizedHandler(fn: (() => void) | null): void {
+  unauthorizedHandler = fn;
+}
+
 // errorMessage extracts a human-readable error from a non-OK response.
 // Many endpoints return a JSON envelope like {"ok":false,"error":"..."}
 // even on 4xx; surface that string instead of the raw JSON blob.
@@ -101,9 +110,17 @@ async function errorMessage(res: Response, path: string): Promise<string> {
   return `${path}: ${res.status}`;
 }
 
+// failIfNotOK throws on a non-OK response, firing the unauthorized handler
+// first on a 401 so the app can drop to login. Non-401 behaviour is unchanged.
+async function failIfNotOK(res: Response, path: string): Promise<void> {
+  if (res.ok) return;
+  if (res.status === 401) unauthorizedHandler?.();
+  throw new Error(await errorMessage(res, path));
+}
+
 async function getJSON<T>(path: string): Promise<T> {
   const res = await fetch(path, { credentials: "same-origin" });
-  if (!res.ok) throw new Error(await errorMessage(res, path));
+  await failIfNotOK(res, path);
   return (await res.json()) as T;
 }
 
@@ -114,7 +131,7 @@ async function postJSON(path: string, body: unknown): Promise<void> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(await errorMessage(res, path));
+  await failIfNotOK(res, path);
 }
 
 async function postJSONResult<T>(path: string, body: unknown): Promise<T> {
@@ -124,7 +141,7 @@ async function postJSONResult<T>(path: string, body: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(await errorMessage(res, path));
+  await failIfNotOK(res, path);
   return (await res.json()) as T;
 }
 
@@ -135,7 +152,7 @@ async function putJSON<T>(path: string, body: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(await errorMessage(res, path));
+  await failIfNotOK(res, path);
   return (await res.json()) as T;
 }
 
@@ -360,7 +377,7 @@ async function delJSON<T>(path: string, body: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(await errorMessage(res, path));
+  await failIfNotOK(res, path);
   return (await res.json()) as T;
 }
 
@@ -408,7 +425,10 @@ export const api = {
   },
   saveSettings: (s: Settings) => putJSON<Settings>("/api/settings", s),
   // verifyPassword: confirms the operator's password without changing it.
-  // Returns true on 200, false on 401, throws otherwise.
+  // Returns true on 200, false on 401, throws otherwise. This deliberately
+  // does NOT route through failIfNotOK: here a 401 means "wrong password" for a
+  // step-up confirm, not "session lost", so it must not fire the unauthorized
+  // handler and drop the operator to login.
   verifyPassword: async (password: string): Promise<boolean> => {
     const res = await fetch("/api/auth/verify", {
       method: "POST",
