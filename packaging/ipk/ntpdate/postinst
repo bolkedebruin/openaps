@@ -8,6 +8,6 @@
 # via rcS.d S46.
 set -e
 
-[ -x /etc/rcS.d/S46-ntpdate ] && /etc/rcS.d/S46-ntpdate start
+[ -x /etc/rcS.d/S56-ntpdate ] && /etc/rcS.d/S56-ntpdate start
 
 exit 0

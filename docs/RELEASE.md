@@ -1,3 +1,27 @@
+# OpenAPS v1.1.13
+
+Fixes the ECU clock not being set after a reboot.
+
+## Fixed
+
+- **ntpdate now reliably sets the clock at boot.** Two issues on this
+  battery-RTC-less ECU: (1) a cold boot starts at year 2000, and `ntpdate -b`
+  could fail to step a multi-year gap (`step-systime: Invalid argument`) — the
+  init now nudges an implausibly-old clock to the last-known-good
+  `/etc/timestamp` first, so ntpdate only steps a small offset; (2) the init ran
+  *before* `S55bootmisc.sh`, which calls `hwclock --hctosys` and reset the clock
+  back to the dead RTC right after ntpdate had corrected it, leaving the box at
+  year 2000 for up to an hour. The init is renumbered `S56-ntpdate` so it runs
+  after bootmisc as the final boot-time clock setter.
+
+## Upgrading
+
+`opkg upgrade ntpdate` (or reinstall it). The upgrade replaces the old
+`S46-ntpdate` init with `S56-ntpdate` and restarts the sync loop. No other
+changes.
+
+---
+
 # OpenAPS v1.1.12
 
 Adds a helper to migrate ECUs from the 1.0.X release to 1.1.X.

@@ -517,8 +517,8 @@ ipk-ntpdate: build-mkipk $(NTPDATE_DIR)/ntpdate
 	@# (preserved on upgrade); the conffiles manifest lists this exact path.
 	@cp packaging/ntpdate-servers.conf $(IPKROOT)/ntpdate/etc/ntpdate/servers.conf
 	@chmod 0644 $(IPKROOT)/ntpdate/etc/ntpdate/servers.conf
-	@cp packaging/S46-ntpdate $(IPKROOT)/ntpdate/etc/rcS.d/S46-ntpdate
-	@chmod 0755 $(IPKROOT)/ntpdate/etc/rcS.d/S46-ntpdate
+	@cp packaging/S56-ntpdate $(IPKROOT)/ntpdate/etc/rcS.d/S56-ntpdate
+	@chmod 0755 $(IPKROOT)/ntpdate/etc/rcS.d/S56-ntpdate
 	$(call call_mkipk,ntpdate,$(IPK_ARCH))
 
 # package-ipks — build every .ipk in ipk-all, then mirror them into build/ipks/ (the dir

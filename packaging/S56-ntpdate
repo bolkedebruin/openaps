@@ -1,12 +1,15 @@
 #!/bin/sh
 #
-# S46-ntpdate — keep the ECU clock in step with the Debian NTP pool.
+# S56-ntpdate — keep the ECU clock in step with the Debian NTP pool.
 #
 # The box has no cron and no battery RTC, so this runs ntpdate from a small
 # self-retrying background loop: sync immediately on start, retry every 60s
 # until the network/DNS comes up at boot, then once an hour. `ntpdate -b`
-# force-steps the clock. Numbered S46 so it runs after S40networking and
-# before S47-openaps-tls-proxy.
+# force-steps the clock.
+#
+# Numbered S56 so it runs AFTER S55bootmisc.sh — which calls `hwclock --hctosys`
+# and would otherwise reset the clock to the (dead) RTC right after an earlier
+# ntpdate run. As the last boot-time clock setter, ntpdate's correction sticks.
 
 BIN=/usr/local/sbin/ntpdate
 CONF=/etc/ntpdate/servers.conf
@@ -31,6 +34,19 @@ start() {
     # descendants. The parent records the loop's pid ($!) so stop() can kill it.
     nohup sh -c '
         while true; do
+            # No battery-backed RTC: a cold boot can start at 1970/2000.
+            # ntpdate -b can fail to step a multi-year gap ("step-systime:
+            # Invalid argument"), so first nudge an implausibly-old clock to a
+            # recent baseline — the last-known-good /etc/timestamp (written at
+            # shutdown), else a built-in floor. ntpdate then steps only a small
+            # offset.
+            if [ "$(date +%Y)" -lt 2020 ]; then
+                if [ -f /etc/timestamp ]; then
+                    date -s "$(date -r /etc/timestamp "+%Y-%m-%d %H:%M:%S")" >/dev/null 2>&1 || true
+                else
+                    date -s "2026-06-01 00:00:00" >/dev/null 2>&1 || true
+                fi
+            fi
             if '"$BIN"' -b '"$NTPSERVERS"' > "'"$LAST"'" 2>&1; then
                 sleep 3600
             else
