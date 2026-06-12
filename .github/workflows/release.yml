@@ -60,7 +60,10 @@ jobs:
       - name: generate SHA256SUMS
         working-directory: build
         run: |
-          sha256sum ipks/*.ipk | sort -k 2 > SHA256SUMS
+          # Ship the 1.0.X -> 1.1.X migration helper as a standalone release
+          # asset (it is a script, not an .ipk, and is NOT in the bootstrap).
+          cp ../packaging/openaps-unstub-stock.sh openaps-unstub-stock.sh
+          sha256sum ipks/*.ipk openaps-unstub-stock.sh | sort -k 2 > SHA256SUMS
           cat SHA256SUMS
 
       - name: upload release artifacts (create release if missing)
@@ -74,11 +77,13 @@ jobs:
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
             gh release upload "${GITHUB_REF_NAME}" \
               build/ipks/*.ipk \
+              build/openaps-unstub-stock.sh \
               build/SHA256SUMS \
               --clobber
           else
             gh release create "${GITHUB_REF_NAME}" \
               build/ipks/*.ipk \
+              build/openaps-unstub-stock.sh \
               build/SHA256SUMS \
               --title "OpenAPS ${GITHUB_REF_NAME}" \
               --notes-file /tmp/relnotes.md

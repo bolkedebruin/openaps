@@ -1,3 +1,34 @@
+# OpenAPS v1.1.12
+
+Adds a helper to migrate ECUs from the 1.0.X release to 1.1.X.
+
+## Added
+
+- **`openaps-unstub-stock.sh` — 1.0.X → 1.1.X migration helper (release asset).**
+  1.0.X suppressed the stock firmware with in-place sleeper stubs; 1.1.X disables
+  it cleanly at the manager level (the `apsystems-stock` package). This script
+  converts a 1.0.X box to the 1.1.X layout without opkg: it restores every
+  stubbed `<app>.real` binary and comments the stock manager launch in
+  `S50ecu_init` (the exact state `opkg remove apsystems-stock` produces),
+  starting nothing. It refuses unless persistent SSH (`openaps-dropbear`) is
+  installed, so it can't cause a lockout. Idempotent; `--dry-run` supported.
+  Shipped as a standalone asset (with a SHA256SUMS entry), not in the bootstrap.
+
+## Migrating from 1.0.X
+
+See **`docs/MIGRATION-1.0-to-1.1.md`** for the full procedure. In short, on the
+ECU as root: (1) `opkg install openaps-dropbear` first — its postinst starts
+persistent, manager-independent SSH immediately (this release includes the
+`openaps-dropbear` ipk); (2) run `openaps-unstub-stock.sh`; (3) install the rest
+of the 1.1.X packages (not `apsystems-stock`); (4) reboot.
+
+## Upgrading
+
+Install the `.ipk` packages from this release over the opkg feed as usual. No
+configuration or schema changes.
+
+---
+
 # OpenAPS v1.1.11
 
 Fixes the built-in grid profiles being absent on a fresh install.
