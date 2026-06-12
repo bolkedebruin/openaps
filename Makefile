@@ -53,6 +53,10 @@ PROTOC ?= protoc
 # - ipk-dropbear / fetch-dropbear auto-fetch into $(BUILD_DIR)/dropbear-armv7 if unset.
 DROPBEAR_DIR ?= $(BUILD_DIR)/dropbear-armv7
 
+# NTPDATE_DIR holds the extracted ntpdate ARMv7 binary.
+# ipk-ntpdate / fetch-ntpdate auto-fetch into $(BUILD_DIR)/ntpdate-armv7 if unset.
+NTPDATE_DIR ?= $(BUILD_DIR)/ntpdate-armv7
+
 .PHONY: all build-all build-all-arm \
         build-inv-driver build-inv-driver-arm \
         build-ecu-web build-ecu-web-arm \
@@ -64,9 +68,9 @@ DROPBEAR_DIR ?= $(BUILD_DIR)/dropbear-armv7
         deploy-inv-driver deploy-ecu-web deploy-ecu-zb deploy-ecu-sunspec \
         install-init-zb uninstall-init-zb \
         package-zb package-sunspec package-sunspec-with-dropbear \
-        package-all fetch-dropbear \
+        package-all fetch-dropbear fetch-ntpdate \
         ipk-all ipk-base ipk-inv-driver ipk-ecu-zb ipk-ecu-web ipk-ecu-sunspec \
-        ipk-tls-proxy ipk-dropbear package-ipks package-bootstrap \
+        ipk-tls-proxy ipk-dropbear ipk-ntpdate package-ipks package-bootstrap \
         web web-test proto \
         test vet fmt clean
 
@@ -313,6 +317,11 @@ fetch-dropbear: $(DROPBEAR_DIR)/dropbear
 $(DROPBEAR_DIR)/dropbear:
 	@./packaging/fetch-dropbear.sh $(DROPBEAR_DIR)
 
+fetch-ntpdate: $(NTPDATE_DIR)/ntpdate
+
+$(NTPDATE_DIR)/ntpdate:
+	@./packaging/fetch-ntpdate.sh $(NTPDATE_DIR)
+
 package-all: package-zb package-sunspec
 
 # ---------------- .ipk packaging (opkg) ----------------
@@ -385,7 +394,7 @@ define call_mkipk
 	@ls -lh $(IPK_DIR)/$(1)_$(VERSION)_$(2).ipk
 endef
 
-ipk-all: ipk-base ipk-inv-driver ipk-ecu-zb ipk-ecu-web ipk-ecu-sunspec ipk-recoveryd ipk-tls-proxy ipk-dropbear ipk-apsystems-stock
+ipk-all: ipk-base ipk-inv-driver ipk-ecu-zb ipk-ecu-web ipk-ecu-sunspec ipk-recoveryd ipk-tls-proxy ipk-dropbear ipk-ntpdate ipk-apsystems-stock
 
 # (a) openaps-base — Architecture: all, no Depends. Ships release.pub +
 #     openaps-rollback; postinst provisions settings.json from /etc/yuneng.
@@ -475,7 +484,26 @@ ipk-dropbear: build-mkipk $(DROPBEAR_DIR)/dropbear
 	@chmod 0755 $(IPKROOT)/openaps-dropbear/etc/rcS.d/S98-dropbear
 	$(call call_mkipk,openaps-dropbear,$(IPK_ARCH))
 
-# package-ipks — build all 7 .ipks, then mirror them into build/ipks/ (the dir
+# (h) ntpdate — armv7ahf-vfp-neon, Depends: none. Bundles the Debian wheezy
+#     ntpdate ARMv7 binary (fetched into $(NTPDATE_DIR)) under /usr/local/sbin,
+#     its operator-editable servers conffile, and the S46 init that steps the
+#     clock at boot and hourly from a small rcS loop (the box has no cron).
+ipk-ntpdate: build-mkipk $(NTPDATE_DIR)/ntpdate
+	@rm -rf $(IPKROOT)/ntpdate
+	@mkdir -p $(IPKROOT)/ntpdate/usr/local/sbin
+	@mkdir -p $(IPKROOT)/ntpdate/etc/ntpdate
+	@mkdir -p $(IPKROOT)/ntpdate/etc/rcS.d
+	@cp $(NTPDATE_DIR)/ntpdate $(IPKROOT)/ntpdate/usr/local/sbin/ntpdate
+	@chmod 0755 $(IPKROOT)/ntpdate/usr/local/sbin/ntpdate
+	@# Ship the servers list at its final path so opkg tracks it as a conffile
+	@# (preserved on upgrade); the conffiles manifest lists this exact path.
+	@cp packaging/ntpdate-servers.conf $(IPKROOT)/ntpdate/etc/ntpdate/servers.conf
+	@chmod 0644 $(IPKROOT)/ntpdate/etc/ntpdate/servers.conf
+	@cp packaging/S46-ntpdate $(IPKROOT)/ntpdate/etc/rcS.d/S46-ntpdate
+	@chmod 0755 $(IPKROOT)/ntpdate/etc/rcS.d/S46-ntpdate
+	$(call call_mkipk,ntpdate,$(IPK_ARCH))
+
+# package-ipks — build every .ipk in ipk-all, then mirror them into build/ipks/ (the dir
 # the bootstrap tarball and a published feed both consume).
 package-ipks: ipk-all
 	@rm -rf $(BUILD_DIR)/ipks

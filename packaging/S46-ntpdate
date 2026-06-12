@@ -1,0 +1,65 @@
+#!/bin/sh
+#
+# S46-ntpdate — keep the ECU clock in step with the Debian NTP pool.
+#
+# The box has no cron and no battery RTC, so this runs ntpdate from a small
+# self-retrying background loop: sync immediately on start, retry every 60s
+# until the network/DNS comes up at boot, then once an hour. `ntpdate -b`
+# force-steps the clock. Numbered S46 so it runs after S40networking and
+# before S47-openaps-tls-proxy.
+
+BIN=/usr/local/sbin/ntpdate
+CONF=/etc/ntpdate/servers.conf
+PIDFILE=/var/run/ntpdate.pid
+LAST=/var/run/ntpdate.last
+
+NTPSERVERS=
+if [ -f "$CONF" ]; then
+    . "$CONF"
+fi
+
+start() {
+    [ -x "$BIN" ] || { echo "ntpdate not installed"; return 0; }
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "ntpdate already running (pid $(cat "$PIDFILE"))"
+        return 0
+    fi
+    [ -n "$NTPSERVERS" ] || { echo "NTPSERVERS not set in $CONF"; return 1; }
+
+    # nohup'd detached loop, same SIGHUP-immune pattern as S98-dropbear: the
+    # loop survives both init(1) boot context and a context that reaps its
+    # descendants. The parent records the loop's pid ($!) so stop() can kill it.
+    nohup sh -c '
+        while true; do
+            if '"$BIN"' -b '"$NTPSERVERS"' > "'"$LAST"'" 2>&1; then
+                sleep 3600
+            else
+                sleep 60
+            fi
+        done
+    ' </dev/null >/dev/null 2>&1 &
+    echo $! > "$PIDFILE"
+    echo "ntpdate started (pid $(cat "$PIDFILE"))"
+}
+
+stop() {
+    if [ -f "$PIDFILE" ]; then
+        kill "$(cat "$PIDFILE")" 2>/dev/null
+        # The loop shell exits on the signal; a blocking `sleep` it was waiting
+        # on may linger harmlessly until it expires. Kill any in-flight one-shot
+        # too — no other ntpdate runs on this box.
+        killall ntpdate 2>/dev/null
+        rm -f "$PIDFILE"
+        echo "ntpdate stopped"
+    fi
+}
+
+case "$1" in
+    start)   start ;;
+    stop)    stop ;;
+    restart) stop; sleep 1; start ;;
+    *)
+        echo "usage: $0 {start|stop|restart}"
+        exit 2
+        ;;
+esac

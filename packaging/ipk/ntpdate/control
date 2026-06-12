@@ -1,0 +1,10 @@
+Package: ntpdate
+Version: __OPENAPS_VERSION__
+Architecture: armv7ahf-vfp-neon
+Maintainer: Bolke de Bruin <bdbruin@gmail.com>
+Section: net
+Priority: optional
+Depends:
+Description: ntpdate from Debian wheezy armhf.
+ Steps the ECU clock at boot and hourly against the Debian NTP pool. A
+ client-only one-shot, run from a small rcS loop since the box has no cron.

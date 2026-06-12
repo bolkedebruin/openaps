@@ -1,0 +1,13 @@
+#!/bin/sh
+# postinst — ntpdate
+#
+# ntpdate runs as root with no privilege separation, so there is no user or
+# group to create. The server list (/etc/ntpdate/servers.conf) ships as a
+# conffile, so opkg installs and preserves it across upgrades — this script
+# does not write it. Just bring the sync loop up now; it also starts at boot
+# via rcS.d S46.
+set -e
+
+[ -x /etc/rcS.d/S46-ntpdate ] && /etc/rcS.d/S46-ntpdate start
+
+exit 0
