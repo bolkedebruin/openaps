@@ -426,9 +426,27 @@ ipk-apsystems-stock: build-mkipk
 	@chmod 0644 $(IPKROOT)/apsystems-stock/usr/share/doc/apsystems-stock/README
 	$(call call_mkipk,apsystems-stock,all)
 
-# (b) openaps-inv-driver — armv7ahf-vfp-neon, Depends: openaps-base.
+# (b) openaps-inv-driver — armv7ahf-vfp-neon, Depends: openaps-base. Bespoke
+#     (not stage_service) so it also ships the seed grid profiles into the dir
+#     inv-driver loads at startup, giving a fresh install its base profiles.
+#     They are package DATA, not conffiles: releases ship corrected/new grid
+#     codes, and operator customisation lives in overlays/ (runtime-created,
+#     never touched by the package).
 ipk-inv-driver: build-inv-driver-arm build-mkipk
-	$(call stage_service,openaps-inv-driver,$(INV_DRIVER_ARMV7),S48-inv-driver)
+	@rm -rf $(IPKROOT)/openaps-inv-driver
+	@mkdir -p $(IPKROOT)/openaps-inv-driver/home/applications/inv-driver
+	@mkdir -p $(IPKROOT)/openaps-inv-driver/etc/rcS.d
+	@mkdir -p $(IPKROOT)/openaps-inv-driver/var/lib/inv-driver/gridprofiles/profiles
+	@cp $(INV_DRIVER_ARMV7) $(IPKROOT)/openaps-inv-driver/home/applications/inv-driver/inv-driver
+	@chmod 0755 $(IPKROOT)/openaps-inv-driver/home/applications/inv-driver/inv-driver
+	@cp packaging/S48-inv-driver $(IPKROOT)/openaps-inv-driver/etc/rcS.d/S48-inv-driver
+	@chmod 0755 $(IPKROOT)/openaps-inv-driver/etc/rcS.d/S48-inv-driver
+	@cp gridprofiles-seed/profiles/*.json $(IPKROOT)/openaps-inv-driver/var/lib/inv-driver/gridprofiles/profiles/
+	@chmod 0644 $(IPKROOT)/openaps-inv-driver/var/lib/inv-driver/gridprofiles/profiles/*.json
+	@mkdir -p $(IPK_DIR)
+	@sed 's|__INIT__|/etc/rcS.d/S48-inv-driver|' $(IPK_META)/_service-postinst.in > $(IPK_DIR)/.gen-openaps-inv-driver-postinst
+	$(call call_mkipk,openaps-inv-driver,$(IPK_ARCH))
+	@rm -f $(IPK_DIR)/.gen-openaps-inv-driver-postinst
 
 # (c) openaps-ecu-zb — armv7ahf-vfp-neon, Depends: openaps-base, openaps-inv-driver.
 ipk-ecu-zb: build-ecu-zb-arm build-mkipk
