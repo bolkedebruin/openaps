@@ -1,3 +1,28 @@
+# OpenAPS v1.1.10
+
+Adds an NTP time-sync package for the ECU.
+
+## Added
+
+- **`ntpdate` opkg — keeps the ECU clock synced.** The device has no cron and
+  no battery-backed RTC, so its clock drifts and resets to the last-shutdown
+  time across reboots — which skews logs and TLS certificate validity. This
+  packages the Debian-wheezy `ntpdate` binary (SHA256-pinned from
+  snapshot.debian.org, no cross-compilation) as a bare `ntpdate` package. An
+  rcS init steps the clock with `ntpdate -b` against the Debian NTP pool at
+  boot and hourly; the server list is an operator-editable conffile at
+  `/etc/ntpdate/servers.conf`. It runs as a transient root one-shot with no
+  privilege separation, so it needs no extra users or libraries.
+
+## Upgrading
+
+Install the `.ipk` packages from this release over the opkg feed as usual; see
+`UPGRADING.md`. To enable time sync, install the new package:
+`opkg install ntpdate`. It is feed-installable only (not part of the
+bootstrap). No configuration or schema changes.
+
+---
+
 # OpenAPS v1.1.9
 
 Reliability release: a runtime radio watchdog so the ECU recovers from a
