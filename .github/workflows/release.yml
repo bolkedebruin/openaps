@@ -67,6 +67,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # docs/RELEASE.md is a cumulative changelog (newest section on top).
+          # Extract just the newest "# OpenAPS vX.Y.Z" section for this
+          # release's notes so older entries are kept in-repo but not re-posted.
+          awk '/^# OpenAPS /{n++} n==1{print} n==2{exit}' docs/RELEASE.md > /tmp/relnotes.md
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
             gh release upload "${GITHUB_REF_NAME}" \
               build/ipks/*.ipk \
@@ -77,7 +81,7 @@ jobs:
               build/ipks/*.ipk \
               build/SHA256SUMS \
               --title "OpenAPS ${GITHUB_REF_NAME}" \
-              --notes-file docs/RELEASE.md
+              --notes-file /tmp/relnotes.md
           fi
 
   # Sign the opkg feed index with the release key and publish it to gh-pages.
