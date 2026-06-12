@@ -1,3 +1,25 @@
+# OpenAPS v1.1.11
+
+Fixes the built-in grid profiles being absent on a fresh install.
+
+## Fixed
+
+- **The base grid profiles now ship in `openaps-inv-driver`.** inv-driver
+  loads its base profiles from `/var/lib/inv-driver/gridprofiles/profiles` at
+  startup, but the package never populated that directory — so a fresh install
+  showed an empty Profiles screen. The package now ships the 64 built-in
+  profiles (EN 50549-1, AS/NZS 4777.2, ABNT, …) into that directory. They are
+  package data (refreshed on upgrade), not conffiles; operator overlays are
+  stored separately and are never touched.
+
+## Upgrading
+
+Install the `.ipk` packages from this release over the opkg feed as usual.
+Upgrading `openaps-inv-driver` drops the base profiles into place and reloads
+them on restart. No configuration or schema changes.
+
+---
+
 # OpenAPS v1.1.10
 
 Adds an NTP time-sync package for the ECU.
