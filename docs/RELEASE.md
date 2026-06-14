@@ -1,3 +1,24 @@
+# OpenAPS v1.1.17
+
+Decodes QS2 (4-channel) inverter telemetry.
+
+## Added
+
+- **QS2 telemetry decoding.** QS2 (model `0x36`) reports four DC
+  channels and shares the DS3-class reply command (`0xBB`) with DS3, so
+  a telemetry reply is now dispatched by inverter model code rather than
+  the command byte alone. QS2 decodes all four channels (A–D) and their
+  lifetime accumulators; previously it fell through the DS3 decoder and
+  surfaced only two. The model code is sourced from each inverter's info
+  reply, and QS2 telemetry now reports its model as `QS2`. DS3 and QS1A
+  decoding are unchanged.
+
+## Upgrading
+
+`opkg upgrade openaps-inv-driver`. No configuration or schema changes.
+
+---
+
 # OpenAPS v1.1.16
 
 Recognizes the QS2 inverter and corrects nameplate ratings.
