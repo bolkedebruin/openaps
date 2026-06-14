@@ -109,6 +109,12 @@ type Ingestor struct {
 	// so a protection reply whose inferred family contradicts the known
 	// model is rejected (guards against reply cross-talk on the modem).
 	protFamily map[string]bool
+	// modelByUID caches each UID's model code from its info reply so a
+	// telemetry reply can be decoded with the right field layout. The
+	// shared 0xBB DS3-class reply (DS3, QS2, …) is disambiguated only by
+	// the model code; until an info reply arrives the model is unknown
+	// and the reply decodes as DS3. Guarded by protMu.
+	modelByUID map[string]uint8
 	// protReadQueue serialises on-demand reads through a single worker so
 	// queries are spaced on the wire (concurrent unspaced reads make
 	// ecu-zb's single-frame reassembly cross-talk between inverters).
@@ -576,8 +582,31 @@ func (in *Ingestor) tryProtectionReply(ctx context.Context, tsMs int64, env code
 // are far longer (DS3 page A inner-len ≥ 0x63).
 const protReplyMinLen = 32
 
+// noteModel records a UID's model code (from its info reply) so a later
+// telemetry reply on the shared 0xBB DS3-class command can be decoded
+// with the right per-model field layout.
+func (in *Ingestor) noteModel(uid string, modelCode uint8) {
+	if uid == "" || modelCode == 0 {
+		return
+	}
+	in.protMu.Lock()
+	if in.modelByUID == nil {
+		in.modelByUID = make(map[string]uint8)
+	}
+	in.modelByUID[uid] = modelCode
+	in.protMu.Unlock()
+}
+
+// modelFor returns the cached model code for a UID, or 0 if no info
+// reply has been seen yet (the decoder then falls back to DS3).
+func (in *Ingestor) modelFor(uid string) uint8 {
+	in.protMu.RLock()
+	defer in.protMu.RUnlock()
+	return in.modelByUID[uid]
+}
+
 func (in *Ingestor) tryTelemetry(ctx context.Context, tsMs int64, env codec.L1Envelope) (bool, error) {
-	rep, err := codec.DecodeReplyFromEnvelope(env)
+	rep, err := codec.DecodeReplyForModel(env, in.modelFor(env.PeerUIDString()))
 	if err != nil {
 		return false, nil
 	}
@@ -619,6 +648,7 @@ func (in *Ingestor) tryPairFrame(ctx context.Context, tsMs int64, env codec.L1En
 // only when it's 1 because single-phase implies leg=1 unambiguously.
 // Three-phase per-leg phase is operator-configured (separate work).
 func (in *Ingestor) applyInfoReply(ctx context.Context, tsMs int64, env codec.L1Envelope, info codec.InfoReply) error {
+	in.noteModel(env.PeerUIDString(), info.Model)
 	modelWire := uint32(info.Model)
 	sw := info.SoftwareVersion
 	wireInfo := &wire.InverterInfo{

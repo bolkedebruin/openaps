@@ -118,6 +118,7 @@ type Reply struct {
 	PeerUID   string // 12-char hex, matches `id` column
 	Cmd       byte   // L2 cmd byte (0xB1 QS1A, 0xBB DS3, etc.)
 	Family    Family // dispatching family classification; FamilyUnknown for unrecognised replies
+	ModelCode uint8  // dispatching model code when known (disambiguates the shared 0xBB reply); 0 if unknown
 
 	// Signal-quality bytes from the L1 envelope.
 	// RSSI is the primary signal strength value (with clamp byte < 0x10
@@ -158,6 +159,12 @@ type Reply struct {
 // publish a string-typed model column; in-process consumers should
 // branch on r.Family directly.
 func (r Reply) ModelLabel() string {
+	// When the dispatching model code is known it is authoritative: the
+	// shared 0xBB reply is used by DS3, QS2 and other DS3-class models,
+	// so the Cmd byte alone can't tell them apart.
+	if r.ModelCode != 0 {
+		return ModelLabelForCode(r.ModelCode)
+	}
 	switch r.Cmd {
 	case CmdReplyDS3:
 		return "DS3"
@@ -262,10 +269,23 @@ func DecodeReply(raw []byte) (Reply, error) {
 	return DecodeReplyFromEnvelope(env)
 }
 
-// DecodeReplyFromEnvelope decodes telemetry from an already-parsed
-// L1 envelope. Callers that have alternative decoders to try (info
-// reply, pair frames, ...) parse L1 once and reuse the envelope.
+// DecodeReplyFromEnvelope decodes telemetry from an already-parsed L1
+// envelope without a model hint; the shared 0xBB DS3-class reply falls
+// back to the DS3 layout. Callers that know the inverter's model code
+// should use DecodeReplyForModel so QS2 (and other DS3-class models that
+// share cmd 0xBB) decode with the right field layout.
 func DecodeReplyFromEnvelope(env L1Envelope) (Reply, error) {
+	return DecodeReplyForModel(env, 0)
+}
+
+// DecodeReplyForModel decodes telemetry and uses modelCode to
+// disambiguate the shared 0xBB reply: the reply command byte is
+// identical across DS3-class models, so only the model code selects the
+// per-model field layout (firmware: zb_query_data dispatches on
+// inv->model). Pass 0 when the model is unknown. Callers that have
+// alternative decoders to try (info reply, pair frames, ...) parse L1
+// once and reuse the envelope.
+func DecodeReplyForModel(env L1Envelope, modelCode uint8) (Reply, error) {
 	if env.Encrypted {
 		if !AESEnabled() {
 			return Reply{}, ErrEncrypted
@@ -284,6 +304,7 @@ func DecodeReplyFromEnvelope(env L1Envelope) (Reply, error) {
 		ShortAddr: env.ShortAddr,
 		PeerUID:   env.PeerUIDString(),
 		Cmd:       l2.Cmd,
+		ModelCode: modelCode,
 		RSSI:      env.RSSI,
 		LQI:       env.LQI,
 	}
@@ -293,12 +314,32 @@ func DecodeReplyFromEnvelope(env L1Envelope) (Reply, error) {
 		decodeQS1A(l2.Body, &r)
 	case CmdReplyDS3:
 		r.Family = FamilyDS3
-		decodeDS3(l2.Body, &r)
+		decodeDS3Class(modelCode, l2.Body, &r)
 	default:
 		r.Family = FamilyUnknown
 		return r, fmt.Errorf("%w: 0x%02X", ErrUnknownCmd, l2.Cmd)
 	}
 	return r, nil
+}
+
+// ds3ClassDecoders maps an inverter model code to its telemetry decoder
+// for the shared 0xBB DS3-class reply. The reply command byte is
+// identical across DS3/QS2/… models; only the model code selects the
+// layout. Family files register their codes via init(); an unregistered
+// or zero model falls back to decodeDS3, preserving behaviour for
+// callers that can't supply a model.
+var ds3ClassDecoders = map[uint8]func([]byte, *Reply){}
+
+func registerDS3ClassDecoder(modelCode uint8, fn func([]byte, *Reply)) {
+	ds3ClassDecoders[modelCode] = fn
+}
+
+func decodeDS3Class(modelCode uint8, body []byte, r *Reply) {
+	if fn := ds3ClassDecoders[modelCode]; fn != nil {
+		fn(body, r)
+		return
+	}
+	decodeDS3(body, r)
 }
 
 // charsToUint reads `n` big-endian bytes from b starting at off and
