@@ -192,15 +192,15 @@ func TestSetPowerEndpoint(t *testing.T) {
 		t.Fatalf("unauthenticated => %d, want 401", rec.Code)
 	}
 
-	// Per-inverter cap: 320 W of 1600 nameplate = 20% → per-panel 100 (in
-	// [20,500]) → applied 320, one frame.
+	// Per-inverter cap: 300 W of 1500 nameplate = 20% → per-panel 100 (in
+	// [20,500]) → applied 300, one frame.
 	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, authed(`{"uid":"aabbccddeeff","watts":320}`))
+	h.ServeHTTP(rec, authed(`{"uid":"aabbccddeeff","watts":300}`))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("per-inverter => %d (%s)", rec.Code, rec.Body)
 	}
 	res := decode(rec)
-	if len(res) != 1 || !res[0].OK || res[0].AppliedWatts != 320 {
+	if len(res) != 1 || !res[0].OK || res[0].AppliedWatts != 300 {
 		t.Fatalf("per-inverter results = %+v", res)
 	}
 	if len(sent) != 1 || sent[0].uid != "aabbccddeeff" || len(sent[0].frame) == 0 {
@@ -210,19 +210,19 @@ func TestSetPowerEndpoint(t *testing.T) {
 	// Full nameplate reaches per-panel 500 (uncapped) → applied == nameplate.
 	sent = nil
 	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, authed(`{"uid":"aabbccddeeff","watts":1600}`))
+	h.ServeHTTP(rec, authed(`{"uid":"aabbccddeeff","watts":1500}`))
 	res = decode(rec)
-	if len(res) != 1 || res[0].AppliedWatts != 1600 {
-		t.Errorf("nameplate cap applied = %+v, want 1600", res)
+	if len(res) != 1 || res[0].AppliedWatts != 1500 {
+		t.Errorf("nameplate cap applied = %+v, want 1500", res)
 	}
 
-	// Tiny watts clamps UP to the per-panel floor: 20/500 × 1600 = 64.
+	// Tiny watts clamps UP to the per-panel floor: 20/500 × 1500 = 60.
 	sent = nil
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, authed(`{"uid":"aabbccddeeff","watts":1}`))
 	res = decode(rec)
-	if len(res) != 1 || res[0].AppliedWatts != 64 {
-		t.Errorf("floor clamp applied = %+v, want 64", res)
+	if len(res) != 1 || res[0].AppliedWatts != 60 {
+		t.Errorf("floor clamp applied = %+v, want 60", res)
 	}
 
 	// Unknown uid -> 400.

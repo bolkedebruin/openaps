@@ -14,7 +14,7 @@ func TestApplyTelemetry_DerivesCapLoadOnline(t *testing.T) {
 	s := New(nil)
 	s.ApplyInfo(&wire.InverterInfo{
 		PeerUid:   "aabbccddeeff",
-		ModelCode: u32(uint32(codec.ModelQS1A)), // cap 1600
+		ModelCode: u32(uint32(codec.ModelQS1A)), // cap 1500
 	})
 	s.ApplyTelemetry(&wire.Telemetry{
 		PeerUid:      "aabbccddeeff",
@@ -34,11 +34,11 @@ func TestApplyTelemetry_DerivesCapLoadOnline(t *testing.T) {
 		t.Fatalf("count/online = %d/%d, want 1/1", f.InverterCount, f.OnlineCount)
 	}
 	inv := f.Inverters[0]
-	if inv.NameplateW != 1600 {
-		t.Errorf("NameplateW = %d, want 1600", inv.NameplateW)
+	if inv.NameplateW != 1500 {
+		t.Errorf("NameplateW = %d, want 1500", inv.NameplateW)
 	}
-	if got := inv.LoadPct; got < 49.9 || got > 50.1 {
-		t.Errorf("LoadPct = %.2f, want ~50", got)
+	if got := inv.LoadPct; got < 53.0 || got > 53.7 {
+		t.Errorf("LoadPct = %.2f, want ~53.3", got)
 	}
 	if !inv.Online {
 		t.Errorf("Online = false, want true (age 0)")
@@ -50,8 +50,8 @@ func TestApplyTelemetry_DerivesCapLoadOnline(t *testing.T) {
 		t.Errorf("fleet ActivePowerW = %.0f, want 800", f.ActivePowerW)
 	}
 	// no FleetSummary applied => nameplate summed locally
-	if f.NameplateTotalW != 1600 {
-		t.Errorf("NameplateTotalW = %d, want 1600 (local sum)", f.NameplateTotalW)
+	if f.NameplateTotalW != 1500 {
+		t.Errorf("NameplateTotalW = %d, want 1500 (local sum)", f.NameplateTotalW)
 	}
 }
 

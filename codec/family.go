@@ -54,7 +54,7 @@ func (f Family) String() string {
 // encoder will not magically make it writable.
 func FamilyOf(modelCode uint8) Family {
 	switch modelCode {
-	case ModelDS3, ModelDS3H, ModelDS3L, ModelExt36:
+	case ModelDS3, ModelDS3H, ModelDS3L, ModelQS2:
 		return FamilyDS3
 	case ModelQS1, ModelQS1A:
 		return FamilyQS1
@@ -91,7 +91,7 @@ func FamilyForModelString(model string) Family {
 	switch {
 	case strings.HasPrefix(m, "QS1"): // QS1, QS1A — both QS1 family
 		return FamilyQS1
-	case strings.HasPrefix(m, "DS3"), strings.HasPrefix(m, "DSP"):
+	case strings.HasPrefix(m, "DS3"), strings.HasPrefix(m, "DSP"), strings.HasPrefix(m, "QS2"): // QS2 rides the DS3-class wire protocol
 		return FamilyDS3
 	case strings.HasPrefix(m, "YC600"):
 		return FamilyYC600
@@ -126,8 +126,8 @@ func ModelLabelForCode(modelCode uint8) string {
 		return "DS3H"
 	case ModelDS3L:
 		return "DS3L"
-	case ModelExt36:
-		return "DS3"
+	case ModelQS2:
+		return "QS2"
 	case ModelQT2:
 		return "QT2"
 	}
@@ -144,7 +144,7 @@ func ModelLabelForCode(modelCode uint8) string {
 func BroadcastModelCodes() []uint8 {
 	codes := []uint8{
 		ModelQS1, ModelQS1A,
-		ModelDS3, ModelDS3H, ModelDS3L, ModelExt36,
+		ModelDS3, ModelDS3H, ModelDS3L, ModelQS2,
 	}
 	sort.Slice(codes, func(i, j int) bool { return codes[i] < codes[j] })
 	return codes

@@ -132,14 +132,14 @@ const (
 	ModelExt30    uint8 = 0x30 // three-phase, family name not pinned
 	ModelExt31    uint8 = 0x31 // three-phase, family name not pinned
 	ModelQT2      uint8 = 0x32 // three-phase 4-channel (presumed QT2)
-	ModelExt36    uint8 = 0x36 // single-phase, firmware lists as such; family name not pinned
+	ModelQS2      uint8 = 0x36 // single-phase 4-channel; DS3-class wire protocol (main.exe resolvedata_QS2 / update_QS2_modbus)
 )
 
 // PhaseFromModel returns the inverter family classifier: 1 for
 // single-phase, 3 for three-phase, 0 for unknown.
 func PhaseFromModel(model uint8) uint32 {
 	switch model {
-	case ModelYC600, ModelQS1, ModelQS1A, ModelDS3, ModelDS3H, ModelDS3L, ModelExt36:
+	case ModelYC600, ModelQS1, ModelQS1A, ModelDS3, ModelDS3H, ModelDS3L, ModelQS2:
 		return 1
 	case ModelExt29, ModelExt30, ModelExt31, ModelQT2:
 		return 3

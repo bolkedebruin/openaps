@@ -67,7 +67,7 @@ func TestSubscriberFoldsStreamIntoSnapshot(t *testing.T) {
 			Model: "QS1A", ActivePowerW: 800, GridV: 230.5, FreqHz: 50.0,
 		}}},
 		{Body: &wire.Envelope_Fleet{Fleet: &wire.FleetSummary{
-			NameplateTotalW: 1600, TodayWh: 4200,
+			NameplateTotalW: 1500, TodayWh: 4200,
 		}}},
 	}
 	fakeDriver(t, sock, frames)
@@ -88,7 +88,7 @@ func TestSubscriberFoldsStreamIntoSnapshot(t *testing.T) {
 				t.Error("Connected() should be true while attached")
 			}
 			inv := f.Inverters[0]
-			if inv.Model != "QS1A" || inv.NameplateW != 1600 || inv.GridV != 230.5 {
+			if inv.Model != "QS1A" || inv.NameplateW != 1500 || inv.GridV != 230.5 {
 				t.Errorf("unexpected inverter DTO: %+v", inv)
 			}
 			return

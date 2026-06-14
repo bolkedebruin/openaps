@@ -58,7 +58,7 @@ func EncodeSetPower(modelCode uint8, panelWatts uint16, broadcast bool) ([]byte,
 		return EncodeSetPowerC3(modelCode, panelWatts, broadcast)
 	case ModelQS1, ModelQS1A:
 		return EncodeSetPowerQS1A(panelWatts, broadcast)
-	case ModelDS3, ModelDS3H, ModelDS3L, ModelExt36:
+	case ModelDS3, ModelDS3H, ModelDS3L, ModelQS2:
 		return EncodeSetPowerDS3(panelWatts, broadcast)
 	default:
 		return nil, fmt.Errorf("%w: model 0x%02X", ErrUnsupportedFamily, modelCode)

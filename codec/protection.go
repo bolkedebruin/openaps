@@ -122,7 +122,7 @@ func EncodeSetProtection(modelCode uint8, paramName string, value float64) ([][]
 		return nil, err
 	}
 	switch modelCode {
-	case ModelDS3, ModelDS3H, ModelDS3L, ModelExt36:
+	case ModelDS3, ModelDS3H, ModelDS3L, ModelQS2:
 		return encodeProtectionDS3(paramName, value, CmdSetPowerDS3Unicast)
 	case ModelQS1, ModelQS1A:
 		return encodeProtectionQS1A(paramName, value, CmdSetPowerQS1Unicast)
@@ -154,7 +154,7 @@ func EncodeSetProtectionBroadcast(modelCode uint8, paramName string, value float
 		return nil, err
 	}
 	switch modelCode {
-	case ModelDS3, ModelDS3H, ModelDS3L, ModelExt36:
+	case ModelDS3, ModelDS3H, ModelDS3L, ModelQS2:
 		return encodeProtectionDS3(paramName, value, CmdSetPowerDS3Broadcast)
 	case ModelQS1, ModelQS1A:
 		// The yc600-builder params (grid_recovery_time + the slow volt trips

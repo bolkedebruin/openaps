@@ -93,7 +93,7 @@ func DecodeProtectionReply(modelCode uint8, frames [][]byte) (*ProtectionReading
 	r := &ProtectionReading{Values: make(map[string]float64, 24)}
 	var pager protectionPager
 	switch modelCode {
-	case ModelDS3, ModelDS3H, ModelDS3L, ModelExt36:
+	case ModelDS3, ModelDS3H, ModelDS3L, ModelQS2:
 		r.Model, pager = "DS3", ds3ProtectionPage
 	case ModelQS1, ModelQS1A:
 		r.Model, pager = "QS1A", qs1ProtectionPage

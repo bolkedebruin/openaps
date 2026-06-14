@@ -26,7 +26,7 @@ func TestFamilyOfCoversAllKnownModels(t *testing.T) {
 		{ModelDS3H, FamilyDS3},
 		{ModelDS3L, FamilyDS3},
 		{ModelQT2, FamilyQT2},
-		{ModelExt36, FamilyDS3},
+		{ModelQS2, FamilyDS3},
 	}
 	for _, c := range cases {
 		got := FamilyOf(c.code)
@@ -112,12 +112,12 @@ func TestFamilyForModelString(t *testing.T) {
 func TestBroadcastModelCodes(t *testing.T) {
 	got := BroadcastModelCodes()
 	want := []uint8{
-		ModelQS1,   // 0x08
-		ModelQS1A,  // 0x18
-		ModelDS3,   // 0x20
-		ModelDS3H,  // 0x21
-		ModelDS3L,  // 0x22
-		ModelExt36, // 0x36
+		ModelQS1,  // 0x08
+		ModelQS1A, // 0x18
+		ModelDS3,  // 0x20
+		ModelDS3H, // 0x21
+		ModelDS3L, // 0x22
+		ModelQS2,  // 0x36
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("BroadcastModelCodes() = %v, want %v", got, want)
