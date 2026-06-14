@@ -49,7 +49,7 @@ func main() {
 		logMaxBackups = flag.Int("log-max-backups", 3, "rotated log files retained")
 		logMaxAgeDays = flag.Int("log-max-age", 7, "rotated log retention days")
 
-		configPath    = flag.String("config", config.DefaultPath, "path to JSON config file (writes.enabled / writes.allow_list); missing file = writes disabled")
+		configPath    = flag.String("config", config.DefaultPath, "path to JSON config file (writes.enabled / writes.allow_list); missing file = writes enabled for loopback + local LAN")
 		nameplatePath = flag.String("nameplate-file", "/home/sunspec-nameplate.json", "path to JSON model_int→watts table; missing file = TypeCode-based fallback")
 
 		invDriverSock       = flag.String("invdriver-sock", defaultInvDriverSock(), "UDS path to inv-driver, the sole telemetry source (env INV_DRIVER_SOCK overrides default; empty is a fatal misconfiguration)")

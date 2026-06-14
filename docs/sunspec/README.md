@@ -2,11 +2,11 @@
 
 A SunSpec / Modbus TCP adapter for APsystems ECU gateways (ECU-R, ECU-R-Pro, ECU-C, etc.). Exposes the data the ECU already collects from your microinverters as a standards-compliant SunSpec register bank, so Victron GX, Home Assistant, Grafana, Node-RED, and any other SunSpec consumer can read it natively.
 
-The adapter reads the ECU's own SQLite databases and `/tmp/parameters_app.conf`. No effect on the ECU's radio cycle and no cloud round-trip. Runs on the ECU itself or as a sidecar.
+The adapter sources all per-inverter telemetry and grid-protection state from **inv-driver** over a local Unix socket — inv-driver owns the ZigBee radio and the live inverter state. Modbus writes (curtailment, on/off, grid-protection) are dispatched back through inv-driver and out to the inverters over the radio. No SQLite, no `/tmp` conf files, no cloud round-trip. Runs on the ECU alongside inv-driver.
 
 ## Compatibility
 
-The adapter requires a Linux userspace on the ECU (BusyBox + writable `/home/applications/`) and reads tables from APsystems' `/home/database.db`. ECU models that run a bare-metal RTOS instead of Linux can't host the adapter — point your SunSpec client at APsystems' built-in port 502 in that case.
+The adapter requires a Linux userspace on the ECU (BusyBox + writable `/home/applications/`) and runs as part of the OpenAPS stack (inv-driver owns the radio; ecu-sunspec is a pure UDS client of it). ECU models that run a bare-metal RTOS instead of Linux can't host the adapter — point your SunSpec client at APsystems' built-in port 502 in that case.
 
 | ECU model | Serial prefix | Platform | This adapter | APsystems :502 (per their Rev 3.3 spec) |
 |---|---|---|---|---|
@@ -17,7 +17,7 @@ The adapter requires a Linux userspace on the ECU (BusyBox + writable `/home/app
 | ECU-3 / ECU-3Z | various | Linux | yes — untested | unknown |
 
 Notes:
-- "Tested" means I run this build daily on the listed firmware. Other Linux-based ECUs share the same userspace lineage (Yuneng platform, sqlite-backed `/home/database.db`, BusyBox `/etc/init.d/S99-*` script convention) so the adapter should work without code changes — open an issue if you find otherwise.
+- "Tested" means I run this build daily on the listed firmware. Other Linux-based ECUs share the same userspace lineage (Yuneng platform, BusyBox `/etc/init.d/S99-*` script convention) and run the same inv-driver radio stack, so the adapter should work without code changes — open an issue if you find otherwise.
 - The Cortex-M3 / RT-Thread ECUs (2160 / 2163) ship a single firmware blob that boots from MCU flash at `0x08000000` — there's nowhere to install a Go binary. APsystems' own port-502 server on those models implements only the minimal SunSpec PICS (4 models); the richer 700-series DER models, Multi-MPPT, nameplate, and float variants this adapter exposes simply aren't reachable on those ECUs.
 - A sidecar deployment that proxies a 2160's port 502 is possible but limited — a sidecar machine can only republish what :502 already serves; it can't read the per-inverter tables that aren't exposed over Modbus.
 
@@ -28,19 +28,19 @@ Notes:
 | **1** | Aggregate: `Common + Inverter (101) + Nameplate (120) + Basic Settings (121) + Controls (123) + DER Trip LV/HV/LF/HF (707/708/709/710) + Enter Service (703) + Multi-MPPT (160 with every panel) + Vendor (64202) + End` | System-level totals; what Victron's GX polls |
 | **2..N+1** | Per-microinverter: `Common (SN = inverter UID) + Inverter (101) + Controls (123) + DER Trip + Enter Service + Multi-MPPT (160 with that inverter's panels) + End` | Per-inverter dashboards in HA / Grafana |
 
-Each microinverter shows up in HA's SunSpec integration as an independent device. Per-panel data lives in Multi-MPPT (Model 160) — module count derives from the type code in `parameters_app.conf` (DS3: 2, QS1: 4, DS3-H: 2, YC1000 / QT2: 4).
+Each microinverter shows up in HA's SunSpec integration as an independent device. Per-panel data lives in Multi-MPPT (Model 160) — module count derives from the inverter type code reported by inv-driver (DS3: 2, QS1: 4, DS3-H: 2, YC1000 / QT2: 4).
 
 Standard SunSpec event flags are populated from the ECU's own alarm bitstring: ground fault, over-temperature, AC over/under voltage, over/under frequency, manual shutdown, AC disconnect, grid disconnect (anti-island trip), HW test failure. Raw APsystems bits remain in `EvtVnd1..3` for full fidelity. See [`docs/EVENTS.md`](docs/EVENTS.md) for the complete bit table.
 
-### IEEE 1547-2018 grid protection (read-only)
+### IEEE 1547-2018 grid protection
 
-Models **707/708/709/710** expose the active per-inverter trip thresholds — the LV/HV/LF/HF curves the firmware will actually disconnect on. **Model 703** (Enter Service) exposes the reconnect window: V/Hz band the grid must hold for `ESDlyTms` seconds before the inverter rejoins. Sourced from `protection_parameters60code` in `database.db`, refreshed each ZigBee cycle.
+Models **707/708/709/710** expose the active per-inverter trip thresholds — the LV/HV/LF/HF curves the firmware will actually disconnect on. **Model 703** (Enter Service) exposes the reconnect window: V/Hz band the grid must hold for `ESDlyTms` seconds before the inverter rejoins. Sourced from inv-driver's live per-inverter grid-protection read-back, refreshed each snapshot interval.
 
 This is the SunSpec model set adopted by SMA ennexOS, Fronius GEN24, Enphase, and the IEEE 1547-2018 conformance profile — current-generation DER tooling reads it natively. Older ride-through curve models (129/130/135/136) are not emitted.
 
 Useful for confirming whether your fleet supports Victron AC-coupled frequency-shift: read `Model 710 → Crv[0].MustTrip.Pt[1]` per inverter; the Hz threshold has to sit above the Multi's max FS frequency (typically 52 Hz) with at least 0.5 Hz margin, and the clearance time has to exceed the longest dwell at high frequency. On a mixed fleet the inverter with the lowest OF threshold gates the whole system.
 
-Currently read-only. The active settings can already be changed via the existing PHP `management/set_protection60_parameters` endpoint or via a future Modbus write path gated by `writes.allow_grid_protection` (not implemented).
+The LV/HV/LF/HF trip curves (707–710) are read-only. The over-frequency response *is* writable, though: **Model 711** (freq-watt droop), **Model 134** (freq-watt curve) and **Model 703** (Enter Service) accept Modbus writes, which inv-driver applies to the inverters over the radio (same write path and gating as the Model 123 curtailment controls below). Per-inverter writes target one inverter; aggregate-bank (unit ID 1) writes fan out to the whole fleet.
 
 ## Verify it's working
 
@@ -207,6 +207,60 @@ Host: <ECU-IP>   Port: 502   Slave ID: 4   →  Microinverter C
 
 For the vendor model (model 64202 — daily/month/year energy aggregates, per-inverter RSSI, etc.) to be decoded natively, copy [`sunspec-models/model_64202.json`](sunspec-models/model_64202.json) into pysunspec2's `models/json/` directory inside the HA container. See [`sunspec-models/README.md`](sunspec-models/README.md) for the path.
 
+### Curtailing from Home Assistant (setting the output %)
+
+`CJNE/ha-sunspec` is read-only (it exposes sensors). To *set* the curtailment percentage from HA, use Home Assistant's built-in [`modbus`](https://www.home-assistant.io/integrations/modbus/) integration and write SunSpec Model 123 `WMaxLimPct` directly. Writing the percentage alone applies the cap — `WMaxLimPct=100` is full output, `50` is half. (Slave ID 1 curtails the whole fleet; slave 2..N+1 a single inverter. See [Modbus write controls](#modbus-write-controls-sunspec-model-123) below for the exact semantics, clamps, and gating.)
+
+**Step 1 — find the `WMaxLimPct` register.** Its absolute address depends on the bank layout, so read it once with pysunspec2 (the bank base is 40000):
+
+```sh
+python3 -c "
+import sunspec2.modbus.client as c
+d = c.SunSpecModbusClientDeviceTCP(slave_id=1, ipaddr='<ECU-IP>', ipport=502, timeout=3)
+d.scan()
+m = next(m for m in d.model_list if m.model_id == 123)
+print('WMaxLimPct register :', m.model_addr + 5)   # body offset 3 (+2 header)
+print('WMaxLim_Ena register:', m.model_addr + 9)   # body offset 7 (+2 header)
+"
+```
+
+**Step 2 — define the Modbus hub** in `configuration.yaml`:
+
+```yaml
+modbus:
+  - name: ecu
+    type: tcp
+    host: <ECU-IP>
+    port: 502
+```
+
+**Step 3 — a slider + an automation that writes it.** HA's `modbus` integration has no writable `number` platform, so expose an `input_number` and push changes with the `modbus.write_register` action. `WMaxLimPct` uses scale factor −2 (raw `0..10000` = `0.00..100.00 %`), so multiply the percent by 100:
+
+```yaml
+input_number:
+  pv_curtail_pct:
+    name: PV output cap
+    min: 0
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+
+automation:
+  - alias: Apply PV curtailment to fleet
+    trigger:
+      - platform: state
+        entity_id: input_number.pv_curtail_pct
+    action:
+      - action: modbus.write_register
+        data:
+          hub: ecu
+          slave: 1                      # 1 = whole fleet; 2..N+1 = one inverter
+          address: <WMaxLimPct register> # from step 1
+          value: "{{ (states('input_number.pv_curtail_pct') | float * 100) | int }}"
+```
+
+Set the slider to 100 to remove the cap (full output). Note `WMaxLimPct=0` resolves to the 20 W/panel minimum, **not** "off" — to actually switch inverters off, write the `Conn` register (`m.model_addr + 4`) with value 0 (and 1 to turn back on). The change reaches the inverters within a few seconds; to display the confirmed cap back in HA, add a `modbus` sensor on the same `WMaxLimPct register` with `scale: 0.01`.
+
 ## Adding to Victron Venus
 
 ```
@@ -261,22 +315,27 @@ To disable writes entirely (read-only deployment):
 
 ### What can be written
 
-| SunSpec field (Model 123) | Effect | Mapped to |
+| SunSpec field (Model 123) | Effect | How it's applied |
 |---|---|---|
-| `WMaxLim_Pct` (0..100) | Per-panel cap = `500 W × pct/100` (clamped to `[20, 500]`). Per-inverter banks affect one inverter; aggregate bank affects all. | `UPDATE power SET limitedpower=…, flag=1` (per-panel watts) |
-| `WMaxLim_Ena=0` | Restore full output (`limitedpower = 500`, the ECU's uncapped sentinel) | same table, `limitedpower = 500` |
-| `Conn=0` | Turn inverter(s) off | `INSERT turn_on_off VALUES(uid, 0)` |
-| `Conn=1` | Turn inverter(s) on | `INSERT turn_on_off VALUES(uid, 1)` |
+| `WMaxLim_Pct` + `WMaxLim_Ena=1` | Cap output. Per-inverter the percentage resolves to a per-panel watt cap (`nameplate-per-panel × pct/100`, clamped to `[20, 500]`). Per-inverter banks affect one inverter; the aggregate bank (unit ID 1) affects all. | inv-driver encodes a family-specific set-power frame (DS3 / QS1A / YC600) per inverter and sends it over the radio |
+| `WMaxLim_Ena=0` | Restore full output (uncap) | inv-driver sends the per-panel max (500 W/panel) to each target and cancels any pending auto-revert |
+| `WMaxLimPct_RvrtTms` > 0 | Arm a fail-safe: if the controller doesn't re-write the cap within N seconds, it's lifted automatically | a timer in ecu-sunspec; on expiry it runs the same uncap path as `WMaxLim_Ena=0` |
+| `Conn=0` | Turn inverter(s) off | inv-driver sends the family-independent on/off frame (off) over the radio |
+| `Conn=1` | Turn inverter(s) on | same frame (on) |
 
-The per-panel cap is clamped to the same `[20, 500]` W range the ECU's own PHP `set_maxpower` endpoint enforces. `WMaxLim_Pct` values above 100 are clamped to 100; values that would resolve to under 20 W (including `WMaxLim_Pct=0`) are raised to 20 W. **`WMaxLim_Pct=0` is not "off"** — it's "minimum cap." Use `Conn=0` to actually turn an inverter off.
+The cap is **engaged by writing `WMaxLim_Ena=1` together with `WMaxLim_Pct`** — writing the percentage alone applies the cap; writing `WMaxLim_Ena=0` lifts it. The read-back `WMaxLim_Ena` reflects current state: it reads `1` only while at least one inverter is actually curtailed, so an uncurtailed fleet correctly reports `WMaxLim_Ena=0` / `WMaxLim_Pct=100%` — that's "no limit active," not "feature unavailable."
+
+The per-panel cap is clamped to `[20, 500]` W. `WMaxLim_Pct` above 100 is clamped to 100; values that would resolve to under 20 W/panel (including `WMaxLim_Pct=0`) are raised to 20 W. **`WMaxLim_Pct=0` is not "off"** — it's "minimum cap." Use `Conn=0` to actually turn an inverter off.
+
+The cap persists in the inverter's own NVRAM, so there's no host re-assert loop — it survives the nightly power-down. ecu-sunspec records each cap it sets so the Model 123 read-back stays accurate.
 
 > "% of nameplate" is the SunSpec semantic, but on this hardware the underlying knob is the per-panel watt cap, not AC nameplate. `WMaxLim_Pct=100` resolves to 500 W/panel — the ECU firmware's hard ceiling, also the value the upstream `homeassistant-apsystems_ecu_reader` integration uses as "uncapped." On a DS3 (2 panels) that's 1000 W of headroom, which is well above any practical panel and effectively means "no curtailment." On a QS1 (4 panels, lower per-panel rating) the 500 W/panel boundary won't bind in practice either.
 
 ### Latency
 
-Writes go to the ECU's SQLite tables. The ECU's dispatch loop polls those tables once per ZigBee cycle (default 300 s, fast-poll mode 30 s) and pushes the queued commands over the radio. **Expect 30–300 s** between a Modbus write and the actual inverter responding.
+A write is dispatched immediately: ecu-sunspec hands the encoded frame to inv-driver, which sends it over the ZigBee radio on the next bus turn. **Expect a few seconds** between the Modbus write and the inverter applying it — there's no SQLite table and no dispatch-poll wait. The Model 123 read-back updates within one snapshot interval (default 5 s) after the new cap is confirmed on the wire.
 
-For real-time control (e.g. fast zero-feed-in), use AC-coupled frequency-shift on a Victron Multi instead — that's sub-second because each microinverter's local P-f curve responds without any radio round-trip.
+For *real-time* control (e.g. fast zero-feed-in tracking a fluctuating load), use AC-coupled frequency-shift on a Victron Multi instead — that's sub-second because each microinverter's local P-f curve responds without any radio round-trip. Model 123 curtailment is the right tool for setpoints that change on the order of seconds-to-minutes (scheduled caps, export limits, manual curtailment).
 
 ### Verify a write end-to-end
 
@@ -290,28 +349,47 @@ m = next(m for m in d.model_list if m.model_id == 123); m.read()
 print('current pct:', m.WMaxLimPct.value)
 "
 
-# Cap to 50%.
+# Cap to 50%. Write the percentage AND the enable flag together.
 python3 -c "
 import sunspec2.modbus.client as c
 d = c.SunSpecModbusClientDeviceTCP(slave_id=2, ipaddr='<ECU-IP>', ipport=502, timeout=3)
 d.scan()
 m = next(m for m in d.model_list if m.model_id == 123); m.read()
 m.WMaxLimPct.value = 50
+m.WMaxLim_Ena.value = 1
 m.write()
 "
 
-# Confirm the SQL row updated; flag=1 means the ECU dispatcher will
-# pick it up on the next poll.
-ssh ecu sqlite3 /home/database.db \
-    "'SELECT id, limitedpower, flag FROM power'"
+# Wait a few seconds, then read it back — the cap is confirmed when
+# WMaxLimPct reflects ~50 and WMaxLim_Ena reads 1.
+sleep 8
+python3 -c "
+import sunspec2.modbus.client as c
+d = c.SunSpecModbusClientDeviceTCP(slave_id=2, ipaddr='<ECU-IP>', ipport=502, timeout=3)
+d.scan()
+m = next(m for m in d.model_list if m.model_id == 123); m.read()
+print('pct:', m.WMaxLimPct.value, 'ena:', m.WMaxLim_Ena.value)
+"
+
+# Lift the cap again (full output).
+python3 -c "
+import sunspec2.modbus.client as c
+d = c.SunSpecModbusClientDeviceTCP(slave_id=2, ipaddr='<ECU-IP>', ipport=502, timeout=3)
+d.scan()
+m = next(m for m in d.model_list if m.model_id == 123); m.read()
+m.WMaxLim_Ena.value = 0
+m.write()
+"
 ```
+
+Write to `slave_id=1` instead to curtail the **whole fleet** in one call (the aggregate bank fans the cap out to every inverter, computing each one's per-panel watts from its own nameplate).
 
 ## Architecture / details
 
 - [`docs/EVENTS.md`](docs/EVENTS.md) — full APsystems event bitstring decode, with mapping to standard SunSpec Evt1 flags.
 - [`sunspec-models/`](sunspec-models/) — vendor model 64202 JSON descriptor and instructions for plugging into pysunspec2 / generic SunSpec libraries.
 
-The encoder is data-driven: the inverter list, panel count, AC topology, and curtailment caps all come from the ECU's runtime state — nothing is hardcoded to a specific site or fleet.
+The encoder is data-driven: the inverter list, panel count, AC topology, and curtailment caps all come from inv-driver's live runtime state — nothing is hardcoded to a specific site or fleet.
 
 ## License
 

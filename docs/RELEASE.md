@@ -1,3 +1,33 @@
+# OpenAPS v1.1.14
+
+Documentation fix for the SunSpec adapter, plus a Home Assistant curtailment guide.
+
+## Fixed
+
+- **ecu-sunspec README rewritten to the current write path.** The Modbus
+  write-controls, latency, and verify-a-write sections still described the
+  removed pre-monorepo SQLite path (`UPDATE power SET limitedpower/flag`, "expect
+  30-300 s for the dispatch poll"). They now document the real path: a SunSpec
+  Model 123 write is encoded per inverter and dispatched through inv-driver to
+  the radio in a few seconds. Data-source, grid-protection sourcing, and
+  per-panel-cap notes corrected to inv-driver's live state.
+- **`ecu-sunspec -config` help and config loader comments corrected.** Both
+  claimed "missing file = writes disabled"; the tristate default makes a missing
+  `/home/sunspec.json` enable writes for loopback and the local LAN.
+
+## Added
+
+- **"Curtailing from Home Assistant" guide.** Documents setting the output cap
+  from HA via the built-in `modbus` integration: discovering the `WMaxLimPct`
+  register, an `input_number` slider, and a `modbus.write_register` automation
+  (slave ID 1 curtails the whole fleet, 2..N+1 a single inverter).
+
+## Upgrading
+
+Documentation only — no binary or package changes.
+
+---
+
 # OpenAPS v1.1.13
 
 Fixes the ECU clock not being set after a reboot.

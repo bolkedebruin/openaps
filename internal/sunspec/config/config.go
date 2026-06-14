@@ -69,7 +69,9 @@ func (w WritesConfig) LocalAllowed() bool {
 }
 
 // Load reads and validates a Config JSON file. Returns the zero value with no
-// error if the file does not exist (writes default to disabled in that case).
+// error if the file does not exist — and since WritesConfig is default-on
+// (a nil Enabled means enabled), a missing file means writes are ENABLED for
+// loopback + the local network, the intended out-of-the-box behavior.
 func Load(path string) (Config, error) {
 	if path == "" {
 		path = DefaultPath
@@ -77,9 +79,11 @@ func Load(path string) (Config, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			// Missing file is the expected case for installs that haven't
-			// opted into writes yet. Return the zero-value Config (writes
-			// disabled, empty allowlist).
+			// Missing file is the expected case for a default install.
+			// The zero-value Config has a nil Enabled, which IsEnabled()
+			// treats as enabled, and a nil AllowLocalNetwork, which
+			// LocalAllowed() treats as on — so LAN hosts can write without
+			// any config file. Drop in /home/sunspec.json to restrict.
 			return Config{}, nil
 		}
 		return Config{}, fmt.Errorf("read %s: %w", path, err)
