@@ -9,6 +9,11 @@ import (
 	"github.com/bolkedebruin/openaps/internal/buslock"
 )
 
+// broadcastBusOwner is the owner label the broadcast path registers with the
+// shared bus guard. A const so a typo is a compile error, not a silent
+// owner-string mismatch in diagnostics.
+const broadcastBusOwner = "gridprofile-broadcast"
+
 // fleetRunner is the slice of the reconciler the fleet applier needs: the
 // per-uid reconcile plus the fleet enumeration. The production type is
 // *Reconciler; tests substitute a stub.
@@ -134,7 +139,7 @@ func (a *applier) runBroadcastFleet(parent context.Context, job broadcastJob) {
 		// path uses): broadcast jobs are not serialised upstream, so a priority
 		// acquire here would let a burst of concurrent broadcasts hold the pause
 		// request and starve telemetry. A busy broadcast just reports and retries.
-		if ok, owner := job.lock.TryAcquire("gridprofile-broadcast"); !ok {
+		if ok, owner := job.lock.TryAcquire(broadcastBusOwner); !ok {
 			a.emit(context.Background(), "", "profile_apply_complete", "warn",
 				fmt.Sprintf("%s — bus busy with %s; not applied", job.label, owner))
 			return

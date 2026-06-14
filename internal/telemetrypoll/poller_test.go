@@ -306,6 +306,65 @@ func TestPoller_BusLockReleasedBetweenRounds(t *testing.T) {
 	}
 }
 
+// TestPoller_BusLockPriorityPreemptsMidRound verifies that when an operator
+// op begins waiting for the bus mid-round, the yield channel handed back by
+// AcquirePolite closes and the poller bails early — it does NOT run out the
+// whole fleet, and the operator op wins the lock promptly.
+func TestPoller_BusLockPriorityPreemptsMidRound(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	s := openStore(t)
+	// Seed enough inverters that a full round at the SendInterval below
+	// would take far longer than the preemption we trigger.
+	const fleet = 8
+	for i := 0; i < fleet; i++ {
+		uid := string(rune('a'+i)) + "uid"
+		if err := s.UpsertInverterFromTelemetry(ctx, uid, uint16(0x1000+i), "", "", 1); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+
+	bl := buslock.New()
+	fr := &fakeRouter{}
+	p := &Poller{
+		Store:        NewStoreAdapter(s),
+		Server:       fr,
+		Backend:      "test-backend",
+		SendInterval: 50 * time.Millisecond,
+		BusLock:      bl,
+	}
+
+	done := make(chan struct{})
+	go func() {
+		_ = p.poll(ctx)
+		close(done)
+	}()
+
+	// Let the poller acquire politely and emit a couple of sends, then
+	// preempt with a priority op. AcquirePriority closes the poller's yield
+	// channel, so the poller must bail before draining the whole fleet.
+	time.Sleep(60 * time.Millisecond)
+	ok, _ := bl.AcquirePriority("test-pairing", 2*time.Second)
+	if !ok {
+		t.Fatal("priority acquire timed out; poller did not yield the bus")
+	}
+	defer bl.Release()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("poll did not return after priority preemption")
+	}
+
+	if n := len(fr.snap()); n == 0 || n >= fleet {
+		t.Fatalf("expected an early bail (0 < sends < %d), got %d", fleet, n)
+	}
+	// The priority op now holds the lock; the poller released it on bail.
+	if held, owner := bl.Held(); !held || owner != "test-pairing" {
+		t.Fatalf("after preemption: held=%v owner=%q, want held=true owner=test-pairing", held, owner)
+	}
+}
+
 // TestPoller_Run_TicksAndCancels exercises the Run goroutine: seeds one
 // inverter, starts the poller with a fast ticker, waits for at least one
 // send, then cancels and verifies clean shutdown.

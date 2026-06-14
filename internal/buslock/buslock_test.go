@@ -53,70 +53,97 @@ func TestLock_DoubleReleaseSafe(t *testing.T) {
 	l.Release() // double release, must not panic
 }
 
-// TryAcquirePolite succeeds on a free lock with no waiter, yields while the
-// lock is held, and yields while an operator op is pending even when free.
+// AcquirePolite succeeds on a free lock with no waiter, yields while the lock
+// is held, and yields while an operator op is pending even when free. On
+// success the yield channel is open; the yield ok=false case returns a nil
+// channel.
 func TestPolite_YieldsAndSucceeds(t *testing.T) {
 	l := New()
 
-	// Free, no waiter -> success.
-	ok, holder := l.TryAcquirePolite("poller")
-	if !ok || holder != "" {
-		t.Fatalf("polite on free lock = (%v,%q) want (true,\"\")", ok, holder)
+	// Free, no waiter -> success, open yield channel.
+	ok, y := l.AcquirePolite("poller")
+	if !ok || y == nil {
+		t.Fatalf("polite on free lock = (%v, chan=%v) want (true, non-nil)", ok, y)
+	}
+	select {
+	case <-y:
+		t.Fatalf("yield channel should be open while held with no priority op")
+	default:
 	}
 
-	// Held -> yields with the holder reported.
-	ok, holder = l.TryAcquirePolite("poller")
-	if ok || holder != "poller" {
-		t.Fatalf("polite while held = (%v,%q) want (false,poller)", ok, holder)
-	}
-	l.Release()
-
-	// Free again -> success.
-	ok, _ = l.TryAcquirePolite("poller")
-	if !ok {
-		t.Fatalf("polite after release should succeed")
+	// Held -> yields with a nil channel.
+	ok, y = l.AcquirePolite("poller")
+	if ok || y != nil {
+		t.Fatalf("polite while held = (%v, chan=%v) want (false, nil)", ok, y)
 	}
 	l.Release()
 
-	// Free but an operator op is pending -> yields (holder "").
+	// Free again -> success, a fresh (open) channel.
+	ok, y = l.AcquirePolite("poller")
+	if !ok || y == nil {
+		t.Fatalf("polite after release should succeed with a fresh channel")
+	}
+	select {
+	case <-y:
+		t.Fatalf("fresh yield channel should be open")
+	default:
+	}
+	l.Release()
+
+	// Free but an operator op is pending -> yields (nil channel).
 	l.mu.Lock()
-	l.pausePending = 1
+	l.waiting = 1
 	l.mu.Unlock()
-	ok, holder = l.TryAcquirePolite("poller")
-	if ok || holder != "" {
-		t.Fatalf("polite while waiter pending = (%v,%q) want (false,\"\")", ok, holder)
+	ok, y = l.AcquirePolite("poller")
+	if ok || y != nil {
+		t.Fatalf("polite while waiter pending = (%v, chan=%v) want (false, nil)", ok, y)
 	}
 	l.mu.Lock()
-	l.pausePending = 0
+	l.waiting = 0
 	l.mu.Unlock()
 }
 
-// AcquirePriority preempts a poller that releases shortly after the priority
-// op starts waiting; PausePending is true while it waits and false after.
-func TestPriority_PreemptsPoller(t *testing.T) {
+// The yield channel handed to a polite holder is closed promptly when an
+// AcquirePriority op starts waiting: a receive on it unblocks.
+func TestPolite_YieldChannelClosedOnPriorityWait(t *testing.T) {
 	l := New()
-
-	// Poller holds the lock, releases after a short hold.
-	if ok, _ := l.TryAcquirePolite("poller"); !ok {
+	ok, y := l.AcquirePolite("poller")
+	if !ok {
 		t.Fatalf("poller acquire should succeed")
 	}
+
+	// A priority op begins waiting and should close the yield channel, then the
+	// poller observes it, Releases, and the priority op proceeds.
 	go func() {
-		time.Sleep(40 * time.Millisecond)
+		<-y
 		l.Release()
 	}()
 
-	// Observe PausePending flip true while the priority op waits.
-	sawPending := make(chan bool, 1)
+	start := time.Now()
+	ok, blocker := l.AcquirePriority("pairing", time.Second)
+	if !ok {
+		t.Fatalf("priority should acquire after poller yields, blocker=%q", blocker)
+	}
+	if elapsed := time.Since(start); elapsed > 200*time.Millisecond {
+		t.Fatalf("yield/preempt took too long: %v", elapsed)
+	}
+	l.Release()
+}
+
+// AcquirePriority preempts a polite holder that selects on its yield channel
+// and Releases. After the priority op holds, polite refuses (held). Once it
+// releases, polite succeeds again with a fresh open channel.
+func TestPriority_PreemptsPoller(t *testing.T) {
+	l := New()
+
+	ok, y := l.AcquirePolite("poller")
+	if !ok {
+		t.Fatalf("poller acquire should succeed")
+	}
 	go func() {
-		deadline := time.Now().Add(time.Second)
-		for time.Now().Before(deadline) {
-			if l.PausePending() {
-				sawPending <- true
-				return
-			}
-			time.Sleep(time.Millisecond)
-		}
-		sawPending <- false
+		<-y // revoked when the priority op starts waiting
+		time.Sleep(10 * time.Millisecond)
+		l.Release()
 	}()
 
 	start := time.Now()
@@ -127,24 +154,27 @@ func TestPriority_PreemptsPoller(t *testing.T) {
 	if elapsed := time.Since(start); elapsed > 300*time.Millisecond {
 		t.Fatalf("priority took too long: %v", elapsed)
 	}
-	if !<-sawPending {
-		t.Fatalf("PausePending never observed true while priority op waited")
-	}
-	if l.PausePending() {
-		t.Fatalf("PausePending should be false after priority op acquired")
-	}
 	if held, who := l.Held(); !held || who != "pairing" {
 		t.Fatalf("Held = (%v,%q) want (true,pairing)", held, who)
 	}
 
-	// After priority holds, polite still yields (lock held) until Release.
-	if ok, holder := l.TryAcquirePolite("poller"); ok || holder != "pairing" {
-		t.Fatalf("polite while priority holds = (%v,%q) want (false,pairing)", ok, holder)
+	// While the priority op holds, polite refuses (lock held).
+	if ok, y := l.AcquirePolite("poller"); ok || y != nil {
+		t.Fatalf("polite while priority holds = (%v, chan=%v) want (false, nil)", ok, y)
 	}
 	l.Release()
-	if l.PausePending() {
-		t.Fatalf("PausePending must be false after release")
+
+	// Poller resumes with a fresh, open channel.
+	ok, y = l.AcquirePolite("poller")
+	if !ok || y == nil {
+		t.Fatalf("poller should resume with a fresh channel after release")
 	}
+	select {
+	case <-y:
+		t.Fatalf("resumed yield channel should be open")
+	default:
+	}
+	l.Release()
 }
 
 // AcquirePriority times out and reports the blocker when another priority
@@ -166,17 +196,20 @@ func TestPriority_TimeoutBlocker(t *testing.T) {
 	if elapsed := time.Since(start); elapsed < 50*time.Millisecond {
 		t.Fatalf("timed out too early: %v", elapsed)
 	}
-	// The timed-out waiter must have cleared its pause request.
-	if l.PausePending() {
-		t.Fatalf("PausePending must be false after the waiter gives up")
+	// The timed-out waiter must have cleared its pause request: a polite acquire
+	// now succeeds (waiting back to 0 once op-b returned, op-a still holds so
+	// release it first).
+	l.Release()
+	if ok, _ := l.AcquirePolite("poller"); !ok {
+		t.Fatalf("polite should succeed once the timed-out waiter cleared and lock freed")
 	}
 	l.Release()
 }
 
 // Two priority acquirers racing where the winner holds past the loser's
 // timeout: exactly one wins and the other times out reporting the winner as
-// blocker. Safe even though no runMu guards them here (broadcast may race
-// pairing).
+// blocker. The yield channel is never double-closed (no panic) even with two
+// concurrent priority ops, and no polite holder is involved here.
 func TestPriority_TwoRacers(t *testing.T) {
 	l := New()
 	var wins int32
@@ -208,17 +241,108 @@ func TestPriority_TwoRacers(t *testing.T) {
 	if b := loserBlocker.Load().(string); b != "pairing" && b != "gridprofile-broadcast" {
 		t.Fatalf("loser blocker = %q want one of the racer owners", b)
 	}
-	if l.PausePending() {
-		t.Fatalf("PausePending must be false after both racers finished")
-	}
 	if held, _ := l.Held(); held {
 		t.Fatalf("lock must be free after winner releases")
 	}
 }
 
-// Stress: many polite pollers plus a few priority ops. Everything terminates,
-// no deadlock, and the poller resumes (can acquire politely) after the last
-// priority op releases.
+// Two priority ops both racing to revoke the SAME polite holder must not
+// double-close its yield channel.
+func TestPriority_TwoRacersWithPoliteHolder(t *testing.T) {
+	l := New()
+	ok, y := l.AcquirePolite("poller")
+	if !ok {
+		t.Fatalf("poller acquire should succeed")
+	}
+	go func() {
+		<-y
+		l.Release() // bail promptly on revocation
+	}()
+
+	var wg sync.WaitGroup
+	var wins int32
+	for _, name := range []string{"pairing", "gridprofile-broadcast"} {
+		wg.Add(1)
+		go func(owner string) {
+			defer wg.Done()
+			// The winner holds 120ms, past the loser's 50ms timeout, so exactly
+			// one acquires.
+			ok, _ := l.AcquirePriority(owner, 50*time.Millisecond)
+			if ok {
+				atomic.AddInt32(&wins, 1)
+				time.Sleep(120 * time.Millisecond)
+				l.Release()
+			}
+		}(name)
+	}
+	wg.Wait() // a double-close would have panicked here
+
+	if wins != 1 {
+		t.Fatalf("exactly one racer should win, got %d", wins)
+	}
+	if held, _ := l.Held(); held {
+		t.Fatalf("lock must be free after the winner releases")
+	}
+}
+
+// No livelock: while a priority op waits (held by a non-yielding holder),
+// polite acquire keeps refusing so the poller can't jump ahead; once the
+// priority op releases, polite succeeds again.
+func TestNoLivelock_PoliteRefusesWhilePriorityWaits(t *testing.T) {
+	l := New()
+
+	// A non-priority holder occupies the lock so the priority op must wait.
+	if ok, _ := l.TryAcquire("holder"); !ok {
+		t.Fatalf("holder acquire should succeed")
+	}
+
+	prioDone := make(chan struct{})
+	go func() {
+		ok, _ := l.AcquirePriority("op", time.Second)
+		if !ok {
+			t.Errorf("priority should eventually acquire")
+		}
+		close(prioDone)
+	}()
+
+	// Give the priority op time to register its wait (waiting > 0).
+	deadline := time.Now().Add(time.Second)
+	for {
+		l.mu.Lock()
+		w := l.waiting
+		l.mu.Unlock()
+		if w > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("priority op never registered its wait")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	// Free the lock but, while the priority op waits, polite must refuse.
+	l.Release()
+	if ok, y := l.AcquirePolite("poller"); ok || y != nil {
+		t.Fatalf("polite must refuse while a priority op waits, got (%v,%v)", ok, y)
+	}
+
+	// Let the priority op take it and release.
+	<-prioDone
+	if held, who := l.Held(); !held || who != "op" {
+		t.Fatalf("priority op should hold, got (%v,%q)", held, who)
+	}
+	l.Release()
+
+	// Now polite succeeds again.
+	if ok, _ := l.AcquirePolite("poller"); !ok {
+		t.Fatalf("polite should succeed once the priority op released")
+	}
+	l.Release()
+}
+
+// Stress: many polite holders (acquire / select-on-yield / release) plus a few
+// priority ops. Everything terminates, no deadlock, and the poller resumes
+// (can acquire politely) after the last priority op releases.
 func TestStress_NoDeadlockPollerResumes(t *testing.T) {
 	l := New()
 	stop := make(chan struct{})
@@ -235,9 +359,13 @@ func TestStress_NoDeadlockPollerResumes(t *testing.T) {
 					return
 				default:
 				}
-				if ok, _ := l.TryAcquirePolite("poller"); ok {
+				if ok, y := l.AcquirePolite("poller"); ok {
 					atomic.AddInt64(&politeAcquires, 1)
-					time.Sleep(time.Millisecond)
+					// Hold briefly, but bail immediately on revocation.
+					select {
+					case <-y:
+					case <-time.After(time.Millisecond):
+					}
 					l.Release()
 				} else {
 					time.Sleep(time.Millisecond)
@@ -277,10 +405,7 @@ func TestStress_NoDeadlockPollerResumes(t *testing.T) {
 	politeWg.Wait()
 
 	// Poller resumes: with no waiter and lock free, polite acquire succeeds.
-	// (During the contended phase polite pollers legitimately yield to the
-	// priority ops; the invariant under test is that they resume afterwards,
-	// not that they made progress while operator ops were pending.)
-	if ok, _ := l.TryAcquirePolite("poller"); !ok {
+	if ok, _ := l.AcquirePolite("poller"); !ok {
 		t.Fatalf("poller failed to resume after priority ops drained")
 	}
 	l.Release()

@@ -54,15 +54,16 @@ type Poller struct {
 	// BusLock, if non-nil, is the process-wide guard that pairing ops
 	// and gridprofile broadcasts hold for the duration of a fleet-
 	// disruptive operation. The poller is the POLITE holder: each round
-	// TryAcquirePolite's it before emitting any 0xBB frames and Release's
-	// at end, and it yields the instant an operator op is waiting — both at
-	// round start (TryAcquirePolite returns busy) and mid-round (a
-	// PausePending check releases early). This keeps the poller from
-	// interleaving a 0xBB query with a pairing 0x05/0x0E/0x22 on the modem
-	// fd AND from starving an operator op (which preempts via the lock's
-	// priority acquire) on a large fleet whose round exceeds the interval.
-	// nil disables the gate (legacy behaviour); production wiring must
-	// set it.
+	// AcquirePolite's it before emitting any 0xBB frames and Release's at
+	// end. AcquirePolite returns a yield channel that closes the instant an
+	// operator op begins waiting for the bus; the round selects on it and
+	// returns early, so preemption rides a single revocation signal instead
+	// of a separate mid-round check the holder must remember. This keeps the
+	// poller from interleaving a 0xBB query with a pairing 0x05/0x0E/0x22 on
+	// the modem fd AND from starving an operator op (which preempts via the
+	// lock's priority acquire) on a large fleet whose round exceeds the
+	// interval. nil disables the gate (legacy behaviour); production wiring
+	// must set it.
 	BusLock *buslock.Lock
 
 	// cold-start: log "no inverters" once, not every round.
@@ -104,26 +105,34 @@ func (p *Poller) Run(ctx context.Context) {
 // each. Returns nil on normal completion (including an empty inventory
 // or an absent backend).
 //
-// When BusLock is wired, the round first TryAcquirePolite's it. If a
-// pairing op (or gridprofile broadcast) already owns the lock, or one is
-// waiting to acquire it, the round is skipped/yielded — telemetry frames
-// must not interleave with pairing primitives on the modem fd, and an
-// operator op must not be starved. Mid-round, a PausePending check
-// releases the lock early so a waiting operator op preempts within one
-// SendInterval. The lock is released before return so the next round (or
-// the operator op waiting on it) sees a free bus.
+// When BusLock is wired, the round first AcquirePolite's it. If a pairing
+// op (or gridprofile broadcast) already owns the lock, or one is waiting to
+// acquire it, the round is skipped — telemetry frames must not interleave
+// with pairing primitives on the modem fd, and an operator op must not be
+// starved. AcquirePolite hands back a yield channel that closes the instant
+// an operator op begins waiting; the round selects on it before each send
+// and during each inter-send wait, returning early so the operator op
+// preempts immediately rather than at the next send or a poll tick. The
+// lock is released before return so the next round (or the operator op
+// waiting on it) sees a free bus.
 func (p *Poller) poll(ctx context.Context) error {
 	if p.Store == nil || p.Server == nil || p.Backend == "" {
 		return fmt.Errorf("Store, Server, and Backend must be set")
 	}
+	// yield closes when an operator op begins waiting for the bus. When
+	// BusLock is nil it stays nil, and a nil channel in a select never
+	// fires — so the per-inverter loop's selects below are correct without
+	// a guard.
+	var yield <-chan struct{}
 	if p.BusLock != nil {
-		ok, owner := p.BusLock.TryAcquirePolite(busLockOwner)
+		ok, y := p.BusLock.AcquirePolite(busLockOwner)
 		if !ok {
 			p.busyOnce.Do(func() {
-				log.Printf("telemetrypoll: bus busy (owner=%q); skipping rounds until released", owner)
+				log.Printf("telemetrypoll: bus busy; skipping rounds until released")
 			})
 			return nil
 		}
+		yield = y
 		// Reset the once so the next contention window also logs once.
 		defer func() {
 			p.BusLock.Release()
@@ -149,17 +158,15 @@ func (p *Poller) poll(ctx context.Context) error {
 	frame := codec.OutboundBBQueryL2()
 
 	for i, inv := range inverters {
+		// Bail the instant the bus is revoked (yield closed) or the context
+		// is cancelled. The deferred Release then frees the lock so the
+		// waiting operator op claims it without running out this round.
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		default:
-		}
-
-		// Yield mid-round the moment an operator op is waiting for the bus:
-		// the deferred Release frees the lock so AcquirePriority claims it
-		// within one SendInterval instead of waiting out the whole round.
-		if p.BusLock != nil && p.BusLock.PausePending() {
+		case <-yield:
 			return nil
+		default:
 		}
 
 		env := &wire.Envelope{Body: &wire.Envelope_Send{Send: &wire.Send{
@@ -179,6 +186,8 @@ func (p *Poller) poll(ctx context.Context) error {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
+			case <-yield:
+				return nil
 			case <-time.After(sendInterval):
 			}
 		}
