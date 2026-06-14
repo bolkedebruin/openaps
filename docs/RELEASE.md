@@ -1,3 +1,29 @@
+# OpenAPS v1.1.16
+
+Recognizes the QS2 inverter and corrects nameplate ratings.
+
+## Added
+
+- **Model code `0x36` is now identified as QS2** (single-phase
+  4-channel) and classified into the DS3 family, so it uses the
+  DS3-class wire protocol for encoding, broadcast, and grid-profile
+  pushes. Model strings prefixed `QS2` map to the DS3 family as well.
+
+## Changed
+
+- **Nameplate ratings now follow the APsystems datasheet "maximum
+  continuous output power"** (EMEA 230 V / 50 Hz), not short-term peak.
+  QS2 is 2200 VA; QS1A 1600→1500, DS3 750→880, DS3H 880→960, DS3L
+  600→730, QT2 1800→2000; the YC600 family is 550 and YC1000 is 900.
+  These feed SunSpec Model 120 (Nameplate Ratings) fleet sums and cap
+  the per-inverter power slider.
+
+## Upgrading
+
+`opkg upgrade openaps-inv-driver`. No configuration or schema changes.
+
+---
+
 # OpenAPS v1.1.15
 
 Lets operators add inverters while telemetry is running.
