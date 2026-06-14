@@ -1,3 +1,27 @@
+# OpenAPS v1.1.15
+
+Lets operators add inverters while telemetry is running.
+
+## Fixed
+
+- **Adding inverters no longer fails with "ZigBee bus is busy with
+  telemetry-poll".** Pairing ops (add-by-serial, scan, replace, rekey,
+  change-channel) already paused telemetry via the shared bus lock, but with a
+  non-blocking acquire — and the steady-state telemetry poller re-takes that
+  lock every round. On larger fleets a poll round outgrows the 1 s interval, so
+  the poller held the lock almost continuously and the operator op's acquire
+  always lost the race, getting "busy with telemetry-poll." The bus lock now
+  gives operator ops priority: they preempt the poller (which yields within one
+  telemetry send), so commissioning a full fleet no longer means retrying every
+  add. The poller's preemption rides a single revocation signal, so the
+  coordination is robust as the radio layer grows.
+
+## Upgrading
+
+`opkg upgrade openaps-inv-driver`. No configuration or schema changes.
+
+---
+
 # OpenAPS v1.1.14
 
 Documentation fix for the SunSpec adapter, plus a Home Assistant curtailment guide.
