@@ -1,3 +1,28 @@
+# OpenAPS v1.1.18
+
+Power chart survives a wrong ECU clock.
+
+## Fixed
+
+- **The power chart no longer goes blank after the ECU clock was wrong.**
+  The chart spans its x-axis from the first to the last sample, so a
+  single point recorded while the clock was unset (e.g. `2000-01-01`
+  after an RTC loss) stretched the axis across decades and collapsed the
+  real data into an invisible sliver. The power-history ring now drops
+  samples with an implausible timestamp (before 2020) both when loading
+  its persisted file and when recording new samples, so a clock glitch
+  self-heals once the clock is corrected — no manual cleanup of
+  `power-history.json` needed.
+
+## Upgrading
+
+`opkg upgrade openaps-inv-driver`. No configuration or schema changes.
+An ECU whose chart is already poisoned heals on the next restart after
+upgrading (the bad points are filtered on load); the lifetime energy
+totals in the database were never affected.
+
+---
+
 # OpenAPS v1.1.17
 
 Decodes QS2 (4-channel) inverter telemetry.
