@@ -130,6 +130,10 @@ func (a *applier) runBroadcastFleet(parent context.Context, job broadcastJob) {
 	}
 
 	if job.lock != nil {
+		// Fail-fast (TryAcquire, not the priority AcquirePriority the pairing
+		// path uses): broadcast jobs are not serialised upstream, so a priority
+		// acquire here would let a burst of concurrent broadcasts hold the pause
+		// request and starve telemetry. A busy broadcast just reports and retries.
 		if ok, owner := job.lock.TryAcquire("gridprofile-broadcast"); !ok {
 			a.emit(context.Background(), "", "profile_apply_complete", "warn",
 				fmt.Sprintf("%s — bus busy with %s; not applied", job.label, owner))

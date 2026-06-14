@@ -36,6 +36,13 @@ var uidRe = regexp.MustCompile(`^[0-9A-Fa-f]{12}$`)
 // lockOwner is the buslock owner label for pairing operations.
 const lockOwner = "pairing"
 
+// busAcquireTimeout bounds how long startOp waits to claim the shared bus
+// guard with priority. The steady-state poller yields immediately on a pause
+// request, so the acquire normally returns within one SendInterval; the
+// window is long enough to outlast a large fleet's poll round yet short enough
+// to fail clearly when another operator op (a concurrent broadcast) holds it.
+const busAcquireTimeout = 5 * time.Second
+
 // verifyRetrySleep is the production default wait between rebindVerify
 // passes. Inverters (notably QS1A on this fleet) take a few seconds after a
 // rearm/commit before they answer a directed 0x0E, while their 1 Hz BB
@@ -224,8 +231,14 @@ func (m *Manager) startOp(by, op, stage string, total int, fn func(ctx context.C
 	}
 
 	if m.Lock != nil {
-		if ok, owner := m.Lock.TryAcquire(lockOwner); !ok {
-			return errResp(fmt.Sprintf("ZigBee bus is busy with %s; please retry in a few seconds", owner))
+		// Priority acquire: the poller yields the instant we request the pause,
+		// so this normally returns within one SendInterval. It can block up to
+		// busAcquireTimeout only if another operator op (a gridprofile
+		// broadcast) holds the bus — runMu is held across that wait, but
+		// get_status doesn't take runMu (the UI keeps updating) and no op is
+		// running yet, so a delayed abort correctly no-ops.
+		if ok, blocker := m.Lock.AcquirePriority(lockOwner, busAcquireTimeout); !ok {
+			return errResp(fmt.Sprintf("ZigBee bus is busy with %s; please retry in a few seconds", blocker))
 		}
 	}
 
