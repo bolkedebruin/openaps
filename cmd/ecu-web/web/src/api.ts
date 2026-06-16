@@ -319,6 +319,9 @@ export type PairingStage =
   | "configure"
   | "rekey"
   | "change_channel"
+  | "remove"
+  | "evict"
+  | "delete"
   | "done"
   | "aborted"
   | "error";
@@ -351,6 +354,12 @@ export interface PairingStatus {
   sweep?: PairingSweep;
   per_inverter?: PairingPerInverter[];
   message?: string;
+  // evicted is the outcome of a Remove op's best-effort radio evict: true only
+  // when a live decommission (force=false) successfully re-PANed the unit to the
+  // rendezvous PAN. false when force=true (no radio op) OR the evict was
+  // attempted but failed — in the failed case `message` carries the reappearance
+  // WARNING. It is meaningful only once the op reaches a terminal stage.
+  evicted?: boolean;
   error?: string;
   started_ms?: number;
   updated_ms?: number;
@@ -461,6 +470,15 @@ export const api = {
     postJSONResult<PairingResp>("/api/pairing/rekey", { new_pan, channel }),
   pairingChangeChannel: (channel: number) =>
     postJSONResult<PairingResp>("/api/pairing/change-channel", { channel }),
+  // pairingRemove removes one inverter from the fleet. It is step-up-gated
+  // server-side: the caller must verifyPassword (POST /api/auth/verify) within
+  // the step-up window first, or this 403s. force=false = live decommission
+  // (best-effort evict to PAN 0xFFFF on the current channel, then DB delete);
+  // force=true = mistyped / never-live entry (plain DB delete, no radio op).
+  // The op is asynchronous: a 202 only means it was accepted. The outcome
+  // (evicted bool + warning message) flows through GET /api/pairing/status.
+  pairingRemove: (serial: string, force: boolean) =>
+    postJSONResult<PairingResp>("/api/inverters/remove", { serial, force }),
   pairingAbort: () => postJSONResult<PairingResp>("/api/pairing/abort", {}),
   pairingStatus: () => getJSON<PairingResp>("/api/pairing/status"),
   // --- SSH access plane (recoveryd) ---

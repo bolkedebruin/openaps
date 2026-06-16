@@ -253,8 +253,7 @@ package-zb: build-ecu-zb-arm
 #       ├── etc-init-d/
 #       │   └── S99-sunspec               (BusyBox init script)
 #       └── etc-sunspec/
-#           ├── sunspec.json
-#           └── sunspec-nameplate.json
+#           └── sunspec.json
 package-sunspec: build-ecu-sunspec-arm
 	@echo "+ packaging ecu-sunspec $(VERSION)"
 	@rm -rf $(BUILD_DIR)/pkgroot-sunspec
@@ -270,8 +269,6 @@ package-sunspec: build-ecu-sunspec-arm
 	@chmod 0755 $(BUILD_DIR)/pkgroot-sunspec/update/etc-init-d/S99-sunspec
 	@cp packaging/sunspec.json $(BUILD_DIR)/pkgroot-sunspec/update/etc-sunspec/sunspec.json
 	@chmod 0644 $(BUILD_DIR)/pkgroot-sunspec/update/etc-sunspec/sunspec.json
-	@cp packaging/nameplate.json $(BUILD_DIR)/pkgroot-sunspec/update/etc-sunspec/sunspec-nameplate.json
-	@chmod 0644 $(BUILD_DIR)/pkgroot-sunspec/update/etc-sunspec/sunspec-nameplate.json
 	@(cd $(BUILD_DIR)/pkgroot-sunspec && tar -cjf ../apsystems-sunspec-$(VERSION).tar.bz2 .)
 	@rm -rf $(BUILD_DIR)/pkgroot-sunspec
 	@ls -lh $(BUILD_DIR)/apsystems-sunspec-$(VERSION).tar.bz2

@@ -218,6 +218,26 @@ func (c *Client) sendControl(ctx context.Context, env *wire.Envelope) error {
 	return nil
 }
 
+// FetchEcuID does a one-shot UDS round-trip to read inv-driver's settings
+// and returns the operator-set ECU id. inv-driver owns the ecu-id
+// (settings.json), so it is the authoritative source for the SunSpec SN.
+func (c *Client) FetchEcuID(ctx context.Context) (string, error) {
+	if c == nil {
+		return "", errors.New("invdriver: client is nil")
+	}
+	ctx, cancel := context.WithTimeout(ctx, controlDialTimeout)
+	defer cancel()
+	hello := &wire.Envelope{Body: &wire.Envelope_Hello{Hello: c.newHello(wire.Role_ROLE_UNSPECIFIED)}}
+	req := &wire.Envelope{Body: &wire.Envelope_SettingsReq{SettingsReq: &wire.SettingsRequest{
+		Op: &wire.SettingsRequest_Get{Get: &wire.Empty{}}}}}
+	match := func(e *wire.Envelope) bool { return e.GetSettingsResp() != nil }
+	resp, err := udsutil.Roundtrip(ctx, c.socketPath, hello, match, req)
+	if err != nil {
+		return "", fmt.Errorf("invdriver: settings: %w", err)
+	}
+	return resp.GetSettingsResp().GetSettings().GetEcuId(), nil
+}
+
 // session writes the Hello frame and dispatches incoming envelopes to
 // applyTelemetry / applyInfo. Other envelope kinds are dropped.
 // Returns nil on context cancel or clean peer close; non-nil on

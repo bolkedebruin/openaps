@@ -3,6 +3,9 @@ import type { PairingStatus } from "../api.ts";
 import { pairingActive } from "../api.ts";
 
 const STAGES = ["scan", "bind", "migrate", "configure", "rekey"] as const;
+// A remove op walks its own short stage track (evict is skipped for a plain
+// force-delete, but the chip stays for a stable layout).
+const REMOVE_STAGES = ["evict", "delete"] as const;
 
 const STAGE_LABEL: Record<string, string> = {
   scan: "Scan",
@@ -10,6 +13,9 @@ const STAGE_LABEL: Record<string, string> = {
   migrate: "Migrate",
   configure: "Configure",
   rekey: "Re-key",
+  remove: "Remove",
+  evict: "Evict",
+  delete: "Delete",
   done: "Done",
   aborted: "Aborted",
   error: "Error",
@@ -81,6 +87,12 @@ export class PairingProgressDrawer extends LitElement {
     .sweep { font-size: 12px; color: var(--muted); }
     .err { color: var(--err); font-size: 13px; }
     .ok { color: var(--ok); font-size: 13px; }
+    .warn {
+      color: var(--text); font-size: 13px; line-height: 1.45;
+      border: 1px solid var(--err);
+      background: color-mix(in srgb, var(--err) 12%, transparent);
+      border-radius: 8px; padding: 10px 12px;
+    }
     table { width: 100%; border-collapse: collapse; font-size: 12px; }
     th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
     th { color: var(--muted); text-transform: uppercase; font-size: 10px; letter-spacing: 0.04em; }
@@ -104,12 +116,23 @@ export class PairingProgressDrawer extends LitElement {
     this.dispatchEvent(new CustomEvent("close", { bubbles: true, composed: true }));
   };
 
-  private stageClass(stage: string, current: string): string {
+  private stageClass(stage: string, current: string, track: readonly string[]): string {
     if (stage === current) return "stage active";
-    const si = STAGES.indexOf(stage as (typeof STAGES)[number]);
-    const ci = STAGES.indexOf(current as (typeof STAGES)[number]);
+    const si = track.indexOf(stage);
+    const ci = track.indexOf(current);
     if (ci > si && si >= 0) return "stage done";
     return "stage";
+  }
+
+  // removeEvictFailed reports whether a finished remove op left the unit still
+  // on the live PAN (best-effort evict attempted but failed). The reappearance
+  // WARNING is shown for this case: evicted===false with a per-inverter
+  // "evict-failed" marks a failed live decommission, distinct from a plain
+  // force-delete (where there was no evict to fail).
+  private removeEvictFailed(st: PairingStatus): boolean {
+    if (st.op !== "remove" || st.stage !== "done") return false;
+    if (st.evicted) return false;
+    return (st.per_inverter ?? []).some((p) => p.state === "evict-failed");
   }
 
   render() {
@@ -119,6 +142,9 @@ export class PairingProgressDrawer extends LitElement {
     const total = st?.total ?? 0;
     const done = st?.done ?? 0;
     const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : active ? 0 : 0;
+    const isRemove = st?.op === "remove";
+    const track = isRemove ? REMOVE_STAGES : STAGES;
+    const evictFailed = st ? this.removeEvictFailed(st) : false;
 
     return html`
       <div class="scrim ${this.open ? "open" : ""}" @click=${(e: Event) => { if (e.target === e.currentTarget && !active) this.close(); }}>
@@ -132,7 +158,7 @@ export class PairingProgressDrawer extends LitElement {
               ? html`<p class="empty">No pairing operation running.</p>`
               : html`
                   <div class="stages">
-                    ${STAGES.map((sName) => html`<span class=${this.stageClass(sName, stage)}>${STAGE_LABEL[sName]}</span>`)}
+                    ${track.map((sName) => html`<span class=${this.stageClass(sName, stage, track)}>${STAGE_LABEL[sName]}</span>`)}
                   </div>
 
                   ${total > 0
@@ -144,15 +170,22 @@ export class PairingProgressDrawer extends LitElement {
                     <div><span class="muted">Stage:</span> ${STAGE_LABEL[stage] ?? stage ?? "—"}</div>
                     ${st.current_serial ? html`<div><span class="muted">Current:</span> ${st.current_serial}</div>` : nothing}
                     ${st.substep ? html`<div><span class="muted">Step:</span> ${st.substep}</div>` : nothing}
-                    ${st.message ? html`<div class="muted">${st.message}</div>` : nothing}
+                    ${st.message && !evictFailed ? html`<div class="muted">${st.message}</div>` : nothing}
                   </div>
+
+                  ${evictFailed
+                    ? html`<div class="warn" role="alert">
+                        ⚠ ${st.message ||
+                          "The inverter was deleted but could not be evicted — it may reappear if it calls in again. Re-run remove to evict it, or power it down."}
+                      </div>`
+                    : nothing}
 
                   ${st.sweep
                     ? html`<div class="sweep">Channel ${st.sweep.chan} (sweep ${st.sweep.chan_lo}–${st.sweep.chan_hi}) — telemetry paused</div>`
                     : nothing}
 
                   ${st.error ? html`<div class="err">Error: ${st.error}</div>` : nothing}
-                  ${stage === "done" ? html`<div class="ok">Completed.</div>` : nothing}
+                  ${stage === "done" && !evictFailed ? html`<div class="ok">Completed.</div>` : nothing}
                   ${stage === "aborted" ? html`<div class="muted">Aborted.</div>` : nothing}
 
                   ${st.per_inverter && st.per_inverter.length > 0

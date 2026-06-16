@@ -15,6 +15,9 @@ const (
 	StageConfigure = "configure"
 	StageRekey     = "rekey"
 	StageChannel   = "channel"
+	StageRemove    = "remove"
+	StageEvict     = "evict"
+	StageDelete    = "delete"
 	StageDone      = "done"
 	StageAborted   = "aborted"
 	StageError     = "error"
@@ -27,6 +30,7 @@ const (
 	OpReplace = "replace"
 	OpRekey   = "rekey"
 	OpChannel = "change_channel"
+	OpRemove  = "remove"
 )
 
 // PerInverter is one inverter's progress within the current op. State is a
@@ -60,9 +64,15 @@ type PairingStatus struct {
 	Sweep         Sweep         `json:"sweep"`
 	PerInverter   []PerInverter `json:"per_inverter"`
 	Message       string        `json:"message"`
-	Error         string        `json:"error"`
-	StartedMs     int64         `json:"started_ms"`
-	UpdatedMs     int64         `json:"updated_ms"`
+	// Evicted reports the outcome of a Remove op's best-effort radio evict
+	// (re-PAN to rendezvous 0xFFFF). True only when the evict succeeded on the
+	// force=false path; false when force=true (no evict attempted) or the
+	// evict was attempted but failed — in the latter case Message carries the
+	// "unit may reappear" warning so the UI can surface it.
+	Evicted   bool   `json:"evicted"`
+	Error     string `json:"error"`
+	StartedMs int64  `json:"started_ms"`
+	UpdatedMs int64  `json:"updated_ms"`
 }
 
 // statusTracker is the concurrency-safe holder of the current PairingStatus.

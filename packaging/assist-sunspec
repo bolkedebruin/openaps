@@ -54,17 +54,6 @@ elif [ -f /home/sunspec.json ]; then
     echo "  /home/sunspec.json present — keeping existing config"
 fi
 
-# 2b. Nameplate lookup file at /home/sunspec-nameplate.json — only if not already
-#     present. Preserves any user-added entries for fleet hardware not in the
-#     shipped defaults.
-if [ -f "$SRC/etc-sunspec/sunspec-nameplate.json" ] && [ ! -f /home/sunspec-nameplate.json ]; then
-    cp -f "$SRC/etc-sunspec/sunspec-nameplate.json" /home/sunspec-nameplate.json
-    chmod 0644 /home/sunspec-nameplate.json
-    echo "+ /home/sunspec-nameplate.json (default — edit to add submodels)"
-elif [ -f /home/sunspec-nameplate.json ]; then
-    echo "  /home/sunspec-nameplate.json present — keeping existing table"
-fi
-
 # 3. Boot init script (BusyBox /etc/init.d style).
 put_exec "$SRC/etc-init-d/S99-sunspec" /etc/init.d/S99-sunspec || true
 

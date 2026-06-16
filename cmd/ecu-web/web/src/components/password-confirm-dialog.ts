@@ -2,20 +2,28 @@ import { LitElement, html, css, nothing } from "lit";
 import { api } from "../api.ts";
 
 /**
- * <password-confirm-dialog kind="rekey|channel" @confirm @cancel>
+ * <password-confirm-dialog kind="rekey|channel|remove" @confirm @cancel>
  *
- * A modal that collects a step-up-gated value (a new PAN for "rekey", a new
- * channel number for "channel") together with the operator's password, then
- * verifies the password inline and emits "confirm" with the validated value.
- * The owner runs the actual privileged action; this dialog is purely about
- * collecting value+password and gating on verifyPassword. Errors from the
- * subsequent action can be surfaced back via the `actionError` property to
- * render inside the still-open dialog.
+ * A modal that gates a privileged action behind the operator's password. For
+ * "rekey"/"channel" it also collects a step-up value (a new PAN / channel); for
+ * "remove" there is no value — it is a confirm-only step-up (like the SSH-key
+ * removal) for taking one inverter out of the fleet. In every case it verifies
+ * the password inline (api.verifyPassword) before emitting "confirm" so the
+ * owner never has to handle a 403 step-up detour. Errors from the subsequent
+ * action can be surfaced back via the `actionError` property to render inside
+ * the still-open dialog.
+ *
+ * For kind="remove" the dialog also offers a "never-live entry" toggle that maps
+ * to the remove `force` flag: unchecked (default) = live decommission (evict
+ * then delete); checked = a mistyped / never-live row (plain delete, no radio).
  *
  * Dispatches:
- *   "confirm" { value: string }  — operator confirmed; password verified ok.
+ *   "confirm" { value: string, force?: boolean }
+ *                                  — operator confirmed; password verified ok.
  *                                  For kind="rekey", value is a 1-4 hex PAN.
  *                                  For kind="channel", value is "11".."26".
+ *                                  For kind="remove", value is "" and `force`
+ *                                  carries the never-live toggle.
  *   "cancel"                      — operator cancelled or backdrop-clicked.
  *
  * The dialog is single-shot: the owner closes it (by clearing whatever state
@@ -25,6 +33,9 @@ import { api } from "../api.ts";
 export class PasswordConfirmDialog extends LitElement {
   static properties = {
     kind: { attribute: true },
+    // subject identifies what the action acts on (e.g. the inverter serial for
+    // kind="remove"); shown in the confirm copy so the operator sees the target.
+    subject: { attribute: true },
     busy: { attribute: false },
     actionError: { attribute: false },
     value: { state: true },
@@ -32,9 +43,11 @@ export class PasswordConfirmDialog extends LitElement {
     pwdError: { state: true },
     valueError: { state: true },
     pwdBusy: { state: true },
+    force: { state: true },
   };
 
-  declare kind: "rekey" | "channel";
+  declare kind: "rekey" | "channel" | "remove";
+  declare subject: string;
   declare busy: boolean;
   declare actionError: string;
   declare value: string;
@@ -42,10 +55,12 @@ export class PasswordConfirmDialog extends LitElement {
   declare pwdError: string;
   declare valueError: string;
   declare pwdBusy: boolean;
+  declare force: boolean;
 
   constructor() {
     super();
     this.kind = "rekey";
+    this.subject = "";
     this.busy = false;
     this.actionError = "";
     this.value = "";
@@ -53,6 +68,14 @@ export class PasswordConfirmDialog extends LitElement {
     this.pwdError = "";
     this.valueError = "";
     this.pwdBusy = false;
+    this.force = false;
+  }
+
+  // hasValueField reports whether this kind collects a step-up value. "remove"
+  // is a confirm-only step-up (no value), so the value input/validation and the
+  // initial value-input focus are skipped for it.
+  private get hasValueField(): boolean {
+    return this.kind !== "remove";
   }
 
   static styles = css`
@@ -91,6 +114,13 @@ export class PasswordConfirmDialog extends LitElement {
       display: block; font-size: 12px; color: var(--muted);
       margin: 8px 0 6px;
     }
+    .dialog label.check {
+      display: flex; align-items: flex-start; gap: 8px;
+      font-size: 12px; color: var(--text); line-height: 1.4;
+      margin: 4px 0 12px; cursor: pointer;
+    }
+    .dialog label.check input { width: auto; margin-top: 1px; }
+    .dialog strong { color: var(--text); font-family: var(--mono); }
     .dialog input {
       width: 100%;
       box-sizing: border-box;
@@ -135,11 +165,13 @@ export class PasswordConfirmDialog extends LitElement {
     }
   `;
 
-  // autofocus the value input as soon as the dialog mounts.
+  // autofocus the value input as soon as the dialog mounts; for a confirm-only
+  // kind (no value field) focus the password input instead.
   firstUpdated(): void {
     queueMicrotask(() => {
       const root = this.shadowRoot;
-      root?.querySelector<HTMLInputElement>("#pcd_value")?.focus();
+      const sel = this.hasValueField ? "#pcd_value" : "#pcd_pwd";
+      root?.querySelector<HTMLInputElement>(sel)?.focus();
     });
   }
 
@@ -182,12 +214,14 @@ export class PasswordConfirmDialog extends LitElement {
 
   private async submit(): Promise<void> {
     if (this.pwdBusy || this.busy) return;
-    const valueErr = this.validateValue(this.value);
-    if (valueErr) {
-      this.valueError = valueErr;
-      // focus the value input
-      this.shadowRoot?.querySelector<HTMLInputElement>("#pcd_value")?.focus();
-      return;
+    if (this.hasValueField) {
+      const valueErr = this.validateValue(this.value);
+      if (valueErr) {
+        this.valueError = valueErr;
+        // focus the value input
+        this.shadowRoot?.querySelector<HTMLInputElement>("#pcd_value")?.focus();
+        return;
+      }
     }
     if (!this.password) {
       this.pwdError = "Password required.";
@@ -203,8 +237,8 @@ export class PasswordConfirmDialog extends LitElement {
         this.shadowRoot?.querySelector<HTMLInputElement>("#pcd_pwd")?.focus();
         return;
       }
-      // password verified — hand the value back to the owner.
-      const detail = { value: this.value.trim() };
+      // password verified — hand the value (and remove's force flag) back.
+      const detail = { value: this.value.trim(), force: this.force };
       this.dispatchEvent(
         new CustomEvent("confirm", { detail, bubbles: true, composed: true }),
       );
@@ -292,12 +326,59 @@ export class PasswordConfirmDialog extends LitElement {
     `;
   }
 
+  private onForceToggle = (e: Event) => {
+    this.force = (e.target as HTMLInputElement).checked;
+  };
+
+  private renderRemove() {
+    const serial = this.subject || "this inverter";
+    return html`
+      <h3>Remove inverter</h3>
+      <p>
+        Removes <strong>${serial}</strong> from the fleet and deletes its stored
+        telemetry, panels and lifetime energy. By default the unit is first
+        evicted onto the rendezvous PAN 0xFFFF (best-effort) so it stops reporting
+        here; if that fails it may reappear when it next calls in and you can
+        re-run remove to evict it.
+      </p>
+      <label class="check">
+        <input
+          type="checkbox"
+          .checked=${this.force}
+          @change=${this.onForceToggle}
+          ?disabled=${this.pwdBusy || this.busy}
+        />
+        This was a mistyped / never-live entry — just delete it, skip the radio
+        evict.
+      </label>
+      <p class="warn">
+        Privileged action — your password is required to confirm.
+      </p>
+    `;
+  }
+
+  private renderBody() {
+    switch (this.kind) {
+      case "rekey":
+        return this.renderRekey();
+      case "channel":
+        return this.renderChannel();
+      case "remove":
+        return this.renderRemove();
+    }
+  }
+
   render() {
-    const confirmLabel = this.kind === "rekey" ? "Re-key fleet" : "Change channel";
+    const confirmLabel =
+      this.kind === "rekey"
+        ? "Re-key fleet"
+        : this.kind === "channel"
+          ? "Change channel"
+          : "Remove inverter";
     return html`
       <div class="backdrop" @click=${this.onBackdrop}>
         <div class="dialog" role="dialog" aria-modal="true" @click=${this.stop}>
-          ${this.kind === "rekey" ? this.renderRekey() : this.renderChannel()}
+          ${this.renderBody()}
           <label for="pcd_pwd">Password</label>
           <input
             id="pcd_pwd"

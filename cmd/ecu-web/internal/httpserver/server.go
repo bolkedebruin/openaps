@@ -167,6 +167,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/pairing/rekey", s.cfg.Auth.Require(http.HandlerFunc(s.handlePairingRekey)))
 	mux.Handle("POST /api/pairing/change-channel", s.cfg.Auth.Require(http.HandlerFunc(s.handlePairingChangeChannel)))
 	mux.Handle("POST /api/pairing/abort", s.cfg.Auth.Require(http.HandlerFunc(s.handlePairingAbort)))
+	mux.Handle("POST /api/inverters/remove", s.cfg.Auth.Require(http.HandlerFunc(s.handlePairingRemove)))
 	mux.Handle("GET /api/pairing/status", s.cfg.Auth.Require(http.HandlerFunc(s.handlePairingStatus)))
 	// SSH access plane (recoveryd). DELETE is step-up-gated like the
 	// sensitive settings writes — removing a key is high-impact.

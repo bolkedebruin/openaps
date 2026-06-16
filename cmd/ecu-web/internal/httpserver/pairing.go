@@ -178,6 +178,40 @@ func (s *Server) handlePairingChangeChannel(w http.ResponseWriter, r *http.Reque
 			Channel: body.Channel}}})
 }
 
+// handlePairingRemove removes a single inverter from the fleet. force=false
+// (live decommission) runs a best-effort evict — re-PAN the unit to the
+// rendezvous PAN 0xFFFF on the current channel — then deletes the DB rows;
+// force=true (mistyped / never-live entry) is a plain DB delete with no radio
+// op. Either way the DB rows are deleted; a failed evict is surfaced as a
+// reappearance WARNING through the polled status (PairingStatus.evicted /
+// .message), NOT this immediate response.
+//
+// Gated by step-up like fleet re-key / SSH-key changes: the operator must POST
+// /api/auth/verify within stepUpTTL first, since a live evict re-PANs the unit
+// and the op is destructive. The op is asynchronous — a 202 only means it was
+// accepted; the outcome (evicted bool + warning message) flows through GET
+// /api/pairing/status, which the progress drawer polls until stage=='done'.
+func (s *Server) handlePairingRemove(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.PairingFn == nil {
+		http.Error(w, "pairing unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	var body struct {
+		Serial string `json:"serial"`
+		Force  bool   `json:"force"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if body.Serial == "" {
+		http.Error(w, "serial is required", http.StatusBadRequest)
+		return
+	}
+	s.dispatchStepUp(w, r, &wire.PairingRequest{
+		Op: &wire.PairingRequest_RemoveById{RemoveById: &wire.RemoveById{
+			Serial: body.Serial, Force: body.Force}}})
+}
+
 // handlePairingAbort requests a safe abort of the active op.
 func (s *Server) handlePairingAbort(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.PairingFn == nil {

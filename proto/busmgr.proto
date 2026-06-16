@@ -463,7 +463,21 @@ message PairingRequest {
     Empty           abort       = 5;  // abort the running op (Safe-Abort)
     Empty           get_status  = 6;  // poll current op status (in-memory)
     FleetChangeChannel change_channel = 7;  // move whole fleet to a new RF channel
+    RemoveById      remove_by_id = 8;  // evict (best-effort) + delete one inverter
   }
+}
+
+// RemoveById removes a single inverter from the fleet. force=false runs a
+// best-effort EVICT first (re-PAN the unit to the rendezvous PAN 0xFFFF on
+// the current operating channel) and then deletes its DB rows regardless of
+// the evict outcome; force=true skips the evict and deletes outright (a
+// mistyped/never-live entry). When the evict is attempted but fails the DB
+// rows are still deleted and the caller is warned (via PairingStatus.Evicted
+// false + Message in status_json) that the unit may reappear if it calls in
+// again.
+message RemoveById {
+  string serial = 1;  // 12-digit decimal serial of the unit to remove
+  bool   force  = 2;  // true → skip the evict, delete outright
 }
 
 // FleetChangeChannel moves every paired inverter to a new RF channel: each

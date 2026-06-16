@@ -22,22 +22,23 @@ type applyCapCase struct {
 }
 
 func TestApplyCap_NameplateAwareWithFloorAndCeiling(t *testing.T) {
-	// TypeCode "01" → DS3 (model 0x20): NameplateW=730, panels=2 → 365 W/panel.
-	// TypeCode "03" → QS1 (model 0x18): NameplateW=1460, panels=4 → 365 W/panel.
-	// TypeCode "04" → DS3-H (model 0x21): NameplateW=880, panels=2 → 440 W/panel.
+	// NameplateW comes from codec.NameplateWattsForModel by model code:
+	//   DS3   (model 0x20): NameplateW=880,  panels=2 → 440 W/panel.
+	//   QS1A  (model 0x18): NameplateW=1500, panels=4 → 375 W/panel.
+	//   DS3-H (model 0x21): NameplateW=960,  panels=2 → 480 W/panel.
 	cases := []applyCapCase{
-		{name: "DS3 full scale", inv: source.Inverter{TypeCode: "01", Model: 0x20}, rawPct: 10000, wantW: 365},
-		{name: "DS3 80pct", inv: source.Inverter{TypeCode: "01", Model: 0x20}, rawPct: 8000, wantW: 292},
-		{name: "DS3 20pct", inv: source.Inverter{TypeCode: "01", Model: 0x20}, rawPct: 2000, wantW: 73},
+		{name: "DS3 full scale", inv: source.Inverter{TypeCode: "01", Model: 0x20}, rawPct: 10000, wantW: 440},
+		{name: "DS3 80pct", inv: source.Inverter{TypeCode: "01", Model: 0x20}, rawPct: 8000, wantW: 352},
+		{name: "DS3 20pct", inv: source.Inverter{TypeCode: "01", Model: 0x20}, rawPct: 2000, wantW: 88},
 		{name: "DS3 sub-floor clamps up", inv: source.Inverter{TypeCode: "01", Model: 0x20},
 			rawPct: 100, wantW: source.MinPanelLimitW},
 		{name: "DS3 above max raw clamps to 10000", inv: source.Inverter{TypeCode: "01", Model: 0x20},
-			rawPct: 15000, wantW: 365},
-		{name: "QS1 full scale", inv: source.Inverter{TypeCode: "03", Model: 0x18}, rawPct: 10000, wantW: 365},
-		{name: "DS3-H full scale per-panel 440", inv: source.Inverter{TypeCode: "04", Model: 0x21},
-			rawPct: 10000, wantW: 440},
+			rawPct: 15000, wantW: 440},
+		{name: "QS1 full scale", inv: source.Inverter{TypeCode: "03", Model: 0x18}, rawPct: 10000, wantW: 375},
+		{name: "DS3-H full scale per-panel 480", inv: source.Inverter{TypeCode: "04", Model: 0x21},
+			rawPct: 10000, wantW: 480},
 		{name: "DS3-H 80pct under ceiling", inv: source.Inverter{TypeCode: "04", Model: 0x21},
-			rawPct: 8000, wantW: 352},
+			rawPct: 8000, wantW: 384},
 	}
 
 	for _, c := range cases {

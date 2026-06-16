@@ -30,6 +30,9 @@ export class InvertersView extends LitElement {
     // last action error to surface inside the dialog.
     privilegedDialog: { state: true },
     privilegedError: { state: true },
+    // removeUid is the inverter the remove dialog targets ("" when the open
+    // dialog is not a remove).
+    removeUid: { state: true },
   };
   declare fleet: Fleet | null;
   declare names: Record<string, string>;
@@ -38,8 +41,9 @@ export class InvertersView extends LitElement {
   declare busy: boolean;
   declare aborting: boolean;
   declare notice: string;
-  declare privilegedDialog: "" | "rekey" | "channel";
+  declare privilegedDialog: "" | "rekey" | "channel" | "remove";
   declare privilegedError: string;
+  declare removeUid: string;
 
   private pollTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -54,6 +58,7 @@ export class InvertersView extends LitElement {
     this.notice = "";
     this.privilegedDialog = "";
     this.privilegedError = "";
+    this.removeUid = "";
   }
 
   connectedCallback(): void {
@@ -195,30 +200,52 @@ export class InvertersView extends LitElement {
     this.privilegedDialog = "channel";
   };
 
+  // onRemove opens the confirm-only password dialog for taking one inverter out
+  // of the fleet. The same dialog re-key/SSH-key changes use; the operator's
+  // password is verified inline before the step-up-gated remove dispatch.
+  private onRemove = (uid: string) => {
+    this.notice = "";
+    this.privilegedError = "";
+    this.removeUid = uid;
+    this.privilegedDialog = "remove";
+  };
+
   private onPrivilegedCancel = () => {
     if (this.busy) return;
     this.privilegedDialog = "";
     this.privilegedError = "";
+    this.removeUid = "";
   };
 
   private onPrivilegedConfirm = async (e: Event) => {
     const kind = this.privilegedDialog;
     if (!kind) return;
-    const { value } = (e as CustomEvent<{ value: string }>).detail;
+    const { value, force } = (e as CustomEvent<{ value: string; force?: boolean }>).detail;
     this.busy = true;
     this.privilegedError = "";
     this.notice = "";
     try {
-      const r = kind === "rekey"
-        ? await api.pairingRekey(value, 0)
-        : await api.pairingChangeChannel(Number(value));
+      let r;
+      if (kind === "rekey") {
+        r = await api.pairingRekey(value, 0);
+      } else if (kind === "channel") {
+        r = await api.pairingChangeChannel(Number(value));
+      } else {
+        r = await api.pairingRemove(this.removeUid, force ?? false);
+      }
       if (!r.ok) {
-        const msg = r.error || (kind === "rekey" ? "re-key rejected" : "channel change rejected");
+        const msg = r.error || (
+          kind === "rekey" ? "re-key rejected"
+          : kind === "channel" ? "channel change rejected"
+          : "remove rejected");
         throw new Error(msg);
       }
-      // success: close the dialog and open the progress drawer.
+      // success: close the dialog and open the progress drawer. The remove
+      // outcome (evict success/fail + any reappearance warning) surfaces through
+      // the polled status that the progress drawer renders.
       this.privilegedDialog = "";
       this.privilegedError = "";
+      this.removeUid = "";
       this.applyResp(r.status);
     } catch (err) {
       // Render the action error INSIDE the still-open dialog so the operator
@@ -309,6 +336,20 @@ export class InvertersView extends LitElement {
       white-space: nowrap;
     }
     button.replace:hover { color: var(--text); border-color: var(--muted); }
+    td.actions { white-space: nowrap; }
+    td.actions button + button { margin-left: 6px; }
+    button.remove {
+      background: transparent;
+      border: 1px solid var(--err);
+      color: var(--err);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    button.remove:hover:not(:disabled) { background: color-mix(in srgb, var(--err) 12%, transparent); }
+    button.remove:disabled { opacity: 0.45; cursor: not-allowed; }
   `;
 
   private renderTable() {
@@ -354,10 +395,13 @@ export class InvertersView extends LitElement {
                 <td class="num">${fmtHz(inv.freq_hz)}</td>
                 <td class="num">${inv.panels?.length ?? 0}</td>
                 <td class="num ${nFaults ? "fault" : ""}">${nFaults || "—"}</td>
-                <td>
+                <td class="actions">
                   <button class="replace" title="Replace this inverter with a new unit"
                     ?disabled=${this.busy}
                     @click=${() => this.onReplace(inv.uid)}>Replace</button>
+                  <button class="remove" title="Remove this inverter from the fleet"
+                    ?disabled=${this.busy}
+                    @click=${() => this.onRemove(inv.uid)}>Remove</button>
                 </td>
               </tr>`;
             })}
@@ -398,6 +442,7 @@ export class InvertersView extends LitElement {
       ${this.privilegedDialog
         ? html`<password-confirm-dialog
             .kind=${this.privilegedDialog}
+            .subject=${this.removeUid}
             .busy=${this.busy}
             .actionError=${this.privilegedError}
             @confirm=${this.onPrivilegedConfirm}

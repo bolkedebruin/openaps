@@ -83,13 +83,13 @@ func TestServer_WriteWMaxLimPct_PerInverter(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	// INV-A: a DS3 292 W/panel set-power frame went to inv-driver.
-	want, err := codec.EncodeSetPower(0x20, 292, false)
+	// INV-A: a DS3 352 W/panel set-power frame went to inv-driver.
+	want, err := codec.EncodeSetPower(0x20, 352, false)
 	if err != nil {
 		t.Fatalf("EncodeSetPower: %v", err)
 	}
 	if got := fake.frameFor("INV-A"); !bytes.Equal(got, want) {
-		t.Errorf("INV-A frame=% X want % X (80%% of 365 W/panel)", got, want)
+		t.Errorf("INV-A frame=% X want % X (80%% of 440 W/panel)", got, want)
 	}
 
 	// INV-B should be untouched (per-inverter write only hits INV-A).

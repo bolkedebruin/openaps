@@ -137,9 +137,9 @@ func EncodePerInverterWithProtection(inv source.Inverter, ecuid string, unitID u
 	emitDCDataFloatPerInverter(&bank, inv)
 
 	// --- Model 120 — Nameplate Ratings for THIS inverter ---
-	// Per-inverter WRtg comes from inv.NameplateW() — the model_int → watts
-	// table (loaded from sunspec-nameplate.json) when this submodel is
-	// catalogued, else a TypeCode-based fallback.
+	// Per-inverter WRtg comes from inv.NameplateW() — codec.NameplateWattsForModel
+	// (the same table inv-driver uses for the fleet WRtg), else a
+	// TypeCode-based fallback.
 	emitNameplatePerInverter(&bank, inv)
 
 	// --- Model 123 — Inverter Controls (read/write) for THIS inverter ---

@@ -110,14 +110,14 @@ func TestServer_RvrtTms_AutoReverts(t *testing.T) {
 	body := ctlAddr + 2
 
 	// WMaxLimPct=8000 (80.00%) + RvrtTms=1 + Ena=1, offsets 3..7 (Conn
-	// untouched). DS3 365 W/panel → 292 W.
+	// untouched). DS3 440 W/panel → 352 W.
 	regs := []uint16{8000, 0, 1, 0, 1}
 	if err := cli.WriteRegisters(body+sunspec.OffControlsWMaxLimPct, regs); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
 	// Immediately after write: the cap frame is in place.
-	capFrame, _ := codec.EncodeSetPower(0x20, 292, false)
+	capFrame, _ := codec.EncodeSetPower(0x20, 352, false)
 	if got := fake.frameFor("INV-A"); !bytes.Equal(got, capFrame) {
 		t.Errorf("after write frame=% X want % X (cap)", got, capFrame)
 	}
@@ -168,7 +168,7 @@ func TestServer_RvrtTms_RefreshKeepsCap(t *testing.T) {
 
 	// Total elapsed >= 2.1s but each refresh resets the 2s timer, so no
 	// restore frame should have been sent — only cap frames.
-	capFrame, _ := codec.EncodeSetPower(0x20, 292, false)
+	capFrame, _ := codec.EncodeSetPower(0x20, 352, false)
 	restore := ds3RestoreFrame(t)
 	for _, f := range fake.frames() {
 		if bytes.Equal(f.frame, restore) {

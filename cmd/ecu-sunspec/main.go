@@ -36,12 +36,11 @@ func main() {
 
 	var (
 		bind           = flag.String("bind", "tcp://0.0.0.0:502", "modbus TCP listen URL")
-		yunengDir      = flag.String("yuneng-dir", "/etc/yuneng", "directory containing ecuid.conf, version.conf, model.conf (\"\" to skip)")
 		manufacturer   = flag.String("manufacturer", "", "SunSpec Mn field; empty = "+sunspec.DefaultManufacturer)
-		modelName      = flag.String("model-name", "", "SunSpec Md field; empty = read /etc/yuneng/model.conf, then fall back to "+sunspec.DefaultModelName)
+		modelName      = flag.String("model-name", "", "SunSpec Md field; empty falls back to "+sunspec.DefaultModelName)
 		phase          = flag.String("phase-mode", "auto", "SunSpec inverter model: auto|single|split|three (101|102|103)")
-		serialOverride = flag.String("serial-override", "", "force this SN regardless of ecuid.conf (use to re-spawn under a new device id)")
-		serialFallback = flag.String("serial-fallback", "", "SN to use when ecuid.conf is unavailable")
+		serialOverride = flag.String("serial-override", "", "force this SN regardless of the inv-driver ecu-id (use to re-spawn under a new device id)")
+		serialFallback = flag.String("serial-fallback", "", "SN to use when inv-driver's ecu-id is unavailable")
 		refresh        = flag.Duration("refresh-interval", 5*time.Second, "snapshot refresh cadence")
 
 		logFile       = flag.String("log-file", "", "rotated log file path; empty means stderr")
@@ -49,19 +48,12 @@ func main() {
 		logMaxBackups = flag.Int("log-max-backups", 3, "rotated log files retained")
 		logMaxAgeDays = flag.Int("log-max-age", 7, "rotated log retention days")
 
-		configPath    = flag.String("config", config.DefaultPath, "path to JSON config file (writes.enabled / writes.allow_list); missing file = writes enabled for loopback + local LAN")
-		nameplatePath = flag.String("nameplate-file", "/home/sunspec-nameplate.json", "path to JSON model_int→watts table; missing file = TypeCode-based fallback")
+		configPath = flag.String("config", config.DefaultPath, "path to JSON config file (writes.enabled / writes.allow_list); missing file = writes enabled for loopback + local LAN")
 
 		invDriverSock       = flag.String("invdriver-sock", defaultInvDriverSock(), "UDS path to inv-driver, the sole telemetry source (env INV_DRIVER_SOCK overrides default; empty is a fatal misconfiguration)")
 		invDriverOnlineMaxA = flag.Duration("invdriver-online-max-age", 10*time.Second, "max age of an inv-driver telemetry frame before the inverter is marked offline")
 	)
 	flag.Parse()
-
-	if n, err := source.LoadNameplateTable(*nameplatePath); err != nil {
-		fmt.Fprintf(os.Stderr, "ecu-sunspec: nameplate-file %s: %v\n", *nameplatePath, err)
-	} else if n > 0 {
-		fmt.Fprintf(os.Stderr, "ecu-sunspec: loaded %d nameplate entries from %s\n", n, *nameplatePath)
-	}
 
 	var logSink io.Writer = os.Stderr
 	if *logFile != "" {
@@ -91,7 +83,12 @@ func main() {
 	// Telemetry, energy, and grid-protection all come from inv-driver.
 	var invClient *invdriver.Client
 
-	builder := source.NewBuilder(*yunengDir)
+	builder := source.NewBuilder()
+	// Identity is OpenAPS/inv-driver-sourced, never stock /etc/yuneng:
+	// firmware is the OpenAPS build version, PollingS the snapshot refresh
+	// cadence, and the ecu-id (SunSpec SN) is read from inv-driver below.
+	builder.Firmware = "OpenAPS " + version
+	builder.PollingIntervalS = int(refresh.Seconds())
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
@@ -117,6 +114,15 @@ func main() {
 	defer ic.Stop()
 	invClient = ic
 	builder.InvDriverClient = ic
+	// The SunSpec SN comes from inv-driver's operator-set ecu-id (it owns
+	// settings.json), not the stock /etc/yuneng/ecuid.conf. A --serial-override
+	// still wins; an empty result falls back to --serial-fallback.
+	if *serialOverride == "" {
+		if id := fetchEcuID(ctx, ic, logger); id != "" {
+			builder.ECUID = id
+			logger.Printf("ecu-id from inv-driver: %s", id)
+		}
+	}
 	builder.InvDriverOnlineMaxAge = *invDriverOnlineMaxA
 	logger.Printf("invdriver subscriber: socket=%s online-max-age=%s", *invDriverSock, *invDriverOnlineMaxA)
 
@@ -183,4 +189,23 @@ func parsePhase(s string) (sunspec.PhaseMode, error) {
 	default:
 		return sunspec.PhaseAuto, fmt.Errorf("unknown phase mode %q", s)
 	}
+}
+
+// fetchEcuID reads inv-driver's operator-set ecu-id (the SunSpec SN) with a
+// short retry, since inv-driver may still be coming up when ecu-sunspec
+// starts. Returns "" if it stays unavailable; the caller then relies on the
+// --serial-fallback.
+func fetchEcuID(ctx context.Context, ic *invdriver.Client, logger *log.Logger) string {
+	for attempt := 0; attempt < 5; attempt++ {
+		if id, err := ic.FetchEcuID(ctx); err == nil && id != "" {
+			return id
+		}
+		select {
+		case <-ctx.Done():
+			return ""
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
+	logger.Printf("ecu-id unavailable from inv-driver after retries; SunSpec SN falls back to --serial-fallback")
+	return ""
 }

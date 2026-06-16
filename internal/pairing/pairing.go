@@ -182,6 +182,8 @@ func (m *Manager) Handle(ctx context.Context, by string, req *wire.PairingReques
 		return m.startRekey(by, req.GetFleetRekey())
 	case *wire.PairingRequest_ChangeChannel:
 		return m.startChangeChannel(by, req.GetChangeChannel())
+	case *wire.PairingRequest_RemoveById:
+		return m.startRemove(by, req.GetRemoveById())
 	case *wire.PairingRequest_Abort:
 		return m.abort()
 	case *wire.PairingRequest_GetStatus:

@@ -1,12 +1,9 @@
 package source
 
 import (
-	"encoding/json"
-	"fmt"
-	"os"
-	"strconv"
 	"time"
 
+	"github.com/bolkedebruin/openaps/codec"
 	"github.com/bolkedebruin/openaps/wire"
 )
 
@@ -223,79 +220,23 @@ func (inv Inverter) PanelPowers() []int {
 	return out
 }
 
-// nameplateByModel maps the per-inverter `model` integer (from `id.model`
-// in the ECU's database.db) to its rated AC output in watts.
-//
-// Populated at startup from a JSON file (see LoadNameplateTable). The
-// table is a lookup file — not hardcoded — so adding an entry for a new
-// submodel doesn't require rebuilding the binary.
-//
-// Empty by default; lookups fall through to TypeCode-based defaults.
-var nameplateByModel = map[int]int{}
-
-// LoadNameplateTable replaces the model→watts table with the contents of
-// a JSON file. Format:
-//
-//	{
-//	  "models": {
-//	    "24": {"nameplate_w": 1600, "label": "QS1A T24 (EU)"},
-//	    "32": {"nameplate_w": 750,  "label": "DS3 EU"}
-//	  }
-//	}
-//
-// Returns the number of entries loaded. A missing file is not an error
-// (returns 0, nil); only malformed JSON or unreadable file content errors.
-//
-// Derive entries by inspecting the per-inverter nameplate values that
-// inv-driver publishes (codec.NameplateWattsForModel) and overriding
-// them here when the site needs finer-grained per-submodel resolution.
-func LoadNameplateTable(path string) (int, error) {
-	if path == "" {
-		return 0, nil
-	}
-	b, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return 0, nil
-		}
-		return 0, err
-	}
-	var doc struct {
-		Models map[string]struct {
-			NameplateW int    `json:"nameplate_w"`
-			Label      string `json:"label"`
-		} `json:"models"`
-	}
-	if err := json.Unmarshal(b, &doc); err != nil {
-		return 0, fmt.Errorf("parse %s: %w", path, err)
-	}
-	tbl := make(map[int]int, len(doc.Models))
-	for k, v := range doc.Models {
-		mid, err := strconv.Atoi(k)
-		if err != nil {
-			return 0, fmt.Errorf("parse %s: model key %q is not an integer", path, k)
-		}
-		if v.NameplateW > 0 {
-			tbl[mid] = v.NameplateW
-		}
-	}
-	nameplateByModel = tbl
-	return len(tbl), nil
-}
-
 // NameplateW is the rated AC output watts for this inverter.
 //
 // Lookup priority:
-//  1. The model_int → watts table loaded from JSON via LoadNameplateTable
-//  2. TypeCode-based default — coarser fallback when the table doesn't
-//     cover this submodel (or no table file is configured)
+//  1. codec.NameplateWattsForModel — the single OpenAPS source of truth,
+//     the same corrected datasheet table inv-driver applies for the fleet
+//     nameplate (Model 120 WRtg), so per-inverter NameplateW (and the
+//     Model 121 WMax derived from it) stays aligned and can't drift. New
+//     submodels are added there, never in a separate per-ECU file.
+//  2. TypeCode-based default — a coarser last-resort for a model code the
+//     codec doesn't catalogue.
 //
 // The Snapshot.SystemMaxPowerW value (from inv-driver's FleetSummary)
 // is the authoritative fleet total when available; the per-inverter
 // value here is what we surface in per-inverter SunSpec banks
 // (UID 2..N+1) where a per-device value is required.
 func (inv Inverter) NameplateW() int {
-	if w, ok := nameplateByModel[inv.Model]; ok {
+	if w := int(codec.NameplateWattsForModel(uint8(inv.Model))); w > 0 {
 		return w
 	}
 	switch inv.TypeCode {

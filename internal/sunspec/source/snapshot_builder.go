@@ -3,10 +3,7 @@ package source
 import (
 	"context"
 	"math"
-	"os"
 	"sort"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/bolkedebruin/openaps/codec"
@@ -15,14 +12,18 @@ import (
 )
 
 // Builder composes a Snapshot from inv-driver telemetry plus the ECU's
-// own /etc/yuneng identity files. Per-inverter data comes solely from
-// inv-driver.
+// OpenAPS identity (build version + operator-set ecu-id). Per-inverter
+// data, fleet nameplate, and energy come solely from inv-driver; no stock
+// /etc/yuneng firmware config is read.
 type Builder struct {
-	YunengDir string
+	ECUID    string // operator-set id from inv-driver settings → SunSpec SN
+	Firmware string // OpenAPS build version → SunSpec EcuFwVer
+	Model    string // SunSpec Md override; empty → encoder default
 
-	ECUID    string
-	Firmware string
-	Model    string
+	// PollingIntervalS is the vendor-block PollingS (seconds): the data
+	// refresh cadence, set from ecu-sunspec's snapshot refresh interval,
+	// not a stock poll-interval file.
+	PollingIntervalS int
 
 	// InvDriverClient is the per-inverter telemetry source. It is the only
 	// source; when nil, Build produces a snapshot with no inverters.
@@ -38,27 +39,11 @@ type Builder struct {
 	LimitCache *PowerLimitCache
 }
 
-// NewBuilder helper that loads metadata from /etc/yuneng/*.conf if available.
-// Missing files are tolerated — they're surfaced as empty strings.
-func NewBuilder(yunengDir string) *Builder {
-	b := &Builder{
-		ECUID:     readTrim(yunengDir, "ecuid.conf"),
-		Firmware:  readTrim(yunengDir, "version.conf"),
-		Model:     readTrim(yunengDir, "model.conf"),
-		YunengDir: yunengDir,
-	}
-	return b
-}
-
-func readTrim(dir, name string) string {
-	if dir == "" {
-		return ""
-	}
-	b, err := os.ReadFile(dir + "/" + name)
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(b))
+// NewBuilder returns an empty Builder. Identity fields (ECUID, Firmware,
+// Model) are populated by the caller from OpenAPS / inv-driver sources —
+// never from stock firmware config.
+func NewBuilder() *Builder {
+	return &Builder{}
 }
 
 // Build produces a fresh snapshot. Errors from optional sources are not fatal:
@@ -66,15 +51,11 @@ func readTrim(dir, name string) string {
 // caller decides what to surface upstream.
 func (b *Builder) Build(ctx context.Context) (Snapshot, error) {
 	s := Snapshot{
-		Captured: time.Now(),
-		ECUID:    b.ECUID,
-		Firmware: b.Firmware,
-		Model:    b.Model,
-	}
-	if v := readTrim(b.YunengDir, "polling_interval.conf"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			s.PollingInterval = n
-		}
+		Captured:        time.Now(),
+		ECUID:           b.ECUID,
+		Firmware:        b.Firmware,
+		Model:           b.Model,
+		PollingInterval: b.PollingIntervalS,
 	}
 
 	// Fleet aggregates: nameplate sum + lifetime/today/month/year
