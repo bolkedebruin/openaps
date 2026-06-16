@@ -1,3 +1,50 @@
+# OpenAPS v1.1.19
+
+Remove inverters from the console, and report SunSpec identity from OpenAPS.
+
+## Added
+
+- **Remove an inverter from the fleet.** The Inverters page has a
+  per-inverter Remove action (next to Replace), gated by the same
+  password confirmation as re-key and change-channel. For a live unit it
+  makes a best-effort evict — re-PANs it to the rendezvous PAN `0xFFFF`
+  so it leaves the operating network — then deletes its rows; a
+  "never-live entry" toggle skips the evict for a mistyped serial. If the
+  evict can't reach the unit the row is still removed, with a warning
+  that it may reappear if it calls in again (it is never silently
+  suppressed — re-run Remove to evict it). The op runs under the operator
+  bus lock, so it preempts the telemetry poll like other pairing ops, and
+  it is recorded in the events log.
+
+## Fixed
+
+- **SunSpec now reports OpenAPS identity, not stock firmware values.** The
+  datalogger firmware version reads the OpenAPS build version instead of
+  the underlying APsystems `2.1.29D`; the ECU id / serial comes from
+  inv-driver's operator-set settings; and the reporting interval is the
+  adapter's own refresh cadence. No `/etc/yuneng` file is read.
+- **Settings WMax (Model 121) no longer goes stale.** Per-inverter
+  nameplate now comes from the same corrected datasheet table inv-driver
+  uses for the fleet WRtg (Model 120), so the two can't diverge. The
+  separate nameplate override file that held outdated ratings is removed;
+  new submodels are added once, in the shared table.
+
+## Changed
+
+- Because the corrected nameplate also backs the per-inverter set-power
+  cap, a `WMaxLimPct` percentage now resolves against the true rating
+  (e.g. a DS3 at 80% curtails to 80% of 880 W/panel-basis, not the former
+  understated figure). Curtailment is therefore slightly less aggressive
+  on affected models, matching their actual continuous rating.
+
+## Upgrading
+
+`opkg upgrade openaps-inv-driver openaps-ecu-sunspec openaps-ecu-web`. No
+configuration or schema changes. A leftover `/home/sunspec-nameplate.json`
+from a prior install is now ignored and may be deleted.
+
+---
+
 # OpenAPS v1.1.18
 
 Power chart survives a wrong ECU clock.
