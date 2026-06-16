@@ -1,3 +1,35 @@
+# OpenAPS v1.1.20
+
+Restores the ECU id on the SunSpec interface and refreshes it live.
+
+## Fixed
+
+- **A SunSpec/Modbus client (e.g. Victron) no longer shows the PV inverter
+  with a blank name.** v1.1.19 began sourcing the SunSpec serial from
+  inv-driver's operator ecu-id, which is empty unless explicitly set — so
+  the serial came back blank. Provisioning now backfills an empty ecu-id
+  from the ECU's factory serial at install time (only that field; existing
+  config is otherwise untouched), so the id is populated without any manual
+  step.
+
+## Added
+
+- **Setting the ECU id takes effect immediately.** inv-driver broadcasts
+  the new id to the SunSpec adapter when settings change, so the
+  Modbus/Victron name updates without restarting the adapter.
+- **The Settings page shows the effective ECU id and a suggestion.** The
+  field now shows the stored id verbatim (blank when unset, with a note
+  that Modbus will report it blank) alongside the hostname as a suggestion,
+  instead of pre-filling the hostname as if it were set.
+
+## Upgrading
+
+`opkg upgrade openaps-base openaps-inv-driver openaps-ecu-sunspec openaps-ecu-web`.
+No configuration or schema changes. If your ECU id reads blank, set it under
+Settings (the serial on the device label) — it now applies live.
+
+---
+
 # OpenAPS v1.1.19
 
 Remove inverters from the console, and report SunSpec identity from OpenAPS.
