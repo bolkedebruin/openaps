@@ -71,7 +71,7 @@ MD5Sum: 966eb4d9992c07b39a3f3599eae1cd05
 SHA256sum: c473ae27e1efb38feeb4394c68db1e53dd6214a79d7cc05940ee77ce037abade
 
 Package: openaps-ecu-sunspec
-Version: v1.1.18
+Version: v1.1.19
 Architecture: armv7ahf-vfp-neon
 Maintainer: OpenAPS <bdbruin@gmail.com>
 Section: utils
@@ -81,13 +81,13 @@ Description: OpenAPS ecu-sunspec — Modbus/TCP + RTU SunSpec frontend.
  Installs /home/applications/ecu-sunspec/ecu-sunspec and its /etc/rcS.d/S99
  BusyBox init script. Exposes the fleet as SunSpec models over Modbus :502,
  subscribing to inv-driver telemetry over UDS.
-Filename: openaps-ecu-sunspec_v1.1.18_armv7ahf-vfp-neon.ipk
-Size: 3276186
-MD5Sum: 4a2ffbc39e5cf96914669605e628b233
-SHA256sum: 9665f8d09d840742837099dd3f0743b51142d3985304cde14da242528c0a2f03
+Filename: openaps-ecu-sunspec_v1.1.19_armv7ahf-vfp-neon.ipk
+Size: 3274824
+MD5Sum: 9069935fb66eb438719f0e23ec854117
+SHA256sum: 004c90892179bd812ca222f070bc564380bccd276cfd4252f59628f569591606
 
 Package: openaps-ecu-web
-Version: v1.1.18
+Version: v1.1.19
 Architecture: armv7ahf-vfp-neon
 Maintainer: OpenAPS <bdbruin@gmail.com>
 Section: utils
@@ -96,13 +96,13 @@ Depends: openaps-base, openaps-inv-driver, openaps-recoveryd
 Description: OpenAPS ecu-web — VRM-style console (HTTP/2 + SSE, embedded SPA).
  Installs /home/applications/ecu-web/ecu-web and its /etc/rcS.d/S54 BusyBox
  init script. Serves the operator console on :443 over inv-driver UDS.
-Filename: openaps-ecu-web_v1.1.18_armv7ahf-vfp-neon.ipk
-Size: 4325266
-MD5Sum: 18d73d7cb0a97282c60cb7c245cb8150
-SHA256sum: 1bfed5e9aa30a4985c923fc7f2281657fcbbde3904704e82097bf7ab67f7e715
+Filename: openaps-ecu-web_v1.1.19_armv7ahf-vfp-neon.ipk
+Size: 4326374
+MD5Sum: 9420efb47bc58c5450da080ae22a6798
+SHA256sum: 7aa0c9942bc4463800c085790b9e884ce2adf1fdb147426a4683777f9adbfce8
 
 Package: openaps-ecu-zb
-Version: v1.1.18
+Version: v1.1.19
 Architecture: armv7ahf-vfp-neon
 Maintainer: OpenAPS <bdbruin@gmail.com>
 Section: utils
@@ -112,13 +112,13 @@ Description: OpenAPS ecu-zb — ZigBee modem proxy and bus manager.
  Installs /home/applications/ecu-zb/ecu-zb and its /etc/rcS.d/S53 BusyBox
  init script. Drives the CC2530 modem on /dev/ttyO2 and proxies the
  802.15.4 link for inv-driver.
-Filename: openaps-ecu-zb_v1.1.18_armv7ahf-vfp-neon.ipk
-Size: 2176460
-MD5Sum: 3e233ad6cb3d7be3615f5ebed73fed5f
-SHA256sum: 6f2a4cea894de263dd0ee462285f2bfaf55b4ff89d8a8444e8cc0e3bb26c8818
+Filename: openaps-ecu-zb_v1.1.19_armv7ahf-vfp-neon.ipk
+Size: 2176974
+MD5Sum: 95bac1835226bff290779ff016b286b0
+SHA256sum: 39e706371d58366ba20863e366e08b3301929ccb05fff8af74209fd18f436d4a
 
 Package: openaps-inv-driver
-Version: v1.1.18
+Version: v1.1.19
 Architecture: armv7ahf-vfp-neon
 Maintainer: OpenAPS <bdbruin@gmail.com>
 Section: utils
@@ -128,13 +128,13 @@ Description: OpenAPS inv-driver — bus owner, codec, ingest, gridprofile, IPC s
  Installs /home/applications/inv-driver/inv-driver and its /etc/rcS.d/S48
  BusyBox init script. The bus-owning daemon every other OpenAPS service
  talks to over UDS.
-Filename: openaps-inv-driver_v1.1.18_armv7ahf-vfp-neon.ipk
-Size: 4613030
-MD5Sum: 26e336e1fd421a44ec0b5cc97653c231
-SHA256sum: 0bce0e47f70cd7c61ffbc90016858f8d0571c3a776894f12db4bce556a0028e2
+Filename: openaps-inv-driver_v1.1.19_armv7ahf-vfp-neon.ipk
+Size: 4617016
+MD5Sum: bdec90a412d29eb0a73aaeabbc0866bd
+SHA256sum: 9b718ebc31c83d8e2c022364218faff45a4ff6541d4bd2b72dc8f9b957bae241
 
 Package: openaps-recoveryd
-Version: v1.1.18
+Version: v1.1.19
 Architecture: armv7ahf-vfp-neon
 Maintainer: OpenAPS <bdbruin@gmail.com>
 Section: utils
@@ -145,13 +145,13 @@ Description: OpenAPS recoveryd — SSH access plane and recovery surface.
  init script. recoveryd owns root's authorized_keys (the source of truth for SSH
  access) and ensures the dropbear host key, providing an out-of-band recovery
  path and the SSH-key management surface the ecu-web console uses.
-Filename: openaps-recoveryd_v1.1.18_armv7ahf-vfp-neon.ipk
-Size: 2712326
-MD5Sum: e1e3fb0936ca00f4603edd93004ee423
-SHA256sum: ab6731209cb653b7de9c42fbd3bdaf65d3d0f47e76f401f62928a3fa7f51023f
+Filename: openaps-recoveryd_v1.1.19_armv7ahf-vfp-neon.ipk
+Size: 2712968
+MD5Sum: a34c91d6fa73edc29f5cc247b6548681
+SHA256sum: 7f12254acd4d6a930358370ac18f14a047d1e1e412abef90aeecbd3325018200
 
 Package: openaps-tls-proxy
-Version: v1.1.18
+Version: v1.1.19
 Architecture: armv7ahf-vfp-neon
 Maintainer: Bolke de Bruin <bdbruin@gmail.com>
 Section: net
@@ -164,8 +164,8 @@ Description: OpenAPS loopback TLS proxy and opkg feed front-end.
  the only authenticity check on this device (opkg enforces MD5Sum only and
  cannot verify signatures itself). Ships the opkg config that points opkg at
  the proxy and keeps opkg scratch on /home (the 16 MiB /tmp tmpfs overflows).
-Filename: openaps-tls-proxy_v1.1.18_armv7ahf-vfp-neon.ipk
-Size: 2743374
-MD5Sum: 26668767cce680c26c8150324d1864eb
-SHA256sum: 183a14362eb93561d2a0f087f198f4b7bab538654f2087dc8ef8597d3686aaae
+Filename: openaps-tls-proxy_v1.1.19_armv7ahf-vfp-neon.ipk
+Size: 2743368
+MD5Sum: 04b1ea9bd4f246f9b64b2a6dc77c99a6
+SHA256sum: ab1b8016b62fa135829173cbbc04c8b1ed5a9e67dc5dd0730441669ce0e25839
 
