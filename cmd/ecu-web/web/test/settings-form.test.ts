@@ -109,18 +109,20 @@ describe("<settings-form> effective hints (computed client-side)", () => {
 });
 
 describe("<settings-form> ECU ID suggestion", () => {
-  test("when ECU ID is empty, input is seeded with hostname and hint is shown", async () => {
+  test("when ECU ID is empty, the input stays empty and the hint shows it is blank plus the hostname suggestion", async () => {
     const el = await mount(
       { ecu_id: "", mac: "", pan_override: "", zigbee_type: "apsystems" },
       { hostname: "APS-ECU" },
     );
     const root = el.shadowRoot!;
     const input = root.querySelector<HTMLInputElement>("#ecu_id")!;
-    expect(input.value).toBe("APS-ECU");
-    expect(root.textContent ?? "").toContain("Recommended: use the serial on the device label.");
+    expect(input.value).toBe("");
+    const text = root.textContent ?? "";
+    expect(text).toContain("effective: (none — blank in Modbus)");
+    expect(text).toContain("suggestion: APS-ECU");
   });
 
-  test("when ECU ID is set, hostname is NOT used and no hint is shown", async () => {
+  test("when ECU ID is set, the input shows it and the hint reports it as effective", async () => {
     const el = await mount(
       { ecu_id: "MY-ECU-01", mac: "", pan_override: "", zigbee_type: "apsystems" },
       { hostname: "APS-ECU" },
@@ -128,7 +130,9 @@ describe("<settings-form> ECU ID suggestion", () => {
     const root = el.shadowRoot!;
     const input = root.querySelector<HTMLInputElement>("#ecu_id")!;
     expect(input.value).toBe("MY-ECU-01");
-    expect(root.textContent ?? "").not.toContain("Recommended: use the serial");
+    const text = root.textContent ?? "";
+    expect(text).toContain("effective: MY-ECU-01");
+    expect(text).not.toContain("(none — blank in Modbus)");
   });
 });
 

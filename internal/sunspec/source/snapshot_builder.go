@@ -57,6 +57,14 @@ func (b *Builder) Build(ctx context.Context) (Snapshot, error) {
 		Model:           b.Model,
 		PollingInterval: b.PollingIntervalS,
 	}
+	// The ECU id (SunSpec SN) tracks inv-driver's live value — seeded at
+	// startup and refreshed by settings-change broadcasts, so an operator
+	// who sets the id sees it without restarting ecu-sunspec.
+	if b.InvDriverClient != nil {
+		if id := b.InvDriverClient.EcuID(); id != "" {
+			s.ECUID = id
+		}
+	}
 
 	// Fleet aggregates: nameplate sum + lifetime/today/month/year
 	// energy. All sourced from inv-driver's FleetSummary envelope —

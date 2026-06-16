@@ -114,12 +114,11 @@ func main() {
 	defer ic.Stop()
 	invClient = ic
 	builder.InvDriverClient = ic
-	// The SunSpec SN comes from inv-driver's operator-set ecu-id (it owns
-	// settings.json), not the stock /etc/yuneng/ecuid.conf. A --serial-override
-	// still wins; an empty result falls back to --serial-fallback.
+	// Seed the ECU id (SunSpec SN) from inv-driver's operator-set ecu-id; the
+	// builder then reads it live, refreshed by settings-change broadcasts. A
+	// --serial-override still wins; an empty result falls back to --serial-fallback.
 	if *serialOverride == "" {
 		if id := fetchEcuID(ctx, ic, logger); id != "" {
-			builder.ECUID = id
 			logger.Printf("ecu-id from inv-driver: %s", id)
 		}
 	}

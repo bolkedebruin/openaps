@@ -40,6 +40,7 @@ type Client struct {
 	latest  map[string]Snapshot
 	fleet   *wire.FleetSummary          // latest FleetSummary from inv-driver; nil before first frame
 	prot    map[string]*wire.Protection // latest grid-protection state per UID
+	ecuID   string                      // operator-set ECU id; seeded at startup and updated live on settings-change broadcasts
 	lastAt  time.Time
 	started time.Time
 
@@ -161,6 +162,23 @@ func (c *Client) Fleet() *wire.FleetSummary {
 	return c.fleet
 }
 
+// EcuID returns the operator-set ECU id last seen from inv-driver — the
+// startup settings read plus any live settings-change broadcast. Empty
+// until inv-driver reports one.
+func (c *Client) EcuID() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.ecuID
+}
+
+// SetEcuID records the ECU id reported by inv-driver. An empty value is
+// kept (a deliberate clear in settings propagates to the SunSpec SN).
+func (c *Client) SetEcuID(id string) {
+	c.mu.Lock()
+	c.ecuID = id
+	c.mu.Unlock()
+}
+
 func (c *Client) logf(format string, args ...any) {
 	if c.Logger != nil {
 		c.Logger.Printf(format, args...)
@@ -235,7 +253,9 @@ func (c *Client) FetchEcuID(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("invdriver: settings: %w", err)
 	}
-	return resp.GetSettingsResp().GetSettings().GetEcuId(), nil
+	id := resp.GetSettingsResp().GetSettings().GetEcuId()
+	c.SetEcuID(id)
+	return id, nil
 }
 
 // session writes the Hello frame and dispatches incoming envelopes to
@@ -281,6 +301,10 @@ func (c *Client) session(ctx context.Context, conn net.Conn) error {
 			c.applyFleet(body.Fleet)
 		case *wire.Envelope_Protection:
 			c.applyProtection(body.Protection)
+		case *wire.Envelope_SettingsResp:
+			// inv-driver broadcasts a settings snapshot when the operator
+			// changes it; pick up a new ecu-id live (no restart).
+			c.SetEcuID(body.SettingsResp.GetSettings().GetEcuId())
 		}
 	}
 }

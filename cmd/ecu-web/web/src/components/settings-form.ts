@@ -319,7 +319,10 @@ export class SettingsForm extends LitElement {
   render() {
     const s = this.settings;
     const ecuPlaceholder = "e.g. the serial on the device label";
-    const ecuInitial = s.ecu_id || this.hostname || "";
+    // Show the stored ecu_id verbatim (empty when unset) so the field never
+    // looks set when it isn't; the hostname is offered only as a suggestion.
+    const ecuValue = s.ecu_id ?? "";
+    const ecuSuggestion = this.hostname || "";
     // Effective radio values are computed CLIENT-SIDE: inv-driver no longer
     // returns them. The PAN comes from pan_override, else the lower-16 of the
     // configured MAC (empty → the backend uses the live eth0 MAC, not visible
@@ -375,11 +378,13 @@ export class SettingsForm extends LitElement {
             id="ecu_id"
             type="text"
             placeholder=${ecuPlaceholder}
-            .value=${ecuInitial}
+            .value=${ecuValue}
           />
-          ${!s.ecu_id
-            ? html`<div class="hint">Recommended: use the serial on the device label.</div>`
-            : nothing}
+          <div class="hint">
+            effective: ${s.ecu_id || "(none — blank in Modbus)"}${ecuSuggestion
+              ? html` · suggestion: ${ecuSuggestion}`
+              : nothing}
+          </div>
         </label>
         <label>
           MAC

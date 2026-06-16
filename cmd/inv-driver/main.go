@@ -372,6 +372,15 @@ func runServe(args []string) error {
 	settingsHandler.AppendEvent = st.AppendEvent
 	settingsHandler.AppendEventBy = "ecu-web"
 	srv.Settings = settingsHandler
+	// Broadcast the ecu-id to subscribers (ecu-sunspec) when the operator
+	// changes settings, so the SunSpec SN refreshes without a restart.
+	settingsHandler.OnChange = func() {
+		pub.Publish(&wire.Envelope{Body: &wire.Envelope_SettingsResp{
+			SettingsResp: &wire.SettingsResponse{
+				Ok:       true,
+				Settings: &wire.Settings{EcuId: settingsStore.Get().EcuID},
+			}}})
+	}
 
 	// Pairing state machine: drives ecu-zb radio primitives via the
 	// correlation transport, persists results, and shares busLock with the

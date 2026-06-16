@@ -1,8 +1,11 @@
 #!/bin/sh
 #
 # openaps-base postinst — provision /etc/inv-driver/settings.json from the
-# stock /etc/yuneng/*.conf provisioning files when absent. Idempotent: an
-# existing settings.json is left untouched (operator-edited config wins).
+# stock /etc/yuneng/*.conf provisioning files at install time, so the ecu_id
+# lives in inv-driver's own config and no app reads ecuid.conf at runtime.
+# Idempotent: an existing settings.json is kept (operator edits win), except
+# an EMPTY ecu_id is backfilled from the factory serial so the SunSpec SN /
+# dashboard id isn't blank.
 set -e
 
 SETTINGS_PATH=/etc/inv-driver/settings.json
@@ -11,8 +14,34 @@ ECUID_CONF=/etc/yuneng/ecuid.conf
 
 mkdir -p /etc/openaps /etc/inv-driver
 
+# read_ecu_id echoes the factory serial from ecuid.conf, sanitised to the
+# JSON-safe allowlist ([0-9A-Za-z_-]); empty when absent or unparseable.
+read_ecu_id() {
+    _id=""
+    if [ -f "$ECUID_CONF" ]; then
+        _id=$(cat "$ECUID_CONF" 2>/dev/null | tr -d '[:space:]')
+    fi
+    case "$_id" in *[!0-9A-Za-z_-]*) _id= ;; esac
+    printf '%s' "$_id"
+}
+
 if [ -f "$SETTINGS_PATH" ]; then
-    echo "openaps-base: $SETTINGS_PATH already exists — keeping operator-edited config"
+    # Keep operator-edited config, but backfill an empty ecu_id (the only
+    # field touched; all others are preserved).
+    if grep -qE '"ecu_id"[[:space:]]*:[[:space:]]*""' "$SETTINGS_PATH"; then
+        ECU_ID=$(read_ecu_id)
+        if [ -n "$ECU_ID" ]; then
+            sed 's#"ecu_id"[[:space:]]*:[[:space:]]*""#"ecu_id": "'"$ECU_ID"'"#' \
+                "$SETTINGS_PATH" > "$SETTINGS_PATH.new"
+            chmod 0600 "$SETTINGS_PATH.new"
+            mv "$SETTINGS_PATH.new" "$SETTINGS_PATH"
+            echo "openaps-base: backfilled empty ecu_id=$ECU_ID in $SETTINGS_PATH"
+        else
+            echo "openaps-base: $SETTINGS_PATH ecu_id empty and no factory serial to seed it"
+        fi
+    else
+        echo "openaps-base: $SETTINGS_PATH already exists — keeping operator-edited config"
+    fi
     exit 0
 fi
 
@@ -34,15 +63,11 @@ fi
 PAN_HEX=$(echo "$MAC_HEX" | tail -c 5 | tr 'a-f' 'A-F')
 # Re-format MAC as colon-separated for cosmetics.
 MAC_FMT=$(echo "$MAC_HEX" | sed 's/\(..\)/\1:/g;s/:$//')
-ECU_ID=""
-if [ -f "$ECUID_CONF" ]; then
-    ECU_ID=$(cat "$ECUID_CONF" 2>/dev/null | tr -d '[:space:]')
-fi
+ECU_ID=$(read_ecu_id)
 
 # Allowlist each yuneng-derived value substituted UNQUOTED into JSON: reject
 # anything outside [0-9A-Za-z_-] (so quotes, backslashes, control chars or
 # whitespace can never malform/inject the generated settings.json).
-case "$ECU_ID" in *[!0-9A-Za-z_-]*) ECU_ID= ;; esac
 case "$PAN_HEX" in *[!0-9A-Za-z_-]*) PAN_HEX= ;; esac
 case "$MAC_FMT" in *[!0-9A-Za-z:_-]*) MAC_FMT= ;; esac
 
