@@ -11,9 +11,9 @@
       "filename": "ntpdate_v1.1.13_armv7ahf-vfp-neon.ipk"
     },
     "openaps-base": {
-      "version": "v1.1.20",
-      "fingerprint": "c4f71e03f721148b443c8195f577b276f8bbb0abfa4c39e4afdea531f05e227a",
-      "filename": "openaps-base_v1.1.20_all.ipk"
+      "version": "v1.1.21",
+      "fingerprint": "06c95749d5a24dcab6d3cf71bffae7800462005ea058d0a29ef227ed695670b5",
+      "filename": "openaps-base_v1.1.21_all.ipk"
     },
     "openaps-dropbear": {
       "version": "v1.1.3",
@@ -21,34 +21,34 @@
       "filename": "openaps-dropbear_v1.1.3_armv7ahf-vfp-neon.ipk"
     },
     "openaps-ecu-sunspec": {
-      "version": "v1.1.20",
-      "fingerprint": "165bfffd41dad2ff61fa2165c6b14bddcbabba7e5a6de8c50f39d4369c3a9d51",
-      "filename": "openaps-ecu-sunspec_v1.1.20_armv7ahf-vfp-neon.ipk"
+      "version": "v1.1.21",
+      "fingerprint": "3f5109f3ec73619cc5fdc0883c3b601d039f30b92e34bf356c721442e6e532e6",
+      "filename": "openaps-ecu-sunspec_v1.1.21_armv7ahf-vfp-neon.ipk"
     },
     "openaps-ecu-web": {
-      "version": "v1.1.20",
-      "fingerprint": "3c3f876ab1c05221c01d9e9256fdb2741c1cf3cbb41eb5ef7d8e876d16437491",
-      "filename": "openaps-ecu-web_v1.1.20_armv7ahf-vfp-neon.ipk"
+      "version": "v1.1.21",
+      "fingerprint": "8975058dee23792848499281dd022c7e69f9b5f5c4bd23b6b465eba1adadc12e",
+      "filename": "openaps-ecu-web_v1.1.21_armv7ahf-vfp-neon.ipk"
     },
     "openaps-ecu-zb": {
-      "version": "v1.1.20",
-      "fingerprint": "10999cbc84c491a229a530738ef8fecf4dae6c599dbec67e3c4698cb87fbbc39",
-      "filename": "openaps-ecu-zb_v1.1.20_armv7ahf-vfp-neon.ipk"
+      "version": "v1.1.21",
+      "fingerprint": "f2e5c0d137aea2ba1b873ea6dbda6de07f0f40944137024c8c493deb2cdeac2c",
+      "filename": "openaps-ecu-zb_v1.1.21_armv7ahf-vfp-neon.ipk"
     },
     "openaps-inv-driver": {
-      "version": "v1.1.20",
-      "fingerprint": "9a0169516a15a45774cca07665434ce75b7bab97e844b57b536aed0954ae6c3c",
-      "filename": "openaps-inv-driver_v1.1.20_armv7ahf-vfp-neon.ipk"
+      "version": "v1.1.21",
+      "fingerprint": "63f5043a7e957c74820212e9bb44c1ab971cf974c018f1b9da3a90e43aa3251f",
+      "filename": "openaps-inv-driver_v1.1.21_armv7ahf-vfp-neon.ipk"
     },
     "openaps-recoveryd": {
-      "version": "v1.1.20",
-      "fingerprint": "34c531e267b82c06350787c8ecea7dca108a263d7fc081211d6e003b7988dabc",
-      "filename": "openaps-recoveryd_v1.1.20_armv7ahf-vfp-neon.ipk"
+      "version": "v1.1.21",
+      "fingerprint": "c23485855db9d84a51b588bbb646a0d0e0a5679fccb86a7f90bf42d193ff2f9d",
+      "filename": "openaps-recoveryd_v1.1.21_armv7ahf-vfp-neon.ipk"
     },
     "openaps-tls-proxy": {
-      "version": "v1.1.20",
-      "fingerprint": "f50830c3e026e943a752bdcb8448f1ff1144f95d98299e362e1497b43cdcbb12",
-      "filename": "openaps-tls-proxy_v1.1.20_armv7ahf-vfp-neon.ipk"
+      "version": "v1.1.21",
+      "fingerprint": "14821e67fe121256d61da37b6564386aaa38ea4fc5382f1f3f3a8ab4ff3cc309",
+      "filename": "openaps-tls-proxy_v1.1.21_armv7ahf-vfp-neon.ipk"
     }
   }
 }
