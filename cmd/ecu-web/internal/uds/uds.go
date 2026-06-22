@@ -7,7 +7,7 @@ package uds
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net"
 	"sync/atomic"
 	"time"
@@ -36,10 +36,10 @@ func (s *Subscriber) Run(ctx context.Context) error {
 	return wire.DialLoop(ctx, wire.DialLoopConfig{
 		SocketPath: s.SocketPath,
 		Session:    s.session,
-		OnConnect:  func() { s.connected.Store(true); log.Printf("uds: connected to %s", s.SocketPath) },
+		OnConnect:  func() { s.connected.Store(true); slog.Info("uds: connected", "socket", s.SocketPath) },
 		OnDialError: func(err error, retryIn time.Duration) {
 			s.connected.Store(false)
-			log.Printf("uds: %v (retry in %s)", err, retryIn.Round(time.Millisecond))
+			slog.Warn("uds: dial", "err", err, "retry_in", retryIn.Round(time.Millisecond))
 		},
 	})
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/bolkedebruin/openaps/internal/buslock"
 )
@@ -77,7 +77,7 @@ func (a *applier) runFleet(parent context.Context, run fleetRunner, label string
 
 	uids, err := run.FleetUIDs(parent)
 	if err != nil {
-		log.Printf("gridprofile: fleet apply %q: enumerate fleet: %v", label, err)
+		slog.Error("gridprofile fleet apply: enumerate fleet", "label", label, "err", err)
 		a.emit(context.Background(), "", "profile_apply_complete", "warn",
 			fmt.Sprintf("%s — enumerate fleet failed: %v", label, err))
 		return
@@ -148,7 +148,7 @@ func (a *applier) runBroadcastFleet(parent context.Context, job broadcastJob) {
 	}
 
 	if _, err := run.ApplyBaseBroadcast(parent, job.sender, job.modelCodes...); err != nil {
-		log.Printf("gridprofile: fleet broadcast %q: apply: %v", job.label, err)
+		slog.Error("gridprofile fleet broadcast: apply", "label", job.label, "err", err)
 		a.emit(context.Background(), "", "profile_apply_complete", "warn",
 			fmt.Sprintf("%s — broadcast failed: %v", job.label, err))
 		return
@@ -158,7 +158,7 @@ func (a *applier) runBroadcastFleet(parent context.Context, job broadcastJob) {
 	// full effective state per inverter, through the same per-uid serialization.
 	uids, err := run.FleetUIDs(parent)
 	if err != nil {
-		log.Printf("gridprofile: fleet broadcast %q: enumerate fleet: %v", job.label, err)
+		slog.Error("gridprofile fleet broadcast: enumerate fleet", "label", job.label, "err", err)
 		a.emit(context.Background(), "", "profile_apply_complete", "warn",
 			fmt.Sprintf("%s — enumerate fleet failed: %v", job.label, err))
 		return

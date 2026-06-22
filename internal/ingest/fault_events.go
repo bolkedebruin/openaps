@@ -3,7 +3,7 @@ package ingest
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -169,7 +169,7 @@ func (in *Ingestor) markFaults(uid string, tsMs int64, f *wire.InverterFaults, f
 			sev = faultSeverity(e.bit)
 		}
 		if err := in.S.AppendEvent(ctx, tsMs, e.uid, e.kind, sev, "inv-driver", e.detail); err != nil {
-			log.Printf("ingest: fault event %s uid=%s bit=%s: %v", e.kind, e.uid, e.bit, err)
+			slog.Error("ingest fault event", "kind", e.kind, "uid", e.uid, "bit", e.bit, "err", err)
 		}
 	}
 }

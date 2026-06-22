@@ -2,7 +2,7 @@ package ingest
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -133,7 +133,7 @@ func (in *Ingestor) onlineSweep(ctx context.Context, now int64) {
 
 	for _, e := range emits {
 		if err := in.S.AppendEvent(ctx, now, e.uid, e.kind, "info", "inv-driver", ""); err != nil {
-			log.Printf("ingest: online event %s uid=%s: %v", e.kind, e.uid, err)
+			slog.Error("ingest online event", "kind", e.kind, "uid", e.uid, "err", err)
 		}
 	}
 }

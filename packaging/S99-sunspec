@@ -7,7 +7,10 @@
 
 BIN=/home/applications/ecu-sunspec/ecu-sunspec
 PIDOF="pidof ecu-sunspec"
-LOG=/home/ecu-sunspec.log
+# ecu-sunspec owns its rotated log via --log-file; the init redirect only
+# captures pre-logging flag errors and Go runtime panics.
+LOG=/var/log/ecu-sunspec.log
+BOOTLOG=/var/log/ecu-sunspec.boot.log
 ARGS="--bind tcp://0.0.0.0:502 --invdriver-sock /var/run/inv-driver.sock --log-file $LOG --log-max-size 5 --log-max-backups 3"
 
 start() {
@@ -16,7 +19,8 @@ start() {
         return 0
     fi
     [ -x "$BIN" ] || { echo "$BIN missing or not executable"; return 1; }
-    nohup $BIN $ARGS > /dev/null 2>&1 &
+    mkdir -p /var/log
+    nohup $BIN $ARGS >> "$BOOTLOG" 2>&1 &
     echo "ecu-sunspec started"
 }
 

@@ -2,7 +2,7 @@ package proxy
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -115,7 +115,7 @@ func (h *BusTrackerHook) Start(inj Injector) error {
 	h.injMu.Lock()
 	h.inj = inj
 	h.injMu.Unlock()
-	log.Printf("BusTrackerHook: started (passive, reply-suppression only)")
+	slog.Info("BusTrackerHook started (passive, reply-suppression only)")
 	return nil
 }
 

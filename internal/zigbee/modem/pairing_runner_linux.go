@@ -5,7 +5,7 @@ package modem
 import (
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -67,7 +67,7 @@ func (r *PairingRunner) modemWriteMu() *sync.Mutex {
 		return r.Mu
 	}
 	r.fallbackWarn.Do(func() {
-		log.Printf("pairing: WARNING PairingRunner.Mu is nil; using internal fallback mutex — production must wire splice.ModemWriteMu()")
+		slog.Warn("pairing PairingRunner.Mu is nil, using internal fallback mutex; production must wire splice.ModemWriteMu()")
 	})
 	return &r.fallbackMu
 }
@@ -189,7 +189,7 @@ func (r *PairingRunner) Ping() (alive bool, err error) {
 		}
 		return false, fmt.Errorf("ping: %w", err)
 	}
-	log.Printf("pairing: ping ack % X", ack)
+	slog.Debug("pairing ping ack", "ack", fmt.Sprintf("% X", ack))
 	return true, nil
 }
 
@@ -203,7 +203,7 @@ func (r *PairingRunner) SetModulePan(pan uint16, channel byte) error {
 	if err != nil {
 		return fmt.Errorf("set-module-pan (pan=0x%04X ch=%d): %w", pan, channel, err)
 	}
-	log.Printf("pairing: set-module-pan pan=0x%04X ch=%d ack % X", pan, channel, ack)
+	slog.Debug("pairing set-module-pan ack", "pan", fmt.Sprintf("0x%04X", pan), "channel", channel, "ack", fmt.Sprintf("% X", ack))
 	return nil
 }
 
@@ -336,11 +336,11 @@ func (r *PairingRunner) ReportScan(window time.Duration, seq byte) ([]FoundUnit,
 	// Quiet the announcers. Send the 0xD2 list-off then a 0xD3 broadcast
 	// quiet to end the discovery sweep.
 	if err := r.writeFrame(buildReportIdOff(ieees, seq+1), "report-id-off"); err != nil {
-		log.Printf("pairing: report-id-off write failed: %v", err)
+		slog.Error("pairing report-id-off write failed", "err", err)
 	}
 	time.Sleep(100 * time.Millisecond)
 	if err := r.writeFrame(buildReportIdQuiet(), "report-id-quiet"); err != nil {
-		log.Printf("pairing: report-id-quiet write failed: %v", err)
+		slog.Error("pairing report-id-quiet write failed", "err", err)
 	}
 	return found, nil
 }

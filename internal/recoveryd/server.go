@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -71,7 +71,7 @@ func (s *Server) Serve(ctx context.Context) error {
 	if err := os.Chmod(s.SocketPath, s.SocketMode); err != nil {
 		return fmt.Errorf("recoveryd.Serve: chmod %s: %w", s.SocketPath, err)
 	}
-	log.Printf("recoveryd: listening on %s (mode %o)", s.SocketPath, s.SocketMode)
+	slog.Info("recoveryd: listening", "socket", s.SocketPath, "mode", fmt.Sprintf("%o", s.SocketMode))
 
 	var wg sync.WaitGroup
 	go func() {
@@ -91,7 +91,7 @@ func (s *Server) Serve(ctx context.Context) error {
 			if errors.Is(err, net.ErrClosed) {
 				break
 			}
-			log.Printf("recoveryd: accept: %v", err)
+			slog.Error("recoveryd: accept", "err", err)
 			continue
 		}
 		s.seqMu.Lock()
@@ -119,7 +119,7 @@ func (s *Server) handleConn(ctx context.Context, c net.Conn) {
 	// On Linux uid is the real peer uid; require AllowUID (0/root by default).
 	// On non-Linux the gate is unavailable (uid == -1) and we allow it.
 	if uid >= 0 && uid != s.AllowUID {
-		log.Printf("recoveryd: refused peer uid=%d (allowed uid=%d)", uid, s.AllowUID)
+		slog.Warn("recoveryd: refused peer", "uid", uid, "allowed_uid", s.AllowUID)
 		_ = c.SetWriteDeadline(time.Now().Add(idleDeadline))
 		_ = wire.WriteMessage(c, &wire.AccessResponse{Ok: false, Error: fmt.Sprintf("refused: peer uid=%d not allowed", uid)})
 		return
@@ -137,14 +137,14 @@ func (s *Server) handleConn(ctx context.Context, c net.Conn) {
 			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
 				return
 			}
-			log.Printf("recoveryd: read: %v", err)
+			slog.Warn("recoveryd: read", "err", err)
 			return
 		}
 		resp := s.dispatch(&req)
 		_ = c.SetWriteDeadline(time.Now().Add(idleDeadline))
 		if err := wire.WriteMessage(c, resp); err != nil {
 			if !errors.Is(err, net.ErrClosed) {
-				log.Printf("recoveryd: write: %v", err)
+				slog.Warn("recoveryd: write", "err", err)
 			}
 			return
 		}

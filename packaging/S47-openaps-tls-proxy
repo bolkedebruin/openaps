@@ -18,7 +18,10 @@
 
 BIN=/home/applications/openaps-tls-proxy/openaps-tls-proxy
 RUN=/home/applications/openaps-tls-proxy
-LOG=$RUN/openaps-tls-proxy.log
+# the proxy owns its rotated log via -log-file; the init redirect only captures
+# pre-logging flag errors and Go runtime panics.
+LOG=/var/log/openaps-tls-proxy.log
+BOOTLOG=/var/log/openaps-tls-proxy.boot.log
 PIDFILE=$RUN/openaps-tls-proxy.pid
 LISTEN=127.0.0.1:8071
 PUBKEY=/etc/openaps/release.pub
@@ -32,7 +35,7 @@ if [ -f "$FEEDCONF" ]; then
     . "$FEEDCONF"
 fi
 
-ARGS="-listen $LISTEN -upstream $UPSTREAM -idle-timeout 0 -pubkey $PUBKEY -cache-dir $CACHE"
+ARGS="-listen $LISTEN -upstream $UPSTREAM -idle-timeout 0 -pubkey $PUBKEY -cache-dir $CACHE -log-file $LOG"
 
 start() {
     if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
@@ -41,14 +44,14 @@ start() {
     fi
     [ -x "$BIN" ] || { echo "$BIN missing or not executable"; return 1; }
     [ -n "$UPSTREAM" ] || { echo "UPSTREAM not set in $FEEDCONF"; return 1; }
-    mkdir -p "$RUN" "$CACHE"
+    mkdir -p "$RUN" "$CACHE" /var/log
 
     # nohup-sh-exec wrapper: same pattern as S48-inv-driver, so the daemon
     # survives both init(1) boot context and PHP-FPM upgrade-endpoint context.
     # The inner exec lets the wrapper sh be replaced by the proxy so the
     # captured PID is the right one. GOMAXPROCS/GOMEMLIMIT cap runtime RAM.
     nohup sh -c "GOMAXPROCS=1 GOMEMLIMIT=16MiB exec '$BIN' $ARGS" \
-        </dev/null >> "$LOG" 2>&1 &
+        </dev/null >> "$BOOTLOG" 2>&1 &
     sleep 1
     P=$(pidof openaps-tls-proxy 2>/dev/null | tr ' ' '\n' | head -n 1)
     if [ -n "$P" ] && kill -0 "$P" 2>/dev/null; then

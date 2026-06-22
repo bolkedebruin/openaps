@@ -12,7 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 	"math"
 	"net/http"
 	"path"
@@ -203,7 +203,7 @@ func (s *Server) Run(ctx context.Context) error {
 
 	errc := make(chan error, 1)
 	go func() {
-		log.Printf("httpserver: listening on %s (HTTP/2, TLS)", s.cfg.Listen)
+		slog.Info("httpserver: listening (HTTP/2, TLS)", "addr", s.cfg.Listen)
 		// Certs supplied via TLSConfig, so the file args are empty.
 		errc <- srv.ListenAndServeTLS("", "")
 	}()
@@ -924,7 +924,7 @@ func logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// SSE connections are long-lived; don't spam a line per stream tick.
 		if r.URL.Path != "/api/stream" {
-			log.Printf("http: %s %s", r.Method, r.URL.Path)
+			slog.Debug("http", "method", r.Method, "path", r.URL.Path)
 		}
 		next.ServeHTTP(w, r)
 	})

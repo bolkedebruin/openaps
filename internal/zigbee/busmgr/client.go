@@ -13,7 +13,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"os"
 	"sync"
@@ -234,7 +234,7 @@ func (c *Client) maybeLogDrop() {
 	c.dropsSince = 0
 	c.lastDropLog = now
 	c.dropMu.Unlock()
-	log.Printf("busmgr: dropped %d frames (queue full)", n)
+	slog.Warn("busmgr dropped frames (queue full)", "count", n)
 }
 
 // run drives the dial/session loop via wire.DialLoop.
@@ -245,11 +245,11 @@ func (c *Client) run() {
 		MinBackoff: dialMinBackoff,
 		MaxBackoff: dialMaxBackoff,
 		OnConnect: func() {
-			log.Printf("busmgr: connected to %s", c.socketPath)
+			slog.Info("busmgr connected", "sock", c.socketPath)
 			c.connected.Store(true)
 		},
 		OnDialError: func(err error, retryIn time.Duration) {
-			log.Printf("busmgr: dial %s: %v (retry in %s)", c.socketPath, err, retryIn)
+			slog.Warn("busmgr dial failed", "sock", c.socketPath, "err", err, "retry_in", retryIn)
 		},
 		Session: func(ctx context.Context, conn net.Conn) error {
 			defer c.connected.Store(false)
@@ -346,8 +346,8 @@ func (c *Client) handleInbound(env *wire.Envelope) {
 			// sending an out-of-range value that would silently
 			// truncate to a different inverter's SA.
 			c.sendFailTotal.Add(1)
-			log.Printf("busmgr: Send rejected: short_addr 0x%X exceeds uint16 max (peer=%q)",
-				rawSA, b.Send.GetPeerUid())
+			slog.Error("busmgr Send rejected: short_addr exceeds uint16 max",
+				"short_addr", fmt.Sprintf("0x%X", rawSA), "peer", b.Send.GetPeerUid())
 			return
 		}
 		c.dispatchSend(b.Send.GetFrame(), b.Send.GetPeerUid(), uint16(rawSA), b.Send.GetDeadlineMs())
@@ -371,7 +371,7 @@ func (c *Client) handleInbound(env *wire.Envelope) {
 func (c *Client) dispatchSend(l2 []byte, peerUID string, shortAddr uint16, deadlineMs int64) {
 	if err := validateFrame(l2); err != nil {
 		c.sendFailTotal.Add(1)
-		log.Printf("busmgr: Send rejected: %v (peer=%q frame=%d bytes)", err, peerUID, len(l2))
+		slog.Error("busmgr Send rejected", "err", err, "peer", peerUID, "frame_bytes", len(l2))
 		return
 	}
 
@@ -385,15 +385,15 @@ func (c *Client) dispatchSend(l2 []byte, peerUID string, shortAddr uint16, deadl
 	} else {
 		if peerUID == "" {
 			c.sendFailTotal.Add(1)
-			log.Printf("busmgr: Send missing both peer_uid and short_addr (frame=%d bytes)", len(l2))
+			slog.Error("busmgr Send missing both peer_uid and short_addr", "frame_bytes", len(l2))
 			return
 		}
 		var ok bool
 		sa, ok = c.Inventory.LookupSA(peerUID)
 		if !ok {
 			c.sendFailTotal.Add(1)
-			log.Printf("busmgr: Send unknown peer_uid %q (deadline_ms=%d frame=%d bytes)",
-				peerUID, deadlineMs, len(l2))
+			slog.Error("busmgr Send unknown peer_uid",
+				"peer", peerUID, "deadline_ms", deadlineMs, "frame_bytes", len(l2))
 			return
 		}
 	}
@@ -403,7 +403,7 @@ func (c *Client) dispatchSend(l2 []byte, peerUID string, shortAddr uint16, deadl
 func (c *Client) dispatchBroadcast(l2 []byte, deadlineMs int64) {
 	if err := validateFrame(l2); err != nil {
 		c.sendFailTotal.Add(1)
-		log.Printf("busmgr: Broadcast rejected: %v (frame=%d bytes)", err, len(l2))
+		slog.Error("busmgr Broadcast rejected", "err", err, "frame_bytes", len(l2))
 		return
 	}
 	// The yc600-builder protection cmds (the sub IS the cmd: AQ/AD/AC/AY,
@@ -413,7 +413,8 @@ func (c *Client) dispatchBroadcast(l2 []byte, deadlineMs int64) {
 	// reject them here so a raw Envelope_Broadcast can't either.
 	if isUnicastOnlyCmd(l2) {
 		c.sendFailTotal.Add(1)
-		log.Printf("busmgr: Broadcast rejected: L2 cmd 0x%02X is unicast-only (yc600 protection)", l2[3])
+		slog.Error("busmgr Broadcast rejected: L2 cmd is unicast-only (yc600 protection)",
+			"cmd", fmt.Sprintf("0x%02X", l2[3]))
 		return
 	}
 	c.injectL1(BuildL1Frame(0, l2), "Broadcast", "", deadlineMs)
@@ -430,14 +431,14 @@ func (c *Client) injectL1(frame []byte, kind, peerUID string, deadlineMs int64) 
 	cb := c.OnSend
 	if cb == nil {
 		c.sendFailTotal.Add(1)
-		log.Printf("busmgr: %s received but OnSend is not configured (peer=%q deadline_ms=%d frame=%d bytes)",
-			kind, peerUID, deadlineMs, len(frame))
+		slog.Error("busmgr received command but OnSend is not configured",
+			"kind", kind, "peer", peerUID, "deadline_ms", deadlineMs, "frame_bytes", len(frame))
 		return
 	}
 	if err := cb(frame); err != nil {
 		c.sendFailTotal.Add(1)
-		log.Printf("busmgr: %s dispatch failed: %v (peer=%q frame=%d bytes)",
-			kind, err, peerUID, len(frame))
+		slog.Error("busmgr dispatch failed",
+			"kind", kind, "err", err, "peer", peerUID, "frame_bytes", len(frame))
 		return
 	}
 	c.sendOkTotal.Add(1)

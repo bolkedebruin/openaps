@@ -2,7 +2,7 @@ package server
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -36,19 +36,19 @@ type Reverter struct {
 	timers map[uint8]*time.Timer
 	sender frameSender
 	limits *source.PowerLimitCache
-	logger *log.Logger
+	logger *slog.Logger
 }
 
 // NewReverter builds a Reverter bound to the inv-driver sender. Returns
 // nil when sender is nil (Model 123 writes disabled). Callers must pass
 // an untyped-nil — not a typed-nil *invdriver.Client — for the check to
 // hold; main.go assigns Config.InvDriver only when the client exists.
-func NewReverter(sender frameSender, limits *source.PowerLimitCache, lg *log.Logger) *Reverter {
+func NewReverter(sender frameSender, limits *source.PowerLimitCache, lg *slog.Logger) *Reverter {
 	if sender == nil {
 		return nil
 	}
 	if lg == nil {
-		lg = log.Default()
+		lg = slog.Default()
 	}
 	return &Reverter{
 		timers: map[uint8]*time.Timer{},
@@ -126,10 +126,10 @@ func (r *Reverter) fire(uid uint8, targets []revertTarget) {
 	ctx := context.Background()
 	for _, t := range targets {
 		if err := sendPanelWatts(ctx, r.sender, t.uid, t.modelCode, source.MaxPanelLimitW); err != nil {
-			r.logger.Printf("reverter: uid=%d restore %s: %v", uid, t.uid, err)
+			r.logger.Error("reverter: restore failed", "unit_id", uid, "uid", t.uid, "err", err)
 			continue
 		}
 		r.limits.Set(t.uid, source.MaxPanelLimitW)
-		r.logger.Printf("reverter: uid=%d restored %s to full power (RvrtTms expired)", uid, t.uid)
+		r.logger.Info("reverter: restored to full power (RvrtTms expired)", "unit_id", uid, "uid", t.uid)
 	}
 }

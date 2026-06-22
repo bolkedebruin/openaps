@@ -12,7 +12,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -28,6 +28,7 @@ import (
 	"github.com/bolkedebruin/openaps/internal/gridprofile"
 	"github.com/bolkedebruin/openaps/internal/ingest"
 	"github.com/bolkedebruin/openaps/internal/ipc"
+	"github.com/bolkedebruin/openaps/internal/logx"
 	"github.com/bolkedebruin/openaps/internal/pairing"
 	"github.com/bolkedebruin/openaps/internal/probe"
 	"github.com/bolkedebruin/openaps/internal/settings"
@@ -129,12 +130,14 @@ func runServe(args []string) error {
 		"cadence between 0xBB poll rounds; per-inverter Sends are spaced by -probe-interval within the round")
 	enableAESL1 := fs.Bool("enable-aes-l1", false,
 		"EXPERIMENTAL: enable L1 OTA AES-128 decrypt of inbound encrypted frames (per-frame key derivation per docs/AES-DESIGN.md; no on-wire test vectors)")
+	lc := logx.Bind(fs, "inv-driver", "/var/log/inv-driver.log")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	lc.Init()
 	if *enableAESL1 {
 		codec.SetAESEnabled(true)
-		log.Printf("L1 AES enabled (EXPERIMENTAL: no on-wire test vectors)")
+		slog.Info("L1 AES enabled (EXPERIMENTAL: no on-wire test vectors)")
 	}
 	controllers := splitTrim(*controllerBackends)
 	uids, err := parseUIDList(*controllerUIDs)
@@ -171,10 +174,10 @@ func runServe(args []string) error {
 	overlaysDir := filepath.Join(*gridProfilesDir, "overlays")
 	if err := gpStore.LoadProfilesFromDir(ctx, profilesDir); err != nil {
 		// Non-fatal: missing dir on first install is expected.
-		log.Printf("gridprofile: LoadProfilesFromDir %q: %v", profilesDir, err)
+		slog.Warn("gridprofile LoadProfilesFromDir", "dir", profilesDir, "err", err)
 	}
 	if err := gpStore.LoadOverlaysFromDir(ctx, overlaysDir); err != nil {
-		log.Printf("gridprofile: LoadOverlaysFromDir %q: %v", overlaysDir, err)
+		slog.Warn("gridprofile LoadOverlaysFromDir", "dir", overlaysDir, "err", err)
 	}
 
 	pruneOnce(ctx, st, *retainTelemetry, *retainOther)
@@ -266,11 +269,12 @@ func runServe(args []string) error {
 			time.Sleep(2 * 4 * time.Second) // 2 × ReadSettle
 			rpt, err := rec.VerifyStartup(ctx, uid, mc)
 			if err != nil {
-				log.Printf("gridprofile VerifyStartup uid=%s: %v", uid, err)
+				slog.Error("gridprofile VerifyStartup", "uid", uid, "err", err)
 				return
 			}
-			log.Printf("gridprofile VerifyStartup uid=%s identified=%q score=%.2f desiredState=%v reconciledOnStartup=%v",
-				uid, rpt.IdentifiedID, rpt.IdentifiedScore, rpt.HasDesiredState, rpt.ReconciledOnStartup)
+			slog.Info("gridprofile VerifyStartup",
+				"uid", uid, "identified", rpt.IdentifiedID, "score", rpt.IdentifiedScore,
+				"desiredState", rpt.HasDesiredState, "reconciledOnStartup", rpt.ReconciledOnStartup)
 			// Now that the protection cache is warm for this uid, enqueue an
 			// overlay reconcile if one is persisted. This replaces the
 			// boot-time ReconcileAllOverlays sweep — running it before the
@@ -278,7 +282,7 @@ func runServe(args []string) error {
 			// for every overlay point on every restart.
 			if mp := gpManagerPtr; mp != nil {
 				if err := mp.ReconcileOverlaysForUID(ctx, uid); err != nil {
-					log.Printf("gridprofile ReconcileOverlaysForUID uid=%s: %v", uid, err)
+					slog.Error("gridprofile ReconcileOverlaysForUID", "uid", uid, "err", err)
 				}
 			}
 		}()
@@ -331,19 +335,19 @@ func runServe(args []string) error {
 	if mac := settingsStore.Get().MAC; mac != "" {
 		live := settings.ReadEth0MAC()
 		if !strings.EqualFold(strings.TrimSpace(live), mac) {
-			log.Printf("settings: applying mac override %s (live=%s)", mac, live)
+			slog.Info("settings applying mac override", "mac", mac, "live", live)
 			bootCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			applyErr := settings.ApplyMAC(bootCtx, mac)
 			cancel()
 			if applyErr != nil {
-				log.Printf("settings: mac apply at boot failed: %v (continuing with live MAC)", applyErr)
+				slog.Warn("settings mac apply at boot failed; continuing with live MAC", "err", applyErr)
 			}
 			// Record the outcome to the events store so an operator can
 			// reconstruct the boot-time history later, even if they only
 			// reach the ECU via the recovery path.
 			kind, sev, detail := settings.ApplyEventFields(applyErr == nil, live, mac, applyErr)
 			if err := st.AppendEvent(ctx, time.Now().UnixMilli(), "", kind, sev, "inv-driver", "boot: "+detail); err != nil {
-				log.Printf("settings: append boot apply event: %v", err)
+				slog.Error("settings append boot apply event", "err", err)
 			}
 		}
 	}
@@ -430,7 +434,7 @@ func runServe(args []string) error {
 
 	if *telemetryPoll {
 		if *probeBackend == "" {
-			log.Printf("telemetrypoll: -probe-backend is empty; telemetry polling disabled")
+			slog.Warn("telemetrypoll -probe-backend is empty; telemetry polling disabled")
 		} else {
 			tp := &telemetrypoll.Poller{
 				Store:        telemetrypoll.NewStoreAdapter(st),
@@ -446,8 +450,8 @@ func runServe(args []string) error {
 				BusLock: busLock,
 			}
 			go tp.Run(ctx)
-			log.Printf("telemetrypoll: started (interval=%s per-inverter-spacing=%s backend=%q)",
-				*telemetryPollInterval, *probeInterval, *probeBackend)
+			slog.Info("telemetrypoll started",
+				"interval", *telemetryPollInterval, "per_inverter_spacing", *probeInterval, "backend", *probeBackend)
 		}
 	}
 
@@ -475,9 +479,9 @@ func pruneOnce(ctx context.Context, st *store.Store, retainTelemetry, retainOthe
 		cutoff := now - retainTelemetry.Milliseconds()
 		n, err := st.PruneEvents(ctx, cutoff, []string{"telemetry"})
 		if err != nil {
-			log.Printf("prune: telemetry: %v", err)
+			slog.Error("prune telemetry", "err", err)
 		} else if n > 0 {
-			log.Printf("prune: removed %d telemetry events older than %s", n, retainTelemetry)
+			slog.Info("prune removed telemetry events", "count", n, "older_than", retainTelemetry)
 		}
 	}
 	if retainOther > 0 {
@@ -486,9 +490,9 @@ func pruneOnce(ctx context.Context, st *store.Store, retainTelemetry, retainOthe
 		// the telemetry call above just won't match.
 		n, err := st.PruneEvents(ctx, cutoff, nil)
 		if err != nil {
-			log.Printf("prune: other: %v", err)
+			slog.Error("prune other", "err", err)
 		} else if n > 0 {
-			log.Printf("prune: removed %d events older than %s", n, retainOther)
+			slog.Info("prune removed events", "count", n, "older_than", retainOther)
 		}
 	}
 }
@@ -836,7 +840,7 @@ func (s storeEventSink) AppendEvent(ctx context.Context, tsMs int64, uid, kind, 
 		return
 	}
 	if err := s.S.AppendEvent(ctx, tsMs, uid, kind, severity, "inv-driver", detail); err != nil {
-		log.Printf("gridprofile: append %s event uid=%s: %v", kind, uid, err)
+		slog.Error("gridprofile append event", "kind", kind, "uid", uid, "err", err)
 	}
 }
 

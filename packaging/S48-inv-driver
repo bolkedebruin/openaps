@@ -12,20 +12,23 @@
 # State paths:
 #   /var/run/inv-driver.sock      UDS endpoint (mode 0600)
 #   /var/lib/inv-driver/state.db  SQLite WAL store
-#   /home/applications/inv-driver/inv-driver.log   stdout/stderr
+#   /var/log/inv-driver.log       rotated log (binary-owned)
 
 BIN=/home/applications/inv-driver/inv-driver
 DATA=/var/lib/inv-driver
 SOCK=/var/run/inv-driver.sock
 RUN=/home/applications/inv-driver
-LOG=$RUN/inv-driver.log
+# inv-driver owns its rotated log via -log-file; the init redirect only
+# captures pre-logging flag errors and Go runtime panics.
+LOG=/var/log/inv-driver.log
+BOOTLOG=/var/log/inv-driver.boot.log
 PIDFILE=$RUN/inv-driver.pid
 # -controller-backends: peers allowed to issue controller ops (Send /
 # Broadcast / GridProfile / SystemStatus). inv-driver-cli is the operator
 # CLI; ecu-sunspec is the Modbus adapter routing Model 123 set-power /
 # on-off writes; ecu-web is the web console (SystemStatus now, settings /
 # commands in later milestones).
-ARGS="serve -socket $SOCK -db $DATA/state.db -controller-backends inv-driver-cli,ecu-sunspec,ecu-web"
+ARGS="serve -socket $SOCK -db $DATA/state.db -controller-backends inv-driver-cli,ecu-sunspec,ecu-web -log-file $LOG"
 
 start() {
     if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
@@ -33,14 +36,14 @@ start() {
         return 0
     fi
     [ -x "$BIN" ] || { echo "$BIN missing or not executable"; return 1; }
-    mkdir -p "$DATA" "$RUN"
+    mkdir -p "$DATA" "$RUN" /var/log
 
     # nohup-sh-exec wrapper: same pattern as S53-ecu-zb, so the daemon
     # survives both init(1) boot context and PHP-FPM upgrade-endpoint
     # context. The inner exec lets the wrapper sh be replaced by
     # inv-driver so the captured PID is the right one.
     nohup sh -c "echo \$\$ > '$PIDFILE'; exec '$BIN' $ARGS" \
-        </dev/null >> "$LOG" 2>&1 &
+        </dev/null >> "$BOOTLOG" 2>&1 &
     sleep 1
     if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
         echo "inv-driver started (pid $(cat "$PIDFILE"))"

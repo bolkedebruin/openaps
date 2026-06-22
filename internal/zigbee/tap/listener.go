@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -68,7 +68,7 @@ func (s *Server) startUnix(ctx context.Context) error {
 	s.listeners = append(s.listeners, l)
 	s.wg.Add(1)
 	go s.acceptLoop(ctx, l, "unix")
-	log.Printf("tap: unix listener at %s", s.unixPath)
+	slog.Info("tap unix listener", "path", s.unixPath)
 	return nil
 }
 
@@ -80,7 +80,7 @@ func (s *Server) startTCP(ctx context.Context) error {
 	s.listeners = append(s.listeners, l)
 	s.wg.Add(1)
 	go s.acceptLoop(ctx, l, "tcp")
-	log.Printf("tap: tcp listener at %s", l.Addr())
+	slog.Info("tap tcp listener", "addr", l.Addr())
 	return nil
 }
 
@@ -92,11 +92,11 @@ func (s *Server) acceptLoop(ctx context.Context, l net.Listener, label string) {
 			if isClosedErr(err) || ctx.Err() != nil {
 				return
 			}
-			log.Printf("tap %s: accept: %v", label, err)
+			slog.Error("tap accept failed", "listener", label, "err", err)
 			return
 		}
-		log.Printf("tap %s: subscriber attached %s (now %d)",
-			label, conn.RemoteAddr(), s.br.SubscriberCount()+1)
+		slog.Info("tap subscriber attached",
+			"listener", label, "remote", conn.RemoteAddr(), "count", s.br.SubscriberCount()+1)
 		s.wg.Add(1)
 		go s.serveConn(label, conn)
 	}
@@ -123,7 +123,7 @@ func (s *Server) serveConn(label string, conn net.Conn) {
 	detach, done := s.br.Attach(conn)
 	defer detach()
 	<-done
-	log.Printf("tap %s: subscriber detached %s", label, conn.RemoteAddr())
+	slog.Info("tap subscriber detached", "listener", label, "remote", conn.RemoteAddr())
 }
 
 // Stop closes all listeners and forcibly disconnects active

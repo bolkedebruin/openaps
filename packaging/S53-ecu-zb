@@ -18,9 +18,12 @@
 
 BIN=/home/applications/ecu-zb/ecu-zb
 RUN=/home/applications/ecu-zb/run
-LOG=/home/applications/ecu-zb/log
+# ecu-zb owns its rotated log via --log-file; the init redirect only captures
+# pre-logging flag errors and Go runtime panics.
+LOG=/var/log/ecu-zb.log
+BOOTLOG=/var/log/ecu-zb.boot.log
 PIDFILE=$RUN/ecu-zb.pid
-ARGS="--proxy --tty /dev/ttyO2 --pty $RUN/zb-pty --tap-sock $RUN/pcap.sock --tap-tcp 0.0.0.0:19999 --invdriver-sock /var/run/inv-driver.sock"
+ARGS="--proxy --tty /dev/ttyO2 --pty $RUN/zb-pty --tap-sock $RUN/pcap.sock --tap-tcp 0.0.0.0:19999 --invdriver-sock /var/run/inv-driver.sock --log-file $LOG"
 
 start() {
     if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
@@ -35,7 +38,7 @@ start() {
         return 0
     fi
     [ -x "$BIN" ] || { echo "$BIN missing or not executable"; return 1; }
-    mkdir -p "$RUN" "$LOG"
+    mkdir -p "$RUN" /var/log
 
     # Wrapped in `nohup sh -c "exec ..."` so the proxy survives both
     # boot-time invocation (init(1) ancestor) and PHP-FPM-context
@@ -44,12 +47,12 @@ start() {
     # `exec` lets the wrapper sh be replaced by ecu-zb so we still
     # capture the right PID for the pidfile.
     nohup sh -c "echo \$\$ > '$PIDFILE'; exec '$BIN' $ARGS" \
-        </dev/null >> "$LOG/ecu-zb.log" 2>&1 &
+        </dev/null >> "$BOOTLOG" 2>&1 &
     sleep 1
     if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
         echo "ecu-zb started (pid $(cat "$PIDFILE"))"
     else
-        echo "ecu-zb failed to stay up; check $LOG/ecu-zb.log"
+        echo "ecu-zb failed to stay up; check $LOG and $BOOTLOG"
         return 1
     fi
 

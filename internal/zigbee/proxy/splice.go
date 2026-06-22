@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -345,7 +345,7 @@ func (s *Splice) copyOne(ctx context.Context, name string, dir FrameDirection) e
 		}
 		if rerr != nil {
 			if errors.Is(rerr, io.EOF) {
-				log.Printf("%s: EOF", name)
+				slog.Debug("splice copy EOF", "dir", name)
 				return nil
 			}
 			// O_NONBLOCK pty master returns EAGAIN when there is no
@@ -366,7 +366,7 @@ func (s *Splice) copyOne(ctx context.Context, name string, dir FrameDirection) e
 				if err := s.faultHost(curHost); err != nil {
 					return fmt.Errorf("%s read: %w", name, err)
 				}
-				log.Printf("%s: host pty reopened after EIO", name)
+				slog.Warn("splice host pty reopened after EIO", "dir", name)
 				continue
 			}
 			return fmt.Errorf("%s read: %w", name, rerr)
@@ -405,7 +405,7 @@ func (s *Splice) write(dir FrameDirection, p []byte) error {
 		if err != nil && isEAGAIN(err) {
 			n := atomic.AddUint64(&s.hostDropCount, 1)
 			if n == 1 || n%logEveryDrops == 0 {
-				log.Printf("modem→host: pty master EAGAIN; dropped %d byte(s) (total drops=%d, slave likely unread)", len(p), n)
+				slog.Warn("modem→host pty master EAGAIN, dropped bytes (slave likely unread)", "bytes", len(p), "total_drops", n)
 			}
 			return nil
 		}
@@ -413,13 +413,13 @@ func (s *Splice) write(dir FrameDirection, p []byte) error {
 			if ferr := s.faultHost(host); ferr != nil {
 				return ferr
 			}
-			log.Printf("modem→host: host pty reopened after EIO write")
+			slog.Warn("modem→host host pty reopened after EIO write")
 			host = s.currentHost()
 			_, err = host.Write(p)
 			if err != nil && isEAGAIN(err) {
 				n := atomic.AddUint64(&s.hostDropCount, 1)
 				if n == 1 || n%logEveryDrops == 0 {
-					log.Printf("modem→host: pty master EAGAIN after reopen; dropped %d byte(s) (total drops=%d)", len(p), n)
+					slog.Warn("modem→host pty master EAGAIN after reopen, dropped bytes", "bytes", len(p), "total_drops", n)
 				}
 				return nil
 			}

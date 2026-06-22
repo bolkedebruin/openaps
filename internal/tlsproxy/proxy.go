@@ -15,7 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -59,7 +59,7 @@ type Config struct {
 	// Client is the upstream HTTP client; nil builds a hardened default.
 	Client *http.Client
 	// Logger is used for request/error logging; nil discards.
-	Logger *log.Logger
+	Logger *slog.Logger
 }
 
 // Server is the loopback opkg proxy.
@@ -70,7 +70,7 @@ type Server struct {
 	cacheDir    string
 	verifier    Verifier
 	client      *http.Client
-	log         *log.Logger
+	log         *slog.Logger
 
 	mu       sync.Mutex
 	manifest *manifest // cached after the index is fetched + verified
@@ -156,7 +156,7 @@ func New(cfg Config) (*Server, error) {
 	}
 	lg := cfg.Logger
 	if lg == nil {
-		lg = log.New(io.Discard, "", 0)
+		lg = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	return &Server{
 		upstream:    u,
@@ -210,7 +210,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	}
 	rel, err := s.relPath(r.URL.Path)
 	if err != nil {
-		s.log.Printf("reject %s: %v", r.URL.Path, err)
+		s.log.Warn("reject", "path", r.URL.Path, "err", err)
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
@@ -228,7 +228,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 func (s *Server) serveIndex(w http.ResponseWriter, r *http.Request, rel string) {
 	body, err := s.loadIndex(r.Context(), rel)
 	if err != nil {
-		s.log.Printf("index %s: %v", rel, err)
+		s.log.Error("index", "rel", rel, "err", err)
 		http.Error(w, "bad gateway", http.StatusBadGateway)
 		return
 	}
@@ -273,7 +273,7 @@ func (s *Server) serveFile(w http.ResponseWriter, r *http.Request, rel string) {
 		// opkg normally fetches the index first, but be robust if a file is
 		// requested cold: load and verify the index now.
 		if _, err := s.loadIndex(r.Context(), s.indexName); err != nil {
-			s.log.Printf("file %s: index load: %v", rel, err)
+			s.log.Error("file: index load", "rel", rel, "err", err)
 			http.Error(w, "bad gateway", http.StatusBadGateway)
 			return
 		}
@@ -283,20 +283,20 @@ func (s *Server) serveFile(w http.ResponseWriter, r *http.Request, rel string) {
 	}
 	want, ok := m.digestFor(rel)
 	if !ok {
-		s.log.Printf("file %s: not in verified index", rel)
+		s.log.Warn("file: not in verified index", "rel", rel)
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 
 	tmp, gotDigest, err := s.download(r.Context(), rel)
 	if err != nil {
-		s.log.Printf("file %s: download: %v", rel, err)
+		s.log.Error("file: download", "rel", rel, "err", err)
 		http.Error(w, "bad gateway", http.StatusBadGateway)
 		return
 	}
 	defer os.Remove(tmp)
 	if gotDigest != want {
-		s.log.Printf("file %s: digest mismatch want=%s got=%s", rel, want, gotDigest)
+		s.log.Error("file: digest mismatch", "rel", rel, "want", want, "got", gotDigest)
 		http.Error(w, "bad gateway", http.StatusBadGateway)
 		return
 	}
@@ -448,7 +448,7 @@ func (s *Server) idleWatch(ctx context.Context, timeout time.Duration, fire cont
 			}
 			t.Reset(timeout)
 		case <-t.C:
-			s.log.Printf("idle for %s, shutting down", timeout)
+			s.log.Info("idle, shutting down", "timeout", timeout)
 			fire()
 			return
 		}

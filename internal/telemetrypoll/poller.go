@@ -7,7 +7,7 @@ package telemetrypoll
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -90,12 +90,12 @@ func (p *Poller) Run(ctx context.Context) {
 		case <-t.C:
 			start := time.Now()
 			if err := p.poll(ctx); err != nil {
-				log.Printf("telemetrypoll: %v", err)
+				slog.Error("telemetrypoll round", "err", err)
 			}
 			elapsed := time.Since(start)
 			if elapsed > interval {
-				log.Printf("telemetrypoll: WARN round took %s, exceeds interval %s; effective cadence degraded",
-					elapsed.Round(time.Millisecond), interval)
+				slog.Warn("telemetrypoll round exceeds interval; effective cadence degraded",
+					"elapsed", elapsed.Round(time.Millisecond), "interval", interval)
 			}
 		}
 	}
@@ -128,7 +128,7 @@ func (p *Poller) poll(ctx context.Context) error {
 		ok, y := p.BusLock.AcquirePolite(busLockOwner)
 		if !ok {
 			p.busyOnce.Do(func() {
-				log.Printf("telemetrypoll: bus busy; skipping rounds until released")
+				slog.Debug("telemetrypoll bus busy; skipping rounds until released")
 			})
 			return nil
 		}
@@ -145,7 +145,7 @@ func (p *Poller) poll(ctx context.Context) error {
 	}
 	if len(inverters) == 0 {
 		p.emptyOnce.Do(func() {
-			log.Printf("telemetrypoll: no inverters in state.db yet; telemetry seeds passively from observed replies")
+			slog.Info("telemetrypoll no inverters in state.db yet; telemetry seeds passively from observed replies")
 		})
 		return nil
 	}
@@ -177,8 +177,8 @@ func (p *Poller) poll(ctx context.Context) error {
 		if ok := p.Server.SendToBackend(p.Backend, env); !ok {
 			// Backend absent or queue full — skip the remainder of this
 			// round; the next tick will retry.
-			log.Printf("telemetrypoll: backend=%q send refused at uid=%s; skipping rest of round",
-				p.Backend, inv.UID)
+			slog.Debug("telemetrypoll send refused; skipping rest of round",
+				"backend", p.Backend, "uid", inv.UID)
 			return nil
 		}
 

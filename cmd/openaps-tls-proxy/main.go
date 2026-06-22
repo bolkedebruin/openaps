@@ -12,12 +12,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/bolkedebruin/openaps/internal/logx"
 	"github.com/bolkedebruin/openaps/internal/releasekey"
 	"github.com/bolkedebruin/openaps/internal/tlsproxy"
 )
@@ -26,10 +26,8 @@ import (
 var version = "dev"
 
 func main() {
-	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
-	log.SetPrefix("openaps-tls-proxy: ")
-
 	fs := flag.NewFlagSet("openaps-tls-proxy", flag.ExitOnError)
+	lc := logx.Bind(fs, "openaps-tls-proxy", "/var/log/openaps-tls-proxy.log")
 	listen := fs.String("listen", "127.0.0.1:8071", "loopback address opkg points at (must be a loopback address)")
 	upstream := fs.String("upstream", "", "HTTPS feed base, e.g. https://USER.github.io/openaps-feed/stable (required)")
 	mount := fs.String("mount", "/", "request path prefix opkg uses")
@@ -40,25 +38,26 @@ func main() {
 	idleTimeout := fs.Duration("idle-timeout", 0, "self-exit after this much inactivity (0 = run until signal; >0 = on-demand)")
 	showVersion := fs.Bool("version", false, "print version and exit")
 	_ = fs.Parse(os.Args[1:])
+	logger := lc.Init()
 
 	if *showVersion {
-		log.Printf("version %s", version)
+		logger.Info("version", "version", version)
 		return
 	}
 	if *upstream == "" {
-		log.Fatalf("-upstream is required")
+		logx.Fatal("-upstream is required")
 	}
 
 	// Enforce loopback-only. This proxy serves bytes opkg cannot itself verify;
 	// exposing it off-box would let a network peer feed an unauthenticated
 	// client, so the bind address must resolve to a loopback address.
 	if err := requireLoopback(*listen); err != nil {
-		log.Fatalf("listen: %v", err)
+		logx.Fatal("listen", "err", err)
 	}
 
 	verifier, err := releasekey.LoadFile(*pubkey)
 	if err != nil {
-		log.Fatalf("release key: %v", err)
+		logx.Fatal("release key", "err", err)
 	}
 
 	srv, err := tlsproxy.New(tlsproxy.Config{
@@ -68,25 +67,25 @@ func main() {
 		CacheDir:     *cacheDir,
 		ExtraCAFile:  *caFile,
 		Verifier:     verifier,
-		Logger:       log.Default(),
+		Logger:       logger,
 	})
 	if err != nil {
-		log.Fatalf("init: %v", err)
+		logx.Fatal("init", "err", err)
 	}
 
 	ln, err := net.Listen("tcp", *listen)
 	if err != nil {
-		log.Fatalf("listen %s: %v", *listen, err)
+		logx.Fatal("listen", "addr", *listen, "err", err)
 	}
-	log.Printf("listening on %s, upstream %s", ln.Addr(), *upstream)
+	logger.Info("listening", "addr", ln.Addr(), "upstream", *upstream)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	if err := srv.Serve(ctx, ln, *idleTimeout); err != nil {
-		log.Fatalf("serve: %v", err)
+		logx.Fatal("serve", "err", err)
 	}
-	log.Printf("shutdown")
+	logger.Info("shutdown")
 }
 
 // requireLoopback resolves the host part of addr and returns an error unless

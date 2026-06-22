@@ -2,7 +2,7 @@ package modem
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -40,7 +40,7 @@ func FetchSettings(ctx context.Context, sockPath, backend string) (panHex string
 	env, err := udsutil.Roundtrip(ctx, sockPath, hello,
 		func(e *wire.Envelope) bool { return e.GetSettingsResp() != nil }, req)
 	if err != nil {
-		log.Printf("modem: settings fetch skipped, %s: %v", sockPath, err)
+		slog.Warn("modem settings fetch skipped", "sock", sockPath, "err", err)
 		return "", 0, false
 	}
 	s := env.GetSettingsResp().GetSettings()

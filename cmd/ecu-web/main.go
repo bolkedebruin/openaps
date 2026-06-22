@@ -7,7 +7,7 @@ package main
 import (
 	"context"
 	"flag"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -19,6 +19,7 @@ import (
 	"github.com/bolkedebruin/openaps/cmd/ecu-web/internal/snapshot"
 	"github.com/bolkedebruin/openaps/cmd/ecu-web/internal/uds"
 	"github.com/bolkedebruin/openaps/cmd/ecu-web/web"
+	"github.com/bolkedebruin/openaps/internal/logx"
 )
 
 // version and gitHash are overridden at build time via
@@ -33,25 +34,25 @@ func main() {
 	stateDir := flag.String("state-dir", "/var/lib/ecu-web", "dir for TLS cert/key and auth credentials")
 	backend := flag.String("backend", "ecu-web", "Hello backend identity reported to inv-driver")
 	pushRate := flag.Duration("push-rate", time.Second, "minimum interval between SSE fleet frames")
+	lc := logx.Bind(flag.CommandLine, "ecu-web", "/var/log/ecu-web.log")
 	flag.Parse()
+	lc.Init()
 
-	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
-	log.SetPrefix("ecu-web: ")
-	log.Printf("starting version=%s listen=%s sock=%s state-dir=%s", version, *listen, *sock, *stateDir)
+	slog.Info("starting", "version", version, "listen", *listen, "sock", *sock, "state_dir", *stateDir)
 
 	hostname, _ := os.Hostname()
 
 	authMgr, err := auth.NewManager(filepath.Join(*stateDir, "auth.json"))
 	if err != nil {
-		log.Fatalf("auth init: %v", err)
+		logx.Fatal("auth init", "err", err)
 	}
 	if !authMgr.Configured() {
-		log.Printf("no operator password set — first browser visit must complete setup")
+		slog.Info("no operator password set — first browser visit must complete setup")
 	}
 
 	assets, err := web.Assets()
 	if err != nil {
-		log.Fatalf("embed assets: %v", err)
+		logx.Fatal("embed assets", "err", err)
 	}
 
 	snap := snapshot.New(nil)
@@ -98,12 +99,12 @@ func main() {
 
 	go func() {
 		if err := sub.Run(ctx); err != nil && ctx.Err() == nil {
-			log.Printf("uds subscriber exited: %v", err)
+			slog.Error("uds subscriber exited", "err", err)
 		}
 	}()
 
 	if err := srv.Run(ctx); err != nil {
-		log.Fatalf("http server: %v", err)
+		logx.Fatal("http server", "err", err)
 	}
-	log.Printf("shutdown complete")
+	slog.Info("shutdown complete")
 }

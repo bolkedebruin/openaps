@@ -2,7 +2,7 @@ package busmgr
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/bolkedebruin/openaps/internal/zigbee/modem"
@@ -158,13 +158,13 @@ func (c *Client) finishPairing(res *wire.PairingCmdResult, err error) {
 	if err != nil {
 		res.Ok = false
 		res.Error = err.Error()
-		log.Printf("pairing: req_id=%d failed: %v", res.ReqId, err)
+		slog.Error("pairing failed", "req_id", res.ReqId, "err", err)
 	}
 	c.Enqueue(&wire.Envelope{Body: &wire.Envelope_PairingResult{PairingResult: res}})
 }
 
 func (c *Client) replyPairingErr(reqID uint64, msg string) {
-	log.Printf("pairing: req_id=%d rejected: %s", reqID, msg)
+	slog.Error("pairing rejected", "req_id", reqID, "msg", msg)
 	c.Enqueue(&wire.Envelope{Body: &wire.Envelope_PairingResult{
 		PairingResult: &wire.PairingCmdResult{ReqId: reqID, Ok: false, Error: msg},
 	}})

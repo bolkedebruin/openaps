@@ -3,7 +3,7 @@ package settings
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"regexp"
 	"strconv"
 	"strings"
@@ -86,7 +86,7 @@ func (h *Handler) Handle(ctx context.Context, req *wire.SettingsRequest) *wire.S
 			}
 			h.emitApplyEvent(ctx, true, live, newMAC, nil)
 		case newMAC == "" && oldMAC != "":
-			log.Printf("settings: mac cleared; eth0 keeps current value until next boot")
+			slog.Info("settings mac cleared; eth0 keeps current value until next boot")
 		}
 		if err := h.Store.Save(s); err != nil {
 			return &wire.SettingsResponse{Ok: false, Error: err.Error()}
@@ -108,7 +108,7 @@ func (h *Handler) emitApplyEvent(ctx context.Context, ok bool, live, wanted stri
 	}
 	kind, sev, detail := ApplyEventFields(ok, live, wanted, applyErr)
 	if err := h.AppendEvent(ctx, time.Now().UnixMilli(), "", kind, sev, h.AppendEventBy, detail); err != nil {
-		log.Printf("settings: append apply event: %v", err)
+		slog.Error("settings append apply event", "err", err)
 	}
 }
 

@@ -15,14 +15,17 @@
 # State paths:
 #   ~root/.ssh/authorized_keys       key file (mode 0600), the source of truth
 #   /var/run/recoveryd.sock          UDS endpoint (mode 0600, root-only)
-#   /home/applications/recoveryd/recoveryd.log   stdout/stderr
+#   /var/log/recoveryd.log           rotated log (binary-owned)
 
 BIN=/home/applications/recoveryd/recoveryd
 SOCK=/var/run/recoveryd.sock
 RUN=/home/applications/recoveryd
-LOG=$RUN/recoveryd.log
+# recoveryd owns its rotated log via -log-file; the init redirect only captures
+# pre-logging flag errors and Go runtime panics.
+LOG=/var/log/recoveryd.log
+BOOTLOG=/var/log/recoveryd.boot.log
 PIDFILE=$RUN/recoveryd.pid
-ARGS="-manage-dropbear=true -socket $SOCK"
+ARGS="-manage-dropbear=true -socket $SOCK -log-file $LOG"
 
 start() {
     if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
@@ -30,7 +33,7 @@ start() {
         return 0
     fi
     [ -x "$BIN" ] || { echo "$BIN missing or not executable"; return 1; }
-    mkdir -p "$RUN"
+    mkdir -p "$RUN" /var/log
 
     # Ensure root's home dir is root-owned and not group/other-writable before
     # dropbear authenticates against ~/.ssh/authorized_keys. dropbear (like
@@ -51,7 +54,7 @@ start() {
     # upgrade-endpoint context. The inner exec replaces the wrapper sh with
     # recoveryd so the captured PID is the right one.
     nohup sh -c "echo \$\$ > '$PIDFILE'; exec '$BIN' $ARGS" \
-        </dev/null >> "$LOG" 2>&1 &
+        </dev/null >> "$BOOTLOG" 2>&1 &
     sleep 1
     if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
         echo "recoveryd started (pid $(cat "$PIDFILE"))"

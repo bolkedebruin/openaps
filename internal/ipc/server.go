@@ -9,7 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"os"
 	"sync"
@@ -181,7 +181,7 @@ func (s *Server) Serve(ctx context.Context) error {
 	if err := os.Chmod(s.SocketPath, s.SocketMode); err != nil {
 		return fmt.Errorf("ipc.Serve: chmod %s: %w", s.SocketPath, err)
 	}
-	log.Printf("ipc: listening on %s (mode %o)", s.SocketPath, s.SocketMode)
+	slog.Info("ipc listening", "socket", s.SocketPath, "mode", fmt.Sprintf("%o", s.SocketMode))
 
 	// Cancel-driven shutdown: closing the listener unblocks Accept,
 	// and closing live conns unblocks in-flight reads.
@@ -206,7 +206,7 @@ func (s *Server) Serve(ctx context.Context) error {
 			if errors.Is(err, net.ErrClosed) {
 				break
 			}
-			log.Printf("ipc: accept: %v", err)
+			slog.Error("ipc accept", "err", err)
 			continue
 		}
 		id := s.connSeq.Add(1)
@@ -225,7 +225,7 @@ func (s *Server) Serve(ctx context.Context) error {
 	select {
 	case <-done:
 	case <-time.After(shutdownGrace):
-		log.Printf("ipc: shutdown grace expired; some connection goroutines may still be running")
+		slog.Warn("ipc shutdown grace expired; some connection goroutines may still be running")
 	}
 	return nil
 }
@@ -234,7 +234,7 @@ func (s *Server) handleConn(ctx context.Context, id uint64, c net.Conn) {
 	tag := fmt.Sprintf("conn#%d", id)
 	defer func() {
 		_ = c.Close()
-		log.Printf("ipc %s: closed", tag)
+		slog.Debug("ipc conn closed", "conn", tag)
 	}()
 
 	peerUID := udsutil.PeerUID(c)
@@ -243,18 +243,19 @@ func (s *Server) handleConn(ctx context.Context, id uint64, c net.Conn) {
 	_ = c.SetReadDeadline(time.Now().Add(helloDeadline))
 	var env wire.Envelope
 	if err := wire.ReadFrame(c, &env); err != nil {
-		log.Printf("ipc %s: hello read: %v", tag, err)
+		slog.Debug("ipc hello read", "conn", tag, "err", err)
 		return
 	}
 	hello := env.GetHello()
 	if hello == nil {
-		log.Printf("ipc %s: protocol error: first frame is not Hello", tag)
+		slog.Warn("ipc protocol error: first frame is not Hello", "conn", tag)
 		return
 	}
 	backend := hello.GetBackend()
 	role := hello.GetRole()
-	log.Printf("ipc %s: hello backend=%q version=%q host=%q role=%s peer_uid=%d",
-		tag, backend, hello.GetVersion(), hello.GetHostname(), role.String(), peerUID)
+	slog.Debug("ipc hello",
+		"conn", tag, "backend", backend, "version", hello.GetVersion(),
+		"host", hello.GetHostname(), "role", role.String(), "peer_uid", peerUID)
 
 	// Track this peer for SystemStatus reporting. ROLE_UNSPECIFIED peers
 	// run the publisher loop, so report them as PUBLISHER.
@@ -267,7 +268,7 @@ func (s *Server) handleConn(ctx context.Context, id uint64, c net.Conn) {
 		defer s.Peers.Remove(id)
 	}
 	if err := s.Ingestor.HandleWithPeer(ctx, peerUID, backend, &env); err != nil {
-		log.Printf("ipc %s: hello ingest: %v", tag, err)
+		slog.Debug("ipc hello ingest", "conn", tag, "err", err)
 	}
 
 	switch role {
@@ -322,7 +323,7 @@ func (s *Server) handlePublisher(ctx context.Context, peerUID int, tag, backend 
 			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
 				return
 			}
-			log.Printf("ipc %s: read: %v", tag, err)
+			slog.Debug("ipc read", "conn", tag, "err", err)
 			return
 		}
 		// GridProfileRequest is a synchronous request/response op.
@@ -331,31 +332,31 @@ func (s *Server) handlePublisher(ctx context.Context, peerUID int, tag, backend 
 		// semantics; we mirror the gate explicitly).
 		if req := next.GetGridProfileReq(); req != nil {
 			if err := s.handleGridProfileReq(ctx, peerUID, backend, tag, c, req); err != nil {
-				log.Printf("ipc %s: grid-profile: %v", tag, err)
+				slog.Debug("ipc grid-profile", "conn", tag, "err", err)
 			}
 			continue
 		}
 		if req := next.GetSystemStatusReq(); req != nil {
 			if err := s.handleSystemStatusReq(ctx, peerUID, backend, tag, c, req); err != nil {
-				log.Printf("ipc %s: system-status: %v", tag, err)
+				slog.Debug("ipc system-status", "conn", tag, "err", err)
 			}
 			continue
 		}
 		if req := next.GetEventsReq(); req != nil {
 			if err := s.handleEventsReq(ctx, peerUID, backend, tag, c, req); err != nil {
-				log.Printf("ipc %s: events: %v", tag, err)
+				slog.Debug("ipc events", "conn", tag, "err", err)
 			}
 			continue
 		}
 		if req := next.GetSettingsReq(); req != nil {
 			if err := s.handleSettingsReq(ctx, peerUID, backend, tag, c, req); err != nil {
-				log.Printf("ipc %s: settings: %v", tag, err)
+				slog.Debug("ipc settings", "conn", tag, "err", err)
 			}
 			continue
 		}
 		if req := next.GetPairingReq(); req != nil {
 			if err := s.handlePairingReq(ctx, peerUID, backend, tag, c, req); err != nil {
-				log.Printf("ipc %s: pairing: %v", tag, err)
+				slog.Debug("ipc pairing", "conn", tag, "err", err)
 			}
 			continue
 		}
@@ -365,7 +366,7 @@ func (s *Server) handlePublisher(ctx context.Context, peerUID int, tag, backend 
 			// types fall through here; debug-level logging keeps the
 			// noise floor reasonable for benign cases (Hello echoes,
 			// future fields).
-			log.Printf("ipc %s: ingest: %v", tag, err)
+			slog.Debug("ipc ingest", "conn", tag, "err", err)
 		}
 	}
 }
@@ -442,7 +443,7 @@ func writeSystemStatusResp(tag string, c net.Conn, resp *wire.SystemStatusRespon
 	if err := wire.WriteFrame(c, env); err != nil {
 		return fmt.Errorf("write system-status response: %w", err)
 	}
-	log.Printf("ipc %s: system-status response ok=%v peers=%d", tag, resp.GetOk(), len(resp.GetPeers()))
+	slog.Debug("ipc system-status response", "conn", tag, "ok", resp.GetOk(), "peers", len(resp.GetPeers()))
 	return nil
 }
 
@@ -473,7 +474,7 @@ func writeEventsResp(tag string, c net.Conn, resp *wire.EventsResponse) error {
 	if err := wire.WriteFrame(c, env); err != nil {
 		return fmt.Errorf("write events response: %w", err)
 	}
-	log.Printf("ipc %s: events response ok=%v rows=%d", tag, resp.GetOk(), len(resp.GetEvents()))
+	slog.Debug("ipc events response", "conn", tag, "ok", resp.GetOk(), "rows", len(resp.GetEvents()))
 	return nil
 }
 
@@ -511,7 +512,7 @@ func writeSettingsResp(tag string, c net.Conn, resp *wire.SettingsResponse) erro
 	if err := wire.WriteFrame(c, env); err != nil {
 		return fmt.Errorf("write settings response: %w", err)
 	}
-	log.Printf("ipc %s: settings response ok=%v", tag, resp.GetOk())
+	slog.Debug("ipc settings response", "conn", tag, "ok", resp.GetOk())
 	return nil
 }
 
@@ -544,7 +545,7 @@ func writePairingResp(tag string, c net.Conn, resp *wire.PairingResponse) error 
 	if err := wire.WriteFrame(c, env); err != nil {
 		return fmt.Errorf("write pairing response: %w", err)
 	}
-	log.Printf("ipc %s: pairing response ok=%v", tag, resp.GetOk())
+	slog.Debug("ipc pairing response", "conn", tag, "ok", resp.GetOk())
 	return nil
 }
 
@@ -556,7 +557,7 @@ func writeGridProfileResp(tag string, c net.Conn, resp *wire.GridProfileResponse
 	if err := wire.WriteFrame(c, env); err != nil {
 		return fmt.Errorf("write grid-profile response: %w", err)
 	}
-	log.Printf("ipc %s: grid-profile response ok=%v", tag, resp.GetOk())
+	slog.Debug("ipc grid-profile response", "conn", tag, "ok", resp.GetOk())
 	return nil
 }
 
@@ -568,7 +569,7 @@ func (s *Server) publisherWriter(tag string, c net.Conn, pc *publisherConn, done
 		_ = c.SetWriteDeadline(time.Now().Add(writeDeadline))
 		if err := wire.WriteFrame(c, env); err != nil {
 			if !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
-				log.Printf("ipc %s: publisher write: %v", tag, err)
+				slog.Debug("ipc publisher write", "conn", tag, "err", err)
 			}
 			// Drain remaining queued envelopes so close(pc.out)
 			// in the caller's defer can complete without panicking
@@ -588,7 +589,7 @@ func (s *Server) registerPublisher(tag string, pc *publisherConn) {
 		s.publishers = make(map[string]*publisherConn)
 	}
 	if existing, ok := s.publishers[pc.backend]; ok && existing != pc {
-		log.Printf("ipc %s: duplicate publisher backend=%q; replacing previous", tag, pc.backend)
+		slog.Warn("ipc duplicate publisher; replacing previous", "conn", tag, "backend", pc.backend)
 	}
 	s.publishers[pc.backend] = pc
 }
@@ -638,8 +639,8 @@ func (s *Server) SendToBackend(backend string, env *wire.Envelope) bool {
 		return true
 	default:
 		pc.dropped.Add(1)
-		log.Printf("ipc: send to backend=%q dropped (queue full); total dropped=%d",
-			backend, pc.dropped.Load())
+		slog.Warn("ipc send to backend dropped (queue full)",
+			"backend", backend, "total_dropped", pc.dropped.Load())
 		return false
 	}
 }
@@ -650,12 +651,12 @@ func (s *Server) SendToBackend(backend string, env *wire.Envelope) bool {
 // closing the conn on any read error.
 func (s *Server) handleSubscriber(ctx context.Context, tag string, c net.Conn) {
 	if s.Publisher == nil {
-		log.Printf("ipc %s: subscriber requested but Publisher is nil; dropping", tag)
+		slog.Warn("ipc subscriber requested but Publisher is nil; dropping", "conn", tag)
 		return
 	}
 	ch, unsubscribe := s.Publisher.Subscribe()
 	defer unsubscribe()
-	log.Printf("ipc %s: subscriber attached", tag)
+	slog.Debug("ipc subscriber attached", "conn", tag)
 
 	// Push the current InverterInfo snapshot before the live stream.
 	// Subscribe-first / replay-second ordering: any live update that
@@ -664,7 +665,7 @@ func (s *Server) handleSubscriber(ctx context.Context, tag string, c net.Conn) {
 	// live envelope that re-asserts replayed state.
 	if err := s.replaySubscriberState(ctx, c); err != nil {
 		if !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
-			log.Printf("ipc %s: replay: %v", tag, err)
+			slog.Debug("ipc replay", "conn", tag, "err", err)
 		}
 		return
 	}
@@ -692,19 +693,19 @@ func (s *Server) handleSubscriber(ctx context.Context, tag string, c net.Conn) {
 			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
 				return
 			}
-			log.Printf("ipc %s: subscriber read: %v; closing", tag, err)
+			slog.Debug("ipc subscriber read; closing", "conn", tag, "err", err)
 			return
 		case env, ok := <-ch:
 			if !ok {
 				// Publisher evicted us as slow. Drop the conn so the
 				// client reconnects fresh.
-				log.Printf("ipc %s: subscriber evicted (slow)", tag)
+				slog.Debug("ipc subscriber evicted (slow)", "conn", tag)
 				return
 			}
 			_ = c.SetWriteDeadline(time.Now().Add(writeDeadline))
 			if err := wire.WriteFrame(c, env); err != nil {
 				if !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
-					log.Printf("ipc %s: subscriber write: %v", tag, err)
+					slog.Debug("ipc subscriber write", "conn", tag, "err", err)
 				}
 				return
 			}
@@ -776,7 +777,7 @@ ORDER  BY uid`)
 		return fmt.Errorf("rows: %w", err)
 	}
 	if count > 0 {
-		log.Printf("ipc: replayed %d InverterInfo row(s) to subscriber", count)
+		slog.Debug("ipc replayed InverterInfo rows to subscriber", "count", count)
 	}
 
 	// Follow with one FleetSummary (nameplate + energy aggregates)
@@ -797,7 +798,7 @@ ORDER  BY uid`)
 				return err
 			}
 		}
-		log.Printf("ipc: replayed %d Protection row(s) to subscriber", len(prots))
+		slog.Debug("ipc replayed Protection rows to subscriber", "count", len(prots))
 	}
 
 	fleet := s.Ingestor.BuildFleetSummary(ctx)
@@ -809,8 +810,8 @@ ORDER  BY uid`)
 	if err := wire.WriteFrame(conn, env); err != nil {
 		return err
 	}
-	log.Printf("ipc: replayed FleetSummary (nameplate=%dW count=%d lifetime=%dWh today=%dWh) to subscriber",
-		fleet.GetNameplateTotalW(), fleet.GetInverterCount(),
-		fleet.GetLifetimeWh(), fleet.GetTodayWh())
+	slog.Debug("ipc replayed FleetSummary to subscriber",
+		"nameplate_w", fleet.GetNameplateTotalW(), "count", fleet.GetInverterCount(),
+		"lifetime_wh", fleet.GetLifetimeWh(), "today_wh", fleet.GetTodayWh())
 	return nil
 }

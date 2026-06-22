@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"os"
 	"sync"
@@ -50,7 +50,7 @@ type Client struct {
 	done   chan struct{}
 
 	// Logger is optional. nil means silent.
-	Logger *log.Logger
+	Logger *slog.Logger
 }
 
 // Stats is a small read-only view of the subscriber's state.
@@ -88,11 +88,15 @@ func (c *Client) Start(ctx context.Context) error {
 			SocketPath: c.socketPath,
 			OnConnect: func() {
 				c.connected.Store(true)
-				c.logf("invdriver: connected %s", c.socketPath)
+				if c.Logger != nil {
+					c.Logger.Info("invdriver: connected", "socket", c.socketPath)
+				}
 			},
 			OnDialError: func(err error, retryIn time.Duration) {
 				c.connected.Store(false)
-				c.logf("invdriver: dial/session %s: %v (retry in %s)", c.socketPath, err, retryIn)
+				if c.Logger != nil {
+					c.Logger.Warn("invdriver: dial/session", "socket", c.socketPath, "err", err, "retry_in", retryIn)
+				}
 			},
 			Session: func(ctx context.Context, conn net.Conn) error {
 				err := c.session(ctx, conn)
@@ -102,7 +106,9 @@ func (c *Client) Start(ctx context.Context) error {
 		})
 		c.connected.Store(false)
 		if err != nil && !errors.Is(err, context.Canceled) {
-			c.logf("invdriver: dial loop exit: %v", err)
+			if c.Logger != nil {
+				c.Logger.Error("invdriver: dial loop exit", "err", err)
+			}
 		}
 	}()
 	return nil
@@ -177,12 +183,6 @@ func (c *Client) SetEcuID(id string) {
 	c.mu.Lock()
 	c.ecuID = id
 	c.mu.Unlock()
-}
-
-func (c *Client) logf(format string, args ...any) {
-	if c.Logger != nil {
-		c.Logger.Printf(format, args...)
-	}
 }
 
 // newHello builds the Hello frame for the given role. Shared by the

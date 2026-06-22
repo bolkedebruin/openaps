@@ -12,15 +12,18 @@
 # State paths (ecu-web's state dir):
 #   /var/lib/ecu-web/cert.pem,key.pem   self-signed TLS material (auto-gen)
 #   /var/lib/ecu-web/auth.json          operator password hash
-#   /home/applications/ecu-web/ecu-web.log   stdout/stderr
+#   /var/log/ecu-web.log                rotated log (binary-owned)
 
 BIN=/home/applications/ecu-web/ecu-web
 STATE=/var/lib/ecu-web
 SOCK=/var/run/inv-driver.sock
 RUN=/home/applications/ecu-web
-LOG=$RUN/ecu-web.log
+# ecu-web owns its rotated log via -log-file; the init redirect only captures
+# pre-logging flag errors and Go runtime panics.
+LOG=/var/log/ecu-web.log
+BOOTLOG=/var/log/ecu-web.boot.log
 PIDFILE=$RUN/ecu-web.pid
-ARGS="-listen :443 -invdriver-sock $SOCK -state-dir $STATE -backend ecu-web"
+ARGS="-listen :443 -invdriver-sock $SOCK -state-dir $STATE -backend ecu-web -log-file $LOG"
 
 start() {
     if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
@@ -28,14 +31,14 @@ start() {
         return 0
     fi
     [ -x "$BIN" ] || { echo "$BIN missing or not executable"; return 1; }
-    mkdir -p "$STATE" "$RUN"
+    mkdir -p "$STATE" "$RUN" /var/log
 
     # nohup-sh-exec wrapper: same pattern as S48-inv-driver, so the
     # daemon survives both init(1) boot context and the PHP-FPM
     # upgrade-endpoint context. The inner exec replaces the wrapper sh
     # with ecu-web so the captured PID is the right one.
     nohup sh -c "echo \$\$ > '$PIDFILE'; exec '$BIN' $ARGS" \
-        </dev/null >> "$LOG" 2>&1 &
+        </dev/null >> "$BOOTLOG" 2>&1 &
     sleep 1
     if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
         echo "ecu-web started (pid $(cat "$PIDFILE")) — https on :443"

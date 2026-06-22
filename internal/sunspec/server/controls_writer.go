@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/bolkedebruin/openaps/codec"
@@ -45,7 +45,7 @@ type ControlsWriter struct {
 	sender   frameSender
 	reverter *Reverter
 	limits   *source.PowerLimitCache
-	logger   *log.Logger
+	logger   *slog.Logger
 }
 
 // Apply takes a slice of registers freshly written by a client (offsets
@@ -163,8 +163,8 @@ func (cw *ControlsWriter) applyCap(ctx context.Context, uids []string, rawPct ui
 		// Below MinPanelLimitW (20 W/panel) the inverter shuts off, so an
 		// aggressive curtailment must never reach the firmware. Clamp up.
 		if target < source.MinPanelLimitW {
-			cw.warnf("setmax %s: WMaxLimPct=%d → %d W/panel below floor, clamped to %d W",
-				uid, rawPct, target, source.MinPanelLimitW)
+			cw.warn("setmax: W/panel below floor, clamped",
+				"uid", uid, "wmaxlimpct", rawPct, "target_w", target, "floor_w", source.MinPanelLimitW)
 			target = source.MinPanelLimitW
 		}
 		if target > source.MaxPanelLimitW {
@@ -178,12 +178,12 @@ func (cw *ControlsWriter) applyCap(ctx context.Context, uids []string, rawPct ui
 	return nil
 }
 
-func (cw *ControlsWriter) warnf(format string, args ...interface{}) {
+func (cw *ControlsWriter) warn(msg string, args ...any) {
 	if cw.logger != nil {
-		cw.logger.Printf(format, args...)
+		cw.logger.Warn(msg, args...)
 		return
 	}
-	log.Printf(format, args...)
+	slog.Warn(msg, args...)
 }
 
 // findInverter looks up an inverter in the snapshot by UID.

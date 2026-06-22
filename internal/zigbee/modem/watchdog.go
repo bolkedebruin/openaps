@@ -2,7 +2,7 @@ package modem
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -52,7 +52,8 @@ type Watchdog struct {
 	Cooldown time.Duration
 	// Now sources the current time; defaults to time.Now.
 	Now WatchdogClock
-	// Log records watchdog activity; defaults to log.Printf.
+	// Log, if set, records watchdog activity (printf-style). Tests inject a
+	// no-op to silence output; when nil, activity is logged via slog.
 	Log func(string, ...any)
 
 	mu          sync.Mutex
@@ -77,15 +78,6 @@ func (w *Watchdog) now() time.Time {
 		return w.Now()
 	}
 	return time.Now()
-}
-
-// logf logs via the injected logger, defaulting to log.Printf.
-func (w *Watchdog) logf(format string, args ...any) {
-	if w.Log != nil {
-		w.Log(format, args...)
-		return
-	}
-	log.Printf(format, args...)
 }
 
 // defaults fills zero-valued timings with their documented values. Called once
@@ -182,7 +174,11 @@ func (w *Watchdog) runProbe(ctx context.Context) {
 	if err != nil {
 		// Inconclusive — a transport error tells us nothing about whether the
 		// module is wedged, so never reset on it; try again next tick.
-		w.logf("watchdog: probe error (inconclusive, not resetting): %v", err)
+		if w.Log != nil {
+			w.Log("watchdog: probe error (inconclusive, not resetting): %v", err)
+		} else {
+			slog.Warn("watchdog probe error, inconclusive, not resetting", "err", err)
+		}
 		return
 	}
 	if alive {
@@ -195,7 +191,11 @@ func (w *Watchdog) runProbe(ctx context.Context) {
 		// Shutting down: don't start a hardware reset we can't finish cleanly.
 		return
 	}
-	w.logf("watchdog: module unresponsive to 0x0D; recovering")
+	if w.Log != nil {
+		w.Log("watchdog: module unresponsive to 0x0D; recovering")
+	} else {
+		slog.Warn("watchdog module unresponsive to 0x0D, recovering")
+	}
 	rerr := w.Recover(ctx)
 	now := w.now()
 	w.mu.Lock()
@@ -209,6 +209,10 @@ func (w *Watchdog) runProbe(ctx context.Context) {
 	}
 	w.mu.Unlock()
 	if rerr != nil {
-		w.logf("watchdog: recovery failed (backing off): %v", rerr)
+		if w.Log != nil {
+			w.Log("watchdog: recovery failed (backing off): %v", rerr)
+		} else {
+			slog.Error("watchdog recovery failed, backing off", "err", rerr)
+		}
 	}
 }

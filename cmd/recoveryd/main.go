@@ -12,11 +12,11 @@ package main
 import (
 	"context"
 	"flag"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/bolkedebruin/openaps/internal/logx"
 	"github.com/bolkedebruin/openaps/internal/recoveryd"
 )
 
@@ -26,10 +26,8 @@ var version = "dev"
 const defaultSocket = "/var/run/recoveryd.sock"
 
 func main() {
-	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
-	log.SetPrefix("recoveryd: ")
-
 	fs := flag.NewFlagSet("recoveryd", flag.ExitOnError)
+	lc := logx.Bind(fs, "recoveryd", "/var/log/recoveryd.log")
 	authorizedKeys := fs.String("authorized-keys", "", "authorized_keys file recoveryd owns (source of truth); empty resolves the managed user's ~/.ssh/authorized_keys (root by default)")
 	chownUser := fs.String("chown-user", "", "host user to own .ssh + authorized_keys (empty = root; set for the host provider)")
 	manageDropbear := fs.Bool("manage-dropbear", true, "ensure the dropbear RSA host key (set false for a host sshd / Pi)")
@@ -37,9 +35,10 @@ func main() {
 	dropbearKey := fs.String("dropbear-host-key", recoveryd.DefaultDropbearHostKey, "dropbear RSA host key ensured when -manage-dropbear")
 	showVersion := fs.Bool("version", false, "print version and exit")
 	_ = fs.Parse(os.Args[1:])
+	logger := lc.Init()
 
 	if *showVersion {
-		log.Printf("version %s", version)
+		logger.Info("version", "version", version)
 		return
 	}
 
@@ -55,7 +54,7 @@ func main() {
 	// serving so the recovery path is intact even if the UDS never gets a
 	// client. A failure here is fatal — it means the box may be unreachable.
 	if err := mgr.Boot(); err != nil {
-		log.Fatalf("boot: %v", err)
+		logx.Fatal("boot", "err", err)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -63,7 +62,7 @@ func main() {
 
 	srv := &recoveryd.Server{Manager: mgr, SocketPath: *socketPath}
 	if err := srv.Serve(ctx); err != nil {
-		log.Fatalf("serve: %v", err)
+		logx.Fatal("serve", "err", err)
 	}
-	log.Printf("shutdown")
+	logger.Info("shutdown")
 }

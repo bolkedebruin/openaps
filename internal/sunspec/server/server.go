@@ -5,7 +5,7 @@ package server
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -29,7 +29,7 @@ type Config struct {
 	Timeout         time.Duration // session idle timeout
 	MaxClients      uint
 	Encoder         sunspec.Options
-	Logger          *log.Logger
+	Logger          *slog.Logger
 
 	// Writes is the file-loaded config (writes.enabled + allow_list).
 	// Default (omitted) is enabled; explicit "enabled": false disables all
@@ -81,7 +81,7 @@ type Server struct {
 	// no Writer is configured.
 	reverter *Reverter
 
-	logger *log.Logger
+	logger *slog.Logger
 }
 
 // New constructs a Server. Call Start to begin listening, Stop to shut down.
@@ -103,7 +103,7 @@ func New(p Provider, cfg Config) *Server {
 		cfg.MaxClients = 32
 	}
 	if cfg.Logger == nil {
-		cfg.Logger = log.Default()
+		cfg.Logger = slog.Default()
 	}
 	return &Server{
 		cfg:      cfg,
@@ -121,16 +121,18 @@ func (s *Server) Start(ctx context.Context) error {
 	if err := s.refresh(ctx); err != nil {
 		// Don't abort startup — clients will receive zero-value registers
 		// until a successful refresh lands.
-		s.logger.Printf("initial refresh failed: %v", err)
+		s.logger.Error("initial refresh failed", "err", err)
 	}
 
 	go s.refreshLoop(ctx)
 
+	// The modbus library logs via a *log.Logger; bridge it onto the same
+	// slog handler so its output shares the configured destination/format.
 	srv, err := modbus.NewServer(&modbus.ServerConfiguration{
 		URL:        s.cfg.URL,
 		Timeout:    s.cfg.Timeout,
 		MaxClients: s.cfg.MaxClients,
-		Logger:     s.cfg.Logger,
+		Logger:     slog.NewLogLogger(s.cfg.Logger.Handler(), slog.LevelDebug),
 	}, &handler{owner: s})
 	if err != nil {
 		return err
@@ -141,7 +143,7 @@ func (s *Server) Start(ctx context.Context) error {
 	if err := srv.Start(); err != nil {
 		return err
 	}
-	s.logger.Printf("modbus tcp listening on %s", s.cfg.URL)
+	s.logger.Info("modbus tcp listening", "url", s.cfg.URL)
 	return nil
 }
 
@@ -229,7 +231,7 @@ func (s *Server) refreshLoop(ctx context.Context) {
 			return
 		case <-t.C:
 			if err := s.refresh(ctx); err != nil {
-				s.logger.Printf("refresh failed: %v", err)
+				s.logger.Error("refresh failed", "err", err)
 			}
 		}
 	}
@@ -247,12 +249,12 @@ func (h *handler) HandleHoldingRegisters(req *modbus.HoldingRegistersRequest) ([
 	}
 	bank := h.owner.bankFor(req.UnitId)
 	if bank == nil || !bank.Contains(req.Addr, req.Quantity) {
-		h.owner.logger.Printf("FC03 read from %s uid=%d addr=%d qty=%d → IllegalDataAddress",
-			req.ClientAddr, req.UnitId, req.Addr, req.Quantity)
+		h.owner.logger.Warn("FC03 read → IllegalDataAddress",
+			"client", req.ClientAddr, "uid", req.UnitId, "addr", req.Addr, "qty", req.Quantity)
 		return nil, modbus.ErrIllegalDataAddress
 	}
-	h.owner.logger.Printf("FC03 read from %s uid=%d addr=%d qty=%d",
-		req.ClientAddr, req.UnitId, req.Addr, req.Quantity)
+	h.owner.logger.Debug("FC03 read",
+		"client", req.ClientAddr, "uid", req.UnitId, "addr", req.Addr, "qty", req.Quantity)
 	return bank.Slice(req.Addr, req.Quantity), nil
 }
 
@@ -268,13 +270,13 @@ func (h *handler) handleWrite(req *modbus.HoldingRegistersRequest) ([]uint16, er
 		if o.cfg.Writes.Writes.IsEnabled() {
 			reason = "client not in allow_list"
 		}
-		o.logger.Printf("FC06/16 write from %s uid=%d addr=%d → rejected (%s)",
-			req.ClientAddr, req.UnitId, req.Addr, reason)
+		o.logger.Warn("FC06/16 write → rejected",
+			"client", req.ClientAddr, "uid", req.UnitId, "addr", req.Addr, "reason", reason)
 		return nil, modbus.ErrIllegalFunction
 	}
 	if o.cfg.InvDriver == nil {
-		o.logger.Printf("FC06/16 write from %s uid=%d addr=%d → inv-driver not configured",
-			req.ClientAddr, req.UnitId, req.Addr)
+		o.logger.Warn("FC06/16 write → inv-driver not configured",
+			"client", req.ClientAddr, "uid", req.UnitId, "addr", req.Addr)
 		return nil, modbus.ErrIllegalFunction
 	}
 
@@ -351,17 +353,17 @@ func (h *handler) handleWrite(req *modbus.HoldingRegistersRequest) ([]uint16, er
 		}
 		addrOffset := req.Addr - bodyStart
 		if err := m.apply(context.Background(), addrOffset, req.Args); err != nil {
-			o.logger.Printf("FC06/16 write from %s uid=%d model=%d addr=%d apply: %v",
-				req.ClientAddr, req.UnitId, m.id, req.Addr, err)
+			o.logger.Error("FC06/16 write apply",
+				"client", req.ClientAddr, "uid", req.UnitId, "model", m.id, "addr", req.Addr, "err", err)
 			return nil, modbus.ErrIllegalDataValue
 		}
-		o.logger.Printf("FC06/16 write from %s uid=%d model=%d addr=%d qty=%d → applied",
-			req.ClientAddr, req.UnitId, m.id, req.Addr, req.Quantity)
+		o.logger.Info("FC06/16 write → applied",
+			"client", req.ClientAddr, "uid", req.UnitId, "model", m.id, "addr", req.Addr, "qty", req.Quantity)
 		return nil, nil
 	}
 
-	o.logger.Printf("FC06/16 write from %s uid=%d addr=%d qty=%d → no writable model covers this range",
-		req.ClientAddr, req.UnitId, req.Addr, req.Quantity)
+	o.logger.Warn("FC06/16 write → no writable model covers this range",
+		"client", req.ClientAddr, "uid", req.UnitId, "addr", req.Addr, "qty", req.Quantity)
 	return nil, modbus.ErrIllegalDataAddress
 }
 
@@ -391,23 +393,23 @@ func findModelInBank(bank *sunspec.Bank, id uint16) (uint16, bool) {
 func (h *handler) HandleInputRegisters(req *modbus.InputRegistersRequest) ([]uint16, error) {
 	bank := h.owner.bankFor(req.UnitId)
 	if bank == nil || !bank.Contains(req.Addr, req.Quantity) {
-		h.owner.logger.Printf("FC04 read from %s uid=%d addr=%d qty=%d → IllegalDataAddress",
-			req.ClientAddr, req.UnitId, req.Addr, req.Quantity)
+		h.owner.logger.Warn("FC04 read → IllegalDataAddress",
+			"client", req.ClientAddr, "uid", req.UnitId, "addr", req.Addr, "qty", req.Quantity)
 		return nil, modbus.ErrIllegalDataAddress
 	}
-	h.owner.logger.Printf("FC04 read from %s uid=%d addr=%d qty=%d",
-		req.ClientAddr, req.UnitId, req.Addr, req.Quantity)
+	h.owner.logger.Debug("FC04 read",
+		"client", req.ClientAddr, "uid", req.UnitId, "addr", req.Addr, "qty", req.Quantity)
 	return bank.Slice(req.Addr, req.Quantity), nil
 }
 
 func (h *handler) HandleCoils(req *modbus.CoilsRequest) ([]bool, error) {
-	h.owner.logger.Printf("FC01/05/0F coils from %s uid=%d addr=%d qty=%d (rejecting)",
-		req.ClientAddr, req.UnitId, req.Addr, req.Quantity)
+	h.owner.logger.Debug("FC01/05/0F coils (rejecting)",
+		"client", req.ClientAddr, "uid", req.UnitId, "addr", req.Addr, "qty", req.Quantity)
 	return nil, modbus.ErrIllegalFunction
 }
 
 func (h *handler) HandleDiscreteInputs(req *modbus.DiscreteInputsRequest) ([]bool, error) {
-	h.owner.logger.Printf("FC02 discrete from %s uid=%d addr=%d qty=%d (rejecting)",
-		req.ClientAddr, req.UnitId, req.Addr, req.Quantity)
+	h.owner.logger.Debug("FC02 discrete (rejecting)",
+		"client", req.ClientAddr, "uid", req.UnitId, "addr", req.Addr, "qty", req.Quantity)
 	return nil, modbus.ErrIllegalFunction
 }

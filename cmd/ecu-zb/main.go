@@ -11,7 +11,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"runtime"
@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/bolkedebruin/openaps/internal/logx"
 	"github.com/bolkedebruin/openaps/internal/zigbee/busmgr"
 	"github.com/bolkedebruin/openaps/internal/zigbee/inventory"
 	"github.com/bolkedebruin/openaps/internal/zigbee/modem"
@@ -31,17 +32,15 @@ const version = "0.1.0"
 
 func main() {
 	cfg := parseFlags()
-
-	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
-	log.SetOutput(os.Stderr)
-	log.Printf("ecu-zb v%s starting (proxy=%v tty=%s)", version, cfg.proxy, cfg.tty)
+	cfg.log.Init()
+	slog.Info("ecu-zb starting", "version", version, "proxy", cfg.proxy, "tty", cfg.tty)
 
 	if !cfg.proxy {
-		log.Fatalf("v1 requires --proxy (transparent splice mode)")
+		logx.Fatal("v1 requires --proxy (transparent splice mode)")
 	}
 
 	if err := run(cfg); err != nil {
-		log.Fatalf("fatal: %v", err)
+		logx.Fatal("fatal", "err", err)
 	}
 }
 
@@ -53,10 +52,12 @@ type config struct {
 	tapTCP        string
 	bufSize       int
 	invDriverSock string
+	log           *logx.Config
 }
 
 func parseFlags() config {
 	var c config
+	c.log = logx.Bind(flag.CommandLine, "ecu-zb", "/var/log/ecu-zb.log")
 	flag.BoolVar(&c.proxy, "proxy", false, "v1 transparent splice mode (required)")
 	flag.StringVar(&c.tty, "tty", "/dev/ttyO2",
 		"UART device the host process opens; ecu-zb renames it to <tty>.real and symlinks the pty slave at <tty>")
@@ -84,14 +85,14 @@ func run(cfg config) error {
 		return fmt.Errorf("capture %s: %w", cfg.tty, err)
 	}
 	defer restoreUART()
-	log.Printf("real UART available at %s", realPath)
+	slog.Info("real UART available", "path", realPath)
 
 	modemPort, err := uart.OpenSerial(realPath)
 	if err != nil {
 		return fmt.Errorf("open real uart: %w", err)
 	}
 	defer modemPort.Close()
-	log.Printf("opened %s @ 57600 8N1 raw", realPath)
+	slog.Info("opened modem UART @ 57600 8N1 raw", "path", realPath)
 
 	// 2. Allocate the pty pair and publish its slave at the original
 	//    path (and optionally at --pty).
@@ -143,10 +144,10 @@ func run(cfg config) error {
 			_ = os.Remove(cfg.pty)
 		}
 	}()
-	log.Printf("pty slave at %s", pty.SlavePath)
-	log.Printf("symlinked %s -> %s", cfg.tty, pty.SlavePath)
+	slog.Info("pty slave ready", "path", pty.SlavePath)
+	slog.Info("symlinked tty to pty slave", "tty", cfg.tty, "slave", pty.SlavePath)
 	if cfg.pty != "" {
-		log.Printf("symlinked %s -> %s", cfg.pty, pty.SlavePath)
+		slog.Info("symlinked extra pty to pty slave", "pty", cfg.pty, "slave", pty.SlavePath)
 	}
 
 	// 2b. Bring the radio up at boot: a one-time coordinator config
@@ -209,7 +210,7 @@ func run(cfg config) error {
 		if err := busClient.Start(ctx); err != nil {
 			return fmt.Errorf("busmgr start: %w", err)
 		}
-		log.Printf("busmgr sink: %s", cfg.invDriverSock)
+		slog.Info("busmgr sink configured", "sock", cfg.invDriverSock)
 	}
 	if busClient != nil {
 		defer busClient.Stop()
@@ -238,7 +239,7 @@ func run(cfg config) error {
 			if old != nil {
 				_ = old.Close()
 			}
-			log.Printf("pty reopened at %s", next.SlavePath)
+			slog.Warn("pty reopened", "slave", next.SlavePath)
 			return next.Master, nil
 		},
 	}
@@ -263,7 +264,7 @@ func run(cfg config) error {
 			wd.Probe = pairer.Probe
 			wd.Recover = pairer.Recover
 		} else {
-			log.Printf("radio watchdog disabled: no operating PAN")
+			slog.Warn("radio watchdog disabled: no operating PAN")
 		}
 	}
 
@@ -299,21 +300,21 @@ func run(cfg config) error {
 	// inv-driver-backed pairing adapter and a known operating PAN).
 	if wd != nil && wd.Probe != nil {
 		go wd.Run(ctx)
-		log.Printf("radio watchdog running")
+		slog.Info("radio watchdog running")
 	}
 
-	log.Printf("splice running; %d goroutines, GOMAXPROCS=%d",
-		runtime.NumGoroutine(), runtime.GOMAXPROCS(0))
+	slog.Info("splice running",
+		"goroutines", runtime.NumGoroutine(), "gomaxprocs", runtime.GOMAXPROCS(0))
 
 	select {
 	case err := <-spDone:
 		if err != nil && !isClosedAfterShutdown(ctx, err) {
 			return fmt.Errorf("splice: %w", err)
 		}
-		log.Printf("splice ended cleanly")
+		slog.Info("splice ended cleanly")
 		return nil
 	case s := <-sigs:
-		log.Printf("signal %s received; shutting down", s)
+		slog.Info("signal received, shutting down", "signal", s)
 		cancel()
 		if tracker != nil {
 			tracker.Stop()
@@ -329,13 +330,13 @@ func run(cfg config) error {
 		srv.Stop()
 		select {
 		case <-spDone:
-			log.Printf("splice drained naturally")
+			slog.Info("splice drained naturally")
 		case <-time.After(1 * time.Second):
-			log.Printf("splice did not drain within 1s; forcing exit")
+			slog.Warn("splice did not drain within 1s, forcing exit")
 		}
 		// Restore /dev/ttyO2 from /dev/ttyO2.real.
 		restoreUART()
-		log.Printf("shutdown complete")
+		slog.Info("shutdown complete")
 		os.Exit(0)
 		return nil
 	}
@@ -367,9 +368,9 @@ func captureRealUART(ttyPath string) (realPath string, restore func(), err error
 		return realPath, func() {
 			_ = os.Remove(ttyPath) // remove our pty symlink first
 			if err := os.Rename(realPath, ttyPath); err != nil {
-				log.Printf("restore: rename %s -> %s: %v", realPath, ttyPath, err)
+				slog.Error("restore rename failed", "from", realPath, "to", ttyPath, "err", err)
 			} else {
-				log.Printf("restored %s", ttyPath)
+				slog.Info("restored tty", "tty", ttyPath)
 			}
 		}, nil
 	default:
@@ -393,11 +394,11 @@ func noop() {}
 func bringupModem(ctx context.Context, fd int, invDriverSock string) (uint16, byte) {
 	pan, channel, ok := resolveRadioConfig(ctx, invDriverSock)
 	if !ok {
-		log.Printf("modem: skipping bring-up, cannot derive PAN")
+		slog.Warn("modem skipping bring-up, cannot derive PAN")
 		return 0, 0
 	}
 	if err := modem.BringupAPsystems(fd, pan, channel); err != nil {
-		log.Printf("modem: bring-up incomplete: %v", err)
+		slog.Warn("modem bring-up incomplete", "err", err)
 	}
 	return pan, channel
 }
@@ -414,14 +415,14 @@ func resolveRadioConfig(ctx context.Context, invDriverSock string) (pan uint16, 
 
 	if p, parsed := modem.ParsePANHex(panHex); parsed {
 		pan = p
-		log.Printf("modem: using inv-driver pan_override 0x%04X", pan)
+		slog.Info("modem using inv-driver pan_override", "pan", fmt.Sprintf("0x%04X", pan))
 	} else {
 		if panHex != "" {
-			log.Printf("modem: ignoring unparseable pan_override %q; using autodetect", panHex)
+			slog.Warn("modem ignoring unparseable pan_override, using autodetect", "pan_override", panHex)
 		}
 		p, err := modem.ReadPAN(modem.EthInterface)
 		if err != nil {
-			log.Printf("modem: cannot derive PAN: %v", err)
+			slog.Error("modem cannot derive PAN", "err", err)
 			return 0, 0, false
 		}
 		pan = p
@@ -429,9 +430,9 @@ func resolveRadioConfig(ctx context.Context, invDriverSock string) (pan uint16, 
 
 	channel = modem.ResolveChannel(chanSetting)
 	if chanSetting >= 11 && chanSetting <= 26 {
-		log.Printf("modem: using inv-driver channel %d", channel)
+		slog.Info("modem using inv-driver channel", "channel", channel)
 	} else {
-		log.Printf("modem: using channel.conf channel %d", channel)
+		slog.Info("modem using channel.conf channel", "channel", channel)
 	}
 	return pan, channel, true
 }

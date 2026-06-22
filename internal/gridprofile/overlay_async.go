@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -109,8 +109,8 @@ func (a *applier) enqueueInternal(parent context.Context, uid, overlayID string,
 	a.mu.Lock()
 	if prev, ok := a.jobs[uid]; ok {
 		// Supersede the older apply; its remaining work and events are dropped.
-		log.Printf("gridprofile: overlay_apply_superseded uid=%s old_id=%q new_id=%q",
-			uid, prev.overlayID, overlayID)
+		slog.Debug("gridprofile overlay_apply_superseded",
+			"uid", uid, "old_id", prev.overlayID, "new_id", overlayID)
 		prev.cancel(errSuperseded)
 	}
 	job := &applyJob{overlayID: overlayID, cancel: cancel, done: make(chan struct{})}

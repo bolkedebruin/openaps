@@ -8,7 +8,7 @@
 package events
 
 import (
-	"log"
+	"log/slog"
 	"sync"
 
 	"github.com/bolkedebruin/openaps/wire"
@@ -85,7 +85,7 @@ func (p *Publisher) Publish(env *wire.Envelope) {
 		close(s.ch)
 	}
 	p.mu.Unlock()
-	log.Printf("events: evicted %d slow subscriber(s)", len(slow))
+	slog.Warn("evicted slow subscribers", "count", len(slow))
 }
 
 func (p *Publisher) remove(s *subscriber) {

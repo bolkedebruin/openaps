@@ -5,7 +5,7 @@ package modem
 import (
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -38,19 +38,19 @@ func BringupAPsystems(fd int, pan uint16, channel byte) error {
 			alive = true
 			break
 		}
-		log.Printf("modem: 0x0D ping failed (attempt %d/3); hardware-resetting radio", attempt)
+		slog.Warn("modem 0x0D ping failed, hardware-resetting radio", "attempt", attempt, "max", 3)
 		if err := HardwareReset(); err != nil {
-			log.Printf("modem: hardware reset: %v", err)
+			slog.Error("modem hardware reset failed", "err", err)
 		}
 	}
 	if !alive {
-		log.Printf("modem: radio unresponsive after 3 resets; sending config regardless")
+		slog.Warn("modem radio unresponsive after 3 resets, sending config regardless")
 	}
 
 	if err := exchange(fd, buildSetPanidChannel(pan, channel), "set-panid-channel"); err != nil {
 		return fmt.Errorf("set PANID/channel (pan=0x%04X ch=%d): %w", pan, channel, err)
 	}
-	log.Printf("modem: configured as coordinator (pan=0x%04X channel=%d)", pan, channel)
+	slog.Info("modem configured as coordinator", "pan", fmt.Sprintf("0x%04X", pan), "channel", channel)
 	return nil
 }
 
@@ -73,11 +73,11 @@ func exchange(fd int, frame []byte, what string) error {
 	ack, err := awaitAck(fd, ackTimeout)
 	if err != nil {
 		if len(ack) > 0 {
-			log.Printf("modem: %s got % X (no 0xAB ack marker)", what, ack)
+			slog.Warn("modem reply has no 0xAB ack marker", "op", what, "got", fmt.Sprintf("% X", ack))
 		}
 		return fmt.Errorf("%s: %w", what, err)
 	}
-	log.Printf("modem: %s ack % X", what, ack)
+	slog.Debug("modem ack", "op", what, "ack", fmt.Sprintf("% X", ack))
 	return nil
 }
 
@@ -158,7 +158,7 @@ func HardwareReset() error {
 	if rerr != nil {
 		return fmt.Errorf("ioctl %s: %w", resetDevice, rerr)
 	}
-	log.Printf("modem: radio reset asserted via %s; waiting 10s to settle", resetDevice)
+	slog.Info("modem radio reset asserted, waiting 10s to settle", "device", resetDevice)
 	time.Sleep(10 * time.Second)
 	return nil
 }

@@ -1,3 +1,31 @@
+# OpenAPS v1.1.21
+
+Unifies logging across all daemons and moves logs to `/var/log` with built-in
+rotation.
+
+## Changed
+
+- **All daemons now share one logging setup (`slog`).** Every component
+  (inv-driver, ecu-zb, ecu-web, ecu-sunspec, recoveryd, openaps-tls-proxy)
+  emits structured, leveled records through a common package, with a
+  `component=` tag, configurable `-log-level` (debug|info|warn|error), and
+  `-log-format` (text or json).
+- **Logs moved from `/home/applications/*` to `/var/log/<component>.log`,
+  with size-based rotation owned by each binary** (`-log-file`,
+  `-log-max-size`, `-log-max-backups`, `-log-max-age`, `-log-compress`). This
+  stops the per-component log files from growing without bound on flash. The
+  init scripts now capture only pre-startup and panic output to a small
+  `/var/log/<component>.boot.log`.
+- **A non-writable log path falls back to stderr with a warning** instead of
+  silently dropping log lines.
+
+## Upgrading
+
+`opkg upgrade openaps-base openaps-inv-driver openaps-ecu-zb openaps-ecu-web
+openaps-ecu-sunspec openaps-recoveryd openaps-tls-proxy`. No configuration or
+schema changes. After upgrade, logs are under `/var/log/`; the old files under
+`/home/applications/*` stop growing and can be removed.
+
 # OpenAPS v1.1.20
 
 Restores the ECU id on the SunSpec interface and refreshes it live.

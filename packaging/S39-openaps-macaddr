@@ -9,12 +9,13 @@
 #
 # Idempotent and harmless when stock is still active: it sets the same value
 # macapp would, just earlier in boot.
-LOG=/home/openaps-s39.log
+LOG=/var/log/openaps-s39.log
 CONF=/etc/yuneng/ecu_eth0_mac.conf
 
 case "$1" in
     start|"")
         [ -f "$CONF" ] || exit 0
+        mkdir -p /var/log
         MAC=$(tr 'A-F' 'a-f' < "$CONF" | tr -d '[:space:]')
         case "$MAC" in
             *[!0-9a-f:]* | "") echo "$(date) S39: bad MAC in $CONF" >> "$LOG"; exit 0 ;;

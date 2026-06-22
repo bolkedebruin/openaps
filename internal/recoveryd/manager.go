@@ -2,7 +2,7 @@ package recoveryd
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -40,7 +40,7 @@ func (m *Manager) Boot() error {
 	if err := m.prov.ensureDropbearHostKey(); err != nil {
 		return err
 	}
-	log.Printf("recoveryd: boot authorized-keys=%s manage-dropbear=%v", m.prov.path(), m.prov.ManageDropbear)
+	slog.Info("recoveryd: boot", "authorized_keys", m.prov.path(), "manage_dropbear", m.prov.ManageDropbear)
 	return nil
 }
 
@@ -71,7 +71,7 @@ func (m *Manager) AddKey(pubkey, comment string) (Key, error) {
 	}
 	for _, existing := range keys {
 		if existing.Fingerprint == k.Fingerprint {
-			log.Printf("recoveryd: add key %s already present (no-op)", k.Fingerprint)
+			slog.Info("recoveryd: add key already present (no-op)", "fp", k.Fingerprint)
 			return existing, nil
 		}
 	}
@@ -80,7 +80,7 @@ func (m *Manager) AddKey(pubkey, comment string) (Key, error) {
 	if err := m.prov.writeKeys(keys); err != nil {
 		return Key{}, err
 	}
-	log.Printf("recoveryd: ADDED key fp=%s comment=%q (now %d keys)", k.Fingerprint, k.Comment, len(keys))
+	slog.Info("recoveryd: ADDED key", "fp", k.Fingerprint, "comment", k.Comment, "total", len(keys))
 	return k, nil
 }
 
@@ -114,6 +114,6 @@ func (m *Manager) RemoveKey(fingerprint string) error {
 	if err := m.prov.writeKeys(keys); err != nil {
 		return err
 	}
-	log.Printf("recoveryd: REMOVED key fp=%s (now %d keys)", fingerprint, len(keys))
+	slog.Info("recoveryd: REMOVED key", "fp", fingerprint, "total", len(keys))
 	return nil
 }

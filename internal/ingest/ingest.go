@@ -8,7 +8,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -200,8 +200,9 @@ func (in *Ingestor) HandleWithPeer(ctx context.Context, peerUID int, backend str
 		if b.Hello == nil {
 			return fmt.Errorf("hello envelope without body")
 		}
-		log.Printf("ingest hello: backend=%q version=%q hostname=%q role=%s",
-			b.Hello.GetBackend(), b.Hello.GetVersion(), b.Hello.GetHostname(), b.Hello.GetRole().String())
+		slog.Debug("ingest hello",
+			"backend", b.Hello.GetBackend(), "version", b.Hello.GetVersion(),
+			"hostname", b.Hello.GetHostname(), "role", b.Hello.GetRole().String())
 		return nil
 	case *wire.Envelope_Telemetry:
 		if b.Telemetry == nil {
@@ -249,15 +250,15 @@ func (in *Ingestor) HandleWithPeer(ctx context.Context, peerUID int, backend str
 		// pairing primitives) may deliver results. Reject a forged result
 		// from a second publisher; non-fatal (log + drop).
 		if in.RouteBackend == "" || backend != in.RouteBackend {
-			log.Printf("ingest: pairing_result dropped (from backend %q, not the bus backend %q)", backend, in.RouteBackend)
+			slog.Warn("ingest pairing_result dropped: not from the bus backend", "backend", backend, "bus_backend", in.RouteBackend)
 			return nil
 		}
 		if in.PairingResults == nil {
-			log.Printf("ingest: pairing_result dropped (no pairing transport configured)")
+			slog.Warn("ingest pairing_result dropped: no pairing transport configured")
 			return nil
 		}
 		if !in.PairingResults.Deliver(b.PairingResult) {
-			log.Printf("ingest: pairing_result req_id=%d had no waiter (late/duplicate)", b.PairingResult.GetReqId())
+			slog.Debug("ingest pairing_result had no waiter (late/duplicate)", "req_id", b.PairingResult.GetReqId())
 		}
 		return nil
 	case nil:
@@ -276,7 +277,7 @@ func (in *Ingestor) HandleWithPeer(ctx context.Context, peerUID int, backend str
 //     peerUID must be on ControllerUIDs.
 func (in *Ingestor) routeDownstream(peerUID int, sender string, env *wire.Envelope) error {
 	if in.Router == nil || in.RouteBackend == "" {
-		log.Printf("ingest: downstream envelope dropped (no router/backend configured)")
+		slog.Warn("ingest downstream envelope dropped: no router/backend configured")
 		return nil
 	}
 	if sender == in.RouteBackend {

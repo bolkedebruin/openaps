@@ -3,7 +3,7 @@ package ingest
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -221,7 +221,7 @@ func (in *Ingestor) handleProtectionPage(ctx context.Context, tsMs int64, env co
 	knownDS3, known := in.protFamily[uid]
 	in.protMu.RUnlock()
 	if known && knownDS3 != (model == codec.ModelDS3) {
-		log.Printf("protection: dropping reply for uid=%s — inferred family != known model (cross-talk?)", uid)
+		slog.Warn("protection dropping reply: inferred family != known model (cross-talk?)", "uid", uid)
 		return
 	}
 	// Page id: DS3 tags every page 0xDD with the selector at byte[4];
@@ -267,7 +267,7 @@ func (in *Ingestor) handleProtectionPage(ctx context.Context, tsMs int64, env co
 	in.protSig[uid] = sig
 	in.protMu.Unlock()
 	if changed {
-		log.Printf("protection uid=%s model=%s %d fields: %s", uid, reading.Model, len(reading.Values), sig)
+		slog.Info("protection", "uid", uid, "model", reading.Model, "fields", len(reading.Values), "values", sig)
 	}
 	_ = ctx
 }

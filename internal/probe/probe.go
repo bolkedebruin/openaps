@@ -12,7 +12,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/bolkedebruin/openaps/codec"
@@ -65,7 +65,7 @@ func (p *Probe) RunLoop(ctx context.Context) {
 			return
 		case <-p.Trigger:
 			if _, err := p.Run(ctx); err != nil {
-				log.Printf("probe: trigger run: %v", err)
+				slog.Error("probe trigger run", "err", err)
 			}
 		}
 	}
@@ -124,7 +124,7 @@ LIMIT  ?`, limit)
 	if len(targets) == 0 {
 		return 0, nil
 	}
-	log.Printf("probe: dispatching %d info-query frame(s) to backend=%q", len(targets), p.Backend)
+	slog.Info("probe dispatching info-query frames", "count", len(targets), "backend", p.Backend)
 
 	sent := 0
 	for i, uid := range targets {
@@ -144,7 +144,7 @@ LIMIT  ?`, limit)
 			// Publisher disappeared or queue full. Stop early; the
 			// next attach will re-run the probe for whatever still
 			// lacks model_code.
-			log.Printf("probe: backend=%q send refused at uid=%s; aborting pass", p.Backend, uid)
+			slog.Warn("probe send refused; aborting pass", "backend", p.Backend, "uid", uid)
 			return sent, nil
 		}
 

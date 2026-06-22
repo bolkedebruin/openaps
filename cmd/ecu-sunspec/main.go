@@ -7,19 +7,18 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/bolkedebruin/openaps/internal/logx"
 	"github.com/bolkedebruin/openaps/internal/sunspec/config"
 	"github.com/bolkedebruin/openaps/internal/sunspec/server"
 	"github.com/bolkedebruin/openaps/internal/sunspec/source"
 	"github.com/bolkedebruin/openaps/internal/sunspec/source/invdriver"
 	"github.com/bolkedebruin/openaps/internal/sunspec/sunspec"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // version is overridable at build time via -ldflags '-X main.version=...'.
@@ -43,38 +42,24 @@ func main() {
 		serialFallback = flag.String("serial-fallback", "", "SN to use when inv-driver's ecu-id is unavailable")
 		refresh        = flag.Duration("refresh-interval", 5*time.Second, "snapshot refresh cadence")
 
-		logFile       = flag.String("log-file", "", "rotated log file path; empty means stderr")
-		logMaxSizeMB  = flag.Int("log-max-size", 5, "max log size MB before rotation")
-		logMaxBackups = flag.Int("log-max-backups", 3, "rotated log files retained")
-		logMaxAgeDays = flag.Int("log-max-age", 7, "rotated log retention days")
-
 		configPath = flag.String("config", config.DefaultPath, "path to JSON config file (writes.enabled / writes.allow_list); missing file = writes enabled for loopback + local LAN")
 
 		invDriverSock       = flag.String("invdriver-sock", defaultInvDriverSock(), "UDS path to inv-driver, the sole telemetry source (env INV_DRIVER_SOCK overrides default; empty is a fatal misconfiguration)")
 		invDriverOnlineMaxA = flag.Duration("invdriver-online-max-age", 10*time.Second, "max age of an inv-driver telemetry frame before the inverter is marked offline")
 	)
+	lc := logx.Bind(flag.CommandLine, "ecu-sunspec", "/var/log/ecu-sunspec.log")
 	flag.Parse()
 
-	var logSink io.Writer = os.Stderr
-	if *logFile != "" {
-		logSink = &lumberjack.Logger{
-			Filename:   *logFile,
-			MaxSize:    *logMaxSizeMB,
-			MaxBackups: *logMaxBackups,
-			MaxAge:     *logMaxAgeDays,
-			Compress:   true,
-		}
-	}
-	logger := log.New(logSink, "ecu-sunspec ", log.LstdFlags|log.Lmsgprefix)
+	logger := lc.Init()
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
-		logger.Fatalf("load config %s: %v", *configPath, err)
+		logx.Fatal("load config", "path", *configPath, "err", err)
 	}
 	if cfg.Writes.IsEnabled() {
-		logger.Printf("writes enabled; allow_list=%v", cfg.Writes.AllowList)
+		logger.Info("writes enabled", "allow_list", cfg.Writes.AllowList)
 	} else {
-		logger.Printf("writes explicitly disabled")
+		logger.Info("writes explicitly disabled")
 	}
 
 	// invClient is the inv-driver subscriber AND the sole write owner:
@@ -94,7 +79,7 @@ func main() {
 	defer cancel()
 
 	if *invDriverSock == "" {
-		logger.Fatalf("--invdriver-sock is empty: inv-driver is the only telemetry source, nothing to serve")
+		logx.Fatal("--invdriver-sock is empty: inv-driver is the only telemetry source, nothing to serve")
 	}
 
 	// Sub-second staleness floors are almost never what the operator
@@ -102,14 +87,14 @@ func main() {
 	// offline. Zero / negative is already handled in the builder
 	// (falls back to the 10s default).
 	if *invDriverOnlineMaxA > 0 && *invDriverOnlineMaxA < time.Second {
-		logger.Printf("invdriver-online-max-age=%s below 1s; clamping to 1s",
-			*invDriverOnlineMaxA)
+		logger.Warn("invdriver-online-max-age below 1s; clamping to 1s",
+			"requested", *invDriverOnlineMaxA)
 		*invDriverOnlineMaxA = time.Second
 	}
 	ic := invdriver.New(*invDriverSock, version)
 	ic.Logger = logger
 	if err := ic.Start(ctx); err != nil {
-		logger.Fatalf("invdriver start (%s): %v", *invDriverSock, err)
+		logx.Fatal("invdriver start", "socket", *invDriverSock, "err", err)
 	}
 	defer ic.Stop()
 	invClient = ic
@@ -119,15 +104,15 @@ func main() {
 	// --serial-override still wins; an empty result falls back to --serial-fallback.
 	if *serialOverride == "" {
 		if id := fetchEcuID(ctx, ic, logger); id != "" {
-			logger.Printf("ecu-id from inv-driver: %s", id)
+			logger.Info("ecu-id from inv-driver", "ecu_id", id)
 		}
 	}
 	builder.InvDriverOnlineMaxAge = *invDriverOnlineMaxA
-	logger.Printf("invdriver subscriber: socket=%s online-max-age=%s", *invDriverSock, *invDriverOnlineMaxA)
+	logger.Info("invdriver subscriber", "socket", *invDriverSock, "online_max_age", *invDriverOnlineMaxA)
 
 	phaseMode, err := parsePhase(*phase)
 	if err != nil {
-		logger.Fatalf("phase-mode: %v", err)
+		logx.Fatal("phase-mode", "err", err)
 	}
 
 	// Shared between the snapshot builder (WMaxLimPct read-back) and the
@@ -157,12 +142,12 @@ func main() {
 	srv := server.New(builder, scfg)
 
 	if err := srv.Start(ctx); err != nil {
-		logger.Fatalf("server start: %v", err)
+		logx.Fatal("server start", "err", err)
 	}
 	<-ctx.Done()
-	logger.Println("shutting down")
+	logger.Info("shutting down")
 	if err := srv.Stop(); err != nil {
-		logger.Printf("stop: %v", err)
+		logger.Error("stop", "err", err)
 	}
 }
 
@@ -194,7 +179,7 @@ func parsePhase(s string) (sunspec.PhaseMode, error) {
 // short retry, since inv-driver may still be coming up when ecu-sunspec
 // starts. Returns "" if it stays unavailable; the caller then relies on the
 // --serial-fallback.
-func fetchEcuID(ctx context.Context, ic *invdriver.Client, logger *log.Logger) string {
+func fetchEcuID(ctx context.Context, ic *invdriver.Client, logger *slog.Logger) string {
 	for attempt := 0; attempt < 5; attempt++ {
 		if id, err := ic.FetchEcuID(ctx); err == nil && id != "" {
 			return id
@@ -205,6 +190,6 @@ func fetchEcuID(ctx context.Context, ic *invdriver.Client, logger *log.Logger) s
 		case <-time.After(500 * time.Millisecond):
 		}
 	}
-	logger.Printf("ecu-id unavailable from inv-driver after retries; SunSpec SN falls back to --serial-fallback")
+	logger.Warn("ecu-id unavailable from inv-driver after retries; SunSpec SN falls back to --serial-fallback")
 	return ""
 }
