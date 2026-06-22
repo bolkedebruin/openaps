@@ -97,7 +97,18 @@ func (c *Config) Init() *slog.Logger {
 		}
 	}
 
-	opts := &slog.HandlerOptions{Level: level}
+	// slog stamps records in local time; force UTC so logs across a fleet
+	// of ECUs (each in its own zone, and sometimes with a wrong RTC) share
+	// one comparable timeline.
+	opts := &slog.HandlerOptions{
+		Level: level,
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			if len(groups) == 0 && a.Key == slog.TimeKey {
+				a.Value = slog.TimeValue(a.Value.Time().UTC())
+			}
+			return a
+		},
+	}
 	var h slog.Handler
 	if strings.EqualFold(c.Format, "json") {
 		h = slog.NewJSONHandler(sink, opts)

@@ -44,6 +44,28 @@ func TestBridgesStdlibAndSlog(t *testing.T) {
 	}
 }
 
+func TestTimestampsAreUTC(t *testing.T) {
+	path := initTo(t)
+	slog.Info("tick")
+
+	out := read(t, path)
+	// TextHandler renders the time attr as time=<RFC3339>. Forcing UTC means
+	// the offset is the Z designator, never a local +hh:mm / -hh:mm.
+	field := ""
+	for _, f := range strings.Fields(out) {
+		if strings.HasPrefix(f, "time=") {
+			field = f
+			break
+		}
+	}
+	if field == "" {
+		t.Fatalf("no time= field in output\n%s", out)
+	}
+	if !strings.HasSuffix(field, "Z") {
+		t.Errorf("timestamp not UTC (want trailing Z): %s", field)
+	}
+}
+
 func TestLevelFiltering(t *testing.T) {
 	path := initTo(t, "-log-level", "warn")
 	slog.Debug("debug-line")
