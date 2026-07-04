@@ -993,7 +993,7 @@ Please use the static 'html' tag function. See https://lit.dev/docs/templates/ex
           </div>
         </div>
       </div>
-    `}}customElements.define("password-confirm-dialog",W9);class U9 extends ${static properties={fleet:{attribute:!1},names:{attribute:!1},status:{state:!0},drawerOpen:{state:!0},busy:{state:!0},aborting:{state:!0},notice:{state:!0},privilegedDialog:{state:!0},privilegedError:{state:!0},removeUid:{state:!0}};pollTimer=null;constructor(){super();this.fleet=null,this.names={},this.status=null,this.drawerOpen=!1,this.busy=!1,this.aborting=!1,this.notice="",this.privilegedDialog="",this.privilegedError="",this.removeUid=""}connectedCallback(){super.connectedCallback(),this.fetchStatus()}disconnectedCallback(){super.disconnectedCallback(),this.stopPoll()}rename(Q,Y){let G=Y.target.value;this.dispatchEvent(new CustomEvent("rename",{detail:{uid:Q,name:G},bubbles:!0,composed:!0}))}encBadge(Q){if(Q===!0)return q`<span class="enc enc-ok" title="AES-encrypted link">🔒 AES</span>`;if(Q===!1)return q`<span class="enc enc-warn" title="Plaintext link — misconfigured or foreign unit">⚠ plaintext</span>`;return q`<span class="enc enc-unknown" title="Encryption state unknown">—</span>`}async fetchStatus(){try{let Q=await A.pairingStatus();if(this.status=Q.status??null,Q4(this.status))this.drawerOpen=!0,this.startPoll();else this.stopPoll()}catch{}}startPoll(){if(this.pollTimer)return;this.pollTimer=setInterval(()=>void this.fetchStatus(),1000)}stopPoll(){if(this.pollTimer)clearInterval(this.pollTimer);this.pollTimer=null}applyResp(Q){if(this.status=Q??null,this.drawerOpen=!0,Q4(this.status))this.startPoll()}onScan=async(Q)=>{let{slow:Y}=Q.detail;if(Y&&!confirm("Slow scan sweeps ZigBee channels 11–26 on PAN 0xFFFF and pauses fleet "+"telemetry for ~30 seconds. Continue?"))return;this.busy=!0,this.notice="";try{let G=await A.pairingScan({slow:Y});if(!G.ok)throw Error(G.error||"scan rejected");this.applyResp(G.status)}catch(G){this.notice=String(G.message||G)}finally{this.busy=!1}};onAdd=async(Q)=>{let{serial:Y}=Q.detail;this.busy=!0,this.notice="";try{let G=await A.pairingAdd(Y);if(!G.ok)throw Error(G.error||"add rejected");this.applyResp(G.status)}catch(G){this.notice=String(G.message||G)}finally{this.busy=!1}};onReplace=async(Q)=>{let Y=prompt(`Replace inverter ${Q}.
+    `}}customElements.define("password-confirm-dialog",W9);class U9 extends ${static properties={fleet:{attribute:!1},names:{attribute:!1},status:{state:!0},drawerOpen:{state:!0},busy:{state:!0},aborting:{state:!0},notice:{state:!0},privilegedDialog:{state:!0},privilegedError:{state:!0},removeUid:{state:!0},legBusy:{state:!0}};pollTimer=null;constructor(){super();this.fleet=null,this.names={},this.status=null,this.drawerOpen=!1,this.busy=!1,this.aborting=!1,this.notice="",this.privilegedDialog="",this.privilegedError="",this.removeUid="",this.legBusy=!1}async setLeg(Q,Y){let G=this.fleet?.inverters.find((X)=>X.uid===Q);if(!G||G.phase===Y||this.legBusy)return;this.legBusy=!0;try{await A.setInverterPhase(Q,Y),G.phase=Y,this.notice=""}catch(X){this.notice=`Grid leg: ${String(X.message||X)}`}finally{this.legBusy=!1}}connectedCallback(){super.connectedCallback(),this.fetchStatus()}disconnectedCallback(){super.disconnectedCallback(),this.stopPoll()}rename(Q,Y){let G=Y.target.value;this.dispatchEvent(new CustomEvent("rename",{detail:{uid:Q,name:G},bubbles:!0,composed:!0}))}encBadge(Q){if(Q===!0)return q`<span class="enc enc-ok" title="AES-encrypted link">🔒 AES</span>`;if(Q===!1)return q`<span class="enc enc-warn" title="Plaintext link — misconfigured or foreign unit">⚠ plaintext</span>`;return q`<span class="enc enc-unknown" title="Encryption state unknown">—</span>`}async fetchStatus(){try{let Q=await A.pairingStatus();if(this.status=Q.status??null,Q4(this.status))this.drawerOpen=!0,this.startPoll();else this.stopPoll()}catch{}}startPoll(){if(this.pollTimer)return;this.pollTimer=setInterval(()=>void this.fetchStatus(),1000)}stopPoll(){if(this.pollTimer)clearInterval(this.pollTimer);this.pollTimer=null}applyResp(Q){if(this.status=Q??null,this.drawerOpen=!0,Q4(this.status))this.startPoll()}onScan=async(Q)=>{let{slow:Y}=Q.detail;if(Y&&!confirm("Slow scan sweeps ZigBee channels 11–26 on PAN 0xFFFF and pauses fleet "+"telemetry for ~30 seconds. Continue?"))return;this.busy=!0,this.notice="";try{let G=await A.pairingScan({slow:Y});if(!G.ok)throw Error(G.error||"scan rejected");this.applyResp(G.status)}catch(G){this.notice=String(G.message||G)}finally{this.busy=!1}};onAdd=async(Q)=>{let{serial:Y}=Q.detail;this.busy=!0,this.notice="";try{let G=await A.pairingAdd(Y);if(!G.ok)throw Error(G.error||"add rejected");this.applyResp(G.status)}catch(G){this.notice=String(G.message||G)}finally{this.busy=!1}};onReplace=async(Q)=>{let Y=prompt(`Replace inverter ${Q}.
 
 Enter the replacement's 12-digit serial, or leave blank to scan for it. The new unit inherits this one's grid profile, power cap and array slot.`);if(Y===null)return;let G=Y.replace(/\D/g,"");if(G!==""&&G.length!==12){this.notice="Replacement serial must be 12 digits (or blank to scan).";return}this.busy=!0,this.notice="";try{let X=await A.pairingReplace(Q,G);if(!X.ok)throw Error(X.error||"replace rejected");this.applyResp(X.status)}catch(X){this.notice=String(X.message||X)}finally{this.busy=!1}};onRekey=()=>{this.notice="",this.privilegedError="",this.privilegedDialog="rekey"};onChangeChannel=()=>{this.notice="",this.privilegedError="",this.privilegedDialog="channel"};onRemove=(Q)=>{this.notice="",this.privilegedError="",this.removeUid=Q,this.privilegedDialog="remove"};onPrivilegedCancel=()=>{if(this.busy)return;this.privilegedDialog="",this.privilegedError="",this.removeUid=""};onPrivilegedConfirm=async(Q)=>{let Y=this.privilegedDialog;if(!Y)return;let{value:G,force:X}=Q.detail;this.busy=!0,this.privilegedError="",this.notice="";try{let K;if(Y==="rekey")K=await A.pairingRekey(G,0);else if(Y==="channel")K=await A.pairingChangeChannel(Number(G));else K=await A.pairingRemove(this.removeUid,X??!1);if(!K.ok){let B=K.error||(Y==="rekey"?"re-key rejected":Y==="channel"?"channel change rejected":"remove rejected");throw Error(B)}this.privilegedDialog="",this.privilegedError="",this.removeUid="",this.applyResp(K.status)}catch(K){this.privilegedError=String(K.message||K)}finally{this.busy=!1}};onAbort=async()=>{this.aborting=!0;try{let Q=await A.pairingAbort();this.status=Q.status??this.status}catch(Q){this.notice=String(Q.message||Q)}finally{this.aborting=!1,this.fetchStatus()}};onCloseDrawer=()=>{if(Q4(this.status))return;this.drawerOpen=!1};static styles=L`
     :host { display: block; }
@@ -1046,6 +1046,24 @@ Enter the replacement's 12-digit serial, or leave blank to scan for it. The new 
     .enc-ok { color: var(--ok); }
     .enc-warn { color: var(--err); }
     .enc-unknown { color: var(--muted); }
+    .legbtns { display: inline-flex; gap: 3px; white-space: nowrap; }
+    .legbtn {
+      background: var(--bar-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 2px 7px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .legbtn.sel {
+      background: color-mix(in srgb, var(--accent) 20%, transparent);
+      color: var(--accent);
+      border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+    }
+    .legbtn:disabled { opacity: 0.5; cursor: default; }
+    .three { color: var(--muted); font-size: 11px; white-space: nowrap; }
     button.replace {
       background: transparent;
       border: 1px solid var(--border);
@@ -1080,6 +1098,7 @@ Enter the replacement's 12-digit serial, or leave blank to scan for it. The new 
               <th>Encryption</th>
               <th class="num">Output</th><th class="num">Load</th><th>Output cap</th>
               <th class="num">Grid</th><th class="num">Freq</th>
+              <th>Grid leg</th>
               <th class="num">Panels</th><th class="num">Faults</th><th></th>
             </tr>
           </thead>
@@ -1105,6 +1124,18 @@ Enter the replacement's 12-digit serial, or leave blank to scan for it. The new 
                 <td class="capcell"><cap-input .inverter=${Y}></cap-input></td>
                 <td class="num">${N4(Y.grid_v)}</td>
                 <td class="num">${k4(Y.freq_hz)}</td>
+                <td>
+                  ${Y.three_phase?q`<span class="three">3-phase</span>`:q`<span class="legbtns">
+                        ${[1,2,3].map((X)=>q`<button
+                            class="legbtn ${Y.phase===X?"sel":""}"
+                            ?disabled=${this.legBusy}
+                            title="Assign this inverter to grid leg L${X}"
+                            @click=${()=>this.setLeg(Y.uid,X)}
+                          >
+                            L${X}
+                          </button>`)}
+                      </span>`}
+                </td>
                 <td class="num">${Y.panels?.length??0}</td>
                 <td class="num ${G?"fault":""}">${G||"—"}</td>
                 <td class="actions">

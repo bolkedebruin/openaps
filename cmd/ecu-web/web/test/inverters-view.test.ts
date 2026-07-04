@@ -398,4 +398,25 @@ describe("<inverters-view> rekey action", () => {
     expect(lastPan).toBe("1234");
     expect(dialog(el)).toBeNull();
   });
+
+  test("has a Grid leg column", async () => {
+    const el = await mount(fleet([inv()]));
+    const headers = Array.from(el.shadowRoot!.querySelectorAll("th")).map((h) => h.textContent?.trim());
+    expect(headers).toContain("Grid leg");
+  });
+
+  test("single-phase row shows three leg buttons with the assigned leg selected", async () => {
+    const el = await mount(fleet([inv({ model_code: 0x20, phase: 3 })]));
+    const btns = el.shadowRoot?.querySelectorAll("tbody .legbtn");
+    expect(btns?.length).toBe(3);
+    const sel = el.shadowRoot?.querySelectorAll("tbody .legbtn.sel");
+    expect(sel?.length).toBe(1);
+    expect(sel?.[0]?.textContent?.trim()).toBe("L3");
+  });
+
+  test("three-phase row shows a read-only label and no leg buttons", async () => {
+    const el = await mount(fleet([inv({ model: "QT2", model_code: 0x32, three_phase: true })]));
+    expect(el.shadowRoot?.querySelector("tbody .three")).not.toBeNull();
+    expect(el.shadowRoot?.querySelectorAll("tbody .legbtn").length).toBe(0);
+  });
 });

@@ -1,3 +1,17 @@
+# OpenAPS v1.1.23
+
+Makes the grid-leg assignment reachable from the Inverters screen.
+
+## Changed
+
+- **The per-inverter grid-leg selector (L1/L2/L3) is now also in the Inverters
+  table**, not just on the dashboard inverter cards. Three-phase inverters show
+  a read-only "3-phase" label.
+
+## Upgrading
+
+`opkg upgrade openaps-ecu-web`. No configuration or schema changes.
+
 # OpenAPS v1.1.22
 
 Presents a correct three-phase view over SunSpec/Modbus and lets you assign each

@@ -33,6 +33,8 @@ export class InvertersView extends LitElement {
     // removeUid is the inverter the remove dialog targets ("" when the open
     // dialog is not a remove).
     removeUid: { state: true },
+    // legBusy disables the grid-leg buttons while a set is in flight.
+    legBusy: { state: true },
   };
   declare fleet: Fleet | null;
   declare names: Record<string, string>;
@@ -44,6 +46,7 @@ export class InvertersView extends LitElement {
   declare privilegedDialog: "" | "rekey" | "channel" | "remove";
   declare privilegedError: string;
   declare removeUid: string;
+  declare legBusy: boolean;
 
   private pollTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -59,6 +62,25 @@ export class InvertersView extends LitElement {
     this.privilegedDialog = "";
     this.privilegedError = "";
     this.removeUid = "";
+    this.legBusy = false;
+  }
+
+  // setLeg assigns a single-phase inverter's grid leg (1/2/3). Optimistic:
+  // the next fleet poll confirms. Errors (e.g. inv-driver rejecting a
+  // three-phase inverter) surface in the shared notice line.
+  private async setLeg(uid: string, leg: number) {
+    const inv = this.fleet?.inverters.find((i) => i.uid === uid);
+    if (!inv || inv.phase === leg || this.legBusy) return;
+    this.legBusy = true;
+    try {
+      await api.setInverterPhase(uid, leg);
+      inv.phase = leg;
+      this.notice = "";
+    } catch (err) {
+      this.notice = `Grid leg: ${String((err as Error).message || err)}`;
+    } finally {
+      this.legBusy = false;
+    }
   }
 
   connectedCallback(): void {
@@ -325,6 +347,24 @@ export class InvertersView extends LitElement {
     .enc-ok { color: var(--ok); }
     .enc-warn { color: var(--err); }
     .enc-unknown { color: var(--muted); }
+    .legbtns { display: inline-flex; gap: 3px; white-space: nowrap; }
+    .legbtn {
+      background: var(--bar-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 2px 7px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .legbtn.sel {
+      background: color-mix(in srgb, var(--accent) 20%, transparent);
+      color: var(--accent);
+      border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+    }
+    .legbtn:disabled { opacity: 0.5; cursor: default; }
+    .three { color: var(--muted); font-size: 11px; white-space: nowrap; }
     button.replace {
       background: transparent;
       border: 1px solid var(--border);
@@ -366,6 +406,7 @@ export class InvertersView extends LitElement {
               <th>Encryption</th>
               <th class="num">Output</th><th class="num">Load</th><th>Output cap</th>
               <th class="num">Grid</th><th class="num">Freq</th>
+              <th>Grid leg</th>
               <th class="num">Panels</th><th class="num">Faults</th><th></th>
             </tr>
           </thead>
@@ -393,6 +434,22 @@ export class InvertersView extends LitElement {
                 <td class="capcell"><cap-input .inverter=${inv}></cap-input></td>
                 <td class="num">${fmtV(inv.grid_v)}</td>
                 <td class="num">${fmtHz(inv.freq_hz)}</td>
+                <td>
+                  ${inv.three_phase
+                    ? html`<span class="three">3-phase</span>`
+                    : html`<span class="legbtns">
+                        ${[1, 2, 3].map(
+                          (l) => html`<button
+                            class="legbtn ${inv.phase === l ? "sel" : ""}"
+                            ?disabled=${this.legBusy}
+                            title="Assign this inverter to grid leg L${l}"
+                            @click=${() => this.setLeg(inv.uid, l)}
+                          >
+                            L${l}
+                          </button>`,
+                        )}
+                      </span>`}
+                </td>
                 <td class="num">${inv.panels?.length ?? 0}</td>
                 <td class="num ${nFaults ? "fault" : ""}">${nFaults || "—"}</td>
                 <td class="actions">
