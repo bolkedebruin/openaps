@@ -152,10 +152,14 @@ type Inverter struct {
 	ACVoltageV     int     // best-guess phase voltage (params col 6 for type 01 or 03)
 	ACPowerW       int     // best-guess phase power (sum of channel powers when knowable)
 	SignalStrength int     // 0..255 from signal_strength table
-	Phase          int     // from id.phase (1/2/3 or 0)
-	Model          int     // from id.model
-	SoftwareVer    int     // from id.software_version
-	LimitedPowerW  int     // per-panel curtailment cap from power.limitedpower (W)
+	Phase          int     // operator-assigned grid leg (1/2/3), 0=unset; single-phase only
+	// PerLegVoltage holds a three-phase inverter's measured per-grid-leg AC
+	// voltage (0=L1,1=L2,2=L3). Empty for single-phase inverters, which the
+	// operator assigns to one leg via Phase.
+	PerLegVoltage []float64
+	Model         int // from id.model
+	SoftwareVer   int // from id.software_version
+	LimitedPowerW int // per-panel curtailment cap from power.limitedpower (W)
 
 	// PanelWatts carries decoded per-panel watts from inv-driver; length
 	// should equal PanelCount(). It is the source PanelPowers() uses.

@@ -645,9 +645,11 @@ func (in *Ingestor) tryPairFrame(ctx context.Context, tsMs int64, env codec.L1En
 }
 
 // applyInfoReply synthesises an InverterInfo from a decoded 0xDC reply.
-// PhaseFromModel returns the family classifier (1 vs 3); we write phase
-// only when it's 1 because single-phase implies leg=1 unambiguously.
-// Three-phase per-leg phase is operator-configured (separate work).
+// The phase column is the operator-assigned grid leg (1/2/3), owned by the
+// SetInverterPhase control — telemetry never writes it, so an info reply
+// cannot clobber an operator's assignment. An unset leg reads as L1 in the
+// SunSpec encoder; connection type (single vs three-phase) is derived from
+// the model, not this column.
 func (in *Ingestor) applyInfoReply(ctx context.Context, tsMs int64, env codec.L1Envelope, info codec.InfoReply) error {
 	in.noteModel(env.PeerUIDString(), info.Model)
 	modelWire := uint32(info.Model)
@@ -658,10 +660,6 @@ func (in *Ingestor) applyInfoReply(ctx context.Context, tsMs int64, env codec.L1
 		ShortAddr:       uint32(env.ShortAddr),
 		ModelCode:       &modelWire,
 		SoftwareVersion: &sw,
-	}
-	if codec.PhaseFromModel(info.Model) == 1 {
-		one := uint32(1)
-		wireInfo.Phase = &one
 	}
 	return in.storeAndPublishInfo(ctx, wireInfo)
 }
@@ -794,6 +792,7 @@ func telemetryFromReply(r codec.Reply, tsMs int64) *wire.Telemetry {
 		LifetimeScale: r.LifetimeScale,
 		Rssi:          uint32(r.RSSI),
 		Lqi:           uint32(r.LQI),
+		GridVLeg:      r.GridVLeg,
 	}
 	if len(r.Panels) > 0 {
 		t.Panels = make([]*wire.Panel, len(r.Panels))

@@ -1,5 +1,5 @@
 import { LitElement, html, css, nothing } from "lit";
-import type { Inverter } from "../api.ts";
+import { api, type Inverter } from "../api.ts";
 import { fmtW, fmtV, fmtHz, fmtPct, fmtA, faultLabels, ageLabel } from "../format.ts";
 import "./cap-bar.ts";
 
@@ -13,16 +13,38 @@ export class InverterCard extends LitElement {
     inverter: { attribute: false },
     name: { type: String },
     profile: { type: String },
+    legError: { state: true },
+    legBusy: { state: true },
   };
 
   declare inverter: Inverter;
   declare name: string;
   declare profile: string;
+  declare legError: string;
+  declare legBusy: boolean;
 
   constructor() {
     super();
     this.name = "";
     this.profile = "";
+    this.legError = "";
+    this.legBusy = false;
+  }
+
+  private async setLeg(leg: number) {
+    const inv = this.inverter;
+    if (!inv || inv.phase === leg || this.legBusy) return;
+    this.legBusy = true;
+    this.legError = "";
+    try {
+      await api.setInverterPhase(inv.uid, leg);
+      inv.phase = leg; // optimistic; the next fleet poll confirms
+      this.dispatchEvent(new CustomEvent("inverter-updated", { bubbles: true, composed: true }));
+    } catch (e) {
+      this.legError = e instanceof Error ? e.message : String(e);
+    } finally {
+      this.legBusy = false;
+    }
   }
 
   static styles = css`
@@ -78,6 +100,27 @@ export class InverterCard extends LitElement {
       padding: 2px 8px;
       font-size: 11px;
     }
+    .leg { margin-top: 14px; display: flex; align-items: center; gap: 10px; }
+    .leg .k { color: var(--muted); font-size: 11px; }
+    .legbtns { display: inline-flex; gap: 4px; }
+    .legbtn {
+      background: var(--bar-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 3px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .legbtn.sel {
+      background: color-mix(in srgb, var(--accent) 20%, transparent);
+      color: var(--accent);
+      border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+    }
+    .legbtn:disabled { opacity: 0.5; cursor: default; }
+    .three { color: var(--muted); font-size: 12px; }
+    .leg-err { margin-top: 6px; color: var(--err); font-size: 11px; }
   `;
 
   render() {
@@ -128,6 +171,24 @@ export class InverterCard extends LitElement {
             ${faults.map((f) => html`<span class="chip">${f}</span>`)}
           </div>`
         : nothing}
+
+      <div class="leg">
+        <span class="k">Grid leg</span>
+        ${inv.three_phase
+          ? html`<span class="three">3-phase · L1·L2·L3</span>`
+          : html`<span class="legbtns">
+              ${[1, 2, 3].map(
+                (l) => html`<button
+                  class="legbtn ${inv.phase === l ? "sel" : ""}"
+                  ?disabled=${this.legBusy}
+                  @click=${() => this.setLeg(l)}
+                >
+                  L${l}
+                </button>`,
+              )}
+            </span>`}
+      </div>
+      ${this.legError ? html`<div class="leg-err">${this.legError}</div>` : nothing}
     `;
   }
 }

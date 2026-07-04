@@ -16,6 +16,7 @@ package sunspec
 import (
 	"encoding/binary"
 
+	"github.com/bolkedebruin/openaps/codec"
 	"github.com/bolkedebruin/openaps/internal/sunspec/source"
 )
 
@@ -238,11 +239,11 @@ func Encode(s source.Snapshot, opt Options) Bank {
 	// PPVphAB/BC/CA — line-line voltages: not measured.
 	bank.put16(notImplU16, notImplU16, notImplU16)
 	// PhVphA/B/C — line-neutral voltages, scaled ×1; pad unused phases.
-	v := uint16(s.GridVoltageV + 0.5)
+	pv := derivePhaseVoltages(s)
 	bank.put16(
-		phaseValueU16(v, 0, phases),
-		phaseValueU16(v, 1, phases),
-		phaseValueU16(v, 2, phases),
+		phaseValueU16(pv[0], 0, phases),
+		phaseValueU16(pv[1], 1, phases),
+		phaseValueU16(pv[2], 2, phases),
 	)
 	bank.put16(scaleFactor(0)) // VSF: 1 V
 
@@ -468,13 +469,19 @@ func phaseValueU16(v uint16, idx, phasesUsed int) uint16 {
 	return notImplU16
 }
 
-// detectPhase examines the snapshot's per-inverter Phase field and returns
-// the smallest model that fits. Inverters with phase=0 are folded onto phase 1.
+// detectPhase returns the smallest inverter model that fits the fleet.
+// A three-phase inverter (by model) spans all legs, so its presence forces
+// model 103 regardless of the single-phase leg assignments. Otherwise the
+// result follows the distinct legs the single-phase inverters occupy;
+// inverters with an unset leg (phase 0) fold onto L1.
 func detectPhase(s source.Snapshot) PhaseMode {
 	var seen [4]bool
 	for _, inv := range s.Inverters {
 		if !inv.Online {
 			continue
+		}
+		if codec.PhaseFromModel(uint8(inv.Model)) == 3 {
+			return PhaseThree
 		}
 		ph := inv.Phase
 		if ph < 1 || ph > 3 {
@@ -614,33 +621,82 @@ func panelLabel(inv source.Inverter, channel int) string {
 	return uid
 }
 
-// derivePhaseCurrents returns total A and per-phase A from the snapshot.
-//
-// APsystems doesn't measure AC current directly. We back-derive from W/V per
-// phase. SunSpec wants amps × 10 (ASF=-1).
-func derivePhaseCurrents(s source.Snapshot) (total uint16, perPhase [3]uint16) {
-	if s.GridVoltageV <= 0 {
-		return 0, perPhase
+// phaseBuckets returns per-grid-leg active power (W) and AC voltage (V),
+// bucketed by connection type. A single-phase inverter contributes its full
+// power to its operator-assigned leg (unset folds onto L1) and its measured
+// voltage to that leg. A three-phase inverter — which does not report per-leg
+// power on the wire — splits its total power evenly across the three legs and
+// supplies its measured per-leg voltage; this mirrors the stock firmware,
+// which reconstructs per-leg current as (total/3)/V_leg.
+func phaseBuckets(s source.Snapshot) (powerW [3]float64, voltageV [3]float64) {
+	var vSum [3]float64
+	var vCount [3]int
+	addV := func(leg int, v float64) {
+		if v > 0 {
+			vSum[leg] += v
+			vCount[leg]++
+		}
 	}
-	// Bucket inverters by phase from the id table; phase=0 => phase A.
-	var phaseW [3]int
 	for _, inv := range s.Inverters {
 		if !inv.Online {
 			continue
 		}
-		ph := inv.Phase - 1
-		if ph < 0 || ph > 2 {
-			ph = 0
+		if codec.PhaseFromModel(uint8(inv.Model)) == 3 {
+			third := float64(inv.ACPowerW) / 3
+			for i := 0; i < 3; i++ {
+				powerW[i] += third
+				if i < len(inv.PerLegVoltage) {
+					addV(i, inv.PerLegVoltage[i])
+				}
+			}
+			continue
 		}
-		phaseW[ph] += inv.ACPowerW
+		leg := inv.Phase - 1
+		if leg < 0 || leg > 2 {
+			leg = 0
+		}
+		powerW[leg] += float64(inv.ACPowerW)
+		addV(leg, float64(inv.ACVoltageV))
 	}
-	v := s.GridVoltageV
-	var sum int
 	for i := 0; i < 3; i++ {
-		a := float64(phaseW[i]) / v // amps
-		perPhase[i] = uint16(a*10 + 0.5)
-		sum += phaseW[i]
+		if vCount[i] > 0 {
+			voltageV[i] = vSum[i] / float64(vCount[i])
+		} else {
+			voltageV[i] = s.GridVoltageV
+		}
 	}
-	total = uint16(float64(sum)/v*10 + 0.5)
+	return powerW, voltageV
+}
+
+// derivePhaseCurrents returns total A and per-phase A from the snapshot.
+//
+// APsystems doesn't measure AC current directly. We back-derive from W/V per
+// leg (each leg's own voltage), matching the firmware. SunSpec wants amps × 10
+// (ASF=-1).
+func derivePhaseCurrents(s source.Snapshot) (total uint16, perPhase [3]uint16) {
+	powerW, voltageV := phaseBuckets(s)
+	var sumA float64
+	for i := 0; i < 3; i++ {
+		if voltageV[i] <= 0 {
+			continue
+		}
+		a := powerW[i] / voltageV[i]
+		perPhase[i] = uint16(a*10 + 0.5)
+		sumA += a
+	}
+	total = uint16(sumA*10 + 0.5)
 	return total, perPhase
+}
+
+// derivePhaseVoltages returns the per-leg AC voltage (V, rounded) for the
+// model 101/102/103 PhVphA/B/C fields.
+func derivePhaseVoltages(s source.Snapshot) [3]uint16 {
+	_, voltageV := phaseBuckets(s)
+	var out [3]uint16
+	for i := 0; i < 3; i++ {
+		if voltageV[i] > 0 {
+			out[i] = uint16(voltageV[i] + 0.5)
+		}
+	}
+	return out
 }

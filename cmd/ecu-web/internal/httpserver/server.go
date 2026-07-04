@@ -65,6 +65,9 @@ type Config struct {
 	// to inv-driver. Nil makes the POST /api/pairing/* endpoints return a
 	// 503 and GET /api/pairing/status report unavailable.
 	PairingFn func(context.Context, *wire.PairingRequest) (*wire.PairingResponse, error)
+	// SetInverterPhaseFn assigns a single-phase inverter's grid leg (1/2/3)
+	// via inv-driver. Nil makes POST /api/inverters/phase return a 503.
+	SetInverterPhaseFn func(context.Context, string, uint32) (*wire.SetInverterPhaseResponse, error)
 	// SSHKeysList/SSHKeyAdd/SSHKeyRemove talk to recoveryd (the SSH-access
 	// plane owner) over its own local UDS. Nil makes the matching
 	// /api/access/ssh-keys method return a 503. recoveryd, not inv-driver,
@@ -168,6 +171,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/pairing/change-channel", s.cfg.Auth.Require(http.HandlerFunc(s.handlePairingChangeChannel)))
 	mux.Handle("POST /api/pairing/abort", s.cfg.Auth.Require(http.HandlerFunc(s.handlePairingAbort)))
 	mux.Handle("POST /api/inverters/remove", s.cfg.Auth.Require(http.HandlerFunc(s.handlePairingRemove)))
+	mux.Handle("POST /api/inverters/phase", s.cfg.Auth.Require(http.HandlerFunc(s.handleSetInverterPhase)))
 	mux.Handle("GET /api/pairing/status", s.cfg.Auth.Require(http.HandlerFunc(s.handlePairingStatus)))
 	// SSH access plane (recoveryd). DELETE is step-up-gated like the
 	// sensitive settings writes — removing a key is high-impact.
@@ -438,6 +442,41 @@ type powerRespDTO struct {
 // panel count, clamps to the codec envelope, encodes per family, and sends
 // one unicast per inverter (never a broadcast — mixed families and per-panel
 // floors need per-inverter values).
+// handleSetInverterPhase assigns a single-phase inverter's grid leg. inv-driver
+// enforces single-phase-only and unknown-UID rejection; those come back as an
+// error, surfaced here as 400 with inv-driver's message.
+func (s *Server) handleSetInverterPhase(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.SetInverterPhaseFn == nil {
+		http.Error(w, "phase assignment unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	var body struct {
+		UID string `json:"uid"`
+		Leg uint32 `json:"leg"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if body.UID == "" {
+		http.Error(w, "uid is required", http.StatusBadRequest)
+		return
+	}
+	if body.Leg < 1 || body.Leg > 3 {
+		http.Error(w, "leg must be 1, 2, or 3", http.StatusBadRequest)
+		return
+	}
+	resp, err := s.cfg.SetInverterPhaseFn(r.Context(), body.UID, body.Leg)
+	if err != nil {
+		msg := err.Error()
+		if resp != nil && resp.GetError() != "" {
+			msg = resp.GetError()
+		}
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func (s *Server) handleSetPower(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.SendFrame == nil {
 		http.Error(w, "power control unavailable", http.StatusServiceUnavailable)

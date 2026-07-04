@@ -46,6 +46,12 @@ message Envelope {
     PairingResponse      pairing_resp       = 23;
     PairingCmd           pairing_cmd        = 24;
     PairingCmdResult     pairing_result     = 25;
+
+    // Per-inverter grid-leg assignment (controller -> driver). Applies to
+    // single-phase inverters only; three-phase inverters report their own
+    // per-leg telemetry and are rejected.
+    SetInverterPhaseRequest  set_inverter_phase_req  = 26;
+    SetInverterPhaseResponse set_inverter_phase_resp = 27;
   }
 }
 
@@ -123,6 +129,11 @@ message Telemetry {
   // telemetry not decoded from a RawFrame) rather than "plaintext". Feeds
   // the ecu-web per-inverter encryption badge.
   optional bool encrypted = 20;
+  // grid_v_leg carries the per-grid-leg AC voltage a three-phase inverter
+  // (QT2) measures: index 0=L1, 1=L2, 2=L3. Empty for single-phase
+  // inverters, which feed one leg the hardware cannot name. The SunSpec
+  // adapter uses these for the model 103 per-phase voltages.
+  repeated double grid_v_leg = 21;
 }
 
 // InverterFaults dispatches on family. Each variant mirrors the
@@ -615,4 +626,21 @@ message SettingsResponse {
   string            error     = 2;
   Settings          settings  = 3;
   EffectiveSettings effective = 4;
+}
+
+// SetInverterPhaseRequest assigns the grid leg a single-phase inverter is
+// physically wired to. This is operator metadata the hardware cannot report
+// (a single-phase micro measures its own output but not which leg it feeds),
+// used to bucket its power into the correct phase of the SunSpec three-phase
+// model. Three-phase inverters report their own per-leg telemetry and are
+// rejected.
+message SetInverterPhaseRequest {
+  string uid = 1;  // 12-char hex inverter UID
+  uint32 leg = 2;  // 1=L1, 2=L2, 3=L3
+}
+
+// SetInverterPhaseResponse returns ok/error for the assignment.
+message SetInverterPhaseResponse {
+  bool   ok    = 1;
+  string error = 2;
 }

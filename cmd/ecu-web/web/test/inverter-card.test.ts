@@ -99,4 +99,19 @@ describe("<inverter-card>", () => {
     const el = await mount(sample());
     expect(el.shadowRoot?.querySelector(".profile")).toBeNull();
   });
+
+  test("single-phase shows three leg buttons with the assigned leg selected", async () => {
+    const el = await mount(sample({ model_code: 0x18, phase: 2 }));
+    expect(el.shadowRoot?.querySelectorAll(".legbtn").length).toBe(3);
+    const selected = el.shadowRoot?.querySelectorAll(".legbtn.sel");
+    expect(selected?.length).toBe(1);
+    expect(selected?.[0]?.textContent?.trim()).toBe("L2");
+    expect(el.shadowRoot?.querySelector(".three")).toBeNull();
+  });
+
+  test("three-phase (QT2) shows a read-only label and no leg buttons", async () => {
+    const el = await mount(sample({ model: "QT2", model_code: 0x32, three_phase: true }));
+    expect(el.shadowRoot?.querySelector(".three")).not.toBeNull();
+    expect(el.shadowRoot?.querySelectorAll(".legbtn").length).toBe(0);
+  });
 });

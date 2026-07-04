@@ -18,6 +18,7 @@ import (
 
 	"database/sql"
 
+	"github.com/bolkedebruin/openaps/codec"
 	"github.com/bolkedebruin/openaps/internal/events"
 	"github.com/bolkedebruin/openaps/internal/ingest"
 	"github.com/bolkedebruin/openaps/internal/store"
@@ -360,6 +361,12 @@ func (s *Server) handlePublisher(ctx context.Context, peerUID int, tag, backend 
 			}
 			continue
 		}
+		if req := next.GetSetInverterPhaseReq(); req != nil {
+			if err := s.handleSetInverterPhaseReq(ctx, peerUID, backend, tag, c, req); err != nil {
+				slog.Debug("ipc set-inverter-phase", "conn", tag, "err", err)
+			}
+			continue
+		}
 		if err := s.Ingestor.HandleWithPeer(ctx, peerUID, backend, &next); err != nil {
 			// Per-event error: log and continue. Connection is still
 			// synchronised on the next length prefix. Unknown body
@@ -400,6 +407,54 @@ func (s *Server) handleGridProfileReq(ctx context.Context, peerUID int, backend,
 		}
 	}
 	return writeGridProfileResp(tag, c, resp)
+}
+
+// handleSetInverterPhaseReq assigns the grid leg a single-phase inverter is
+// wired to. Same controller gate as Send/Broadcast/GridProfile. The leg is
+// operator metadata the hardware cannot report; it is rejected for
+// three-phase inverters, which report their own per-leg telemetry.
+func (s *Server) handleSetInverterPhaseReq(ctx context.Context, peerUID int, backend, tag string, c net.Conn, req *wire.SetInverterPhaseRequest) error {
+	refuse := func(msg string) error {
+		return writeSetInverterPhaseResp(tag, c, &wire.SetInverterPhaseResponse{Ok: false, Error: msg})
+	}
+	if !s.Ingestor.IsControllerBackend(backend) {
+		return refuse(fmt.Sprintf("set-inverter-phase refused: backend %q not an allowed controller", backend))
+	}
+	if !s.Ingestor.IsControllerUID(peerUID) {
+		return refuse(fmt.Sprintf("set-inverter-phase refused: peer uid=%d not in controller-uids allow-list", peerUID))
+	}
+	if s.Store == nil {
+		return refuse("set-inverter-phase: store not configured")
+	}
+	uid := req.GetUid()
+	leg := req.GetLeg()
+	if leg < 1 || leg > 3 {
+		return refuse(fmt.Sprintf("leg must be 1, 2, or 3, got %d", leg))
+	}
+	code, found, err := s.Store.InverterModelCode(ctx, uid)
+	if err != nil {
+		return refuse(fmt.Sprintf("lookup inverter %q: %v", uid, err))
+	}
+	if !found {
+		return refuse(fmt.Sprintf("unknown inverter %q", uid))
+	}
+	// Leg assignment applies only to single-phase inverters. A three-phase
+	// inverter spans all legs and reports its own per-leg telemetry, so there
+	// is no single leg to assign.
+	if codec.PhaseFromModel(uint8(code)) != 1 {
+		return refuse(fmt.Sprintf("inverter %q (model 0x%02x) is not single-phase; three-phase inverters report their own per-leg telemetry", uid, code))
+	}
+	legVal := leg
+	if _, err := s.Store.UpsertInverterInfo(ctx, store.InverterInfoUpdate{
+		UID:              uid,
+		TsMs:             time.Now().UnixMilli(),
+		Phase:            &legVal,
+		PreserveLastSeen: true,
+	}); err != nil {
+		return refuse(fmt.Sprintf("persist phase for %q: %v", uid, err))
+	}
+	_ = s.Store.AppendEvent(ctx, time.Now().UnixMilli(), uid, "phase_set", "info", backend, fmt.Sprintf("L%d", leg))
+	return writeSetInverterPhaseResp(tag, c, &wire.SetInverterPhaseResponse{Ok: true})
 }
 
 // gridProfileAuditKind picks the event kind for an audited grid-profile op,
@@ -551,6 +606,16 @@ func writePairingResp(tag string, c net.Conn, resp *wire.PairingResponse) error 
 
 // writeGridProfileResp wraps a GridProfileResponse in an Envelope and writes
 // it to conn with the configured write deadline.
+func writeSetInverterPhaseResp(tag string, c net.Conn, resp *wire.SetInverterPhaseResponse) error {
+	env := &wire.Envelope{Body: &wire.Envelope_SetInverterPhaseResp{SetInverterPhaseResp: resp}}
+	_ = c.SetWriteDeadline(time.Now().Add(writeDeadline))
+	if err := wire.WriteFrame(c, env); err != nil {
+		return fmt.Errorf("write set-inverter-phase response: %w", err)
+	}
+	slog.Debug("ipc set-inverter-phase response", "conn", tag, "ok", resp.GetOk())
+	return nil
+}
+
 func writeGridProfileResp(tag string, c net.Conn, resp *wire.GridProfileResponse) error {
 	env := &wire.Envelope{Body: &wire.Envelope_GridProfileResp{GridProfileResp: resp}}
 	_ = c.SetWriteDeadline(time.Now().Add(writeDeadline))

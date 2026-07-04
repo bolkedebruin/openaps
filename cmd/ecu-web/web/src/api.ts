@@ -14,6 +14,10 @@ export interface Inverter {
   model: string;
   model_code: number;
   phase: number;
+  // three_phase is true for inverters that span all three grid legs and
+  // report their own per-leg telemetry (backend-derived from the model). The
+  // card shows the leg selector only when this is false/absent.
+  three_phase?: boolean;
   sw_version: number;
   online: boolean;
   last_seen_ms: number;
@@ -452,6 +456,8 @@ export const api = {
   },
   setPower: (req: { uid?: string; array?: boolean; watts: number }) =>
     postJSONResult<PowerResult>("/api/power", req),
+  setInverterPhase: (uid: string, leg: number) =>
+    postJSON("/api/inverters/phase", { uid, leg }),
   profiles: () => getJSON<ProfilesState>("/api/profiles"),
   overlays: () => getJSON<LocalSiteProfile[]>("/api/overlays"),
   selectBase: (id: string) =>

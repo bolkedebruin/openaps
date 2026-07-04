@@ -18,12 +18,14 @@ CREATE TABLE IF NOT EXISTS inverters (
     last_seen_ms     INTEGER NOT NULL,
     model_code       INTEGER,
     software_version INTEGER,
-    -- phase is the per-leg AC assignment (1/2/3 = leg A/B/C). For
-    -- single-phase inverters there is only one leg, so it's always 1.
-    -- For three-phase inverters the leg is operator-configured and
-    -- stays NULL here until set. The family classifier (single vs
-    -- three) is NOT stored; consumers derive it from model_code via
-    -- codec.PhaseFromModel.
+    -- phase is the operator-assigned grid leg (1/2/3 = leg A/B/C) for a
+    -- SINGLE-phase inverter — metadata the hardware cannot report. It is
+    -- written only by the SetInverterPhase control and stays NULL until the
+    -- operator assigns it (an unset leg reads as L1 in the SunSpec encoder).
+    -- Three-phase inverters report their own per-leg telemetry and are
+    -- rejected by SetInverterPhase, so this column stays NULL for them. The
+    -- family classifier (single vs three) is NOT stored; consumers derive it
+    -- from model_code via codec.PhaseFromModel.
     phase            INTEGER,
     zigbee_bound     INTEGER,
     turned_off_rpt   INTEGER

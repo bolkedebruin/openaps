@@ -109,6 +109,8 @@ type Envelope struct {
 	//	*Envelope_PairingResp
 	//	*Envelope_PairingCmd
 	//	*Envelope_PairingResult
+	//	*Envelope_SetInverterPhaseReq
+	//	*Envelope_SetInverterPhaseResp
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -358,6 +360,24 @@ func (x *Envelope) GetPairingResult() *PairingCmdResult {
 	return nil
 }
 
+func (x *Envelope) GetSetInverterPhaseReq() *SetInverterPhaseRequest {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_SetInverterPhaseReq); ok {
+			return x.SetInverterPhaseReq
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetSetInverterPhaseResp() *SetInverterPhaseResponse {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_SetInverterPhaseResp); ok {
+			return x.SetInverterPhaseResp
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -458,6 +478,17 @@ type Envelope_PairingResult struct {
 	PairingResult *PairingCmdResult `protobuf:"bytes,25,opt,name=pairing_result,json=pairingResult,proto3,oneof"`
 }
 
+type Envelope_SetInverterPhaseReq struct {
+	// Per-inverter grid-leg assignment (controller -> driver). Applies to
+	// single-phase inverters only; three-phase inverters report their own
+	// per-leg telemetry and are rejected.
+	SetInverterPhaseReq *SetInverterPhaseRequest `protobuf:"bytes,26,opt,name=set_inverter_phase_req,json=setInverterPhaseReq,proto3,oneof"`
+}
+
+type Envelope_SetInverterPhaseResp struct {
+	SetInverterPhaseResp *SetInverterPhaseResponse `protobuf:"bytes,27,opt,name=set_inverter_phase_resp,json=setInverterPhaseResp,proto3,oneof"`
+}
+
 func (*Envelope_Hello) isEnvelope_Body() {}
 
 func (*Envelope_Telemetry) isEnvelope_Body() {}
@@ -503,6 +534,10 @@ func (*Envelope_PairingResp) isEnvelope_Body() {}
 func (*Envelope_PairingCmd) isEnvelope_Body() {}
 
 func (*Envelope_PairingResult) isEnvelope_Body() {}
+
+func (*Envelope_SetInverterPhaseReq) isEnvelope_Body() {}
+
+func (*Envelope_SetInverterPhaseResp) isEnvelope_Body() {}
 
 // Hello is the first frame on every backend connection. The driver
 // uses it to identify the bus backend (e.g. apsystems-stock-zb) and
@@ -696,7 +731,12 @@ type Telemetry struct {
 	// optional so unset means "frame type unknown" (e.g. legacy/direct
 	// telemetry not decoded from a RawFrame) rather than "plaintext". Feeds
 	// the ecu-web per-inverter encryption badge.
-	Encrypted     *bool `protobuf:"varint,20,opt,name=encrypted,proto3,oneof" json:"encrypted,omitempty"`
+	Encrypted *bool `protobuf:"varint,20,opt,name=encrypted,proto3,oneof" json:"encrypted,omitempty"`
+	// grid_v_leg carries the per-grid-leg AC voltage a three-phase inverter
+	// (QT2) measures: index 0=L1, 1=L2, 2=L3. Empty for single-phase
+	// inverters, which feed one leg the hardware cannot name. The SunSpec
+	// adapter uses these for the model 103 per-phase voltages.
+	GridVLeg      []float64 `protobuf:"fixed64,21,rep,packed,name=grid_v_leg,json=gridVLeg,proto3" json:"grid_v_leg,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -862,6 +902,13 @@ func (x *Telemetry) GetEncrypted() bool {
 		return *x.Encrypted
 	}
 	return false
+}
+
+func (x *Telemetry) GetGridVLeg() []float64 {
+	if x != nil {
+		return x.GridVLeg
+	}
+	return nil
 }
 
 // InverterFaults dispatches on family. Each variant mirrors the
@@ -4600,12 +4647,122 @@ func (x *SettingsResponse) GetEffective() *EffectiveSettings {
 	return nil
 }
 
+// SetInverterPhaseRequest assigns the grid leg a single-phase inverter is
+// physically wired to. This is operator metadata the hardware cannot report
+// (a single-phase micro measures its own output but not which leg it feeds),
+// used to bucket its power into the correct phase of the SunSpec three-phase
+// model. Three-phase inverters report their own per-leg telemetry and are
+// rejected.
+type SetInverterPhaseRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Uid           string                 `protobuf:"bytes,1,opt,name=uid,proto3" json:"uid,omitempty"`  // 12-char hex inverter UID
+	Leg           uint32                 `protobuf:"varint,2,opt,name=leg,proto3" json:"leg,omitempty"` // 1=L1, 2=L2, 3=L3
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetInverterPhaseRequest) Reset() {
+	*x = SetInverterPhaseRequest{}
+	mi := &file_busmgr_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetInverterPhaseRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetInverterPhaseRequest) ProtoMessage() {}
+
+func (x *SetInverterPhaseRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetInverterPhaseRequest.ProtoReflect.Descriptor instead.
+func (*SetInverterPhaseRequest) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *SetInverterPhaseRequest) GetUid() string {
+	if x != nil {
+		return x.Uid
+	}
+	return ""
+}
+
+func (x *SetInverterPhaseRequest) GetLeg() uint32 {
+	if x != nil {
+		return x.Leg
+	}
+	return 0
+}
+
+// SetInverterPhaseResponse returns ok/error for the assignment.
+type SetInverterPhaseResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetInverterPhaseResponse) Reset() {
+	*x = SetInverterPhaseResponse{}
+	mi := &file_busmgr_proto_msgTypes[53]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetInverterPhaseResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetInverterPhaseResponse) ProtoMessage() {}
+
+func (x *SetInverterPhaseResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_busmgr_proto_msgTypes[53]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetInverterPhaseResponse.ProtoReflect.Descriptor instead.
+func (*SetInverterPhaseResponse) Descriptor() ([]byte, []int) {
+	return file_busmgr_proto_rawDescGZIP(), []int{53}
+}
+
+func (x *SetInverterPhaseResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *SetInverterPhaseResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
 var File_busmgr_proto protoreflect.FileDescriptor
 
 const file_busmgr_proto_rawDesc = "" +
 	"\n" +
-	"\fbusmgr.proto\x12\tbusmgr.v1\"\xfb\n" +
-	"\n" +
+	"\fbusmgr.proto\x12\tbusmgr.v1\"\xb4\f\n" +
 	"\bEnvelope\x12(\n" +
 	"\x05hello\x18\x01 \x01(\v2\x10.busmgr.v1.HelloH\x00R\x05hello\x124\n" +
 	"\ttelemetry\x18\x02 \x01(\v2\x14.busmgr.v1.TelemetryH\x00R\ttelemetry\x12>\n" +
@@ -4636,7 +4793,9 @@ const file_busmgr_proto_rawDesc = "" +
 	"\fpairing_resp\x18\x17 \x01(\v2\x1a.busmgr.v1.PairingResponseH\x00R\vpairingResp\x128\n" +
 	"\vpairing_cmd\x18\x18 \x01(\v2\x15.busmgr.v1.PairingCmdH\x00R\n" +
 	"pairingCmd\x12D\n" +
-	"\x0epairing_result\x18\x19 \x01(\v2\x1b.busmgr.v1.PairingCmdResultH\x00R\rpairingResultB\x06\n" +
+	"\x0epairing_result\x18\x19 \x01(\v2\x1b.busmgr.v1.PairingCmdResultH\x00R\rpairingResult\x12Y\n" +
+	"\x16set_inverter_phase_req\x18\x1a \x01(\v2\".busmgr.v1.SetInverterPhaseRequestH\x00R\x13setInverterPhaseReq\x12\\\n" +
+	"\x17set_inverter_phase_resp\x18\x1b \x01(\v2#.busmgr.v1.SetInverterPhaseResponseH\x00R\x14setInverterPhaseRespB\x06\n" +
 	"\x04body\"\xbb\x01\n" +
 	"\x05Hello\x12\x18\n" +
 	"\abackend\x18\x01 \x01(\tR\abackend\x12\x18\n" +
@@ -4649,7 +4808,7 @@ const file_busmgr_proto_rawDesc = "" +
 	"\x05ts_ms\x18\x01 \x01(\x03R\x04tsMs\x12\x1d\n" +
 	"\n" +
 	"short_addr\x18\x02 \x01(\rR\tshortAddr\x12\x19\n" +
-	"\bl1_frame\x18\x03 \x01(\fR\al1Frame\"\xd7\x04\n" +
+	"\bl1_frame\x18\x03 \x01(\fR\al1Frame\"\xf5\x04\n" +
 	"\tTelemetry\x12\x13\n" +
 	"\x05ts_ms\x18\x01 \x01(\x03R\x04tsMs\x12\x1d\n" +
 	"\n" +
@@ -4672,7 +4831,9 @@ const file_busmgr_proto_rawDesc = "" +
 	"\x04rssi\x18\x11 \x01(\rR\x04rssi\x12\x10\n" +
 	"\x03lqi\x18\x12 \x01(\rR\x03lqi\x12\"\n" +
 	"\rprev_frame_ms\x18\x13 \x01(\x03R\vprevFrameMs\x12!\n" +
-	"\tencrypted\x18\x14 \x01(\bH\x00R\tencrypted\x88\x01\x01B\f\n" +
+	"\tencrypted\x18\x14 \x01(\bH\x00R\tencrypted\x88\x01\x01\x12\x1c\n" +
+	"\n" +
+	"grid_v_leg\x18\x15 \x03(\x01R\bgridVLegB\f\n" +
 	"\n" +
 	"_encryptedJ\x04\b\x0f\x10\x10\"q\n" +
 	"\x0eInverterFaults\x12(\n" +
@@ -4974,7 +5135,13 @@ const file_busmgr_proto_rawDesc = "" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12/\n" +
 	"\bsettings\x18\x03 \x01(\v2\x13.busmgr.v1.SettingsR\bsettings\x12:\n" +
-	"\teffective\x18\x04 \x01(\v2\x1c.busmgr.v1.EffectiveSettingsR\teffective*;\n" +
+	"\teffective\x18\x04 \x01(\v2\x1c.busmgr.v1.EffectiveSettingsR\teffective\"=\n" +
+	"\x17SetInverterPhaseRequest\x12\x10\n" +
+	"\x03uid\x18\x01 \x01(\tR\x03uid\x12\x10\n" +
+	"\x03leg\x18\x02 \x01(\rR\x03leg\"@\n" +
+	"\x18SetInverterPhaseResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error*;\n" +
 	"\x04Role\x12\x14\n" +
 	"\x10ROLE_UNSPECIFIED\x10\x00\x12\r\n" +
 	"\tPUBLISHER\x10\x01\x12\x0e\n" +
@@ -4994,63 +5161,65 @@ func file_busmgr_proto_rawDescGZIP() []byte {
 }
 
 var file_busmgr_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_busmgr_proto_msgTypes = make([]protoimpl.MessageInfo, 54)
+var file_busmgr_proto_msgTypes = make([]protoimpl.MessageInfo, 56)
 var file_busmgr_proto_goTypes = []any{
-	(Role)(0),                     // 0: busmgr.v1.Role
-	(*Envelope)(nil),              // 1: busmgr.v1.Envelope
-	(*Hello)(nil),                 // 2: busmgr.v1.Hello
-	(*RawFrame)(nil),              // 3: busmgr.v1.RawFrame
-	(*Telemetry)(nil),             // 4: busmgr.v1.Telemetry
-	(*InverterFaults)(nil),        // 5: busmgr.v1.InverterFaults
-	(*DS3Faults)(nil),             // 6: busmgr.v1.DS3Faults
-	(*QS1AFaults)(nil),            // 7: busmgr.v1.QS1AFaults
-	(*Panel)(nil),                 // 8: busmgr.v1.Panel
-	(*DecodeFailed)(nil),          // 9: busmgr.v1.DecodeFailed
-	(*Send)(nil),                  // 10: busmgr.v1.Send
-	(*Broadcast)(nil),             // 11: busmgr.v1.Broadcast
-	(*Reset)(nil),                 // 12: busmgr.v1.Reset
-	(*SubscribeRaw)(nil),          // 13: busmgr.v1.SubscribeRaw
-	(*FleetSummary)(nil),          // 14: busmgr.v1.FleetSummary
-	(*InverterInfo)(nil),          // 15: busmgr.v1.InverterInfo
-	(*Protection)(nil),            // 16: busmgr.v1.Protection
-	(*GridProfileRequest)(nil),    // 17: busmgr.v1.GridProfileRequest
-	(*Empty)(nil),                 // 18: busmgr.v1.Empty
-	(*SelectBase)(nil),            // 19: busmgr.v1.SelectBase
-	(*OverlaySet)(nil),            // 20: busmgr.v1.OverlaySet
-	(*ClearOverlay)(nil),          // 21: busmgr.v1.ClearOverlay
-	(*GetEffective)(nil),          // 22: busmgr.v1.GetEffective
-	(*GridProfileResponse)(nil),   // 23: busmgr.v1.GridProfileResponse
-	(*SystemStatusRequest)(nil),   // 24: busmgr.v1.SystemStatusRequest
-	(*SystemStatusResponse)(nil),  // 25: busmgr.v1.SystemStatusResponse
-	(*EcuIdentity)(nil),           // 26: busmgr.v1.EcuIdentity
-	(*PeerStatus)(nil),            // 27: busmgr.v1.PeerStatus
-	(*EventsRequest)(nil),         // 28: busmgr.v1.EventsRequest
-	(*EventsResponse)(nil),        // 29: busmgr.v1.EventsResponse
-	(*Event)(nil),                 // 30: busmgr.v1.Event
-	(*Settings)(nil),              // 31: busmgr.v1.Settings
-	(*SettingsRequest)(nil),       // 32: busmgr.v1.SettingsRequest
-	(*PairingRequest)(nil),        // 33: busmgr.v1.PairingRequest
-	(*RemoveById)(nil),            // 34: busmgr.v1.RemoveById
-	(*FleetChangeChannel)(nil),    // 35: busmgr.v1.FleetChangeChannel
-	(*ScanStart)(nil),             // 36: busmgr.v1.ScanStart
-	(*AddById)(nil),               // 37: busmgr.v1.AddById
-	(*ReplaceInverter)(nil),       // 38: busmgr.v1.ReplaceInverter
-	(*FleetRekey)(nil),            // 39: busmgr.v1.FleetRekey
-	(*PairingResponse)(nil),       // 40: busmgr.v1.PairingResponse
-	(*PairingCmd)(nil),            // 41: busmgr.v1.PairingCmd
-	(*SetModulePan)(nil),          // 42: busmgr.v1.SetModulePan
-	(*ReportIdScan)(nil),          // 43: busmgr.v1.ReportIdScan
-	(*GetShortAddr)(nil),          // 44: busmgr.v1.GetShortAddr
-	(*SetInverterPanChannel)(nil), // 45: busmgr.v1.SetInverterPanChannel
-	(*PrimeInverterPan)(nil),      // 46: busmgr.v1.PrimeInverterPan
-	(*CommitPanNow)(nil),          // 47: busmgr.v1.CommitPanNow
-	(*BindQuiet)(nil),             // 48: busmgr.v1.BindQuiet
-	(*PairingCmdResult)(nil),      // 49: busmgr.v1.PairingCmdResult
-	(*FoundInverter)(nil),         // 50: busmgr.v1.FoundInverter
-	(*EffectiveSettings)(nil),     // 51: busmgr.v1.EffectiveSettings
-	(*SettingsResponse)(nil),      // 52: busmgr.v1.SettingsResponse
-	nil,                           // 53: busmgr.v1.Protection.ValuesEntry
-	nil,                           // 54: busmgr.v1.Settings.InverterNamesEntry
+	(Role)(0),                        // 0: busmgr.v1.Role
+	(*Envelope)(nil),                 // 1: busmgr.v1.Envelope
+	(*Hello)(nil),                    // 2: busmgr.v1.Hello
+	(*RawFrame)(nil),                 // 3: busmgr.v1.RawFrame
+	(*Telemetry)(nil),                // 4: busmgr.v1.Telemetry
+	(*InverterFaults)(nil),           // 5: busmgr.v1.InverterFaults
+	(*DS3Faults)(nil),                // 6: busmgr.v1.DS3Faults
+	(*QS1AFaults)(nil),               // 7: busmgr.v1.QS1AFaults
+	(*Panel)(nil),                    // 8: busmgr.v1.Panel
+	(*DecodeFailed)(nil),             // 9: busmgr.v1.DecodeFailed
+	(*Send)(nil),                     // 10: busmgr.v1.Send
+	(*Broadcast)(nil),                // 11: busmgr.v1.Broadcast
+	(*Reset)(nil),                    // 12: busmgr.v1.Reset
+	(*SubscribeRaw)(nil),             // 13: busmgr.v1.SubscribeRaw
+	(*FleetSummary)(nil),             // 14: busmgr.v1.FleetSummary
+	(*InverterInfo)(nil),             // 15: busmgr.v1.InverterInfo
+	(*Protection)(nil),               // 16: busmgr.v1.Protection
+	(*GridProfileRequest)(nil),       // 17: busmgr.v1.GridProfileRequest
+	(*Empty)(nil),                    // 18: busmgr.v1.Empty
+	(*SelectBase)(nil),               // 19: busmgr.v1.SelectBase
+	(*OverlaySet)(nil),               // 20: busmgr.v1.OverlaySet
+	(*ClearOverlay)(nil),             // 21: busmgr.v1.ClearOverlay
+	(*GetEffective)(nil),             // 22: busmgr.v1.GetEffective
+	(*GridProfileResponse)(nil),      // 23: busmgr.v1.GridProfileResponse
+	(*SystemStatusRequest)(nil),      // 24: busmgr.v1.SystemStatusRequest
+	(*SystemStatusResponse)(nil),     // 25: busmgr.v1.SystemStatusResponse
+	(*EcuIdentity)(nil),              // 26: busmgr.v1.EcuIdentity
+	(*PeerStatus)(nil),               // 27: busmgr.v1.PeerStatus
+	(*EventsRequest)(nil),            // 28: busmgr.v1.EventsRequest
+	(*EventsResponse)(nil),           // 29: busmgr.v1.EventsResponse
+	(*Event)(nil),                    // 30: busmgr.v1.Event
+	(*Settings)(nil),                 // 31: busmgr.v1.Settings
+	(*SettingsRequest)(nil),          // 32: busmgr.v1.SettingsRequest
+	(*PairingRequest)(nil),           // 33: busmgr.v1.PairingRequest
+	(*RemoveById)(nil),               // 34: busmgr.v1.RemoveById
+	(*FleetChangeChannel)(nil),       // 35: busmgr.v1.FleetChangeChannel
+	(*ScanStart)(nil),                // 36: busmgr.v1.ScanStart
+	(*AddById)(nil),                  // 37: busmgr.v1.AddById
+	(*ReplaceInverter)(nil),          // 38: busmgr.v1.ReplaceInverter
+	(*FleetRekey)(nil),               // 39: busmgr.v1.FleetRekey
+	(*PairingResponse)(nil),          // 40: busmgr.v1.PairingResponse
+	(*PairingCmd)(nil),               // 41: busmgr.v1.PairingCmd
+	(*SetModulePan)(nil),             // 42: busmgr.v1.SetModulePan
+	(*ReportIdScan)(nil),             // 43: busmgr.v1.ReportIdScan
+	(*GetShortAddr)(nil),             // 44: busmgr.v1.GetShortAddr
+	(*SetInverterPanChannel)(nil),    // 45: busmgr.v1.SetInverterPanChannel
+	(*PrimeInverterPan)(nil),         // 46: busmgr.v1.PrimeInverterPan
+	(*CommitPanNow)(nil),             // 47: busmgr.v1.CommitPanNow
+	(*BindQuiet)(nil),                // 48: busmgr.v1.BindQuiet
+	(*PairingCmdResult)(nil),         // 49: busmgr.v1.PairingCmdResult
+	(*FoundInverter)(nil),            // 50: busmgr.v1.FoundInverter
+	(*EffectiveSettings)(nil),        // 51: busmgr.v1.EffectiveSettings
+	(*SettingsResponse)(nil),         // 52: busmgr.v1.SettingsResponse
+	(*SetInverterPhaseRequest)(nil),  // 53: busmgr.v1.SetInverterPhaseRequest
+	(*SetInverterPhaseResponse)(nil), // 54: busmgr.v1.SetInverterPhaseResponse
+	nil,                              // 55: busmgr.v1.Protection.ValuesEntry
+	nil,                              // 56: busmgr.v1.Settings.InverterNamesEntry
 }
 var file_busmgr_proto_depIdxs = []int32{
 	2,  // 0: busmgr.v1.Envelope.hello:type_name -> busmgr.v1.Hello
@@ -5076,51 +5245,53 @@ var file_busmgr_proto_depIdxs = []int32{
 	40, // 20: busmgr.v1.Envelope.pairing_resp:type_name -> busmgr.v1.PairingResponse
 	41, // 21: busmgr.v1.Envelope.pairing_cmd:type_name -> busmgr.v1.PairingCmd
 	49, // 22: busmgr.v1.Envelope.pairing_result:type_name -> busmgr.v1.PairingCmdResult
-	0,  // 23: busmgr.v1.Hello.role:type_name -> busmgr.v1.Role
-	8,  // 24: busmgr.v1.Telemetry.panels:type_name -> busmgr.v1.Panel
-	5,  // 25: busmgr.v1.Telemetry.faults:type_name -> busmgr.v1.InverterFaults
-	6,  // 26: busmgr.v1.InverterFaults.ds3:type_name -> busmgr.v1.DS3Faults
-	7,  // 27: busmgr.v1.InverterFaults.qs1a:type_name -> busmgr.v1.QS1AFaults
-	53, // 28: busmgr.v1.Protection.values:type_name -> busmgr.v1.Protection.ValuesEntry
-	18, // 29: busmgr.v1.GridProfileRequest.list_profiles:type_name -> busmgr.v1.Empty
-	18, // 30: busmgr.v1.GridProfileRequest.refresh_profiles:type_name -> busmgr.v1.Empty
-	19, // 31: busmgr.v1.GridProfileRequest.select_base:type_name -> busmgr.v1.SelectBase
-	20, // 32: busmgr.v1.GridProfileRequest.set_overlay:type_name -> busmgr.v1.OverlaySet
-	21, // 33: busmgr.v1.GridProfileRequest.clear_overlay:type_name -> busmgr.v1.ClearOverlay
-	22, // 34: busmgr.v1.GridProfileRequest.get_effective:type_name -> busmgr.v1.GetEffective
-	18, // 35: busmgr.v1.GridProfileRequest.get_status:type_name -> busmgr.v1.Empty
-	18, // 36: busmgr.v1.GridProfileRequest.list_overlays:type_name -> busmgr.v1.Empty
-	18, // 37: busmgr.v1.GridProfileRequest.get_base:type_name -> busmgr.v1.Empty
-	26, // 38: busmgr.v1.SystemStatusResponse.ecu:type_name -> busmgr.v1.EcuIdentity
-	27, // 39: busmgr.v1.SystemStatusResponse.peers:type_name -> busmgr.v1.PeerStatus
-	30, // 40: busmgr.v1.EventsResponse.events:type_name -> busmgr.v1.Event
-	54, // 41: busmgr.v1.Settings.inverter_names:type_name -> busmgr.v1.Settings.InverterNamesEntry
-	18, // 42: busmgr.v1.SettingsRequest.get:type_name -> busmgr.v1.Empty
-	31, // 43: busmgr.v1.SettingsRequest.set:type_name -> busmgr.v1.Settings
-	36, // 44: busmgr.v1.PairingRequest.scan:type_name -> busmgr.v1.ScanStart
-	37, // 45: busmgr.v1.PairingRequest.add_by_id:type_name -> busmgr.v1.AddById
-	38, // 46: busmgr.v1.PairingRequest.replace:type_name -> busmgr.v1.ReplaceInverter
-	39, // 47: busmgr.v1.PairingRequest.fleet_rekey:type_name -> busmgr.v1.FleetRekey
-	18, // 48: busmgr.v1.PairingRequest.abort:type_name -> busmgr.v1.Empty
-	18, // 49: busmgr.v1.PairingRequest.get_status:type_name -> busmgr.v1.Empty
-	35, // 50: busmgr.v1.PairingRequest.change_channel:type_name -> busmgr.v1.FleetChangeChannel
-	34, // 51: busmgr.v1.PairingRequest.remove_by_id:type_name -> busmgr.v1.RemoveById
-	42, // 52: busmgr.v1.PairingCmd.set_module_pan:type_name -> busmgr.v1.SetModulePan
-	43, // 53: busmgr.v1.PairingCmd.report_scan:type_name -> busmgr.v1.ReportIdScan
-	44, // 54: busmgr.v1.PairingCmd.get_short_addr:type_name -> busmgr.v1.GetShortAddr
-	45, // 55: busmgr.v1.PairingCmd.set_inv_pan:type_name -> busmgr.v1.SetInverterPanChannel
-	46, // 56: busmgr.v1.PairingCmd.prime_inv:type_name -> busmgr.v1.PrimeInverterPan
-	47, // 57: busmgr.v1.PairingCmd.commit_pan:type_name -> busmgr.v1.CommitPanNow
-	48, // 58: busmgr.v1.PairingCmd.bind_quiet:type_name -> busmgr.v1.BindQuiet
-	18, // 59: busmgr.v1.PairingCmd.get_module_pan:type_name -> busmgr.v1.Empty
-	50, // 60: busmgr.v1.PairingCmdResult.found:type_name -> busmgr.v1.FoundInverter
-	31, // 61: busmgr.v1.SettingsResponse.settings:type_name -> busmgr.v1.Settings
-	51, // 62: busmgr.v1.SettingsResponse.effective:type_name -> busmgr.v1.EffectiveSettings
-	63, // [63:63] is the sub-list for method output_type
-	63, // [63:63] is the sub-list for method input_type
-	63, // [63:63] is the sub-list for extension type_name
-	63, // [63:63] is the sub-list for extension extendee
-	0,  // [0:63] is the sub-list for field type_name
+	53, // 23: busmgr.v1.Envelope.set_inverter_phase_req:type_name -> busmgr.v1.SetInverterPhaseRequest
+	54, // 24: busmgr.v1.Envelope.set_inverter_phase_resp:type_name -> busmgr.v1.SetInverterPhaseResponse
+	0,  // 25: busmgr.v1.Hello.role:type_name -> busmgr.v1.Role
+	8,  // 26: busmgr.v1.Telemetry.panels:type_name -> busmgr.v1.Panel
+	5,  // 27: busmgr.v1.Telemetry.faults:type_name -> busmgr.v1.InverterFaults
+	6,  // 28: busmgr.v1.InverterFaults.ds3:type_name -> busmgr.v1.DS3Faults
+	7,  // 29: busmgr.v1.InverterFaults.qs1a:type_name -> busmgr.v1.QS1AFaults
+	55, // 30: busmgr.v1.Protection.values:type_name -> busmgr.v1.Protection.ValuesEntry
+	18, // 31: busmgr.v1.GridProfileRequest.list_profiles:type_name -> busmgr.v1.Empty
+	18, // 32: busmgr.v1.GridProfileRequest.refresh_profiles:type_name -> busmgr.v1.Empty
+	19, // 33: busmgr.v1.GridProfileRequest.select_base:type_name -> busmgr.v1.SelectBase
+	20, // 34: busmgr.v1.GridProfileRequest.set_overlay:type_name -> busmgr.v1.OverlaySet
+	21, // 35: busmgr.v1.GridProfileRequest.clear_overlay:type_name -> busmgr.v1.ClearOverlay
+	22, // 36: busmgr.v1.GridProfileRequest.get_effective:type_name -> busmgr.v1.GetEffective
+	18, // 37: busmgr.v1.GridProfileRequest.get_status:type_name -> busmgr.v1.Empty
+	18, // 38: busmgr.v1.GridProfileRequest.list_overlays:type_name -> busmgr.v1.Empty
+	18, // 39: busmgr.v1.GridProfileRequest.get_base:type_name -> busmgr.v1.Empty
+	26, // 40: busmgr.v1.SystemStatusResponse.ecu:type_name -> busmgr.v1.EcuIdentity
+	27, // 41: busmgr.v1.SystemStatusResponse.peers:type_name -> busmgr.v1.PeerStatus
+	30, // 42: busmgr.v1.EventsResponse.events:type_name -> busmgr.v1.Event
+	56, // 43: busmgr.v1.Settings.inverter_names:type_name -> busmgr.v1.Settings.InverterNamesEntry
+	18, // 44: busmgr.v1.SettingsRequest.get:type_name -> busmgr.v1.Empty
+	31, // 45: busmgr.v1.SettingsRequest.set:type_name -> busmgr.v1.Settings
+	36, // 46: busmgr.v1.PairingRequest.scan:type_name -> busmgr.v1.ScanStart
+	37, // 47: busmgr.v1.PairingRequest.add_by_id:type_name -> busmgr.v1.AddById
+	38, // 48: busmgr.v1.PairingRequest.replace:type_name -> busmgr.v1.ReplaceInverter
+	39, // 49: busmgr.v1.PairingRequest.fleet_rekey:type_name -> busmgr.v1.FleetRekey
+	18, // 50: busmgr.v1.PairingRequest.abort:type_name -> busmgr.v1.Empty
+	18, // 51: busmgr.v1.PairingRequest.get_status:type_name -> busmgr.v1.Empty
+	35, // 52: busmgr.v1.PairingRequest.change_channel:type_name -> busmgr.v1.FleetChangeChannel
+	34, // 53: busmgr.v1.PairingRequest.remove_by_id:type_name -> busmgr.v1.RemoveById
+	42, // 54: busmgr.v1.PairingCmd.set_module_pan:type_name -> busmgr.v1.SetModulePan
+	43, // 55: busmgr.v1.PairingCmd.report_scan:type_name -> busmgr.v1.ReportIdScan
+	44, // 56: busmgr.v1.PairingCmd.get_short_addr:type_name -> busmgr.v1.GetShortAddr
+	45, // 57: busmgr.v1.PairingCmd.set_inv_pan:type_name -> busmgr.v1.SetInverterPanChannel
+	46, // 58: busmgr.v1.PairingCmd.prime_inv:type_name -> busmgr.v1.PrimeInverterPan
+	47, // 59: busmgr.v1.PairingCmd.commit_pan:type_name -> busmgr.v1.CommitPanNow
+	48, // 60: busmgr.v1.PairingCmd.bind_quiet:type_name -> busmgr.v1.BindQuiet
+	18, // 61: busmgr.v1.PairingCmd.get_module_pan:type_name -> busmgr.v1.Empty
+	50, // 62: busmgr.v1.PairingCmdResult.found:type_name -> busmgr.v1.FoundInverter
+	31, // 63: busmgr.v1.SettingsResponse.settings:type_name -> busmgr.v1.Settings
+	51, // 64: busmgr.v1.SettingsResponse.effective:type_name -> busmgr.v1.EffectiveSettings
+	65, // [65:65] is the sub-list for method output_type
+	65, // [65:65] is the sub-list for method input_type
+	65, // [65:65] is the sub-list for extension type_name
+	65, // [65:65] is the sub-list for extension extendee
+	0,  // [0:65] is the sub-list for field type_name
 }
 
 func init() { file_busmgr_proto_init() }
@@ -5152,6 +5323,8 @@ func file_busmgr_proto_init() {
 		(*Envelope_PairingResp)(nil),
 		(*Envelope_PairingCmd)(nil),
 		(*Envelope_PairingResult)(nil),
+		(*Envelope_SetInverterPhaseReq)(nil),
+		(*Envelope_SetInverterPhaseResp)(nil),
 	}
 	file_busmgr_proto_msgTypes[3].OneofWrappers = []any{}
 	file_busmgr_proto_msgTypes[4].OneofWrappers = []any{
@@ -5200,7 +5373,7 @@ func file_busmgr_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_busmgr_proto_rawDesc), len(file_busmgr_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   54,
+			NumMessages:   56,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

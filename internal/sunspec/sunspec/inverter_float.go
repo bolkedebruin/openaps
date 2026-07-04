@@ -99,11 +99,11 @@ func emitInverterFloat(bank *Bank, s source.Snapshot, phase PhaseMode) {
 	bank.putFloat32NotImpl()
 	bank.putFloat32NotImpl()
 
-	// PhVphA/B/C — line-neutral.
-	v := float32(s.GridVoltageV)
-	bank.putFloat32Phase(v, 0, phases)
-	bank.putFloat32Phase(v, 1, phases)
-	bank.putFloat32Phase(v, 2, phases)
+	// PhVphA/B/C — line-neutral, per-leg.
+	pv := derivePhaseVoltages(s)
+	bank.putFloat32Phase(float32(pv[0]), 0, phases)
+	bank.putFloat32Phase(float32(pv[1]), 1, phases)
+	bank.putFloat32Phase(float32(pv[2]), 2, phases)
 
 	// W
 	bank.putFloat32(float32(s.SystemPowerW))

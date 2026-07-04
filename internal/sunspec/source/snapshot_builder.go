@@ -222,6 +222,9 @@ func (b *Builder) invertersFromInvDriver() []Inverter {
 			ACVoltageV:  intRound(snap.ACVolts),
 			ACPowerW:    intRound(snap.ACWatts),
 		}
+		if len(snap.PerLegVolts) > 0 {
+			inv.PerLegVoltage = append([]float64(nil), snap.PerLegVolts...)
+		}
 		if snap.ModelCode != nil {
 			inv.Model = int(*snap.ModelCode)
 		}

@@ -1,3 +1,32 @@
+# OpenAPS v1.1.22
+
+Presents a correct three-phase view over SunSpec/Modbus and lets you assign each
+single-phase inverter to its grid leg.
+
+## Added
+
+- **Per-inverter grid-leg assignment.** A single-phase microinverter feeds one
+  grid leg (L1/L2/L3) that the hardware cannot report. You can now set it per
+  inverter from the web UI; the SunSpec adapter uses it to place each inverter's
+  power on the correct phase of the three-phase model. Three-phase inverters
+  report their own per-leg data and need no assignment.
+- **QT2 three-phase telemetry decoding.** Decodes the QT2/QT2D per-leg grid
+  voltages; the SunSpec adapter reports model 103 (three-phase) when a
+  three-phase inverter is present, splitting power across the legs the way the
+  stock firmware does. (Decoded from firmware; not yet validated against live
+  QT2 hardware.)
+
+## Fixed
+
+- **A three-phase inverter no longer reports all of its power on L1** in the
+  SunSpec model.
+
+## Upgrading
+
+`opkg upgrade openaps-inv-driver openaps-ecu-sunspec openaps-ecu-web`. No
+configuration or schema changes. Assign single-phase inverters to their grid leg
+from the inverter card for an accurate per-phase view.
+
 # OpenAPS v1.1.21
 
 Unifies logging across all daemons and moves logs to `/var/log` with built-in

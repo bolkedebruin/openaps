@@ -134,6 +134,14 @@ type Reply struct {
 	ActivePowerW  float64
 	ReactivePower float64
 
+	// GridVLeg carries the per-grid-leg AC voltage measured by a
+	// three-phase inverter (index 0=L1, 1=L2, 2=L3). Zero-length for
+	// single-phase replies, which feed a single leg the hardware cannot
+	// name. The SunSpec encoder uses these to populate the model 103
+	// per-phase voltage fields; per-leg power/current are derived from the
+	// total, matching the stock firmware.
+	GridVLeg []float64
+
 	// LifetimeRaw is the raw multi-byte big-endian counter per panel.
 	// Multiplied by LifetimeScale it gives kWh; raw + scale stay
 	// separate so callers can verify or override.

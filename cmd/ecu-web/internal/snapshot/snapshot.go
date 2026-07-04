@@ -235,11 +235,16 @@ type PanelDTO struct {
 
 // InverterDTO is the per-inverter view the dashboard renders.
 type InverterDTO struct {
-	UID         string  `json:"uid"`
-	ShortAddr   uint32  `json:"short_addr"`
-	Model       string  `json:"model"`
-	ModelCode   uint8   `json:"model_code"`
-	Phase       uint32  `json:"phase"`
+	UID       string `json:"uid"`
+	ShortAddr uint32 `json:"short_addr"`
+	Model     string `json:"model"`
+	ModelCode uint8  `json:"model_code"`
+	Phase     uint32 `json:"phase"`
+	// ThreePhase is true for inverters that span all three grid legs and
+	// report their own per-leg telemetry (derived from the model via
+	// codec.PhaseFromModel). Single-phase inverters are operator-assigned to
+	// one leg via Phase; the UI shows the leg selector only when false.
+	ThreePhase  bool    `json:"three_phase"`
 	SWVersion   uint32  `json:"sw_version"`
 	ZigbeeBound *bool   `json:"zigbee_bound,omitempty"`
 	TurnedOff   *bool   `json:"turned_off,omitempty"`
@@ -338,6 +343,7 @@ func (st *invState) toDTO(nowMs int64) InverterDTO {
 		Model:        st.modelName,
 		ModelCode:    st.modelCode,
 		Phase:        st.phase,
+		ThreePhase:   codec.PhaseFromModel(st.modelCode) == 3,
 		SWVersion:    st.swVersion,
 		ZigbeeBound:  st.zigbeeBound,
 		TurnedOff:    st.turnedOff,

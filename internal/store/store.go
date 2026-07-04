@@ -171,6 +171,25 @@ type InverterInfoUpdate struct {
 	PreserveLastSeen bool
 }
 
+// InverterModelCode returns the stored model_code for an inverter UID.
+// found is false when no such inverter row exists; a row whose model_code
+// is still NULL returns found=true with code 0 (model not yet learned).
+func (s *Store) InverterModelCode(ctx context.Context, uid string) (code uint32, found bool, err error) {
+	var mc sql.NullInt64
+	switch e := s.db.QueryRowContext(ctx,
+		`SELECT model_code FROM inverters WHERE uid = ?`, uid).Scan(&mc); e {
+	case nil:
+		if mc.Valid {
+			return uint32(mc.Int64), true, nil
+		}
+		return 0, true, nil
+	case sql.ErrNoRows:
+		return 0, false, nil
+	default:
+		return 0, false, fmt.Errorf("InverterModelCode: %w", e)
+	}
+}
+
 // UpsertInverterInfo upserts the inverters row keyed by UID with the
 // optional identity / pair-state columns. On INSERT, paired_at_ms and
 // last_seen_ms are set to TsMs. On UPDATE, last_seen_ms takes TsMs unless

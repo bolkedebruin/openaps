@@ -63,6 +63,24 @@ func (c *Controller) Send(ctx context.Context, uid string, frame []byte) error {
 	return nil
 }
 
+// SetInverterPhase assigns the grid leg (1/2/3) a single-phase inverter is
+// wired to. inv-driver rejects the op for three-phase inverters, which report
+// their own per-leg telemetry.
+func (c *Controller) SetInverterPhase(ctx context.Context, uid string, leg uint32) (*wire.SetInverterPhaseResponse, error) {
+	req := &wire.Envelope{Body: &wire.Envelope_SetInverterPhaseReq{
+		SetInverterPhaseReq: &wire.SetInverterPhaseRequest{Uid: uid, Leg: leg},
+	}}
+	env, err := c.roundtrip(ctx, req, func(e *wire.Envelope) bool { return e.GetSetInverterPhaseResp() != nil })
+	if err != nil {
+		return nil, err
+	}
+	resp := env.GetSetInverterPhaseResp()
+	if !resp.GetOk() {
+		return resp, fmt.Errorf("inv-driver: %s", resp.GetError())
+	}
+	return resp, nil
+}
+
 // SystemStatus fetches ECU identity + connected peers from inv-driver.
 func (c *Controller) SystemStatus(ctx context.Context) (*wire.SystemStatusResponse, error) {
 	req := &wire.Envelope{Body: &wire.Envelope_SystemStatusReq{SystemStatusReq: &wire.SystemStatusRequest{}}}

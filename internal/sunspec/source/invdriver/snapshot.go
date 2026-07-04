@@ -15,19 +15,22 @@ import (
 // "explicitly zero". FetchedAt tracks telemetry freshness;
 // InfoFetchedAt tracks identity freshness.
 type Snapshot struct {
-	TsMs       int64
-	Cmd        uint32
-	Model      string
-	ACWatts    float64
-	ACVolts    float64
-	ACFreq     float64
-	BusV       float64
-	ReportSec  uint32
-	Panels     []Panel
-	LifetimeWh float64
-	RSSI       byte // L1 envelope byte 4 — primary RSSI
-	LQI        byte // L1 envelope byte 5 — secondary signal metric
-	FetchedAt  time.Time
+	TsMs    int64
+	Cmd     uint32
+	Model   string
+	ACWatts float64
+	ACVolts float64
+	// PerLegVolts holds a three-phase inverter's measured per-grid-leg AC
+	// voltage (0=L1,1=L2,2=L3). Empty for single-phase inverters.
+	PerLegVolts []float64
+	ACFreq      float64
+	BusV        float64
+	ReportSec   uint32
+	Panels      []Panel
+	LifetimeWh  float64
+	RSSI        byte // L1 envelope byte 4 — primary RSSI
+	LQI         byte // L1 envelope byte 5 — secondary signal metric
+	FetchedAt   time.Time
 
 	// Faults carries the family-specific named-bit decode the codec
 	// produces. Nil when the inverter has not yet streamed a telemetry
@@ -59,18 +62,19 @@ type Panel struct {
 func fromTelemetry(t *wire.Telemetry) Snapshot {
 	panels := t.GetPanels()
 	out := Snapshot{
-		TsMs:      t.GetTsMs(),
-		Cmd:       t.GetCmd(),
-		Model:     t.GetModel(),
-		ACWatts:   t.GetActivePowerW(),
-		ACVolts:   t.GetGridV(),
-		ACFreq:    t.GetFreqHz(),
-		BusV:      t.GetBusV(),
-		ReportSec: t.GetReportSec(),
-		Faults:    t.GetFaults(),
-		RSSI:      byte(t.GetRssi()),
-		LQI:       byte(t.GetLqi()),
-		FetchedAt: time.Now(),
+		TsMs:        t.GetTsMs(),
+		Cmd:         t.GetCmd(),
+		Model:       t.GetModel(),
+		ACWatts:     t.GetActivePowerW(),
+		ACVolts:     t.GetGridV(),
+		PerLegVolts: t.GetGridVLeg(),
+		ACFreq:      t.GetFreqHz(),
+		BusV:        t.GetBusV(),
+		ReportSec:   t.GetReportSec(),
+		Faults:      t.GetFaults(),
+		RSSI:        byte(t.GetRssi()),
+		LQI:         byte(t.GetLqi()),
+		FetchedAt:   time.Now(),
 	}
 	if len(panels) > 0 {
 		out.Panels = make([]Panel, 0, len(panels))
