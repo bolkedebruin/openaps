@@ -38,19 +38,24 @@ start() {
     # current daemon's output.
     : > "$LOG"
 
-    # No battery-backed RTC: a cold boot can start at 1970/2000. ntpd steps a
-    # large offset on its own, but nudge an implausibly-old clock to a recent
-    # baseline first — the last-known-good /etc/timestamp mtime (written at
-    # shutdown), else a built-in floor — so even a decade-wide gap is a non-issue.
+    # No battery-backed RTC: a cold boot can start at 1970/2000, and busybox ntpd
+    # will not step a decade-wide offset — so baseline the clock to a recent time
+    # first, leaving ntpd only a small offset to discipline. Prefer the last-good
+    # /etc/timestamp mtime (written at shutdown), else a built-in floor.
+    #
+    # Trust the timestamp ONLY if its mtime is itself post-2020: a box that shut
+    # down still stuck at 2000 writes a 2000 timestamp, which would otherwise
+    # re-pin the clock to 2000 every boot (a self-perpetuating stuck clock). Fall
+    # back to the floor in that case so ntpd can always step.
+    #
     # Use the shipped busybox for date so -r/-s support never depends on whatever
-    # /bin/date happens to be on a given firmware ($BIN is verified executable
-    # above; date -r reads the file's mtime, not its contents).
+    # /bin/date is; date -r reads the file's mtime, not its contents.
     if [ "$("$BIN" date +%Y)" -lt 2020 ]; then
-        if [ -f /etc/timestamp ]; then
-            "$BIN" date -s "$("$BIN" date -r /etc/timestamp '+%Y-%m-%d %H:%M:%S')" >/dev/null 2>&1 || true
-        else
-            "$BIN" date -s "2026-06-01 00:00:00" >/dev/null 2>&1 || true
+        base="2026-06-01 00:00:00"
+        if [ -f /etc/timestamp ] && [ "$("$BIN" date -r /etc/timestamp +%Y)" -ge 2020 ] 2>/dev/null; then
+            base="$("$BIN" date -r /etc/timestamp '+%Y-%m-%d %H:%M:%S')"
         fi
+        "$BIN" date -s "$base" >/dev/null 2>&1 || true
     fi
 
     # busybox ntpd wants a repeatable -p per peer, not a space-separated list.

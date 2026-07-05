@@ -1,3 +1,22 @@
+# OpenAPS v1.1.26
+
+Fixes the ECU clock staying stuck at the year 2000 on some cold boots.
+
+## Fixed
+
+- **The boot-time clock pre-set no longer re-pins a stuck clock to 2000.** On an
+  RTC-less ECU the boot script baselines the clock from the last-good
+  `/etc/timestamp` before starting `ntpd`, because `ntpd` cannot step a
+  decade-wide offset. If a box had shut down while still stuck at 2000, that
+  timestamp itself carried the year 2000, so the pre-set re-applied 2000 every
+  boot and `ntpd` could never catch up. The pre-set now ignores a pre-2020
+  timestamp and falls back to a recent floor, so `ntpd` always has a small
+  offset to step.
+
+## Upgrading
+
+`opkg update && opkg install openaps-busybox`. No configuration changes.
+
 # OpenAPS v1.1.25
 
 Fixes the ECU clock never being set on newer stock firmware.
