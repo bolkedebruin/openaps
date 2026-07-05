@@ -53,9 +53,12 @@ PROTOC ?= protoc
 # - ipk-dropbear / fetch-dropbear auto-fetch into $(BUILD_DIR)/dropbear-armv7 if unset.
 DROPBEAR_DIR ?= $(BUILD_DIR)/dropbear-armv7
 
-# BUSYBOX_DIR holds the fetched static busybox ARMv7 binary (busybox-openaps).
-# ipk-busybox / fetch-busybox auto-fetch into $(BUILD_DIR)/busybox-armv7 if unset.
-BUSYBOX_DIR ?= $(BUILD_DIR)/busybox-armv7
+# BUSYBOX_BIN is the static busybox ARMv7 binary, VENDORED in the repo rather
+# than fetched at build time: busybox.net is a single flaky host (SSL timeouts
+# break CI) and vendoring pins the exact reviewed binary in git. Its SHA-256 is
+# checked at ipk build. Refresh/re-pin it with `make fetch-busybox`.
+BUSYBOX_BIN    ?= packaging/vendor/busybox-armv7l
+BUSYBOX_SHA256 := cd04052b8b6885f75f50b2a280bfcbf849d8710c8e61d369c533acf307eda064
 
 .PHONY: all build-all build-all-arm \
         build-inv-driver build-inv-driver-arm \
@@ -314,10 +317,11 @@ fetch-dropbear: $(DROPBEAR_DIR)/dropbear
 $(DROPBEAR_DIR)/dropbear:
 	@./packaging/fetch-dropbear.sh $(DROPBEAR_DIR)
 
-fetch-busybox: $(BUSYBOX_DIR)/busybox-openaps
-
-$(BUSYBOX_DIR)/busybox-openaps:
-	@./packaging/fetch-busybox.sh $(BUSYBOX_DIR)
+# Refresh the vendored busybox binary from busybox.net (SHA-verified). Run this
+# manually to re-pin; the normal build uses the committed $(BUSYBOX_BIN) and
+# never touches the network.
+fetch-busybox:
+	@./packaging/fetch-busybox.sh $(dir $(BUSYBOX_BIN))
 
 package-all: package-zb package-sunspec
 
@@ -500,17 +504,22 @@ ipk-dropbear: build-mkipk $(DROPBEAR_DIR)/dropbear
 	$(call call_mkipk,openaps-dropbear,$(IPK_ARCH))
 
 # (h) openaps-busybox — armv7ahf-vfp-neon, Depends: none. Bundles the static
-#     (musl) busybox ARMv7 binary (fetched into $(BUSYBOX_DIR)) as
+#     (musl) busybox ARMv7 binary (vendored at $(BUSYBOX_BIN)) as
 #     /usr/local/bin/busybox-openaps — its ntpd applet is the clock daemon (no
 #     OpenSSL) — plus its operator-editable servers conffile and the S56 init
 #     that runs ntpd as a daemon. Replaces the old ntpdate package (see control:
 #     Replaces/Conflicts ntpdate).
-ipk-busybox: build-mkipk $(BUSYBOX_DIR)/busybox-openaps
+ipk-busybox: build-mkipk
+	@# The busybox binary is vendored; verify its pin so a corrupted or swapped
+	@# file fails the build (portable sha check: shasum on mac, sha256sum on CI).
+	@got=$$(shasum -a 256 $(BUSYBOX_BIN) 2>/dev/null | awk '{print $$1}'); \
+	 [ -n "$$got" ] || got=$$(sha256sum $(BUSYBOX_BIN) 2>/dev/null | awk '{print $$1}'); \
+	 [ "$$got" = "$(BUSYBOX_SHA256)" ] || { echo "ERROR: $(BUSYBOX_BIN) SHA-256 mismatch (got $$got, want $(BUSYBOX_SHA256))"; exit 1; }
 	@rm -rf $(IPKROOT)/openaps-busybox
 	@mkdir -p $(IPKROOT)/openaps-busybox/usr/local/bin
 	@mkdir -p $(IPKROOT)/openaps-busybox/etc/ntpdate
 	@mkdir -p $(IPKROOT)/openaps-busybox/etc/rcS.d
-	@cp $(BUSYBOX_DIR)/busybox-openaps $(IPKROOT)/openaps-busybox/usr/local/bin/busybox-openaps
+	@cp $(BUSYBOX_BIN) $(IPKROOT)/openaps-busybox/usr/local/bin/busybox-openaps
 	@chmod 0755 $(IPKROOT)/openaps-busybox/usr/local/bin/busybox-openaps
 	@# Ship the servers list at its final path so opkg tracks it as a conffile
 	@# (preserved on upgrade); the conffiles manifest lists this exact path.

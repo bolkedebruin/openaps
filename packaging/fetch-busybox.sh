@@ -12,18 +12,21 @@
 # crypto dependency. Validated running on the ECU's armv7 hardfloat / Linux 3.2
 # userland: steps a large offset then disciplines the clock.
 #
+# The binary is VENDORED at packaging/vendor/busybox-armv7l and committed to the
+# repo; the normal build uses that committed copy and never touches the network
+# (busybox.net is a single flaky host). This script is the REFRESH/re-pin tool:
+# run it to re-download and SHA-verify the vendored binary, e.g. after bumping
+# the pinned version.
+#
 # Usage:
-#   ./packaging/fetch-busybox.sh [output-dir]
+#   ./packaging/fetch-busybox.sh [output-dir]   # default: packaging/vendor
 #
-# Produces (default output dir = build/busybox-armv7):
-#   <out>/busybox-openaps
-#
-# After running this:
-#   make ipk-busybox BUSYBOX_DIR=<out>
+# Produces:
+#   <out>/busybox-armv7l   (update SHA256 below if you bump the version)
 
 set -e
 
-OUT="${1:-build/busybox-armv7}"
+OUT="${1:-packaging/vendor}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
@@ -78,14 +81,13 @@ if [ "$got_sha" != "$SHA256" ]; then
 fi
 
 mkdir -p "$OUT"
-cp "$BIN" "$OUT/busybox-openaps"
-chmod 0755 "$OUT/busybox-openaps"
+cp "$BIN" "$OUT/busybox-armv7l"
+chmod 0755 "$OUT/busybox-armv7l"
 
-echo "+ wrote busybox-openaps to $OUT"
+echo "+ wrote (vendored) busybox-armv7l to $OUT"
 echo
 echo "verify ELF arch:"
-file "$OUT/busybox-openaps" 2>/dev/null | head -1 || true
+file "$OUT/busybox-armv7l" 2>/dev/null | head -1 || true
 
 echo
-echo "next:"
-echo "  make ipk-busybox BUSYBOX_DIR=$OUT"
+echo "commit the refreshed binary; the build (make ipk-busybox) uses it directly."
