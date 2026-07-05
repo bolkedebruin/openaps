@@ -1,0 +1,17 @@
+#!/bin/sh
+# postinst — openaps-busybox
+#
+# Installs the static busybox time client. The server list
+# (/etc/ntpdate/servers.conf) ships as a conffile, so opkg preserves operator
+# edits across upgrades. Bring the ntpd daemon up now; it also starts at boot
+# via rcS.d S56. `restart` (not start) so an upgrade replaces a running daemon.
+set -e
+
+# `|| true` so a slow first sync (e.g. network not up yet at install time) that
+# trips the init's liveness check does not fail package configuration — the
+# daemon self-retries and S56 also runs at boot.
+if [ -x /etc/rcS.d/S56-ntpdate ]; then
+    /etc/rcS.d/S56-ntpdate restart || true
+fi
+
+exit 0

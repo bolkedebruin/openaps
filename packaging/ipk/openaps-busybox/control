@@ -1,0 +1,15 @@
+Package: openaps-busybox
+Version: __OPENAPS_VERSION__
+Architecture: armv7ahf-vfp-neon
+Maintainer: Bolke de Bruin <bdbruin@gmail.com>
+Section: net
+Priority: optional
+Depends:
+Replaces: ntpdate
+Conflicts: ntpdate
+Description: Static busybox providing the OpenAPS NTP client.
+ A fully static (musl) busybox installed as /usr/local/bin/busybox-openaps. Its
+ ntpd applet keeps the RTC-less ECU clock stepped and disciplined against the
+ Debian NTP pool, run as a daemon from the shipped S56 boot script. Unlike the
+ old ntpdate it links no OpenSSL, so it survives the stock firmware's move to
+ OpenSSL 1.1. Replaces (and removes) the ntpdate package.

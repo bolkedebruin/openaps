@@ -1,3 +1,30 @@
+# OpenAPS v1.1.25
+
+Fixes the ECU clock never being set on newer stock firmware.
+
+## Fixed
+
+- **Time sync now works regardless of the stock firmware's OpenSSL version.**
+  The clock client was the Debian `ntpdate` binary, dynamically linked against
+  OpenSSL 1.0.0 (`libcrypto.so.1.0.0`). On firmware that ships OpenSSL 1.1 that
+  library is gone, so `ntpdate` failed to load and the clock was never
+  stepped — silently, because the boot script discarded the error. It is
+  replaced by a fully static (musl) busybox whose `ntpd` applet links no
+  OpenSSL, run as a persistent daemon that steps a large offset at boot and
+  disciplines the clock continuously.
+
+## Packaging
+
+- New package `openaps-busybox` replaces `ntpdate`: it installs the static
+  `/usr/local/bin/busybox-openaps` and the `S56` clock daemon, and is bundled in
+  the bootstrap so a fresh install has a correct clock from first boot.
+
+## Upgrading
+
+`opkg update && opkg install openaps-busybox`. This removes `ntpdate`; if opkg
+reports a conflict, run `opkg remove ntpdate` first. No configuration changes —
+the operator NTP server list at `/etc/ntpdate/servers.conf` is preserved.
+
 # OpenAPS v1.1.24
 
 Fixes grid-leg assignment while inverters are online.

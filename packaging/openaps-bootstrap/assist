@@ -79,6 +79,13 @@ APSTOCK_IPK=""
 for f in "$IPK_DIR"/apsystems-stock_*_all.ipk; do
     [ -f "$f" ] && APSTOCK_IPK=$f
 done
+# openaps-busybox provides the static ntpd/crond client (no OpenSSL). Installing
+# it at bootstrap sets the clock early — TLS validity and log timestamps depend
+# on a sane clock. Architecture: armv7ahf-vfp-neon.
+BUSYBOX_IPK=""
+for f in "$IPK_DIR"/openaps-busybox_*_armv7ahf-vfp-neon.ipk; do
+    [ -f "$f" ] && BUSYBOX_IPK=$f
+done
 
 # ---------------------------------------------------------------------------
 # Step 1 — pre-flight + lock + backup
@@ -119,6 +126,10 @@ if [ -z "$TLSPROXY_IPK" ]; then
 fi
 if [ -z "$APSTOCK_IPK" ]; then
     echo "FATAL: no apsystems-stock_*_all.ipk in $IPK_DIR"
+    exit 1
+fi
+if [ -z "$BUSYBOX_IPK" ]; then
+    echo "FATAL: no openaps-busybox_*_armv7ahf-vfp-neon.ipk in $IPK_DIR"
     exit 1
 fi
 echo "  dropbear ipk:  $DROPBEAR_IPK"
@@ -339,6 +350,16 @@ else
     echo "  rollback: tar -xzf $BACKUP_PATH -C /"
     exit 1
 fi
+
+# openaps-busybox — the static ntpd/crond client (no OpenSSL). Install it here,
+# right after the recovery path is up and before anything relies on a sane clock
+# (TLS validity on the later networked feed, log timestamps). Remove any old
+# ntpdate package first so its S56/servers.conf files don't conflict on install.
+# LOCAL .ipk install (no network); its postinst starts ntpd. Non-fatal — a clock
+# hiccup must not abort the conversion when dropbear is already listening.
+$OPKG_LOCAL remove ntpdate >/dev/null 2>&1 || true
+echo "  installing $(basename "$BUSYBOX_IPK")"
+$OPKG_LOCAL install "$BUSYBOX_IPK" || echo "  WARNING: opkg install of openaps-busybox failed; clock will not be synced until it is installed"
 
 # tls-proxy next — its S47 rcS.d init serves the persistent loopback feed.
 echo "  installing $(basename "$TLSPROXY_IPK")"

@@ -53,9 +53,9 @@ PROTOC ?= protoc
 # - ipk-dropbear / fetch-dropbear auto-fetch into $(BUILD_DIR)/dropbear-armv7 if unset.
 DROPBEAR_DIR ?= $(BUILD_DIR)/dropbear-armv7
 
-# NTPDATE_DIR holds the extracted ntpdate ARMv7 binary.
-# ipk-ntpdate / fetch-ntpdate auto-fetch into $(BUILD_DIR)/ntpdate-armv7 if unset.
-NTPDATE_DIR ?= $(BUILD_DIR)/ntpdate-armv7
+# BUSYBOX_DIR holds the fetched static busybox ARMv7 binary (busybox-openaps).
+# ipk-busybox / fetch-busybox auto-fetch into $(BUILD_DIR)/busybox-armv7 if unset.
+BUSYBOX_DIR ?= $(BUILD_DIR)/busybox-armv7
 
 .PHONY: all build-all build-all-arm \
         build-inv-driver build-inv-driver-arm \
@@ -68,9 +68,9 @@ NTPDATE_DIR ?= $(BUILD_DIR)/ntpdate-armv7
         deploy-inv-driver deploy-ecu-web deploy-ecu-zb deploy-ecu-sunspec \
         install-init-zb uninstall-init-zb \
         package-zb package-sunspec package-sunspec-with-dropbear \
-        package-all fetch-dropbear fetch-ntpdate \
+        package-all fetch-dropbear fetch-busybox \
         ipk-all ipk-base ipk-inv-driver ipk-ecu-zb ipk-ecu-web ipk-ecu-sunspec \
-        ipk-tls-proxy ipk-dropbear ipk-ntpdate package-ipks package-bootstrap \
+        ipk-tls-proxy ipk-dropbear ipk-busybox package-ipks package-bootstrap \
         web web-test proto \
         test vet fmt clean
 
@@ -314,10 +314,10 @@ fetch-dropbear: $(DROPBEAR_DIR)/dropbear
 $(DROPBEAR_DIR)/dropbear:
 	@./packaging/fetch-dropbear.sh $(DROPBEAR_DIR)
 
-fetch-ntpdate: $(NTPDATE_DIR)/ntpdate
+fetch-busybox: $(BUSYBOX_DIR)/busybox-openaps
 
-$(NTPDATE_DIR)/ntpdate:
-	@./packaging/fetch-ntpdate.sh $(NTPDATE_DIR)
+$(BUSYBOX_DIR)/busybox-openaps:
+	@./packaging/fetch-busybox.sh $(BUSYBOX_DIR)
 
 package-all: package-zb package-sunspec
 
@@ -391,7 +391,7 @@ define call_mkipk
 	@ls -lh $(IPK_DIR)/$(1)_$(VERSION)_$(2).ipk
 endef
 
-ipk-all: ipk-base ipk-inv-driver ipk-ecu-zb ipk-ecu-web ipk-ecu-sunspec ipk-recoveryd ipk-tls-proxy ipk-dropbear ipk-ntpdate ipk-apsystems-stock
+ipk-all: ipk-base ipk-inv-driver ipk-ecu-zb ipk-ecu-web ipk-ecu-sunspec ipk-recoveryd ipk-tls-proxy ipk-dropbear ipk-busybox ipk-apsystems-stock
 
 # (a) openaps-base — Architecture: all, no Depends. Ships release.pub +
 #     openaps-rollback; postinst provisions settings.json from /etc/yuneng.
@@ -499,24 +499,26 @@ ipk-dropbear: build-mkipk $(DROPBEAR_DIR)/dropbear
 	@chmod 0755 $(IPKROOT)/openaps-dropbear/etc/rcS.d/S98-dropbear
 	$(call call_mkipk,openaps-dropbear,$(IPK_ARCH))
 
-# (h) ntpdate — armv7ahf-vfp-neon, Depends: none. Bundles the Debian wheezy
-#     ntpdate ARMv7 binary (fetched into $(NTPDATE_DIR)) under /usr/local/sbin,
-#     its operator-editable servers conffile, and the S46 init that steps the
-#     clock at boot and hourly from a small rcS loop (the box has no cron).
-ipk-ntpdate: build-mkipk $(NTPDATE_DIR)/ntpdate
-	@rm -rf $(IPKROOT)/ntpdate
-	@mkdir -p $(IPKROOT)/ntpdate/usr/local/sbin
-	@mkdir -p $(IPKROOT)/ntpdate/etc/ntpdate
-	@mkdir -p $(IPKROOT)/ntpdate/etc/rcS.d
-	@cp $(NTPDATE_DIR)/ntpdate $(IPKROOT)/ntpdate/usr/local/sbin/ntpdate
-	@chmod 0755 $(IPKROOT)/ntpdate/usr/local/sbin/ntpdate
+# (h) openaps-busybox — armv7ahf-vfp-neon, Depends: none. Bundles the static
+#     (musl) busybox ARMv7 binary (fetched into $(BUSYBOX_DIR)) as
+#     /usr/local/bin/busybox-openaps — its ntpd applet is the clock daemon (no
+#     OpenSSL) — plus its operator-editable servers conffile and the S56 init
+#     that runs ntpd as a daemon. Replaces the old ntpdate package (see control:
+#     Replaces/Conflicts ntpdate).
+ipk-busybox: build-mkipk $(BUSYBOX_DIR)/busybox-openaps
+	@rm -rf $(IPKROOT)/openaps-busybox
+	@mkdir -p $(IPKROOT)/openaps-busybox/usr/local/bin
+	@mkdir -p $(IPKROOT)/openaps-busybox/etc/ntpdate
+	@mkdir -p $(IPKROOT)/openaps-busybox/etc/rcS.d
+	@cp $(BUSYBOX_DIR)/busybox-openaps $(IPKROOT)/openaps-busybox/usr/local/bin/busybox-openaps
+	@chmod 0755 $(IPKROOT)/openaps-busybox/usr/local/bin/busybox-openaps
 	@# Ship the servers list at its final path so opkg tracks it as a conffile
 	@# (preserved on upgrade); the conffiles manifest lists this exact path.
-	@cp packaging/ntpdate-servers.conf $(IPKROOT)/ntpdate/etc/ntpdate/servers.conf
-	@chmod 0644 $(IPKROOT)/ntpdate/etc/ntpdate/servers.conf
-	@cp packaging/S56-ntpdate $(IPKROOT)/ntpdate/etc/rcS.d/S56-ntpdate
-	@chmod 0755 $(IPKROOT)/ntpdate/etc/rcS.d/S56-ntpdate
-	$(call call_mkipk,ntpdate,$(IPK_ARCH))
+	@cp packaging/ntpdate-servers.conf $(IPKROOT)/openaps-busybox/etc/ntpdate/servers.conf
+	@chmod 0644 $(IPKROOT)/openaps-busybox/etc/ntpdate/servers.conf
+	@cp packaging/S56-ntpdate $(IPKROOT)/openaps-busybox/etc/rcS.d/S56-ntpdate
+	@chmod 0755 $(IPKROOT)/openaps-busybox/etc/rcS.d/S56-ntpdate
+	$(call call_mkipk,openaps-busybox,$(IPK_ARCH))
 
 # package-ipks — build every .ipk in ipk-all, then mirror them into build/ipks/ (the dir
 # the bootstrap tarball and a published feed both consume).
@@ -565,7 +567,7 @@ AUTHORIZED_KEYS    ?=
 ROOT_PW            ?=
 
 package-bootstrap: export ROOT_PW := $(ROOT_PW)
-package-bootstrap: ipk-dropbear ipk-tls-proxy ipk-apsystems-stock
+package-bootstrap: ipk-dropbear ipk-tls-proxy ipk-apsystems-stock ipk-busybox
 	@[ -n "$$ROOT_PW" ] || { echo "ERROR: ROOT_PW is required (e.g. ROOT_PW=openaps) — a bootstrap with no known root password could brick the box when stock is disabled"; exit 1; }
 	@echo "+ packaging openaps-bootstrap $(VERSION)"
 	@rm -rf $(BUILD_DIR)/pkgroot-bootstrap
@@ -574,6 +576,7 @@ package-bootstrap: ipk-dropbear ipk-tls-proxy ipk-apsystems-stock
 	@chmod 0755 $(BOOTSTRAP_PAY)/assist
 	@cp $(IPK_DIR)/openaps-dropbear_$(VERSION)_$(IPK_ARCH).ipk   $(BOOTSTRAP_PAY)/ipks/
 	@cp $(IPK_DIR)/openaps-tls-proxy_$(VERSION)_$(IPK_ARCH).ipk  $(BOOTSTRAP_PAY)/ipks/
+	@cp $(IPK_DIR)/openaps-busybox_$(VERSION)_$(IPK_ARCH).ipk    $(BOOTSTRAP_PAY)/ipks/
 	@cp $(IPK_DIR)/apsystems-stock_$(VERSION)_all.ipk           $(BOOTSTRAP_PAY)/ipks/
 	@cp packaging/release.pub       $(BOOTSTRAP_PAY)/release.pub
 	@cp packaging/opkg-openaps.conf $(BOOTSTRAP_PAY)/opkg-openaps.conf

@@ -1,72 +1,109 @@
 #!/bin/sh
 #
-# S56-ntpdate — keep the ECU clock in step with the Debian NTP pool.
+# S56-ntpdate — keep the RTC-less ECU clock in step with the Debian NTP pool.
 #
-# The box has no cron and no battery RTC, so this runs ntpdate from a small
-# self-retrying background loop: sync immediately on start, retry every 60s
-# until the network/DNS comes up at boot, then once an hour. `ntpdate -b`
-# force-steps the clock.
+# Runs busybox ntpd as a persistent client daemon: it steps a large offset on
+# the first good sync, then disciplines the clock continuously and re-resolves /
+# retries on its own until the network is up. This replaces the old self-retrying
+# one-shot loop — the daemon owns the retry and re-sync.
 #
 # Numbered S56 so it runs AFTER S55bootmisc.sh — which calls `hwclock --hctosys`
-# and would otherwise reset the clock to the (dead) RTC right after an earlier
-# ntpdate run. As the last boot-time clock setter, ntpdate's correction sticks.
+# and would otherwise reset the clock to the (dead) RTC. As the last boot-time
+# clock setter, ntpd's correction sticks.
+#
+# The binary is the static (musl) busybox-openaps; its ntpd applet links no
+# OpenSSL, so it is immune to the stock firmware's OpenSSL version.
 
-BIN=/usr/local/sbin/ntpdate
+BIN=/usr/local/bin/busybox-openaps
 CONF=/etc/ntpdate/servers.conf
-PIDFILE=/var/run/ntpdate.pid
-LAST=/var/run/ntpdate.last
+RUN=/var/run
+PIDFILE=$RUN/ntpdate.pid
+LOG=/var/log/ntpd.log
 
 NTPSERVERS=
-if [ -f "$CONF" ]; then
-    . "$CONF"
-fi
+[ -f "$CONF" ] && . "$CONF"
 
 start() {
-    [ -x "$BIN" ] || { echo "ntpdate not installed"; return 0; }
     if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-        echo "ntpdate already running (pid $(cat "$PIDFILE"))"
+        echo "ntpd already running (pid $(cat "$PIDFILE"))"
         return 0
     fi
+    [ -x "$BIN" ] || { echo "$BIN missing or not executable"; return 1; }
     [ -n "$NTPSERVERS" ] || { echo "NTPSERVERS not set in $CONF"; return 1; }
+    mkdir -p "$RUN" /var/log
 
-    # nohup'd detached loop, same SIGHUP-immune pattern as S98-dropbear: the
-    # loop survives both init(1) boot context and a context that reaps its
-    # descendants. The parent records the loop's pid ($!) so stop() can kill it.
-    nohup sh -c '
-        while true; do
-            # No battery-backed RTC: a cold boot can start at 1970/2000.
-            # ntpdate -b can fail to step a multi-year gap ("step-systime:
-            # Invalid argument"), so first nudge an implausibly-old clock to a
-            # recent baseline — the last-known-good /etc/timestamp (written at
-            # shutdown), else a built-in floor. ntpdate then steps only a small
-            # offset.
-            if [ "$(date +%Y)" -lt 2020 ]; then
-                if [ -f /etc/timestamp ]; then
-                    date -s "$(date -r /etc/timestamp "+%Y-%m-%d %H:%M:%S")" >/dev/null 2>&1 || true
-                else
-                    date -s "2026-06-01 00:00:00" >/dev/null 2>&1 || true
-                fi
-            fi
-            if '"$BIN"' -b '"$NTPSERVERS"' > "'"$LAST"'" 2>&1; then
-                sleep 3600
-            else
-                sleep 60
-            fi
-        done
-    ' </dev/null >/dev/null 2>&1 &
-    echo $! > "$PIDFILE"
-    echo "ntpdate started (pid $(cat "$PIDFILE"))"
+    # Reset the log each start so it can't grow unbounded over the device's
+    # lifetime: busybox ntpd has no internal rotation and appends step/error
+    # lines to $LOG forever otherwise. Truncating per start keeps only the
+    # current daemon's output.
+    : > "$LOG"
+
+    # No battery-backed RTC: a cold boot can start at 1970/2000. ntpd steps a
+    # large offset on its own, but nudge an implausibly-old clock to a recent
+    # baseline first — the last-known-good /etc/timestamp mtime (written at
+    # shutdown), else a built-in floor — so even a decade-wide gap is a non-issue.
+    # Use the shipped busybox for date so -r/-s support never depends on whatever
+    # /bin/date happens to be on a given firmware ($BIN is verified executable
+    # above; date -r reads the file's mtime, not its contents).
+    if [ "$("$BIN" date +%Y)" -lt 2020 ]; then
+        if [ -f /etc/timestamp ]; then
+            "$BIN" date -s "$("$BIN" date -r /etc/timestamp '+%Y-%m-%d %H:%M:%S')" >/dev/null 2>&1 || true
+        else
+            "$BIN" date -s "2026-06-01 00:00:00" >/dev/null 2>&1 || true
+        fi
+    fi
+
+    # busybox ntpd wants a repeatable -p per peer, not a space-separated list.
+    # Hostnames carry no spaces/globs, so the unquoted expansion below is safe.
+    PARGS=
+    for s in $NTPSERVERS; do
+        PARGS="$PARGS -p $s"
+    done
+
+    # nohup-sh-exec wrapper: same pattern as S48-inv-driver, so the daemon
+    # survives both init(1) boot context and the PHP-FPM upgrade-endpoint
+    # context. -n keeps ntpd in the foreground so the wrapper's exec PID is the
+    # daemon's PID; the wrapper backgrounds it. ntpd's step/error lines go to
+    # $LOG (the old design swallowed them into a file nobody read).
+    nohup sh -c "echo \$\$ > '$PIDFILE'; exec '$BIN' ntpd -n $PARGS" \
+        </dev/null >> "$LOG" 2>&1 &
+    sleep 1
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "ntpd started (pid $(cat "$PIDFILE"))"
+    else
+        echo "ntpd failed to stay up; check $LOG"
+        return 1
+    fi
 }
 
 stop() {
     if [ -f "$PIDFILE" ]; then
-        kill "$(cat "$PIDFILE")" 2>/dev/null
-        # The loop shell exits on the signal; a blocking `sleep` it was waiting
-        # on may linger harmlessly until it expires. Kill any in-flight one-shot
-        # too — no other ntpdate runs on this box.
-        killall ntpdate 2>/dev/null
+        PID=$(cat "$PIDFILE")
+        kill "$PID" 2>/dev/null
+        sleep 1
+        kill -9 "$PID" 2>/dev/null
         rm -f "$PIDFILE"
-        echo "ntpdate stopped"
+        echo "ntpd stopped"
+    else
+        # No pidfile: fall back to the process name. busybox may present either
+        # the applet name or the binary basename depending on build, so match
+        # both. The pidfile is the primary path; this is belt-and-braces.
+        P=$(pidof ntpd busybox-openaps 2>/dev/null)
+        if [ -n "$P" ]; then
+            kill $P 2>/dev/null
+            echo "ntpd stopped (no pidfile, used pidof)"
+        else
+            echo "ntpd not running"
+        fi
+    fi
+}
+
+status() {
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "running (pid $(cat "$PIDFILE"))"
+    else
+        echo "stopped"
+        exit 1
     fi
 }
 
@@ -74,8 +111,9 @@ case "$1" in
     start)   start ;;
     stop)    stop ;;
     restart) stop; sleep 1; start ;;
+    status)  status ;;
     *)
-        echo "usage: $0 {start|stop|restart}"
+        echo "usage: $0 {start|stop|restart|status}"
         exit 2
         ;;
 esac
