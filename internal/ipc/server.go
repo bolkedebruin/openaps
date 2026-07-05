@@ -454,6 +454,20 @@ func (s *Server) handleSetInverterPhaseReq(ctx context.Context, peerUID int, bac
 		return refuse(fmt.Sprintf("persist phase for %q: %v", uid, err))
 	}
 	_ = s.Store.AppendEvent(ctx, time.Now().UnixMilli(), uid, "phase_set", "info", backend, fmt.Sprintf("L%d", leg))
+	// Broadcast the change to live subscribers (ecu-web, ecu-sunspec) so they
+	// update immediately. Without this the DB is written but the subscribers'
+	// in-memory snapshots keep their replay-time phase, and the next telemetry
+	// push reverts the UI to it. Nil fields leave the subscriber's other
+	// identity columns untouched in its merge.
+	if s.Publisher != nil {
+		modelCode := code
+		s.Publisher.Publish(&wire.Envelope{Body: &wire.Envelope_Info{Info: &wire.InverterInfo{
+			TsMs:      time.Now().UnixMilli(),
+			PeerUid:   uid,
+			ModelCode: &modelCode,
+			Phase:     &legVal,
+		}}})
+	}
 	return writeSetInverterPhaseResp(tag, c, &wire.SetInverterPhaseResponse{Ok: true})
 }
 

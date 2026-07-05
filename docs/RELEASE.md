@@ -1,3 +1,21 @@
+# OpenAPS v1.1.24
+
+Fixes grid-leg assignment while inverters are online.
+
+## Fixed
+
+- **Setting a single-phase inverter's grid leg no longer springs back to L1
+  when the inverter is online.** The assignment was written to the database but
+  not pushed to the live view, so the next telemetry update reverted it; it now
+  broadcasts the change so the dashboard, inverters table, and the SunSpec
+  three-phase model update immediately.
+- **The assignment no longer intermittently fails** with a "database is locked"
+  error when it coincides with a telemetry update.
+
+## Upgrading
+
+`opkg upgrade openaps-inv-driver`. No configuration or schema changes.
+
 # OpenAPS v1.1.23
 
 Makes the grid-leg assignment reachable from the Inverters screen.

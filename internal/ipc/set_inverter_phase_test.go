@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bolkedebruin/openaps/internal/events"
 	"github.com/bolkedebruin/openaps/internal/ingest"
 	"github.com/bolkedebruin/openaps/internal/store"
 	"github.com/bolkedebruin/openaps/wire"
@@ -108,6 +109,41 @@ func TestHandleSetInverterPhase(t *testing.T) {
 	}
 	if cnt != 1 || by.String != "ecu-web" || detail.String != "L3" {
 		t.Fatalf("audit: cnt=%d by=%q detail=%q; want 1,ecu-web,L3", cnt, by.String, detail.String)
+	}
+}
+
+// TestSetInverterPhase_BroadcastsInfo is the regression for the "reverts to L1
+// while online" bug: a successful set must broadcast an InverterInfo carrying
+// the new leg so live subscribers update instead of keeping the stale value.
+func TestSetInverterPhase_BroadcastsInfo(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, t.TempDir()+"/state.db")
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer st.Close()
+	seedInverter(t, st, "800000000001", 0x18)
+
+	pub := events.New()
+	srv := &Server{
+		Ingestor:  &ingest.Ingestor{S: st, ControllerBackends: []string{"ecu-web"}},
+		Store:     st,
+		Publisher: pub,
+	}
+	ch, unsub := pub.Subscribe()
+	defer unsub()
+
+	if r := callSetPhase(t, srv, 0, "ecu-web", &wire.SetInverterPhaseRequest{Uid: "800000000001", Leg: 2}); !r.GetOk() {
+		t.Fatalf("set failed: %q", r.GetError())
+	}
+	select {
+	case env := <-ch:
+		info := env.GetInfo()
+		if info == nil || info.GetPeerUid() != "800000000001" || info.GetPhase() != 2 {
+			t.Fatalf("broadcast Info = %+v; want uid=800000000001 phase=2", info)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("no InverterInfo broadcast after SetInverterPhase")
 	}
 }
 

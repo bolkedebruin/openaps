@@ -38,7 +38,14 @@ func Open(ctx context.Context, path string) (*Store, error) {
 			return nil, fmt.Errorf("store.Open: mkdir %q: %w", dir, err)
 		}
 	}
-	dsn := "file:" + path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)"
+	// _txlock=immediate makes every BeginTx issue BEGIN IMMEDIATE so the write
+	// lock is taken up front. Without it, a deferred transaction that reads
+	// then upgrades to a write (e.g. UpsertInverterInfo's existence probe +
+	// upsert) fails with SQLITE_BUSY when another connection holds the write
+	// lock — a lock-upgrade conflict busy_timeout does NOT wait on. With
+	// IMMEDIATE, the contending writer instead waits out busy_timeout. This is
+	// what let an operator's SetInverterPhase fail against the telemetry writer.
+	dsn := "file:" + path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_txlock=immediate"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("store.Open: %w", err)
