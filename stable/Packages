@@ -37,7 +37,7 @@ MD5Sum: e47c5d0c66efd39f38ff8acbc883bc7a
 SHA256sum: ca0b58edc9785ecf77a937961fb692feff409dd098b0a0c7ed196c4b2cf44324
 
 Package: openaps-busybox
-Version: v1.1.26
+Version: v1.1.27
 Architecture: armv7ahf-vfp-neon
 Maintainer: Bolke de Bruin <bdbruin@gmail.com>
 Section: net
@@ -51,10 +51,10 @@ Description: Static busybox providing the OpenAPS NTP client.
  Debian NTP pool, run as a daemon from the shipped S56 boot script. Unlike the
  old ntpdate it links no OpenSSL, so it survives the stock firmware's move to
  OpenSSL 1.1. Replaces (and removes) the ntpdate package.
-Filename: openaps-busybox_v1.1.26_armv7ahf-vfp-neon.ipk
-Size: 709692
-MD5Sum: a827808236960eeaa8b4db740d80dfcb
-SHA256sum: b7189d6cb8ce92521d109307409b5f4a4fa83e688bd471f5df27872d7da00a15
+Filename: openaps-busybox_v1.1.27_armv7ahf-vfp-neon.ipk
+Size: 710126
+MD5Sum: bfe7b409234d5c2e3c82dac293d39bba
+SHA256sum: 67789112195f51be8061e76b7fd3c00c5e9eb2992758838976de65e7a378bf57
 
 Package: openaps-dropbear
 Version: v1.1.3
@@ -76,7 +76,7 @@ MD5Sum: 966eb4d9992c07b39a3f3599eae1cd05
 SHA256sum: c473ae27e1efb38feeb4394c68db1e53dd6214a79d7cc05940ee77ce037abade
 
 Package: openaps-ecu-sunspec
-Version: v1.1.26
+Version: v1.1.27
 Architecture: armv7ahf-vfp-neon
 Maintainer: OpenAPS <bdbruin@gmail.com>
 Section: utils
@@ -86,13 +86,13 @@ Description: OpenAPS ecu-sunspec — Modbus/TCP + RTU SunSpec frontend.
  Installs /home/applications/ecu-sunspec/ecu-sunspec and its /etc/rcS.d/S99
  BusyBox init script. Exposes the fleet as SunSpec models over Modbus :502,
  subscribing to inv-driver telemetry over UDS.
-Filename: openaps-ecu-sunspec_v1.1.26_armv7ahf-vfp-neon.ipk
-Size: 3343134
-MD5Sum: 3a8b1db40472a232909a617b5eb1d938
-SHA256sum: a01c9bfbfefb6da04e173cc0fc3a37fbdeaea53b68b37d099e5405bb20773351
+Filename: openaps-ecu-sunspec_v1.1.27_armv7ahf-vfp-neon.ipk
+Size: 3343140
+MD5Sum: dc9c9ca61f0f248815f254b708b54665
+SHA256sum: 5c9df4699af9b33fe7542ae05003ada64ef7ddc83ccb65b6f260de435255e79d
 
 Package: openaps-ecu-web
-Version: v1.1.26
+Version: v1.1.27
 Architecture: armv7ahf-vfp-neon
 Maintainer: OpenAPS <bdbruin@gmail.com>
 Section: utils
@@ -101,13 +101,13 @@ Depends: openaps-base, openaps-inv-driver, openaps-recoveryd
 Description: OpenAPS ecu-web — VRM-style console (HTTP/2 + SSE, embedded SPA).
  Installs /home/applications/ecu-web/ecu-web and its /etc/rcS.d/S54 BusyBox
  init script. Serves the operator console on :443 over inv-driver UDS.
-Filename: openaps-ecu-web_v1.1.26_armv7ahf-vfp-neon.ipk
-Size: 4427662
-MD5Sum: 9610b07900558443d1c51e741dd0ed84
-SHA256sum: ad7061239409cf8be874a82136019a6405480086bf6b40b94368579a52aef639
+Filename: openaps-ecu-web_v1.1.27_armv7ahf-vfp-neon.ipk
+Size: 4427672
+MD5Sum: 331162fc0b58d4fc2cfd704c9b7f2930
+SHA256sum: 0bd907ea620cf88c021b05330cabb64d5b0b9830cdda0f6f1003ee8240ccb290
 
 Package: openaps-ecu-zb
-Version: v1.1.26
+Version: v1.1.27
 Architecture: armv7ahf-vfp-neon
 Maintainer: OpenAPS <bdbruin@gmail.com>
 Section: utils
@@ -117,13 +117,13 @@ Description: OpenAPS ecu-zb — ZigBee modem proxy and bus manager.
  Installs /home/applications/ecu-zb/ecu-zb and its /etc/rcS.d/S53 BusyBox
  init script. Drives the CC2530 modem on /dev/ttyO2 and proxies the
  802.15.4 link for inv-driver.
-Filename: openaps-ecu-zb_v1.1.26_armv7ahf-vfp-neon.ipk
-Size: 2330202
-MD5Sum: 2474e3bde72ba9feee0854820733af2f
-SHA256sum: 8c195e7a7fa37a9541a0b02299c804ffe9b5523b5450a58862a995147ce92467
+Filename: openaps-ecu-zb_v1.1.27_armv7ahf-vfp-neon.ipk
+Size: 2330204
+MD5Sum: 5576807d38581c52b13673ce08d73a4c
+SHA256sum: 654f481ea5853f2d830566879938353c588e7b14d63b322eee52c7c655de0f26
 
 Package: openaps-inv-driver
-Version: v1.1.26
+Version: v1.1.27
 Architecture: armv7ahf-vfp-neon
 Maintainer: OpenAPS <bdbruin@gmail.com>
 Section: utils
@@ -133,13 +133,13 @@ Description: OpenAPS inv-driver — bus owner, codec, ingest, gridprofile, IPC s
  Installs /home/applications/inv-driver/inv-driver and its /etc/rcS.d/S48
  BusyBox init script. The bus-owning daemon every other OpenAPS service
  talks to over UDS.
-Filename: openaps-inv-driver_v1.1.26_armv7ahf-vfp-neon.ipk
-Size: 4712452
-MD5Sum: 576808f6764774c31f7a92c3112abf27
-SHA256sum: cfe455d67eb58863664e172c0e7387c81f11c4174b39acb1d7719fd464add581
+Filename: openaps-inv-driver_v1.1.27_armv7ahf-vfp-neon.ipk
+Size: 4712456
+MD5Sum: ad7f1a1a254a1e44d1ed066f0efb6f83
+SHA256sum: 20448ec7173046bd2e308a97c8b7960e61133e3c7ccfebdd4bc60f9cf17e6b01
 
 Package: openaps-recoveryd
-Version: v1.1.26
+Version: v1.1.27
 Architecture: armv7ahf-vfp-neon
 Maintainer: OpenAPS <bdbruin@gmail.com>
 Section: utils
@@ -150,13 +150,13 @@ Description: OpenAPS recoveryd — SSH access plane and recovery surface.
  init script. recoveryd owns root's authorized_keys (the source of truth for SSH
  access) and ensures the dropbear host key, providing an out-of-band recovery
  path and the SSH-key management surface the ecu-web console uses.
-Filename: openaps-recoveryd_v1.1.26_armv7ahf-vfp-neon.ipk
-Size: 2865288
-MD5Sum: bb22c935265b0ecf5eafdc00c687c9f2
-SHA256sum: 607f2048e439351e9f42fc8dc7810444fb0a0a1bbdd3841da936370d559add33
+Filename: openaps-recoveryd_v1.1.27_armv7ahf-vfp-neon.ipk
+Size: 2865286
+MD5Sum: 32ea457a4bfbaa22b316d817163f845f
+SHA256sum: 251f51bf9c525e3ca8012cf3ffea127f6e0208e25e7c5043802a40870d7de9cf
 
 Package: openaps-tls-proxy
-Version: v1.1.26
+Version: v1.1.27
 Architecture: armv7ahf-vfp-neon
 Maintainer: Bolke de Bruin <bdbruin@gmail.com>
 Section: net
@@ -169,8 +169,8 @@ Description: OpenAPS loopback TLS proxy and opkg feed front-end.
  the only authenticity check on this device (opkg enforces MD5Sum only and
  cannot verify signatures itself). Ships the opkg config that points opkg at
  the proxy and keeps opkg scratch on /home (the 16 MiB /tmp tmpfs overflows).
-Filename: openaps-tls-proxy_v1.1.26_armv7ahf-vfp-neon.ipk
-Size: 2895306
-MD5Sum: ecad86e0d51874487caca56271e5703a
-SHA256sum: 466e72757968f5c5e1fdc74f34069d09e57f2b9ea4a96d683ccd84b3e88809fe
+Filename: openaps-tls-proxy_v1.1.27_armv7ahf-vfp-neon.ipk
+Size: 2895312
+MD5Sum: 98e30c4eb93488bdd2a1ffd7ce55989a
+SHA256sum: 8bfb1624b49d46882d89d2885cd0e354648ea4f9d27f6d7a823a14c1d6efddf1
 
