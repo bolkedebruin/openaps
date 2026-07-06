@@ -1,15 +1,19 @@
 #!/bin/sh
 #
-# S56-ntpdate — keep the RTC-less ECU clock in step with the Debian NTP pool.
+# openaps-ntpd — keep the RTC-less ECU clock in step with the Debian NTP pool.
 #
-# Runs busybox ntpd as a persistent client daemon: it steps a large offset on
-# the first good sync, then disciplines the clock continuously and re-resolves /
-# retries on its own until the network is up. This replaces the old self-retrying
-# one-shot loop — the daemon owns the retry and re-sync.
+# Runs busybox ntpd as a persistent client daemon under a supervisor loop: ntpd
+# steps a large offset on the first good sync then disciplines continuously, but
+# busybox ntpd exits right after a step (a post-step recv EBADF), so the loop
+# respawns it — the next instance sees a corrected clock, does not step, and
+# stays up.
 #
-# Numbered S56 so it runs AFTER S55bootmisc.sh — which calls `hwclock --hctosys`
-# and would otherwise reset the clock to the (dead) RTC. As the last boot-time
-# clock setter, ntpd's correction sticks.
+# Installed as /etc/rc5.d/S99-ntpdate — in the default runlevel, AFTER
+# rc5.d/S20hwclock.sh runs `hwclock --hctosys`. That hctosys reads the dead,
+# unwritable RTC (permanently 2000) and clobbers any earlier clock set; the whole
+# of rcS.d runs BEFORE the runlevel, so an rcS.d clock-setter always loses to it.
+# Running last in the runlevel makes ntpd's correction stick. ntpd cannot step a
+# ~26-year offset, so start() first pre-nudges the clock to a recent baseline.
 #
 # The binary is the static (musl) busybox-openaps; its ntpd applet links no
 # OpenSSL, so it is immune to the stock firmware's OpenSSL version.
@@ -65,13 +69,20 @@ start() {
         PARGS="$PARGS -p $s"
     done
 
-    # nohup-sh-exec wrapper: same pattern as S48-inv-driver, so the daemon
-    # survives both init(1) boot context and the PHP-FPM upgrade-endpoint
-    # context. -n keeps ntpd in the foreground so the wrapper's exec PID is the
-    # daemon's PID; the wrapper backgrounds it. ntpd's step/error lines go to
-    # $LOG (the old design swallowed them into a file nobody read).
-    nohup sh -c "echo \$\$ > '$PIDFILE'; exec '$BIN' ntpd -n $PARGS" \
-        </dev/null >> "$LOG" 2>&1 &
+    # Supervised respawn loop under nohup: the loop shell's PID is the pidfile
+    # PID; it re-launches ntpd whenever ntpd exits. This matters because busybox
+    # ntpd exits right after it STEPS a large offset (a post-step recv EBADF).
+    # At boot the clock is wrong, so the first ntpd steps it and dies; the loop
+    # restarts it, and the next instance sees a now-correct clock, does not step,
+    # and stays up to discipline continuously. The 30s pause avoids a hot loop if
+    # ntpd ever exits immediately. nohup + </dev/null detach the loop so it
+    # survives init(1) boot and the PHP-FPM upgrade-endpoint context (same reason
+    # as S48-inv-driver). Step/error lines go to $LOG.
+    nohup sh -c "echo \$\$ > '$PIDFILE'
+        while :; do
+            '$BIN' ntpd -n $PARGS
+            sleep 30
+        done" </dev/null >> "$LOG" 2>&1 &
     sleep 1
     if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
         echo "ntpd started (pid $(cat "$PIDFILE"))"
@@ -82,24 +93,19 @@ start() {
 }
 
 stop() {
+    # Kill the supervisor loop first (via the pidfile) so it stops respawning,
+    # then kill the ntpd instance it launched (a child, or an orphan after the
+    # loop dies). pidof matches the vendored binary basename.
     if [ -f "$PIDFILE" ]; then
-        PID=$(cat "$PIDFILE")
-        kill "$PID" 2>/dev/null
-        sleep 1
-        kill -9 "$PID" 2>/dev/null
+        kill "$(cat "$PIDFILE")" 2>/dev/null
         rm -f "$PIDFILE"
+    fi
+    P=$(pidof busybox-openaps 2>/dev/null)
+    if [ -n "$P" ]; then
+        kill $P 2>/dev/null
         echo "ntpd stopped"
     else
-        # No pidfile: fall back to the process name. busybox may present either
-        # the applet name or the binary basename depending on build, so match
-        # both. The pidfile is the primary path; this is belt-and-braces.
-        P=$(pidof ntpd busybox-openaps 2>/dev/null)
-        if [ -n "$P" ]; then
-            kill $P 2>/dev/null
-            echo "ntpd stopped (no pidfile, used pidof)"
-        else
-            echo "ntpd not running"
-        fi
+        echo "ntpd not running"
     fi
 }
 

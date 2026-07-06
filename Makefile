@@ -518,15 +518,18 @@ ipk-busybox: build-mkipk
 	@rm -rf $(IPKROOT)/openaps-busybox
 	@mkdir -p $(IPKROOT)/openaps-busybox/usr/local/bin
 	@mkdir -p $(IPKROOT)/openaps-busybox/etc/ntpdate
-	@mkdir -p $(IPKROOT)/openaps-busybox/etc/rcS.d
+	@mkdir -p $(IPKROOT)/openaps-busybox/etc/rc5.d
 	@cp $(BUSYBOX_BIN) $(IPKROOT)/openaps-busybox/usr/local/bin/busybox-openaps
 	@chmod 0755 $(IPKROOT)/openaps-busybox/usr/local/bin/busybox-openaps
 	@# Ship the servers list at its final path so opkg tracks it as a conffile
 	@# (preserved on upgrade); the conffiles manifest lists this exact path.
 	@cp packaging/ntpdate-servers.conf $(IPKROOT)/openaps-busybox/etc/ntpdate/servers.conf
 	@chmod 0644 $(IPKROOT)/openaps-busybox/etc/ntpdate/servers.conf
-	@cp packaging/S56-ntpdate $(IPKROOT)/openaps-busybox/etc/rcS.d/S56-ntpdate
-	@chmod 0755 $(IPKROOT)/openaps-busybox/etc/rcS.d/S56-ntpdate
+	@# Clock daemon runs in the DEFAULT RUNLEVEL at S99, AFTER rc5.d/S20hwclock.sh
+	@# (which reads the dead RTC and would clobber an rcS.d clock-set). The whole
+	@# of rcS.d runs before the runlevel, so it must live here, not in rcS.d.
+	@cp packaging/openaps-ntpd $(IPKROOT)/openaps-busybox/etc/rc5.d/S99-ntpdate
+	@chmod 0755 $(IPKROOT)/openaps-busybox/etc/rc5.d/S99-ntpdate
 	$(call call_mkipk,openaps-busybox,$(IPK_ARCH))
 
 # package-ipks — build every .ipk in ipk-all, then mirror them into build/ipks/ (the dir

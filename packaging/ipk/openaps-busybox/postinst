@@ -1,17 +1,21 @@
 #!/bin/sh
 # postinst — openaps-busybox
 #
-# Installs the static busybox time client. The server list
-# (/etc/ntpdate/servers.conf) ships as a conffile, so opkg preserves operator
-# edits across upgrades. Bring the ntpd daemon up now; it also starts at boot
-# via rcS.d S56. `restart` (not start) so an upgrade replaces a running daemon.
+# The server list (/etc/ntpdate/servers.conf) ships as a conffile, so opkg
+# preserves operator edits across upgrades.
+#
+# The clock daemon runs from the default runlevel at /etc/rc5.d/S99-ntpdate,
+# AFTER the runlevel's `hwclock --hctosys` (rc5.d/S20hwclock.sh) — which reads
+# the dead RTC and would otherwise clobber the clock. Remove the legacy rcS.d
+# location shipped by v1.1.25/26 (it ran before the runlevel and got clobbered),
+# then (re)start now. `|| true` so a slow first sync does not fail package
+# configuration — the daemon self-retries and it also starts at boot.
 set -e
 
-# `|| true` so a slow first sync (e.g. network not up yet at install time) that
-# trips the init's liveness check does not fail package configuration — the
-# daemon self-retries and S56 also runs at boot.
-if [ -x /etc/rcS.d/S56-ntpdate ]; then
-    /etc/rcS.d/S56-ntpdate restart || true
+rm -f /etc/rcS.d/S56-ntpdate
+
+if [ -x /etc/rc5.d/S99-ntpdate ]; then
+    /etc/rc5.d/S99-ntpdate restart || true
 fi
 
 exit 0

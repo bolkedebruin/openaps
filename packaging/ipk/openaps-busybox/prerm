@@ -1,0 +1,12 @@
+#!/bin/sh
+# prerm — openaps-busybox
+#
+# Stop the clock daemon before the package's files (the binary + the S99 init)
+# are removed, so no orphaned ntpd keeps running against a deleted binary.
+set -e
+
+if [ -x /etc/rc5.d/S99-ntpdate ]; then
+    /etc/rc5.d/S99-ntpdate stop || true
+fi
+
+exit 0

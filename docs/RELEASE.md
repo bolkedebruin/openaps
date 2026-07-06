@@ -1,3 +1,27 @@
+# OpenAPS v1.1.27
+
+Fixes the clock still getting stuck at the year 2000 after a reboot.
+
+## Fixed
+
+- **The clock daemon now runs after the boot-time RTC read, so its correction
+  sticks.** On these RTC-less ECUs the hardware clock sits permanently at the
+  year 2000 and cannot be written. The default runlevel runs `hwclock --hctosys`
+  (`rc5.d/S20hwclock.sh`), which reads that dead RTC and reset the system clock
+  back to 2000 — and it ran *after* the clock daemon, which lived in `rcS.d`
+  (the whole of which runs before the runlevel). So every boot the RTC read
+  clobbered the pre-set and `ntpd` could never step the ~26-year gap. The daemon
+  now installs at `/etc/rc5.d/S99-ntpdate`, after that `hwclock` read, so the
+  correct time is set last and persists.
+- **`ntpd` now stays running after it corrects the clock.** busybox `ntpd` exits
+  right after stepping a large offset, so at boot it set the time then died,
+  leaving the clock undisciplined. It now runs under a supervisor that restarts
+  it; the next instance sees the corrected clock, does not step, and stays up.
+
+## Upgrading
+
+`opkg update && opkg install openaps-busybox`. No configuration changes.
+
 # OpenAPS v1.1.26
 
 Fixes the ECU clock staying stuck at the year 2000 on some cold boots.
