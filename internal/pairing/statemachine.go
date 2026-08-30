@@ -130,10 +130,20 @@ func (m *Manager) awaitShortAddr(ctx context.Context, serial string) (uint16, er
 		m.status.setStage(StageBind, fmt.Sprintf("re-query short address (%d/%d)", attempt, migrateVerifyAttempts))
 		var sa uint16
 		sa, err = m.Transport.getShortAddr(ctx, serial)
-		if err == nil {
+		switch {
+		case ctx.Err() != nil:
+			// Cancellation wins over whatever the radio was about to say.
+			// An aborted op therefore reports as aborted, not as an inverter
+			// that failed to answer.
+			return 0, ctx.Err()
+		case err == nil && sa != 0:
 			return sa, nil
-		}
-		if errors.Is(err, errBusUnavailable) || ctx.Err() != nil {
+		case err == nil:
+			// A short address of zero is the unit saying "not joined yet".
+			// That is the same transient that the retries exist for. That
+			// answer is not more final than silence.
+			err = fmt.Errorf("inverter %s reports short_addr 0 (not joined)", serial)
+		case errors.Is(err, errBusUnavailable):
 			return 0, err
 		}
 		if attempt == migrateVerifyAttempts {

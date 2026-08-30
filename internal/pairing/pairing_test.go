@@ -272,6 +272,12 @@ type offPANResponder struct {
 	// answer after the first one (the off-PAN probe). It models a unit that
 	// is still rejoining.
 	silentQueries int
+	// notJoined makes those queries answer with short_addr 0. The unit
+	// replies "not joined yet" instead of silence.
+	notJoined bool
+	// onQuery runs on every short-address query. A test uses it to
+	// interleave an action with the retries.
+	onQuery func(n int)
 }
 
 // scanCount returns the number of listens so far.
@@ -322,13 +328,35 @@ func (r *offPANResponder) respond(c *wire.PairingCmd) *wire.PairingCmdResult {
 		r.commitChan = c.GetCommitPan().GetChannel()
 	case c.GetGetShortAddr() != nil:
 		r.queries++
+		if r.onQuery != nil {
+			r.onQuery(r.queries)
+		}
 		if r.queries <= 1+r.silentQueries {
+			if r.notJoined && r.queries > 1 {
+				// The unit answers, but it is not joined yet.
+				return &wire.PairingCmdResult{Ok: true, ShortAddr: 0}
+			}
 			// Off-PAN, then still rejoining. No answer yet.
 			return &wire.PairingCmdResult{Ok: false, Error: "no reply from inverter"}
 		}
 		return &wire.PairingCmdResult{Ok: true, ShortAddr: 0x55AA}
 	}
 	return &wire.PairingCmdResult{Ok: true}
+}
+
+// countOp returns the number of commands of one kind that the transport
+// sent. It includes any that the backend never answered. The responder's own
+// counters miss those.
+func (m *mockTransport) countOp(name string) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	n := 0
+	for _, c := range m.cmds {
+		if opName(c) == name {
+			n++
+		}
+	}
+	return n
 }
 
 // parkChannels returns the channels on which the module parked for a
@@ -1002,8 +1030,12 @@ func TestAdd_RetriesTheQueryAfterMigrating(t *testing.T) {
 	if final := runAdd(t, m, serial); final.Stage != StageDone {
 		t.Fatalf("stage=%q err=%q", final.Stage, final.Error)
 	}
-	if r.queries < 5 {
-		t.Errorf("gave up after %d queries; the unit answered on the 5th", r.queries)
+	// Exactly six: the off-PAN probe, four retries that the unit is still
+	// too busy to answer, then the answer on the fifth. Fewer means the add
+	// gave up early. More means it kept asking a unit that had already
+	// answered.
+	if r.queries != 6 {
+		t.Errorf("asked %d times, want exactly 6 — the unit answered on the 5th retry", r.queries)
 	}
 }
 
@@ -1028,8 +1060,11 @@ func TestAdd_GivesUpAfterTheRetriesRunOut(t *testing.T) {
 	if !strings.Contains(final.Error, "did not answer in") {
 		t.Errorf("error = %q, want it to name the exhausted retries", final.Error)
 	}
-	if r.queries != migrateVerifyAttempts+1 { // +1 for the initial off-PAN probe
-		t.Errorf("asked %d times, want %d retries after the initial probe", r.queries, migrateVerifyAttempts)
+	// Seven: the off-PAN probe plus the six documented attempts. This is a
+	// literal on purpose. As migrateVerifyAttempts+1, the test would track
+	// any change to the budget instead of pinning it.
+	if r.queries != 7 {
+		t.Errorf("asked %d times, want 7 (one probe + %d attempts)", r.queries, migrateVerifyAttempts)
 	}
 	assertRadioRestored(t, mock)
 }
@@ -1135,7 +1170,70 @@ func TestAdd_BusFailureMidRetryStopsImmediately(t *testing.T) {
 	if !strings.Contains(final.Error, "zigbee bus unavailable") {
 		t.Errorf("error = %q, want it to name the bus rather than the inverter", final.Error)
 	}
-	if r.queries >= 1+migrateVerifyAttempts {
-		t.Errorf("burned all %d attempts against a dead bus (%d queries)", migrateVerifyAttempts, r.queries)
+	// The count is what separates "classified correctly" from "gave up
+	// eventually anyway". The error text is the same either way, because the
+	// final failure wraps the last error it saw.
+	if sent := mock.countOp("get_short_addr"); sent > 4 {
+		t.Errorf("sent %d queries against a dead bus; want it to stop on the first query the bus swallows", sent)
+	}
+}
+
+// "Not joined" is the same transient that the retries exist for. A unit that
+// says so is not more final than one that stays silent.
+func TestAdd_RetriesAUnitThatAnswersNotJoined(t *testing.T) {
+	const serial = "999900000015"
+	tr, mock := newMockTransport()
+	r := &offPANResponder{serial: serial, answersOn: 22, silentQueries: 3, notJoined: true}
+	mock.responder = r.respond
+
+	st := newTestStore(t)
+	if err := st.SetInverterFoundChannel(context.Background(), serial, 22); err != nil {
+		t.Fatalf("SetInverterFoundChannel: %v", err)
+	}
+	m := newAddManager(t, tr, st, &recordingEvents{})
+
+	if final := runAdd(t, m, serial); final.Stage != StageDone {
+		t.Fatalf("stage=%q err=%q", final.Stage, final.Error)
+	}
+	// Probe, three "not joined" answers, then a real address. A zero is not
+	// an answer, so it costs a retry exactly as silence does.
+	if r.queries != 5 {
+		t.Errorf("asked %d times, want 5 — a short_addr of 0 is not an answer", r.queries)
+	}
+}
+
+// An abort that lands between retries stops them promptly. It ends the op as
+// aborted, not as an inverter that failed to answer.
+func TestAdd_AbortBetweenRetriesStopsPromptly(t *testing.T) {
+	const serial = "999900000016"
+	tr, mock := newMockTransport()
+	r := &offPANResponder{serial: serial, answersOn: 22, silentQueries: 1000}
+	mock.responder = r.respond
+
+	st := newTestStore(t)
+	if err := st.SetInverterFoundChannel(context.Background(), serial, 22); err != nil {
+		t.Fatalf("SetInverterFoundChannel: %v", err)
+	}
+	m := newAddManager(t, tr, st, &recordingEvents{})
+	m.VerifyRetrySleep = 200 * time.Millisecond
+	r.onQuery = func(n int) {
+		if n == 3 {
+			go m.Handle(context.Background(), "ecu-web", &wire.PairingRequest{
+				Op: &wire.PairingRequest_Abort{Abort: &wire.Empty{}}})
+		}
+	}
+
+	final := runAdd(t, m, serial)
+	if final.Stage != StageAborted {
+		t.Fatalf("stage=%q err=%q, want aborted", final.Stage, final.Error)
+	}
+	if final.Error != "" {
+		t.Errorf("error = %q, want an aborted op to carry none", final.Error)
+	}
+	// The abort fires during the third query. A wait that honours
+	// cancellation therefore means there is no fourth query. One more means
+	// the loop only noticed the abort at the top of the next attempt.
+	if r.queries > 3 {
+		t.Errorf("asked %d times after the abort; want the wait to end on cancellation", r.queries)
 	}
 }
