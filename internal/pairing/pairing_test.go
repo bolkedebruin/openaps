@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -278,6 +279,13 @@ func (r *offPANResponder) scanCount() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return len(r.scanChans)
+}
+
+// queryCount returns the number of short-address queries so far.
+func (r *offPANResponder) queryCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.queries
 }
 
 // sawScanOn reports whether the module ever listened on ch.
@@ -1053,5 +1061,81 @@ func TestAdd_BusFailureDoesNotTriggerAMigration(t *testing.T) {
 		if op == "report_scan" || op == "prime_inv" || op == "commit_pan" {
 			t.Fatalf("went on the air with %q despite an unusable bus: %v", op, mock.opNames())
 		}
+	}
+}
+
+// A rekey against a radio path that is not there must not report
+// "1/3 verified". Nobody asked the fleet. Blame on the fleet sends the
+// operator after inverters that are almost certainly fine.
+func TestRekey_BusFailureIsNotReportedAsStragglers(t *testing.T) {
+	tr, mock := newMockTransport()
+	st := newTestStore(t)
+	ctx := context.Background()
+	for _, s := range []string{"999900000001", "999900000002"} {
+		if err := st.SetInverterShortAddr(ctx, s, 0x0101); err != nil {
+			t.Fatalf("seed %s: %v", s, err)
+		}
+	}
+	// Everything works except the verification queries, which get no
+	// answer. That is a wedged backend, not silent inverters.
+	mock.swallow = func(c *wire.PairingCmd) bool { return c.GetGetShortAddr() != nil }
+	tr.Timeout = 50 * time.Millisecond
+
+	m := newAddManager(t, tr, st, &recordingEvents{})
+	resp := m.Handle(ctx, "ecu-web", &wire.PairingRequest{
+		Op: &wire.PairingRequest_FleetRekey{FleetRekey: &wire.FleetRekey{NewPan: "1234"}}})
+	if !resp.GetOk() {
+		t.Fatalf("start rekey: %s", resp.GetError())
+	}
+
+	final := waitDone(t, m)
+	if final.Stage != StageError {
+		t.Fatalf("stage=%q, want error", final.Stage)
+	}
+	if !strings.Contains(final.Error, "zigbee bus unavailable") {
+		t.Errorf("error = %q, want it to name the bus", final.Error)
+	}
+	if strings.Contains(final.Error, "re-run") {
+		t.Errorf("error = %q, told the operator to chase stragglers that were never asked", final.Error)
+	}
+}
+
+// A bus that dies partway through the retries stops them at once. No number
+// of attempts reaches an inverter through a radio path that is gone.
+func TestAdd_BusFailureMidRetryStopsImmediately(t *testing.T) {
+	const serial = "999900000014"
+	tr, mock := newMockTransport()
+	r := &offPANResponder{serial: serial, answersOn: 22, silentQueries: 1000}
+	mock.responder = r.respond
+	// The bus goes away after the migration, once the retries run.
+	var swallowed atomic.Bool
+	mock.swallow = func(c *wire.PairingCmd) bool {
+		return swallowed.Load() && c.GetGetShortAddr() != nil
+	}
+	tr.Timeout = 50 * time.Millisecond
+
+	st := newTestStore(t)
+	if err := st.SetInverterFoundChannel(context.Background(), serial, 22); err != nil {
+		t.Fatalf("SetInverterFoundChannel: %v", err)
+	}
+	m := newAddManager(t, tr, st, &recordingEvents{})
+	m.VerifyRetrySleep = 30 * time.Millisecond
+
+	go func() {
+		for r.queryCount() < 3 {
+			time.Sleep(time.Millisecond)
+		}
+		swallowed.Store(true)
+	}()
+
+	final := runAdd(t, m, serial)
+	if final.Stage != StageError {
+		t.Fatalf("stage=%q, want error", final.Stage)
+	}
+	if !strings.Contains(final.Error, "zigbee bus unavailable") {
+		t.Errorf("error = %q, want it to name the bus rather than the inverter", final.Error)
+	}
+	if r.queries >= 1+migrateVerifyAttempts {
+		t.Errorf("burned all %d attempts against a dead bus (%d queries)", migrateVerifyAttempts, r.queries)
 	}
 }
