@@ -35,12 +35,16 @@ const (
 
 // PerInverter is one inverter's progress within the current op. State is a
 // free-text per-inverter stage (e.g. "found", "bound", "migrated",
-// "configured", "error"). Encrypted mirrors the last-observed frame type.
+// "configured", "error").
+//
+// Encrypted mirrors the last observed frame type. It is nil when nothing
+// observed a frame yet. A discovery scan cannot tell, so the unit must render
+// as unknown, not as a plaintext claim that the ECU cannot back.
 type PerInverter struct {
 	Serial    string `json:"serial"`
 	ShortAddr uint32 `json:"short_addr"`
 	State     string `json:"state"`
-	Encrypted bool   `json:"encrypted"`
+	Encrypted *bool  `json:"encrypted,omitempty"`
 }
 
 // Sweep describes the channel-sweep position during a slow scan / rekey.
@@ -179,7 +183,9 @@ func (t *statusTracker) upsertInverter(pi PerInverter) {
 				if pi.State != "" {
 					s.PerInverter[i].State = pi.State
 				}
-				s.PerInverter[i].Encrypted = pi.Encrypted
+				if pi.Encrypted != nil {
+					s.PerInverter[i].Encrypted = pi.Encrypted
+				}
 				return
 			}
 		}

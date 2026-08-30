@@ -229,11 +229,9 @@ func TestBuildReportIdQuiet(t *testing.T) {
 
 func TestParseAnnounce(t *testing.T) {
 	ieee := [6]byte{0x99, 0x99, 0x00, 0x00, 0x00, 0x03}
-	// Build a valid announce: 1D 1D <IEEE6> crcHi crcLo, CRC over IEEE so
-	// the residue over IEEE+crc is zero.
-	crc := crc16(ieee[:])
-	reply := append([]byte{0x1D, 0x1D}, ieee[:]...)
-	reply = append(reply, byte(crc>>8), byte(crc&0xFF))
+	// A valid announce is 1D 1D <IEEE6> crcHi crcLo. The CRC covers the
+	// IEEE, so the residue over IEEE+crc is zero.
+	reply := announceFrame(ieee)
 
 	got, ok := parseAnnounce(reply)
 	if !ok {
@@ -316,4 +314,171 @@ func TestIsEncryptedFrame(t *testing.T) {
 	if isEncryptedFrame([]byte{0x1D, 0x1D, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}) {
 		t.Errorf("isEncryptedFrame: bare announce misdetected as AES")
 	}
+}
+
+// announceFrame builds one valid announcement record for an IEEE.
+func announceFrame(ieee [6]byte) []byte {
+	crc := crc16(ieee[:])
+	f := append([]byte{announceTag, announceTag}, ieee[:]...)
+	return append(f, byte(crc>>8), byte(crc))
+}
+
+func TestParseAnnouncesFindsEveryUnitInOneRead(t *testing.T) {
+	a := [6]byte{0x99, 0x99, 0x00, 0x00, 0x00, 0x01}
+	b := [6]byte{0x99, 0x99, 0x00, 0x00, 0x00, 0x02}
+	c := [6]byte{0x80, 0x60, 0x00, 0x04, 0x25, 0x82}
+
+	// Three units answer the same solicitation inside one read, with
+	// leading and trailing noise around them.
+	var buf []byte
+	buf = append(buf, 0x00, 0xFF)
+	buf = append(buf, announceFrame(a)...)
+	buf = append(buf, announceFrame(b)...)
+	buf = append(buf, 0x5A)
+	buf = append(buf, announceFrame(c)...)
+	buf = append(buf, 0x1D, 0x1D) // truncated trailing marker
+
+	got := parseAnnounces(buf)
+	want := [][6]byte{a, b, c}
+	if len(got) != len(want) {
+		t.Fatalf("parseAnnounces found %d units, want %d (% X)", len(got), len(want), buf)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("unit %d = % X, want % X", i, got[i], want[i])
+		}
+	}
+	if s := bcd6ToSerial(got[2]); s != "806000042582" {
+		t.Errorf("third serial = %q, want 806000042582", s)
+	}
+}
+
+func TestParseAnnouncesRejectsBadRecords(t *testing.T) {
+	ieee := [6]byte{0x99, 0x99, 0x00, 0x00, 0x00, 0x03}
+	bad := announceFrame(ieee)
+	bad[len(bad)-1] ^= 0xFF // corrupt CRC
+	if got := parseAnnounces(bad); len(got) != 0 {
+		t.Fatalf("parseAnnounces accepted a bad-CRC record: % X", got)
+	}
+	// A 1D 1D pair that is not a record must not swallow the real one that
+	// follows it.
+	buf := append([]byte{announceTag, announceTag, 0, 0, 0, 0, 0, 0, 0, 0}, announceFrame(ieee)...)
+	if got := parseAnnounces(buf); len(got) != 1 || got[0] != ieee {
+		t.Fatalf("parseAnnounces(% X) = % X, want the one valid record", buf, got)
+	}
+	if got := parseAnnounces(nil); len(got) != 0 {
+		t.Fatalf("parseAnnounces(nil) = % X, want none", got)
+	}
+}
+
+// A valid record consumes its whole length. A record whose own IEEE opens
+// with the 1D 1D marker therefore cannot produce a second, fabricated record
+// out of its tail.
+func TestParseAnnouncesDoesNotSplitInsideARecord(t *testing.T) {
+	outer := [6]byte{announceTag, announceTag, 0xAA, 0xBB, 0xCC, 0xDD}
+	buf := announceFrame(outer)
+	// Bytes [2:4] of that record are 1D 1D, so a second record could start
+	// at offset 2. Complete it with the CRC that would make it valid.
+	var inner [6]byte
+	copy(inner[:], buf[4:announceLen])
+	c := crc16(inner[:])
+	buf = append(buf, byte(c>>8), byte(c))
+
+	got := parseAnnounces(buf)
+	if len(got) != 1 || got[0] != outer {
+		t.Fatalf("parseAnnounces(% X) = % X, want exactly the outer record % X", buf, got, outer)
+	}
+}
+
+// A 1D 1D pair that is not a record must not hide a real record that starts
+// a few bytes later. The scan resyncs at byte granularity. That is the
+// misalignment the head-only parse could not recover from.
+func TestParseAnnouncesResyncsAfterFalseMarker(t *testing.T) {
+	ieee := [6]byte{0x99, 0x99, 0x00, 0x00, 0x00, 0x07}
+	for _, offset := range []int{2, 5} {
+		buf := append([]byte{announceTag, announceTag}, make([]byte, offset-2)...)
+		buf = append(buf, announceFrame(ieee)...)
+		got := parseAnnounces(buf)
+		if len(got) != 1 || got[0] != ieee {
+			t.Errorf("offset %d: parseAnnounces(% X) = % X, want the one real record", offset, buf, got)
+		}
+	}
+}
+
+// A buffer that holds exactly one record and nothing else is the loop's
+// boundary case. The scan must not require trailing bytes to accept it.
+func TestParseAnnouncesAcceptsAnExactlyOneRecordBuffer(t *testing.T) {
+	ieee := [6]byte{0x80, 0x60, 0x00, 0x04, 0x25, 0x82}
+	buf := announceFrame(ieee)
+	if len(buf) != announceLen {
+		t.Fatalf("announceFrame built %d bytes, want %d", len(buf), announceLen)
+	}
+	got := parseAnnounces(buf)
+	if len(got) != 1 || got[0] != ieee {
+		t.Fatalf("parseAnnounces(% X) = % X, want the single record", buf, got)
+	}
+}
+
+// A unit that answers twice, within one read or across reads, is one found
+// unit. The IEEE list stays in step with it, so the report-id-off frame
+// quiets exactly the units reported.
+func TestScanHarvestDeduplicates(t *testing.T) {
+	a := [6]byte{0x99, 0x99, 0x00, 0x00, 0x00, 0x01}
+	b := [6]byte{0x99, 0x99, 0x00, 0x00, 0x00, 0x02}
+
+	var h scanHarvest
+	// First read: a answers twice, then b.
+	if full := h.add(concat(announceFrame(a), announceFrame(a), announceFrame(b))); full {
+		t.Fatal("harvest reported full after two units")
+	}
+	// Second read: a answers again.
+	h.add(announceFrame(a))
+
+	if len(h.units) != 2 {
+		t.Fatalf("harvested %d units, want 2: %+v", len(h.units), h.units)
+	}
+	if h.units[0].Serial != bcd6ToSerial(a) || h.units[1].Serial != bcd6ToSerial(b) {
+		t.Fatalf("units = %+v, want %s then %s", h.units, bcd6ToSerial(a), bcd6ToSerial(b))
+	}
+	if len(h.ieees) != 2 || h.ieees[0] != a || h.ieees[1] != b {
+		t.Fatalf("ieees = % X, want the two units in the same order", h.ieees)
+	}
+}
+
+// The harvest has a cap. Only a CRC authenticates an announcement, and anyone
+// in range can compute one. A flood must therefore not grow the unit list, or
+// the report-id-off frame built from it, without limit.
+func TestScanHarvestStopsAtTheUnitCap(t *testing.T) {
+	var h scanHarvest
+	var full bool
+	for i := 0; i < maxScanUnits*2 && !full; i++ {
+		ieee := [6]byte{0x12, 0x34, 0x56, 0x78, byte(i / 10 % 10), byte(i % 10)}
+		full = h.add(announceFrame(ieee))
+	}
+	if !full {
+		t.Fatal("harvest never reported full")
+	}
+	if len(h.units) != maxScanUnits {
+		t.Fatalf("harvested %d units, want the cap %d", len(h.units), maxScanUnits)
+	}
+	// The same bound applies to one read that carries more than the cap.
+	var burst scanHarvest
+	var buf []byte
+	for i := 0; i < maxScanUnits+20; i++ {
+		buf = append(buf, announceFrame([6]byte{0x98, 0x76, 0x54, 0x32, byte(i / 10 % 10), byte(i % 10)})...)
+	}
+	if full := burst.add(buf); !full {
+		t.Fatal("a single over-cap read did not report full")
+	}
+	if len(burst.units) != maxScanUnits {
+		t.Fatalf("single read harvested %d units, want the cap %d", len(burst.units), maxScanUnits)
+	}
+}
+
+func concat(parts ...[]byte) []byte {
+	var out []byte
+	for _, p := range parts {
+		out = append(out, p...)
+	}
+	return out
 }

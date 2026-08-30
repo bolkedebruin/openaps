@@ -4445,11 +4445,17 @@ func (x *PairingCmdResult) GetChannel() uint32 {
 
 // FoundInverter is one inverter that announced itself (0x1D reply) during
 // a report-id scan.
+//
+// It carries no encryption state. The parser matches an announcement as
+// plaintext bytes, and one read can hold several announcements behind an
+// unrelated frame. The AES marker at the head of that read therefore
+// describes a different frame, and it says nothing about the units found in
+// the read. The per-inverter plaintext/AES badge comes from telemetry
+// ingest, which attributes each L1 frame to its own peer UID.
 type FoundInverter struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Serial        string                 `protobuf:"bytes,1,opt,name=serial,proto3" json:"serial,omitempty"`                         // 12-digit decimal
 	ShortAddr     uint32                 `protobuf:"varint,2,opt,name=short_addr,json=shortAddr,proto3" json:"short_addr,omitempty"` // 0 if not yet assigned
-	Encrypted     bool                   `protobuf:"varint,3,opt,name=encrypted,proto3" json:"encrypted,omitempty"`                  // announcement arrived AES-wrapped (CC EE/FC FC)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4496,13 +4502,6 @@ func (x *FoundInverter) GetShortAddr() uint32 {
 		return x.ShortAddr
 	}
 	return 0
-}
-
-func (x *FoundInverter) GetEncrypted() bool {
-	if x != nil {
-		return x.Encrypted
-	}
-	return false
 }
 
 // EffectiveSettings reports the values inv-driver is actually using right
@@ -5119,12 +5118,11 @@ const file_busmgr_proto_rawDesc = "" +
 	"\n" +
 	"short_addr\x18\x05 \x01(\rR\tshortAddr\x12\x10\n" +
 	"\x03pan\x18\x06 \x01(\rR\x03pan\x12\x18\n" +
-	"\achannel\x18\a \x01(\rR\achannel\"d\n" +
+	"\achannel\x18\a \x01(\rR\achannel\"L\n" +
 	"\rFoundInverter\x12\x16\n" +
 	"\x06serial\x18\x01 \x01(\tR\x06serial\x12\x1d\n" +
 	"\n" +
-	"short_addr\x18\x02 \x01(\rR\tshortAddr\x12\x1c\n" +
-	"\tencrypted\x18\x03 \x01(\bR\tencrypted\"r\n" +
+	"short_addr\x18\x02 \x01(\rR\tshortAddrJ\x04\b\x03\x10\x04\"r\n" +
 	"\x11EffectiveSettings\x12\x10\n" +
 	"\x03mac\x18\x01 \x01(\tR\x03mac\x12\x10\n" +
 	"\x03pan\x18\x02 \x01(\tR\x03pan\x12\x1f\n" +
