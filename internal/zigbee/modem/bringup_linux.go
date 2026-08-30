@@ -3,7 +3,6 @@
 package modem
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -14,12 +13,6 @@ import (
 // resetDevice is the GPIO reset line for the radio; toggled via
 // ioctl(fd, 0, 0).
 const resetDevice = "/dev/reset"
-
-// ackTimeout bounds how long we wait for a config-op reply.
-const ackTimeout = 5 * time.Second
-
-// errNoAck is returned when a config op gets no AB 26 52 reply in time.
-var errNoAck = errors.New("no modem ack")
 
 // BringupAPsystems performs the cold-start configuration of the ECU's
 // built-in module on fd (an open /dev/ttyO2): a 0x0D liveness ping,
@@ -113,14 +106,9 @@ func awaitAck(fd int, timeout time.Duration) ([]byte, error) {
 		if n <= 0 {
 			continue
 		}
-		acc = append(acc, tmp[:n]...)
-		if i := findAck(acc); i >= 0 {
-			return acc[i : i+ackLen], nil
-		}
-		// Bound the scan window so a chatty bus can't grow acc without
-		// limit while we wait; keep enough tail to span a split ack.
-		if len(acc) > 256 {
-			acc = acc[len(acc)-ackLen:]
+		var ack []byte
+		if acc, ack = scanAck(acc, tmp[:n]); ack != nil {
+			return ack, nil
 		}
 	}
 }
