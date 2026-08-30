@@ -2,6 +2,7 @@ package pairing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -67,14 +68,11 @@ func (m *Manager) startScan(by string, req *wire.ScanStart) *wire.PairingRespons
 // while parked on 0xFFFF.
 func (m *Manager) fastScan(ctx context.Context, ch uint32) ([]*wire.FoundInverter, error) {
 	m.status.setStage(StageScan, "park on rendezvous PAN")
-	if err := m.Transport.setModulePan(ctx, 0xFFFF, ch); err != nil {
-		return nil, err
-	}
 	m.status.update(func(s *PairingStatus) {
 		s.Sweep = Sweep{Chan: ch, ChanLo: ch, ChanHi: ch}
 		s.Substep = "report-id scan"
 	})
-	found, err := m.Transport.reportScan(ctx, fastScanWindowMs)
+	found, err := m.scanChannel(ctx, ch, fastScanWindowMs)
 	// Restore the module to the operating PAN regardless of scan outcome.
 	m.restoreModule(ch)
 	return found, err
@@ -96,12 +94,9 @@ func (m *Manager) sweepScan(ctx context.Context, restoreCh, chLo, chHi, dwell ui
 			s.Sweep = Sweep{Chan: ch, ChanLo: chLo, ChanHi: chHi}
 			s.Substep = fmt.Sprintf("sweep channel %d", ch)
 		})
-		if err := m.Transport.setModulePan(ctx, 0xFFFF, ch); err != nil {
-			return nil, fmt.Errorf("set module pan ch=%d: %w", ch, err)
-		}
-		found, err := m.Transport.reportScan(ctx, dwell)
+		found, err := m.scanChannel(ctx, ch, dwell)
 		if err != nil {
-			return nil, fmt.Errorf("report scan ch=%d: %w", ch, err)
+			return nil, err
 		}
 		for _, fi := range found {
 			if _, ok := byID[fi.GetSerial()]; !ok {
@@ -117,6 +112,32 @@ func (m *Manager) sweepScan(ctx context.Context, restoreCh, chLo, chHi, dwell ui
 	return out, nil
 }
 
+// scanChannel parks the module on the rendezvous PAN at ch and runs one
+// report-id window. It records the channel of everything that answers. Every
+// path that listens on a channel goes through here: the fast scan, the
+// sweep, the locate, and the pre-migration confirmation.
+func (m *Manager) scanChannel(ctx context.Context, ch, dwell uint32) ([]*wire.FoundInverter, error) {
+	if err := m.Transport.setModulePan(ctx, 0xFFFF, ch); err != nil {
+		return nil, fmt.Errorf("set module pan ch=%d: %w", ch, err)
+	}
+	found, err := m.Transport.reportScan(ctx, dwell)
+	if err != nil {
+		return nil, fmt.Errorf("report scan ch=%d: %w", ch, err)
+	}
+	m.recordFoundChannel(ctx, found, ch)
+	return found, nil
+}
+
+// answered reports whether serial is among the units that announced.
+func answered(found []*wire.FoundInverter, serial string) bool {
+	for _, fi := range found {
+		if fi.GetSerial() == serial {
+			return true
+		}
+	}
+	return false
+}
+
 // restoreModule returns the radio to ecu-zb's operating PAN by sending the
 // pan=0 sentinel — ecu-zb (the radio owner) resolves the actual PAN+channel
 // it bonded to, so inv-driver never re-derives it. Best-effort: a restore
@@ -130,6 +151,27 @@ func (m *Manager) restoreModule(_ uint32) {
 	defer cancel()
 	if err := m.Transport.setModulePan(ctx, 0, 0); err != nil {
 		m.status.update(func(s *PairingStatus) { s.Message = "warning: module not restored to operating PAN: " + err.Error() })
+	}
+}
+
+// recordFoundChannel persists the RF channel on which each unit answered.
+// Only this code knows the channel: the scan commanded the park, and the
+// announcement itself carries no channel. Without the record, a later add
+// can only guess the ECU's own channel. That is the one channel on which a
+// unit bound to some other ECU is least likely to listen.
+//
+// Best effort: a persist failure costs the add a hint. It does not fail the
+// scan.
+func (m *Manager) recordFoundChannel(ctx context.Context, found []*wire.FoundInverter, ch uint32) {
+	if m.Store == nil {
+		return
+	}
+	for _, fi := range found {
+		serial := fi.GetSerial()
+		if !serialRe.MatchString(serial) {
+			continue
+		}
+		_ = m.Store.SetInverterFoundChannel(ctx, serial, ch)
 	}
 }
 
@@ -276,15 +318,27 @@ func (m *Manager) bindAndMigrate(ctx context.Context, serial string) error {
 	m.status.setStage(StageBind, "query short address")
 	sa, err := m.Transport.getShortAddr(ctx, serial)
 	if err != nil {
-		// Not reachable on our PAN → single rendezvous migration.
-		if migErr := m.migrateOne(ctx, serial, pan, ch); migErr != nil {
-			return fmt.Errorf("migrate: %w", migErr)
+		// The unit is not reachable on our PAN. Find the channel it IS on,
+		// then run a single rendezvous migration from there.
+		srcCh, migErr := m.migrateFromRecalledChannel(ctx, serial, pan, ch)
+		if errors.Is(migErr, errUnitNotOnChannel) || srcCh == 0 {
+			// There is no usable record, or the unit moved after the
+			// record. Sweep for where it is now, then migrate from there.
+			located, locErr := m.locateChannel(ctx, serial, ch)
+			if locErr != nil {
+				return locErr
+			}
+			srcCh = located
+			migErr = m.migrateOne(ctx, serial, pan, ch, srcCh)
+		}
+		if migErr != nil {
+			return fmt.Errorf("migrate from channel %d: %w", srcCh, migErr)
 		}
 		// Re-query after migration.
 		m.status.setStage(StageBind, "re-query short address")
 		sa, err = m.Transport.getShortAddr(ctx, serial)
 		if err != nil {
-			return fmt.Errorf("get short addr after migrate: %w", err)
+			return fmt.Errorf("get short addr after migrate from channel %d: %w", srcCh, err)
 		}
 	}
 	if sa == 0 {
@@ -308,17 +362,96 @@ func (m *Manager) bindAndMigrate(ctx context.Context, serial string) error {
 	return nil
 }
 
-// migrateOne performs a single-inverter rendezvous migration onto pan/ch:
-// park module on 0xFFFF, prime the inverter with the target PAN, broadcast
-// commit, then restore the module to the operating PAN. The module is always
-// restored even on the abort/error path.
-func (m *Manager) migrateOne(ctx context.Context, serial string, pan, ch uint32) (err error) {
-	m.status.setStage(StageMigrate, "rendezvous on PAN 0xFFFF")
+// errUnitNotOnChannel reports that the inverter did not announce itself on
+// the channel where the rendezvous parked. The runner sent nothing at it.
+var errUnitNotOnChannel = errors.New("inverter did not answer on that channel")
+
+// migrateFromRecalledChannel tries the channel on which the last scan heard
+// this unit. It returns that channel and the migration outcome. It returns
+// channel 0 when there is no record to try.
+//
+// The record is a hint, not a licence to send. It can be months old, and the
+// unit may have moved to another ECU since. migrateOne confirms that the
+// unit is really there before anything goes out. If the unit is not there,
+// migrateOne reports errUnitNotOnChannel. A stale record therefore costs one
+// scan window and then falls back to the sweep.
+func (m *Manager) migrateFromRecalledChannel(ctx context.Context, serial string, pan, opChannel uint32) (uint32, error) {
+	if m.Store == nil {
+		return 0, nil
+	}
+	row, err := m.Store.GetInverterPairing(ctx, serial)
+	// A record of our own channel is no help. The direct query on it
+	// already failed. That is how we got here.
+	if err != nil || row.FoundChannel == 0 || row.FoundChannel == opChannel {
+		return 0, nil
+	}
+	m.milestone(ctx, serial, "channel_recalled", "info",
+		fmt.Sprintf("last heard on channel %d", row.FoundChannel))
+	return row.FoundChannel, m.migrateOne(ctx, serial, pan, opChannel, row.FoundChannel)
+}
+
+// locateChannel sweeps the rendezvous PAN across the usable channels for one
+// serial. It stops at the channel on which the serial answers, and it
+// records that channel, so a later add skips the sweep. It restores the
+// module to the operating PAN on every exit path.
+//
+// A sweep parks the radio off the operating PAN, and telemetry stops for the
+// whole fleet while it runs. It therefore happens only after a direct query
+// failed and after the add tried any recorded channel.
+func (m *Manager) locateChannel(ctx context.Context, serial string, restoreCh uint32) (uint32, error) {
+	m.status.setStage(StageMigrate, fmt.Sprintf("locating %s across channels %d-%d", serial, defaultChanLo, defaultChanHi))
+	m.milestone(ctx, serial, "channel_sweep_started", "info",
+		fmt.Sprintf("channels %d-%d, telemetry paused", defaultChanLo, defaultChanHi))
+	defer m.restoreModule(restoreCh)
+
+	for ch := defaultChanLo; ch <= defaultChanHi; ch++ {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
+		m.status.update(func(s *PairingStatus) {
+			s.Sweep = Sweep{Chan: ch, ChanLo: defaultChanLo, ChanHi: defaultChanHi}
+			s.Substep = fmt.Sprintf("listening for %s on channel %d", serial, ch)
+		})
+		found, err := m.scanChannel(ctx, ch, defaultDwellMs)
+		if err != nil {
+			return 0, fmt.Errorf("locate %s: %w", serial, err)
+		}
+		if answered(found, serial) {
+			m.milestone(ctx, serial, "channel_located", "info", fmt.Sprintf("answered on channel %d", ch))
+			return ch, nil
+		}
+	}
+	return 0, fmt.Errorf("inverter %s did not answer on any channel %d-%d: it is powered down, out of range, or not an inverter on this site",
+		serial, defaultChanLo, defaultChanHi)
+}
+
+// migrateOne runs a single-inverter rendezvous migration onto pan/ch. The
+// rendezvous runs on srcChannel, the channel on which the inverter listens
+// now. The prime and the commit carry the target pan/ch. One prime+commit
+// therefore moves the unit across channels and across PANs. migrateOne
+// always restores the module to the operating PAN, also on the abort and
+// error paths. It never leaves the rest of the fleet behind.
+//
+// migrateOne sends nothing at the inverter until the inverter announces
+// itself on srcChannel. The prime is a directed frame with no
+// acknowledgement. The commit is a bare broadcast with no destination at
+// all. Neither can report a wrong channel. Without the confirmation, a stale
+// record would put a PAN-change broadcast on a channel that this site does
+// not own. The mistake would only appear later, as a failed re-query.
+func (m *Manager) migrateOne(ctx context.Context, serial string, pan, ch, srcChannel uint32) (err error) {
+	m.status.setStage(StageMigrate, fmt.Sprintf("rendezvous on PAN 0xFFFF channel %d", srcChannel))
 	m.status.setInverterState(serial, "migrating")
 	defer m.restoreModule(ch)
 
-	if err := m.Transport.setModulePan(ctx, 0xFFFF, ch); err != nil {
-		return fmt.Errorf("module to 0xFFFF: %w", err)
+	m.status.update(func(s *PairingStatus) {
+		s.Substep = fmt.Sprintf("confirming %s is on channel %d", serial, srcChannel)
+	})
+	found, err := m.scanChannel(ctx, srcChannel, defaultDwellMs)
+	if err != nil {
+		return fmt.Errorf("module to 0xFFFF ch=%d: %w", srcChannel, err)
+	}
+	if !answered(found, serial) {
+		return fmt.Errorf("%w: %s silent on channel %d", errUnitNotOnChannel, serial, srcChannel)
 	}
 	m.status.setStage(StageMigrate, "prime inverter")
 	if err := m.Transport.primeInv(ctx, serial, pan, ch); err != nil {
@@ -334,7 +467,7 @@ func (m *Manager) migrateOne(ctx context.Context, serial string, pan, ch uint32)
 		return ctx.Err()
 	case <-time.After(m.settleDur()):
 	}
-	m.milestone(ctx, serial, "migrate_ok", "info", fmt.Sprintf("pan=0x%04X ch=%d", pan, ch))
+	m.milestone(ctx, serial, "migrate_ok", "info", fmt.Sprintf("pan=0x%04X ch=%d (from channel %d)", pan, ch, srcChannel))
 	return nil
 }
 
