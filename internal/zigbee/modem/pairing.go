@@ -318,6 +318,37 @@ func parseShortAddrReply(reply []byte, wantIEEE [6]byte) (uint16, bool) {
 	return sa, true
 }
 
+// minL1ShortAddrReply is the shortest 0x0E reply in the L1 layout: the FC FC
+// marker, the short address, two flag bytes and the 6-byte IEEE.
+const minL1ShortAddrReply = 12
+
+// findShortAddrReply locates the 0x0E reply for wantIEEE anywhere in buf.
+// One read can carry several frames. The pairing sink is the whole modem
+// byte stream, so a reply routinely arrives behind unrelated telemetry. A
+// head-only parse then reports the inverter as silent, and the caller goes
+// on to migrate a unit that had in fact just answered.
+//
+// At offset 0 the scan accepts either reply layout, as before. Beyond
+// offset 0 it accepts only the L1 layout, anchored on its FC FC marker. The
+// bare layout has no marker to anchor on. A match of the bare layout at an
+// arbitrary offset could read a short address out of whatever bytes
+// happened to precede the IEEE. The IEEE must still match the serial that
+// the caller asked for, so the scan never accepts a reply for another unit.
+func findShortAddrReply(buf []byte, wantIEEE [6]byte) (uint16, bool) {
+	if sa, ok := parseShortAddrReply(buf, wantIEEE); ok {
+		return sa, true
+	}
+	for i := 1; i+minL1ShortAddrReply <= len(buf); i++ {
+		if buf[i] != codec.L1ReplySOF || buf[i+1] != codec.L1ReplySOF {
+			continue
+		}
+		if sa, ok := parseShortAddrReply(buf[i:], wantIEEE); ok {
+			return sa, true
+		}
+	}
+	return 0, false
+}
+
 // parseAnnounce parses one 0x1D 0x1D announcement reply, returning the
 // announcing inverter's 6-byte IEEE. The reply layout (autoSearchInverterID)
 // is `1D 1D <IEEE 6> crcHi crcLo`; the CRC-16/CCITT-FALSE residue over the

@@ -3,6 +3,8 @@ package modem
 import (
 	"bytes"
 	"testing"
+
+	"github.com/bolkedebruin/openaps/codec"
 )
 
 // Golden frames verified byte-for-byte against main.exe's decompiled
@@ -315,5 +317,66 @@ func TestIsEncryptedFrame(t *testing.T) {
 	// Bare 1D 1D announcement → not encrypted.
 	if isEncryptedFrame([]byte{0x1D, 0x1D, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}) {
 		t.Errorf("isEncryptedFrame: bare announce misdetected as AES")
+	}
+}
+
+// l1ShortAddrReply builds a 0x0E reply in the L1 layout for one unit.
+func l1ShortAddrReply(sa uint16, ieee [6]byte) []byte {
+	f := []byte{codec.L1ReplySOF, codec.L1ReplySOF, byte(sa >> 8), byte(sa), 0x00, 0x00}
+	return append(f, ieee[:]...)
+}
+
+// A reply that arrives behind an unrelated frame in the same read is still
+// an answer from the inverter. A head-only parse reports the inverter as
+// silent, and the caller then migrates a unit that had just answered.
+func TestFindShortAddrReplyBehindAnotherFrame(t *testing.T) {
+	ieee := [6]byte{0x99, 0x99, 0x00, 0x00, 0x00, 0x03}
+	noise := []byte{0xFB, 0xFB, 0x06, 0xDC, 0x00, 0x00, 0x11, 0x22, 0x33, 0x44}
+
+	buf := append(append([]byte{}, noise...), l1ShortAddrReply(0x1234, ieee)...)
+	if sa, ok := findShortAddrReply(buf, ieee); !ok || sa != 0x1234 {
+		t.Fatalf("findShortAddrReply(% X) = 0x%04X,%v want 0x1234,true", buf, sa, ok)
+	}
+
+	// At offset 0 both layouts still work.
+	bare := append([]byte{0x00, 0x09, 0xAA, 0xBB}, ieee[:]...)
+	if sa, ok := findShortAddrReply(bare, ieee); !ok || sa != 0x0009 {
+		t.Errorf("bare reply at offset 0 = 0x%04X,%v want 0x0009,true", sa, ok)
+	}
+}
+
+// The scan must not invent a short address out of whatever bytes precede a
+// matching IEEE. Past offset 0 it accepts only the L1 layout, anchored on
+// its own FC FC marker.
+func TestFindShortAddrReplyIgnoresUnanchoredMatches(t *testing.T) {
+	ieee := [6]byte{0x99, 0x99, 0x00, 0x00, 0x00, 0x03}
+	// The IEEE appears mid-buffer with no FC FC marker before it. The bytes
+	// in front of it are payload, not a short address. The trailing bytes
+	// matter. The scan only inspects offsets where a whole L1 reply still
+	// fits, so a buffer that ends at the IEEE never reaches the offset where
+	// an unanchored bare-layout match would occur.
+	buf := append([]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77}, ieee[:]...)
+	buf = append(buf, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD)
+	if sa, ok := findShortAddrReply(buf, ieee); ok {
+		t.Fatalf("accepted an unanchored match, sa = 0x%04X", sa)
+	}
+}
+
+func TestFindShortAddrReplyRejectsOtherUnitsAndReservedAddrs(t *testing.T) {
+	ieee := [6]byte{0x99, 0x99, 0x00, 0x00, 0x00, 0x03}
+	other := [6]byte{0x80, 0x60, 0x00, 0x04, 0x25, 0x82}
+
+	// The scan never accepts a reply for a different unit, however deep it
+	// sits.
+	buf := append([]byte{0x00, 0x00}, l1ShortAddrReply(0x1234, other)...)
+	if sa, ok := findShortAddrReply(buf, ieee); ok {
+		t.Errorf("accepted another unit's reply, sa = 0x%04X", sa)
+	}
+
+	// The scan rejects a reserved short address and keeps looking. It still
+	// finds a later valid reply for the same unit.
+	buf = append(l1ShortAddrReply(0xFFFE, ieee), l1ShortAddrReply(0x0055, ieee)...)
+	if sa, ok := findShortAddrReply(buf, ieee); !ok || sa != 0x0055 {
+		t.Errorf("findShortAddrReply(% X) = 0x%04X,%v want 0x0055,true", buf, sa, ok)
 	}
 }
