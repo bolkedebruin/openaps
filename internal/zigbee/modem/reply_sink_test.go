@@ -118,11 +118,13 @@ func TestReadFrameChanReturnsPartialOnDeadline(t *testing.T) {
 
 func TestReadFrameChanReportsEncryptedMarker(t *testing.T) {
 	// An AES-wrapped inbound frame: FC FC marker with a gate byte below the
-	// cleartext threshold at [12].
+	// cleartext threshold at [12]. The frame is split, so the gate byte
+	// arrives in a second chunk. The reader must read the marker from the
+	// assembled frame, because that is how it arrives over a UART.
 	raw := make([]byte, 13)
 	raw[0], raw[1] = codec.L1ReplySOF, codec.L1ReplySOF
 	raw[12] = codec.CleartextGateMin - 1
-	_, encrypted, err := readFrameChan(feed(raw), time.Second)
+	_, encrypted, err := readFrameChan(feed(raw[:6], raw[6:]), time.Second)
 	if err != nil {
 		t.Fatalf("readFrameChan: %v", err)
 	}
@@ -212,19 +214,47 @@ func TestDrainChanReturnsOnClosedSink(t *testing.T) {
 }
 
 // A neighbouring device that holds the bus busy must not decide how much we
-// accumulate. The frame reader returns once it reaches the ceiling.
+// accumulate. The frame reader returns once it reaches the ceiling. The test
+// buffers the chunks before the call, so the cap is what ends the read, with
+// no dependence on timing. It asserts the length exactly, so a cap moved in
+// either direction fails.
 func TestReadFrameChanCapsAccumulator(t *testing.T) {
-	in := make(chan []byte, 8)
-	go func() {
-		for i := 0; i < 8; i++ {
-			in <- bytes.Repeat([]byte{0x5A}, 1024)
-		}
-	}()
-	frame, _, err := readFrameChan(in, 5*time.Second)
+	chunks := make([][]byte, 8)
+	for i := range chunks {
+		chunks[i] = bytes.Repeat([]byte{0x5A}, maxReplyBytes/4)
+	}
+	frame, _, err := readFrameChan(feed(chunks...), 5*time.Second)
 	if err != nil {
 		t.Fatalf("readFrameChan: %v", err)
 	}
-	if len(frame) > maxReplyBytes+1024 {
-		t.Fatalf("accumulated %d bytes, want the reader to stop near %d", len(frame), maxReplyBytes)
+	if len(frame) != maxReplyBytes {
+		t.Fatalf("accumulated %d bytes, want exactly the cap %d", len(frame), maxReplyBytes)
+	}
+}
+
+// The adapter wires PairingRunner.In per primitive, so an unwired runner
+// reads from a nil channel. That is a silent stall for the whole timeout,
+// not a crash. It is worth pinning: in production the timeout is seconds,
+// and the symptom would look like a dead radio.
+func TestNilSinkTimesOutRatherThanCrashing(t *testing.T) {
+	if _, err := awaitAckChan(nil, 20*time.Millisecond); !errors.Is(err, errNoAck) {
+		t.Errorf("awaitAckChan(nil) = %v, want errNoAck", err)
+	}
+	if _, _, err := readFrameChan(nil, 20*time.Millisecond); !errors.Is(err, errNoReply) {
+		t.Errorf("readFrameChan(nil) = %v, want errNoReply", err)
+	}
+	drainChan(nil) // must not block
+}
+
+// The drain does not block. It discards what already arrived, and it does
+// not wait for more. That is what makes writeFrame's flush/settle/drain/write
+// order correct. A chunk that lands after the drain belongs to the reply.
+func TestDrainChanDoesNotWaitForLateChunks(t *testing.T) {
+	in := make(chan []byte, 2)
+	in <- []byte{0x01}
+	drainChan(in)
+	in <- []byte{0x02}
+	if len(in) != 1 {
+		t.Fatalf("channel holds %d chunks, want the post-drain chunk to survive", len(in))
 	}
 }
