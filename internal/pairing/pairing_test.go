@@ -30,6 +30,9 @@ type mockTransport struct {
 	// succeeds with an empty result. get_module_pan is answered globally
 	// (before the responder) so tests don't each have to handle it.
 	responder func(cmd *wire.PairingCmd) *wire.PairingCmdResult
+	// swallow lists the commands that the backend never answers. The
+	// transport then times out the way it does against a wedged ecu-zb.
+	swallow func(cmd *wire.PairingCmd) bool
 }
 
 func newMockTransport() (*Transport, *mockTransport) {
@@ -48,8 +51,13 @@ func (m *mockTransport) SendToBackend(_ string, env *wire.Envelope) bool {
 	m.mu.Lock()
 	m.cmds = append(m.cmds, cmd)
 	resp := m.responder
+	swallow := m.swallow
 	opPAN := m.opPAN
 	m.mu.Unlock()
+
+	if swallow != nil && swallow(cmd) {
+		return true // accepted, never answered
+	}
 
 	var res *wire.PairingCmdResult
 	// get_module_pan is answered globally so each test responder need not.
@@ -259,6 +267,10 @@ type offPANResponder struct {
 	// scanDelay slows each listen, so a test can interleave an abort with
 	// a sweep. Against the mock, the sweep would otherwise finish at once.
 	scanDelay time.Duration
+	// silentQueries is the number of short-address queries that get no
+	// answer after the first one (the off-PAN probe). It models a unit that
+	// is still rejoining.
+	silentQueries int
 }
 
 // scanCount returns the number of listens so far.
@@ -302,8 +314,8 @@ func (r *offPANResponder) respond(c *wire.PairingCmd) *wire.PairingCmdResult {
 		r.commitChan = c.GetCommitPan().GetChannel()
 	case c.GetGetShortAddr() != nil:
 		r.queries++
-		if r.queries == 1 {
-			// Off-PAN: the unit is not on our channel, so it does not answer.
+		if r.queries <= 1+r.silentQueries {
+			// Off-PAN, then still rejoining. No answer yet.
 			return &wire.PairingCmdResult{Ok: false, Error: "no reply from inverter"}
 		}
 		return &wire.PairingCmdResult{Ok: true, ShortAddr: 0x55AA}
@@ -961,5 +973,85 @@ func TestAdd_UnreadableStoreWarnsBeforeSweeping(t *testing.T) {
 	}
 	if len(r.scanChans) == 0 || r.scanChans[0] != defaultChanLo {
 		t.Errorf("listened on %v, want a sweep from channel %d", r.scanChans, defaultChanLo)
+	}
+}
+
+// A migrated unit does not always answer the first question after the
+// commit. Rejoining runs on its own timing. One query decided whether the
+// unit happened to be ready, not whether the migration worked.
+func TestAdd_RetriesTheQueryAfterMigrating(t *testing.T) {
+	const serial = "999900000011"
+	tr, mock := newMockTransport()
+	r := &offPANResponder{serial: serial, answersOn: 22, silentQueries: 4}
+	mock.responder = r.respond
+
+	st := newTestStore(t)
+	if err := st.SetInverterFoundChannel(context.Background(), serial, 22); err != nil {
+		t.Fatalf("SetInverterFoundChannel: %v", err)
+	}
+	m := newAddManager(t, tr, st, &recordingEvents{})
+
+	if final := runAdd(t, m, serial); final.Stage != StageDone {
+		t.Fatalf("stage=%q err=%q", final.Stage, final.Error)
+	}
+	if r.queries < 5 {
+		t.Errorf("gave up after %d queries; the unit answered on the 5th", r.queries)
+	}
+}
+
+// A unit that never answers still fails. The message says how many times the
+// add asked. It does not imply a single missed reply.
+func TestAdd_GivesUpAfterTheRetriesRunOut(t *testing.T) {
+	const serial = "999900000012"
+	tr, mock := newMockTransport()
+	r := &offPANResponder{serial: serial, answersOn: 22, silentQueries: 1000}
+	mock.responder = r.respond
+
+	st := newTestStore(t)
+	if err := st.SetInverterFoundChannel(context.Background(), serial, 22); err != nil {
+		t.Fatalf("SetInverterFoundChannel: %v", err)
+	}
+	m := newAddManager(t, tr, st, &recordingEvents{})
+
+	final := runAdd(t, m, serial)
+	if final.Stage != StageError {
+		t.Fatalf("stage=%q, want error", final.Stage)
+	}
+	if !strings.Contains(final.Error, "did not answer in") {
+		t.Errorf("error = %q, want it to name the exhausted retries", final.Error)
+	}
+	if r.queries != migrateVerifyAttempts+1 { // +1 for the initial off-PAN probe
+		t.Errorf("asked %d times, want %d retries after the initial probe", r.queries, migrateVerifyAttempts)
+	}
+	assertRadioRestored(t, mock)
+}
+
+// A broken path to the radio is not an inverter that moved. A rendezvous in
+// answer to it would put a PAN-change broadcast on the air, to settle a
+// question that nobody asked.
+func TestAdd_BusFailureDoesNotTriggerAMigration(t *testing.T) {
+	const serial = "999900000013"
+	tr, mock := newMockTransport()
+	mock.responder = func(c *wire.PairingCmd) *wire.PairingCmdResult {
+		return &wire.PairingCmdResult{Ok: true}
+	}
+	// The backend delivers nothing for a get_short_addr, so the query fails
+	// the way it does against a wedged backend. The transport times out. The
+	// inverter does not refuse.
+	mock.swallow = func(c *wire.PairingCmd) bool { return c.GetGetShortAddr() != nil }
+	tr.Timeout = 50 * time.Millisecond
+
+	m := newAddManager(t, tr, newTestStore(t), &recordingEvents{})
+	final := runAdd(t, m, serial)
+	if final.Stage != StageError {
+		t.Fatalf("stage=%q, want error", final.Stage)
+	}
+	if !strings.Contains(final.Error, "zigbee bus unavailable") {
+		t.Errorf("error = %q, want it to name the bus, not the inverter", final.Error)
+	}
+	for _, op := range mock.opNames() {
+		if op == "report_scan" || op == "prime_inv" || op == "commit_pan" {
+			t.Fatalf("went on the air with %q despite an unusable bus: %v", op, mock.opNames())
+		}
 	}
 }
