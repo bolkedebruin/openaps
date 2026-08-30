@@ -350,11 +350,12 @@ func TestFindShortAddrReplyBehindAnotherFrame(t *testing.T) {
 // its own FC FC marker.
 func TestFindShortAddrReplyIgnoresUnanchoredMatches(t *testing.T) {
 	ieee := [6]byte{0x99, 0x99, 0x00, 0x00, 0x00, 0x03}
-	// The IEEE appears mid-buffer with no FC FC marker before it. The bytes
-	// in front of it are payload, not a short address. The trailing bytes
-	// matter. The scan only inspects offsets where a whole L1 reply still
-	// fits, so a buffer that ends at the IEEE never reaches the offset where
-	// an unanchored bare-layout match would occur.
+	// The IEEE appears mid-buffer with nothing to anchor it. There is no FC
+	// FC anywhere, so the bytes in front of it are payload, not a short
+	// address. The trailing bytes are there so that the scan reaches the
+	// offset where an unanchored bare-layout match would occur. Without
+	// them, the loop bound stops short of that offset, and the test could
+	// pass without the anchor.
 	buf := append([]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77}, ieee[:]...)
 	buf = append(buf, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD)
 	if sa, ok := findShortAddrReply(buf, ieee); ok {
@@ -378,5 +379,64 @@ func TestFindShortAddrReplyRejectsOtherUnitsAndReservedAddrs(t *testing.T) {
 	buf = append(l1ShortAddrReply(0xFFFE, ieee), l1ShortAddrReply(0x0055, ieee)...)
 	if sa, ok := findShortAddrReply(buf, ieee); !ok || sa != 0x0055 {
 		t.Errorf("findShortAddrReply(% X) = 0x%04X,%v want 0x0055,true", buf, sa, ok)
+	}
+}
+
+// A reply carries no authentication. Two frames that claim different short
+// addresses for the same unit therefore cannot both be true, and neither
+// wins by position. A refusal costs a retry. A choice of one aims later
+// directed sends at whatever address the scan chose.
+func TestFindShortAddrReplyRefusesContradictingMatches(t *testing.T) {
+	ieee := [6]byte{0x99, 0x99, 0x00, 0x00, 0x00, 0x03}
+	buf := append(l1ShortAddrReply(0x1111, ieee), l1ShortAddrReply(0x2222, ieee)...)
+	if sa, ok := findShortAddrReply(buf, ieee); ok {
+		t.Fatalf("accepted 0x%04X from contradicting replies", sa)
+	}
+	// Repeats that agree are not a contradiction: the same unit answers
+	// twice, or a reply and a telemetry frame state the same address.
+	buf = append(l1ShortAddrReply(0x1111, ieee), l1ShortAddrReply(0x1111, ieee)...)
+	if sa, ok := findShortAddrReply(buf, ieee); !ok || sa != 0x1111 {
+		t.Fatalf("findShortAddrReply(agreeing repeats) = 0x%04X,%v want 0x1111,true", sa, ok)
+	}
+}
+
+// Any inbound L1 frame from the wanted unit states its short address in the
+// same place, so ordinary telemetry answers the query. This test pins that
+// contract. A future restriction to a 0x0E opcode check should fail here, so
+// that it is a deliberate decision.
+func TestFindShortAddrReplyAcceptsTelemetryFromTheWantedUnit(t *testing.T) {
+	ieee := [6]byte{0x99, 0x99, 0x00, 0x00, 0x00, 0x03}
+	// FC FC | SA | RSSI | LQI | UID | L2 payload
+	frame := []byte{codec.L1ReplySOF, codec.L1ReplySOF, 0x00, 0x42, 0x5A, 0x30}
+	frame = append(frame, ieee[:]...)
+	frame = append(frame, 0xFB, 0xFB, 0x06, 0xBB, 0x00, 0x00)
+	buf := append([]byte{0x11, 0x22}, frame...)
+
+	if sa, ok := findShortAddrReply(buf, ieee); !ok || sa != 0x0042 {
+		t.Fatalf("findShortAddrReply(telemetry) = 0x%04X,%v want 0x0042,true", sa, ok)
+	}
+}
+
+// A short address that is really a frame marker is a resync artefact. It is
+// not an assignment.
+func TestParseShortAddrReplyRejectsFrameMarkersAsAddresses(t *testing.T) {
+	ieee := [6]byte{0x99, 0x99, 0x00, 0x00, 0x00, 0x03}
+	for _, sa := range []uint16{0xFBFB, 0xFCFC} {
+		if got, ok := parseShortAddrReply(l1ShortAddrReply(sa, ieee), ieee); ok {
+			t.Errorf("accepted 0x%04X as a short address (got 0x%04X)", sa, got)
+		}
+	}
+	// A neighbouring value is a legal address. The scan must still accept it.
+	if got, ok := parseShortAddrReply(l1ShortAddrReply(0xFBFC, ieee), ieee); !ok || got != 0xFBFC {
+		t.Errorf("rejected the legal address 0xFBFC (got 0x%04X,%v)", got, ok)
+	}
+}
+
+func TestFindShortAddrReplyHandlesShortBuffers(t *testing.T) {
+	ieee := [6]byte{0x99, 0x99, 0x00, 0x00, 0x00, 0x03}
+	for _, buf := range [][]byte{nil, {}, {0xFC}, {0xFC, 0xFC, 0x12, 0x34}} {
+		if sa, ok := findShortAddrReply(buf, ieee); ok {
+			t.Errorf("findShortAddrReply(% X) = 0x%04X,true want no match", buf, sa)
+		}
 	}
 }
