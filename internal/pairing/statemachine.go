@@ -2,6 +2,7 @@ package pairing
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"time"
@@ -380,9 +381,20 @@ func (m *Manager) migrateFromRecalledChannel(ctx context.Context, serial string,
 		return 0, nil
 	}
 	row, err := m.Store.GetInverterPairing(ctx, serial)
+	if err != nil {
+		// No row is the normal case for a unit that no scan ever heard. Any
+		// other error means the hint is unavailable, not absent, and it
+		// costs a full sweep. Say so. Do not sweep silently.
+		if !errors.Is(err, sql.ErrNoRows) {
+			m.status.update(func(s *PairingStatus) {
+				s.Message = "warning: could not read the recorded channel for " + serial + ": " + err.Error()
+			})
+		}
+		return 0, nil
+	}
 	// A record of our own channel is no help. The direct query on it
 	// already failed. That is how we got here.
-	if err != nil || row.FoundChannel == 0 || row.FoundChannel == opChannel {
+	if row.FoundChannel == 0 || row.FoundChannel == opChannel {
 		return 0, nil
 	}
 	m.milestone(ctx, serial, "channel_recalled", "info",

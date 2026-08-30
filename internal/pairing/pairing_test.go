@@ -933,3 +933,33 @@ func TestReplace_MigratesTheNewUnitFromItsOwnChannel(t *testing.T) {
 	}
 	assertRadioRestored(t, mock)
 }
+
+// A store that the add cannot read is not the same as a unit that no scan
+// ever heard. Both fall back to the sweep. The broken store costs a
+// fleet-wide telemetry pause, and it must say why.
+func TestAdd_UnreadableStoreWarnsBeforeSweeping(t *testing.T) {
+	const serial = "999900000010"
+	tr, mock := newMockTransport()
+	r := &offPANResponder{serial: serial, answersOn: 17}
+	mock.responder = r.respond
+
+	st := newTestStore(t)
+	if err := st.SetInverterFoundChannel(context.Background(), serial, 21); err != nil {
+		t.Fatalf("SetInverterFoundChannel: %v", err)
+	}
+	m := newAddManager(t, tr, st, &recordingEvents{})
+	if err := st.Close(); err != nil { // the record exists but is unreachable
+		t.Fatalf("Close: %v", err)
+	}
+
+	// The add cannot complete against a closed store, because the persist
+	// of the short address is not best effort. The fallback and its warning
+	// happen first, and that is what this test pins.
+	final := runAdd(t, m, serial)
+	if !strings.Contains(final.Message, "could not read the recorded channel") {
+		t.Errorf("message = %q, want it to name the unreadable record", final.Message)
+	}
+	if len(r.scanChans) == 0 || r.scanChans[0] != defaultChanLo {
+		t.Errorf("listened on %v, want a sweep from channel %d", r.scanChans, defaultChanLo)
+	}
+}
