@@ -3,9 +3,7 @@ package pairing
 import (
 	"context"
 	"testing"
-	"time"
 
-	"github.com/bolkedebruin/openaps/internal/buslock"
 	"github.com/bolkedebruin/openaps/wire"
 )
 
@@ -20,11 +18,7 @@ func newChannelManager(t *testing.T, mock *mockTransport, tr *Transport, setting
 			t.Fatal(err)
 		}
 	}
-	return &Manager{
-		Store: st, Transport: tr, Lock: buslock.New(), Events: &recordingEvents{},
-		Settings: settings, CurrentChannel: func() uint32 { return currentChannel },
-		CommitSettle: 10 * time.Millisecond, VerifyRetrySleep: 5 * time.Millisecond,
-	}
+	return newTestManager(t, tr, st, settings, currentChannel)
 }
 
 func TestChangeChannel_MoveAndVerify(t *testing.T) {
