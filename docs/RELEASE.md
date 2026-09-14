@@ -1,3 +1,35 @@
+# OpenAPS v1.1.28
+
+Fixes a fault in ecu-zb that stopped all telemetry after a modem tty hangup, and stops the radio watchdog from resetting a healthy radio.
+
+## Fixed
+
+- **ecu-zb recovers from a modem tty hangup instead of running deaf.** A
+  hung-up tty returns EOF on every later read. ecu-zb treated that EOF as a
+  clean end of its modem reader and kept running write-only. It still sent
+  polls, but it never read a reply again, and it logged nothing. The
+  inverters kept producing and the radio kept answering, but no telemetry
+  reached the ECU until a restart. ecu-zb now reopens the modem port on a
+  hangup and continues. If the fresh port hangs up five times without one
+  successful read, ecu-zb exits with an error instead.
+- **The radio watchdog no longer resets a healthy radio every four minutes.**
+  The watchdog reads its probe replies through the same modem reader. The
+  hangup above therefore made every probe look like a wedged radio, and the
+  watchdog hardware-reset the radio every four minutes. Each reset removed
+  the network that the inverters joined. The watchdog now doubles its
+  cooldown after each failed recovery, up to one hour. It clears the streak
+  as soon as the radio answers.
+- **ecu-zb restarts after a fatal error.** The init script started ecu-zb
+  once, and nothing restarted it. Any exit left the radio unattended until
+  the next reboot. `S53-ecu-zb` now runs ecu-zb under a supervisor loop that
+  restarts it after 10 s. `status` reports the supervisor and the binary
+  separately.
+
+## Upgrading
+
+`opkg update && opkg install openaps-ecu-zb`. The package restarts ecu-zb
+under the new supervisor. No configuration changes.
+
 # OpenAPS v1.1.27
 
 Fixes the clock still getting stuck at the year 2000 after a reboot.
