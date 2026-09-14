@@ -368,10 +368,10 @@ func (m *Manager) rebindVerify(ctx context.Context, serials []string, t rebindTe
 	// works. Without the retry the op reported "1/3 verified" when the
 	// fleet was in fact fully converged, confusing the operator.
 	verified := map[string]uint16{}
-	m.verifyPass(ctx, serials, verified)
+	busErr := m.verifyPass(ctx, serials, verified)
 
 	const verifyRetries = 2
-	for retry := 0; retry < verifyRetries && len(verified) < len(serials); retry++ {
+	for retry := 0; retry < verifyRetries && len(verified) < len(serials) && busErr == nil; retry++ {
 		if ctx.Err() != nil {
 			break
 		}
@@ -379,7 +379,21 @@ func (m *Manager) rebindVerify(ctx context.Context, serials []string, t rebindTe
 		case <-ctx.Done():
 		case <-time.After(m.verifyRetryDur()):
 		}
-		m.verifyPass(ctx, serials, verified)
+		busErr = m.verifyPass(ctx, serials, verified)
+	}
+
+	if busErr != nil {
+		// Nobody asked the fleet. A report of stragglers here would send the
+		// operator after inverters that are almost certainly fine. It would
+		// also hide the one thing that is not.
+		msg := fmt.Sprintf("%v; %d of %d inverters verified before the bus went away", busErr, len(verified), len(serials))
+		m.status.update(func(st *PairingStatus) {
+			st.Stage = StageError
+			st.Error = msg
+			st.Done = len(verified)
+		})
+		m.milestone(context.Background(), "", t.errKind, "error", msg)
+		return len(verified)
 	}
 
 	for _, s := range serials {
@@ -407,20 +421,29 @@ func (m *Manager) rebindVerify(ctx context.Context, serials []string, t rebindTe
 
 // verifyPass runs one verification round over serials not yet present in
 // verified: per-serial getShortAddr, on success persist + mark verified +
-// record in the map. Failures are silent here — the caller decides whether
-// to retry or accept the partial result. The status update tracks progress
-// across passes so the UI shows the cumulative verified count.
-func (m *Manager) verifyPass(ctx context.Context, serials []string, verified map[string]uint16) {
+// record in the map. An inverter that does not answer stays silent here.
+// The caller decides whether to retry or to accept the partial result. A bus
+// failure comes back as an error. No number of retries reaches a fleet
+// through a radio path that is not there. A report of the units as
+// unverified would blame them for it. The status update tracks progress
+// across passes, so the UI shows the cumulative verified count.
+func (m *Manager) verifyPass(ctx context.Context, serials []string, verified map[string]uint16) error {
 	for _, s := range serials {
 		if _, ok := verified[s]; ok {
 			continue
 		}
 		if ctx.Err() != nil {
-			return
+			return nil
 		}
 		m.status.update(func(st *PairingStatus) { st.CurrentSerial = s; st.Substep = "verify " + s; st.Done = len(verified) })
 		sa, err := m.Transport.getShortAddr(ctx, s)
-		if err != nil || sa == 0 {
+		if err != nil {
+			if errors.Is(err, errBusUnavailable) {
+				return err
+			}
+			continue
+		}
+		if sa == 0 {
 			continue
 		}
 		if m.Store != nil {
@@ -430,6 +453,7 @@ func (m *Manager) verifyPass(ctx context.Context, serials []string, verified map
 		m.status.upsertInverter(PerInverter{Serial: s, ShortAddr: uint32(sa), State: "verified"})
 		verified[s] = sa
 	}
+	return nil
 }
 
 // errResp constructs a failure PairingResponse.

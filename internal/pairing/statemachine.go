@@ -113,6 +113,51 @@ func (m *Manager) sweepScan(ctx context.Context, restoreCh, chLo, chHi, dwell ui
 	return out, nil
 }
 
+// migrateVerifyAttempts is the number of times the add asks for the short
+// address after a commit before it reports the migration as failed. A unit
+// does not always answer the instant it lands on the new PAN. The
+// post-commit settle covers the radio hop, but rejoining runs on the
+// inverter's own timing. A single question answers whether the unit happened
+// to be ready, not whether it arrived.
+const migrateVerifyAttempts = 6
+
+// awaitShortAddr asks for a migrated unit's short address. It retries until
+// the unit answers or the attempts run out. A bus failure stops it at once.
+// No number of retries repairs a radio path that is not there.
+func (m *Manager) awaitShortAddr(ctx context.Context, serial string) (uint16, error) {
+	var err error
+	for attempt := 1; attempt <= migrateVerifyAttempts; attempt++ {
+		m.status.setStage(StageBind, fmt.Sprintf("re-query short address (%d/%d)", attempt, migrateVerifyAttempts))
+		var sa uint16
+		sa, err = m.Transport.getShortAddr(ctx, serial)
+		switch {
+		case ctx.Err() != nil:
+			// Cancellation wins over whatever the radio was about to say.
+			// An aborted op therefore reports as aborted, not as an inverter
+			// that failed to answer.
+			return 0, ctx.Err()
+		case err == nil && sa != 0:
+			return sa, nil
+		case err == nil:
+			// A short address of zero is the unit saying "not joined yet".
+			// That is the same transient that the retries exist for. That
+			// answer is not more final than silence.
+			err = fmt.Errorf("inverter %s reports short_addr 0 (not joined)", serial)
+		case errors.Is(err, errBusUnavailable):
+			return 0, err
+		}
+		if attempt == migrateVerifyAttempts {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		case <-time.After(m.verifyRetryDur()):
+		}
+	}
+	return 0, fmt.Errorf("inverter %s did not answer in %d attempts: %w", serial, migrateVerifyAttempts, err)
+}
+
 // scanChannel parks the module on the rendezvous PAN at ch and runs one
 // report-id window. It records the channel of everything that answers. Every
 // path that listens on a channel goes through here: the fast scan, the
@@ -319,6 +364,12 @@ func (m *Manager) bindAndMigrate(ctx context.Context, serial string) error {
 	m.status.setStage(StageBind, "query short address")
 	sa, err := m.Transport.getShortAddr(ctx, serial)
 	if err != nil {
+		if errors.Is(err, errBusUnavailable) {
+			// The path to the radio failed, not the inverter. A rendezvous
+			// would put a PAN-change broadcast on the air to answer a
+			// question that we never managed to ask.
+			return fmt.Errorf("query short address: %w", err)
+		}
 		// The unit is not reachable on our PAN. Find the channel it IS on,
 		// then run a single rendezvous migration from there.
 		srcCh, migErr := m.migrateFromRecalledChannel(ctx, serial, pan, ch)
@@ -336,10 +387,9 @@ func (m *Manager) bindAndMigrate(ctx context.Context, serial string) error {
 			return fmt.Errorf("migrate from channel %d: %w", srcCh, migErr)
 		}
 		// Re-query after migration.
-		m.status.setStage(StageBind, "re-query short address")
-		sa, err = m.Transport.getShortAddr(ctx, serial)
+		sa, err = m.awaitShortAddr(ctx, serial)
 		if err != nil {
-			return fmt.Errorf("get short addr after migrate from channel %d: %w", srcCh, err)
+			return fmt.Errorf("after migrate from channel %d: %w", srcCh, err)
 		}
 	}
 	if sa == 0 {

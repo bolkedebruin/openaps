@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -30,6 +31,9 @@ type mockTransport struct {
 	// succeeds with an empty result. get_module_pan is answered globally
 	// (before the responder) so tests don't each have to handle it.
 	responder func(cmd *wire.PairingCmd) *wire.PairingCmdResult
+	// swallow lists the commands that the backend never answers. The
+	// transport then times out the way it does against a wedged ecu-zb.
+	swallow func(cmd *wire.PairingCmd) bool
 }
 
 func newMockTransport() (*Transport, *mockTransport) {
@@ -48,8 +52,13 @@ func (m *mockTransport) SendToBackend(_ string, env *wire.Envelope) bool {
 	m.mu.Lock()
 	m.cmds = append(m.cmds, cmd)
 	resp := m.responder
+	swallow := m.swallow
 	opPAN := m.opPAN
 	m.mu.Unlock()
+
+	if swallow != nil && swallow(cmd) {
+		return true // accepted, never answered
+	}
 
 	var res *wire.PairingCmdResult
 	// get_module_pan is answered globally so each test responder need not.
@@ -259,6 +268,16 @@ type offPANResponder struct {
 	// scanDelay slows each listen, so a test can interleave an abort with
 	// a sweep. Against the mock, the sweep would otherwise finish at once.
 	scanDelay time.Duration
+	// silentQueries is the number of short-address queries that get no
+	// answer after the first one (the off-PAN probe). It models a unit that
+	// is still rejoining.
+	silentQueries int
+	// notJoined makes those queries answer with short_addr 0. The unit
+	// replies "not joined yet" instead of silence.
+	notJoined bool
+	// onQuery runs on every short-address query. A test uses it to
+	// interleave an action with the retries.
+	onQuery func(n int)
 }
 
 // scanCount returns the number of listens so far.
@@ -266,6 +285,13 @@ func (r *offPANResponder) scanCount() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return len(r.scanChans)
+}
+
+// queryCount returns the number of short-address queries so far.
+func (r *offPANResponder) queryCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.queries
 }
 
 // sawScanOn reports whether the module ever listened on ch.
@@ -302,13 +328,35 @@ func (r *offPANResponder) respond(c *wire.PairingCmd) *wire.PairingCmdResult {
 		r.commitChan = c.GetCommitPan().GetChannel()
 	case c.GetGetShortAddr() != nil:
 		r.queries++
-		if r.queries == 1 {
-			// Off-PAN: the unit is not on our channel, so it does not answer.
+		if r.onQuery != nil {
+			r.onQuery(r.queries)
+		}
+		if r.queries <= 1+r.silentQueries {
+			if r.notJoined && r.queries > 1 {
+				// The unit answers, but it is not joined yet.
+				return &wire.PairingCmdResult{Ok: true, ShortAddr: 0}
+			}
+			// Off-PAN, then still rejoining. No answer yet.
 			return &wire.PairingCmdResult{Ok: false, Error: "no reply from inverter"}
 		}
 		return &wire.PairingCmdResult{Ok: true, ShortAddr: 0x55AA}
 	}
 	return &wire.PairingCmdResult{Ok: true}
+}
+
+// countOp returns the number of commands of one kind that the transport
+// sent. It includes any that the backend never answered. The responder's own
+// counters miss those.
+func (m *mockTransport) countOp(name string) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	n := 0
+	for _, c := range m.cmds {
+		if opName(c) == name {
+			n++
+		}
+	}
+	return n
 }
 
 // parkChannels returns the channels on which the module parked for a
@@ -961,5 +1009,231 @@ func TestAdd_UnreadableStoreWarnsBeforeSweeping(t *testing.T) {
 	}
 	if len(r.scanChans) == 0 || r.scanChans[0] != defaultChanLo {
 		t.Errorf("listened on %v, want a sweep from channel %d", r.scanChans, defaultChanLo)
+	}
+}
+
+// A migrated unit does not always answer the first question after the
+// commit. Rejoining runs on its own timing. One query decided whether the
+// unit happened to be ready, not whether the migration worked.
+func TestAdd_RetriesTheQueryAfterMigrating(t *testing.T) {
+	const serial = "999900000011"
+	tr, mock := newMockTransport()
+	r := &offPANResponder{serial: serial, answersOn: 22, silentQueries: 4}
+	mock.responder = r.respond
+
+	st := newTestStore(t)
+	if err := st.SetInverterFoundChannel(context.Background(), serial, 22); err != nil {
+		t.Fatalf("SetInverterFoundChannel: %v", err)
+	}
+	m := newAddManager(t, tr, st, &recordingEvents{})
+
+	if final := runAdd(t, m, serial); final.Stage != StageDone {
+		t.Fatalf("stage=%q err=%q", final.Stage, final.Error)
+	}
+	// Exactly six: the off-PAN probe, four retries that the unit is still
+	// too busy to answer, then the answer on the fifth. Fewer means the add
+	// gave up early. More means it kept asking a unit that had already
+	// answered.
+	if r.queries != 6 {
+		t.Errorf("asked %d times, want exactly 6 — the unit answered on the 5th retry", r.queries)
+	}
+}
+
+// A unit that never answers still fails. The message says how many times the
+// add asked. It does not imply a single missed reply.
+func TestAdd_GivesUpAfterTheRetriesRunOut(t *testing.T) {
+	const serial = "999900000012"
+	tr, mock := newMockTransport()
+	r := &offPANResponder{serial: serial, answersOn: 22, silentQueries: 1000}
+	mock.responder = r.respond
+
+	st := newTestStore(t)
+	if err := st.SetInverterFoundChannel(context.Background(), serial, 22); err != nil {
+		t.Fatalf("SetInverterFoundChannel: %v", err)
+	}
+	m := newAddManager(t, tr, st, &recordingEvents{})
+
+	final := runAdd(t, m, serial)
+	if final.Stage != StageError {
+		t.Fatalf("stage=%q, want error", final.Stage)
+	}
+	if !strings.Contains(final.Error, "did not answer in") {
+		t.Errorf("error = %q, want it to name the exhausted retries", final.Error)
+	}
+	// Seven: the off-PAN probe plus the six documented attempts. This is a
+	// literal on purpose. As migrateVerifyAttempts+1, the test would track
+	// any change to the budget instead of pinning it.
+	if r.queries != 7 {
+		t.Errorf("asked %d times, want 7 (one probe + %d attempts)", r.queries, migrateVerifyAttempts)
+	}
+	assertRadioRestored(t, mock)
+}
+
+// A broken path to the radio is not an inverter that moved. A rendezvous in
+// answer to it would put a PAN-change broadcast on the air, to settle a
+// question that nobody asked.
+func TestAdd_BusFailureDoesNotTriggerAMigration(t *testing.T) {
+	const serial = "999900000013"
+	tr, mock := newMockTransport()
+	mock.responder = func(c *wire.PairingCmd) *wire.PairingCmdResult {
+		return &wire.PairingCmdResult{Ok: true}
+	}
+	// The backend delivers nothing for a get_short_addr, so the query fails
+	// the way it does against a wedged backend. The transport times out. The
+	// inverter does not refuse.
+	mock.swallow = func(c *wire.PairingCmd) bool { return c.GetGetShortAddr() != nil }
+	tr.Timeout = 50 * time.Millisecond
+
+	m := newAddManager(t, tr, newTestStore(t), &recordingEvents{})
+	final := runAdd(t, m, serial)
+	if final.Stage != StageError {
+		t.Fatalf("stage=%q, want error", final.Stage)
+	}
+	if !strings.Contains(final.Error, "zigbee bus unavailable") {
+		t.Errorf("error = %q, want it to name the bus, not the inverter", final.Error)
+	}
+	for _, op := range mock.opNames() {
+		if op == "report_scan" || op == "prime_inv" || op == "commit_pan" {
+			t.Fatalf("went on the air with %q despite an unusable bus: %v", op, mock.opNames())
+		}
+	}
+}
+
+// A rekey against a radio path that is not there must not report
+// "1/3 verified". Nobody asked the fleet. Blame on the fleet sends the
+// operator after inverters that are almost certainly fine.
+func TestRekey_BusFailureIsNotReportedAsStragglers(t *testing.T) {
+	tr, mock := newMockTransport()
+	st := newTestStore(t)
+	ctx := context.Background()
+	for _, s := range []string{"999900000001", "999900000002"} {
+		if err := st.SetInverterShortAddr(ctx, s, 0x0101); err != nil {
+			t.Fatalf("seed %s: %v", s, err)
+		}
+	}
+	// Everything works except the verification queries, which get no
+	// answer. That is a wedged backend, not silent inverters.
+	mock.swallow = func(c *wire.PairingCmd) bool { return c.GetGetShortAddr() != nil }
+	tr.Timeout = 50 * time.Millisecond
+
+	m := newAddManager(t, tr, st, &recordingEvents{})
+	resp := m.Handle(ctx, "ecu-web", &wire.PairingRequest{
+		Op: &wire.PairingRequest_FleetRekey{FleetRekey: &wire.FleetRekey{NewPan: "1234"}}})
+	if !resp.GetOk() {
+		t.Fatalf("start rekey: %s", resp.GetError())
+	}
+
+	final := waitDone(t, m)
+	if final.Stage != StageError {
+		t.Fatalf("stage=%q, want error", final.Stage)
+	}
+	if !strings.Contains(final.Error, "zigbee bus unavailable") {
+		t.Errorf("error = %q, want it to name the bus", final.Error)
+	}
+	if strings.Contains(final.Error, "re-run") {
+		t.Errorf("error = %q, told the operator to chase stragglers that were never asked", final.Error)
+	}
+}
+
+// A bus that dies partway through the retries stops them at once. No number
+// of attempts reaches an inverter through a radio path that is gone.
+func TestAdd_BusFailureMidRetryStopsImmediately(t *testing.T) {
+	const serial = "999900000014"
+	tr, mock := newMockTransport()
+	r := &offPANResponder{serial: serial, answersOn: 22, silentQueries: 1000}
+	mock.responder = r.respond
+	// The bus goes away after the migration, once the retries run.
+	var swallowed atomic.Bool
+	mock.swallow = func(c *wire.PairingCmd) bool {
+		return swallowed.Load() && c.GetGetShortAddr() != nil
+	}
+	tr.Timeout = 50 * time.Millisecond
+
+	st := newTestStore(t)
+	if err := st.SetInverterFoundChannel(context.Background(), serial, 22); err != nil {
+		t.Fatalf("SetInverterFoundChannel: %v", err)
+	}
+	m := newAddManager(t, tr, st, &recordingEvents{})
+	m.VerifyRetrySleep = 30 * time.Millisecond
+
+	go func() {
+		for r.queryCount() < 3 {
+			time.Sleep(time.Millisecond)
+		}
+		swallowed.Store(true)
+	}()
+
+	final := runAdd(t, m, serial)
+	if final.Stage != StageError {
+		t.Fatalf("stage=%q, want error", final.Stage)
+	}
+	if !strings.Contains(final.Error, "zigbee bus unavailable") {
+		t.Errorf("error = %q, want it to name the bus rather than the inverter", final.Error)
+	}
+	// The count is what separates "classified correctly" from "gave up
+	// eventually anyway". The error text is the same either way, because the
+	// final failure wraps the last error it saw.
+	if sent := mock.countOp("get_short_addr"); sent > 4 {
+		t.Errorf("sent %d queries against a dead bus; want it to stop on the first query the bus swallows", sent)
+	}
+}
+
+// "Not joined" is the same transient that the retries exist for. A unit that
+// says so is not more final than one that stays silent.
+func TestAdd_RetriesAUnitThatAnswersNotJoined(t *testing.T) {
+	const serial = "999900000015"
+	tr, mock := newMockTransport()
+	r := &offPANResponder{serial: serial, answersOn: 22, silentQueries: 3, notJoined: true}
+	mock.responder = r.respond
+
+	st := newTestStore(t)
+	if err := st.SetInverterFoundChannel(context.Background(), serial, 22); err != nil {
+		t.Fatalf("SetInverterFoundChannel: %v", err)
+	}
+	m := newAddManager(t, tr, st, &recordingEvents{})
+
+	if final := runAdd(t, m, serial); final.Stage != StageDone {
+		t.Fatalf("stage=%q err=%q", final.Stage, final.Error)
+	}
+	// Probe, three "not joined" answers, then a real address. A zero is not
+	// an answer, so it costs a retry exactly as silence does.
+	if r.queries != 5 {
+		t.Errorf("asked %d times, want 5 — a short_addr of 0 is not an answer", r.queries)
+	}
+}
+
+// An abort that lands between retries stops them promptly. It ends the op as
+// aborted, not as an inverter that failed to answer.
+func TestAdd_AbortBetweenRetriesStopsPromptly(t *testing.T) {
+	const serial = "999900000016"
+	tr, mock := newMockTransport()
+	r := &offPANResponder{serial: serial, answersOn: 22, silentQueries: 1000}
+	mock.responder = r.respond
+
+	st := newTestStore(t)
+	if err := st.SetInverterFoundChannel(context.Background(), serial, 22); err != nil {
+		t.Fatalf("SetInverterFoundChannel: %v", err)
+	}
+	m := newAddManager(t, tr, st, &recordingEvents{})
+	m.VerifyRetrySleep = 200 * time.Millisecond
+	r.onQuery = func(n int) {
+		if n == 3 {
+			go m.Handle(context.Background(), "ecu-web", &wire.PairingRequest{
+				Op: &wire.PairingRequest_Abort{Abort: &wire.Empty{}}})
+		}
+	}
+
+	final := runAdd(t, m, serial)
+	if final.Stage != StageAborted {
+		t.Fatalf("stage=%q err=%q, want aborted", final.Stage, final.Error)
+	}
+	if final.Error != "" {
+		t.Errorf("error = %q, want an aborted op to carry none", final.Error)
+	}
+	// The abort fires during the third query. A wait that honours
+	// cancellation therefore means there is no fourth query. One more means
+	// the loop only noticed the abort at the top of the next attempt.
+	if r.queries > 3 {
+		t.Errorf("asked %d times after the abort; want the wait to end on cancellation", r.queries)
 	}
 }

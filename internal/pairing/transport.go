@@ -2,6 +2,7 @@ package pairing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -16,6 +17,15 @@ import (
 type CmdSender interface {
 	SendToBackend(backend string, env *wire.Envelope) bool
 }
+
+// errBusUnavailable marks a failure of the local path to the radio, not of
+// the inverter at the other end of it. The cases are: no backend configured,
+// the send rejected, or ecu-zb that never answers. The distinction matters.
+// Without it, the caller reads an unanswered query as "the unit is not on
+// our PAN" and answers with a rendezvous migration. That is pointless when
+// the radio path itself is broken, and it puts a PAN-change broadcast on
+// the air.
+var errBusUnavailable = errors.New("zigbee bus unavailable")
 
 // defaultCmdTimeout bounds a single radio primitive. The slow primitives
 // (report_scan, commit_pan ×3 + settle) carry their own longer per-op
@@ -85,7 +95,7 @@ func (t *Transport) Deliver(res *wire.PairingCmdResult) bool {
 // is never nil on a nil error.
 func (t *Transport) do(ctx context.Context, cmd *wire.PairingCmd) (*wire.PairingCmdResult, error) {
 	if t.Sender == nil || t.Backend == "" {
-		return nil, fmt.Errorf("pairing transport: no sender/backend configured")
+		return nil, fmt.Errorf("%w: no sender/backend configured", errBusUnavailable)
 	}
 	reqID := t.reqSeq.Add(1)
 	cmd.ReqId = reqID
@@ -108,7 +118,7 @@ func (t *Transport) do(ctx context.Context, cmd *wire.PairingCmd) (*wire.Pairing
 	env := &wire.Envelope{Body: &wire.Envelope_PairingCmd{PairingCmd: cmd}}
 	if !t.Sender.SendToBackend(t.Backend, env) {
 		cleanup()
-		return nil, fmt.Errorf("pairing transport: send to backend %q failed (absent or queue full)", t.Backend)
+		return nil, fmt.Errorf("%w: send to backend %q failed (absent or queue full)", errBusUnavailable, t.Backend)
 	}
 
 	timeout := t.Timeout
@@ -124,7 +134,7 @@ func (t *Transport) do(ctx context.Context, cmd *wire.PairingCmd) (*wire.Pairing
 		return nil, ctx.Err()
 	case <-timer.C:
 		cleanup()
-		return nil, fmt.Errorf("pairing transport: req_id=%d timed out after %s", reqID, timeout)
+		return nil, fmt.Errorf("%w: req_id=%d timed out after %s", errBusUnavailable, reqID, timeout)
 	case res := <-ch:
 		// Waiter already removed by Deliver.
 		if !res.GetOk() {
