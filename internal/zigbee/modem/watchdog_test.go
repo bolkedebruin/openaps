@@ -357,3 +357,126 @@ func TestRunEndToEndDeadModule(t *testing.T) {
 		t.Fatalf("probes = %d, want >= 1", probes)
 	}
 }
+
+// TestCooldownEscalatesWithConsecutiveFailures: each failed recovery doubles
+// the quiet window, so a module that never comes back is probed less and less
+// often instead of being hardware-reset once per interval forever.
+func TestCooldownEscalatesWithConsecutiveFailures(t *testing.T) {
+	clk := newManualClock()
+	w := newWatchdog(clk,
+		func(context.Context) (bool, error) { return false, nil },
+		func(context.Context) error { return errors.New("reset failed") },
+	)
+
+	// Cooldown 3m: 1 failure -> 3m, 2 -> 6m, 3 -> 12m, 4 -> 24m, 5 -> 48m,
+	// then the 1h cap.
+	want := []time.Duration{
+		3 * time.Minute,
+		6 * time.Minute,
+		12 * time.Minute,
+		24 * time.Minute,
+		48 * time.Minute,
+		maxRecoverBackoff,
+		maxRecoverBackoff,
+	}
+	for i, wantCooldown := range want {
+		w.lastInbound = clk.now().Add(-30 * time.Minute)
+		w.runProbe(context.Background())
+
+		w.mu.Lock()
+		fails := w.recoverFails
+		got := w.cooldownLocked()
+		w.mu.Unlock()
+
+		if fails != i+1 {
+			t.Fatalf("after %d probes recoverFails = %d, want %d", i+1, fails, i+1)
+		}
+		if got != wantCooldown {
+			t.Fatalf("after %d consecutive failures cooldown = %v, want %v", fails, got, wantCooldown)
+		}
+
+		// The escalated window must actually suppress the next probe.
+		clk.advance(got - time.Second)
+		if w.tickDecision(clk.now()) != actionSkip {
+			t.Fatalf("probed %v after the last recovery, inside a %v cooldown", got-time.Second, got)
+		}
+		clk.advance(2 * time.Second)
+		if w.tickDecision(clk.now()) != actionProbe {
+			t.Fatalf("did not probe after the %v cooldown elapsed", got)
+		}
+	}
+}
+
+// TestCooldownResetsAfterSuccessfulRecovery: a recovery that works clears the
+// streak, so the next unrelated wedge gets the normal fast response.
+func TestCooldownResetsAfterSuccessfulRecovery(t *testing.T) {
+	clk := newManualClock()
+	recoverErr := errors.New("reset failed")
+	w := newWatchdog(clk,
+		func(context.Context) (bool, error) { return false, nil },
+		func(context.Context) error { return recoverErr },
+	)
+
+	for i := 0; i < 3; i++ {
+		w.lastInbound = clk.now().Add(-30 * time.Minute)
+		w.runProbe(context.Background())
+	}
+	w.mu.Lock()
+	escalated := w.cooldownLocked()
+	w.mu.Unlock()
+	if escalated == w.Cooldown {
+		t.Fatalf("cooldown did not escalate after 3 failures: %v", escalated)
+	}
+
+	recoverErr = nil
+	w.lastInbound = clk.now().Add(-30 * time.Minute)
+	w.runProbe(context.Background())
+
+	w.mu.Lock()
+	fails := w.recoverFails
+	got := w.cooldownLocked()
+	w.mu.Unlock()
+	if fails != 0 {
+		t.Fatalf("recoverFails = %d after a successful recovery, want 0", fails)
+	}
+	if got != w.Cooldown {
+		t.Fatalf("cooldown = %v after a successful recovery, want the configured %v", got, w.Cooldown)
+	}
+}
+
+// TestCooldownResetsWhenModuleAcks: an alive probe means the module is
+// answering again, so a past failure streak must not keep throttling us.
+func TestCooldownResetsWhenModuleAcks(t *testing.T) {
+	clk := newManualClock()
+	alive := false
+	w := newWatchdog(clk,
+		func(context.Context) (bool, error) { return alive, nil },
+		func(context.Context) error { return errors.New("reset failed") },
+	)
+
+	for i := 0; i < 4; i++ {
+		w.lastInbound = clk.now().Add(-30 * time.Minute)
+		w.runProbe(context.Background())
+	}
+	w.mu.Lock()
+	fails := w.recoverFails
+	w.mu.Unlock()
+	if fails != 4 {
+		t.Fatalf("recoverFails = %d, want 4", fails)
+	}
+
+	alive = true
+	w.lastInbound = clk.now().Add(-30 * time.Minute)
+	w.runProbe(context.Background())
+
+	w.mu.Lock()
+	fails = w.recoverFails
+	got := w.cooldownLocked()
+	w.mu.Unlock()
+	if fails != 0 {
+		t.Fatalf("recoverFails = %d after an alive probe, want 0", fails)
+	}
+	if got != w.Cooldown {
+		t.Fatalf("cooldown = %v after an alive probe, want %v", got, w.Cooldown)
+	}
+}

@@ -91,7 +91,19 @@ func run(cfg config) error {
 	if err != nil {
 		return fmt.Errorf("open real uart: %w", err)
 	}
-	defer modemPort.Close()
+	// curModem is the port in use. The splice replaces it when the tty hangs
+	// up (a hung-up tty returns EOF on every later read, so the descriptor
+	// itself has to go), and shutdown closes whichever one is current.
+	var (
+		modemMu  sync.Mutex
+		curModem = modemPort
+	)
+	closeModem := func() {
+		modemMu.Lock()
+		defer modemMu.Unlock()
+		_ = curModem.Close()
+	}
+	defer closeModem()
 	slog.Info("opened modem UART @ 57600 8N1 raw", "path", realPath)
 
 	// 2. Allocate the pty pair and publish its slave at the original
@@ -216,12 +228,45 @@ func run(cfg config) error {
 		defer busClient.Stop()
 	}
 
-	sp := &proxy.Splice{
+	// Declared before the literal so the reopener closures below can refer
+	// to the splice itself (for its modem write lock); they only run once it
+	// is assigned.
+	var sp *proxy.Splice
+	sp = &proxy.Splice{
 		Modem:   modemPort,
 		Host:    pty.Master,
 		Hook:    hook,
 		Tap:     br,
 		BufSize: cfg.bufSize,
+		// Replace the modem port after a hangup. The radio keeps its PAN and
+		// channel across this — only the host-side descriptor is renewed — so
+		// no re-bring-up is needed; OpenSerial reapplies the raw 57600 termios.
+		ModemReopener: func(prev io.ReadWriter) (io.ReadWriter, error) {
+			modemMu.Lock()
+			defer modemMu.Unlock()
+			// Somebody already swapped it: hand back what we have now.
+			if curModem != prev {
+				return curModem, nil
+			}
+			next, err := uart.OpenSerial(realPath)
+			if err != nil {
+				return nil, fmt.Errorf("reopen real uart: %w", err)
+			}
+			old := curModem
+			curModem = next
+			// Close the old descriptor under the modem write lock: the
+			// pairing runner writes via the raw fd number, and freeing it
+			// mid-write would let an unrelated open inherit the number and
+			// receive ZigBee frames. Taking it here is deadlock-free
+			// because writers resolve the port before locking, never the
+			// other way round (see Splice.modemMu's LOCK ORDER note).
+			mu := sp.ModemWriteMu()
+			mu.Lock()
+			_ = old.Close()
+			mu.Unlock()
+			slog.Warn("modem UART reopened", "path", realPath)
+			return next, nil
+		},
 		HostReopener: func(prev io.ReadWriter) (io.ReadWriter, error) {
 			ptyMu.Lock()
 			defer ptyMu.Unlock()
@@ -320,7 +365,7 @@ func run(cfg config) error {
 			tracker.Stop()
 		}
 		releaseSymlinks()
-		_ = modemPort.Close()
+		closeModem()
 		ptyMu.Lock()
 		if curPty != nil {
 			_ = curPty.Close()

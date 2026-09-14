@@ -24,6 +24,18 @@ const logEveryDrops = 256
 // data is available without adding noticeable latency to a real chunk.
 const nonblockReadIdle = 2 * time.Millisecond
 
+// modemReopenSettle is the pause after reopening the modem fd, before the
+// reader tries again. A tty that has just been hung up and reopened needs a
+// moment before it yields data; the pause also bounds the retry rate if the
+// fresh fd faults immediately.
+const modemReopenSettle = 250 * time.Millisecond
+
+// maxModemReopens bounds how many times the modem fd is reopened without a
+// single successful read in between. A device that hangs up again on every
+// fresh fd is not coming back in-process, so the splice stops retrying and
+// faults instead of reopening forever.
+const maxModemReopens = 5
+
 // isEAGAIN reports whether err is the EAGAIN/EWOULDBLOCK condition
 // returned by an O_NONBLOCK fd that would otherwise have blocked.
 func isEAGAIN(err error) bool {
@@ -35,6 +47,15 @@ func isEAGAIN(err error) bool {
 // reopener itself failed. EIO on the master happens when the last
 // slave fd closes — for ecu-zb that means the host reader was killed.
 var ErrHostFault = errors.New("host pty fault")
+
+// ErrModemFault is returned when the modem fd hangs up (read reports EOF)
+// outside of a shutdown and cannot be recovered in-process: either no
+// ModemReopener is configured, the reopener failed, or the fresh fd hung up
+// again maxModemReopens times without ever yielding a byte. A hung-up tty
+// returns EOF forever, so the fd must be replaced — the modem→host copy
+// goroutine is the single reader of that fd, and if it ends the proxy runs
+// write-only.
+var ErrModemFault = errors.New("modem fd fault")
 
 // Splice copies bytes bidirectionally between the real modem UART and
 // the pty master the host process is talking to, mirroring every chunk
@@ -69,19 +90,47 @@ type Splice struct {
 	// returns ErrHostFault.
 	HostReopener func(prev io.ReadWriter) (io.ReadWriter, error)
 
-	// modemMu serialises writes to Modem so a hook's InjectToModem
-	// can't interleave bytes with the host→modem copy goroutine. The
-	// pairing runner takes this same mutex around its flush+sleep+write
-	// sequences (see ModemWriteMu) so there is one, and only one,
-	// modem-fd write serialiser across every writer (splice DirToModem,
-	// hook InjectToModem, busmgr inject, pairing runner). Any new modem
-	// writer MUST take this mutex.
+	// modemMu serialises writes to Modem so a hook's InjectToModem can't
+	// interleave bytes with the host→modem copy goroutine. The pairing
+	// runner takes this same mutex around its flush+sleep+write sequences
+	// (see ModemWriteMu) so there is one, and only one, modem-fd write
+	// serialiser across every writer (splice DirToModem, hook
+	// InjectToModem, busmgr inject, pairing runner). Any new modem writer
+	// MUST take this mutex. It doubles as the guard that keeps a reopen
+	// from closing the descriptor out from under an in-flight write (see
+	// ModemReopener).
+	//
+	// LOCK ORDER: modemPort's lock is always taken BEFORE modemMu, never
+	// while holding it. Writers therefore resolve the port first and lock
+	// second; a reopen holds the port lock and then takes modemMu to close
+	// the port it replaced.
 	modemMu sync.Mutex
 
-	// hostMu guards host. Held in write mode during a reopen; in
-	// read mode whenever a goroutine fetches the current master.
-	hostMu sync.RWMutex
-	host   io.ReadWriter
+	// ModemReopener, if non-nil, is invoked when the modem fd hangs up
+	// (read returns EOF while the proxy is still running). The
+	// implementation must close prev, open a fresh port on the same
+	// device, and return it. A hung-up tty yields EOF on every subsequent
+	// read, so replacing the fd is the only in-process recovery; the
+	// alternative is a proxy that keeps writing polls the radio answers
+	// into a descriptor nobody can read.
+	//
+	// It MUST close prev while holding ModemWriteMu, so the descriptor
+	// number cannot be freed — and reused by an unrelated open —
+	// underneath a write still in flight: the pairing runner writes via
+	// the raw fd, where that would land ZigBee frames in whatever file
+	// inherited the number.
+	//
+	// If ModemReopener is nil, an EOF on Modem is fatal and Run returns
+	// ErrModemFault.
+	ModemReopener func(prev io.ReadWriter) (io.ReadWriter, error)
+
+	// hostPort and modemPort hold the descriptor each side is currently
+	// using and swap in a replacement when it faults. They are distinct
+	// from modemMu, which serialises writers: a reopen must exclude
+	// readers too, and a writer blocked on a wedged port must not block
+	// the reopen that frees it.
+	hostPort  swappablePort
+	modemPort swappablePort
 
 	// gate pauses the host→modem copy goroutine during a pairing primitive
 	// so host traffic can't interleave with the runner's writes.
@@ -205,9 +254,8 @@ func (s *Splice) Run(ctx context.Context) error {
 	if s.BufSize <= 0 {
 		s.BufSize = 64
 	}
-	s.hostMu.Lock()
-	s.host = s.Host
-	s.hostMu.Unlock()
+	s.hostPort.configure(s.Host, s.HostReopener, ErrHostFault)
+	s.modemPort.configure(s.Modem, s.ModemReopener, ErrModemFault)
 
 	cctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -245,45 +293,113 @@ func (s *Splice) Run(ctx context.Context) error {
 	return firstErr
 }
 
-// currentHost returns the master fd currently in use. Acquired under
-// hostMu so a reopen happening concurrently is observed atomically.
+// currentHost returns the pty master currently in use, falling back to the
+// configured Host for callers that run before Run.
 func (s *Splice) currentHost() io.ReadWriter {
-	s.hostMu.RLock()
-	defer s.hostMu.RUnlock()
-	return s.host
+	if rw := s.hostPort.current(); rw != nil {
+		return rw
+	}
+	return s.Host
 }
 
-// faultHost swaps in a fresh Host master after an EIO. If prev is no
-// longer the current host (because the other goroutine already
-// reopened) it's a no-op and returns nil — the caller should retry
-// with currentHost().
-func (s *Splice) faultHost(prev io.ReadWriter) error {
-	s.hostMu.Lock()
-	defer s.hostMu.Unlock()
-	if s.host != prev {
+// swappablePort holds the descriptor a side of the splice is using and
+// replaces it when that descriptor faults. Both sides need this and for the
+// same reason: a pty master returns EIO once its last slave closes, and a tty
+// returns EOF forever once it has hung up. Neither recovers by retrying — the
+// descriptor itself has to go — so the recovery is identical on both sides
+// and lives here once.
+//
+// reopen is the caller-supplied replacement. When it is nil the fault is
+// unrecoverable and fault returns noReopener unwrapped, so callers can test
+// for their own sentinel.
+type swappablePort struct {
+	mu         sync.RWMutex
+	cur        io.ReadWriter
+	reopen     func(prev io.ReadWriter) (io.ReadWriter, error)
+	noReopener error
+}
+
+// configure installs the starting descriptor and the reopener. Called from
+// Run before either copy goroutine starts.
+func (p *swappablePort) configure(cur io.ReadWriter, reopen func(io.ReadWriter) (io.ReadWriter, error), noReopener error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.cur = cur
+	p.reopen = reopen
+	p.noReopener = noReopener
+}
+
+// current returns the descriptor in use, or nil before configure has run.
+func (p *swappablePort) current() io.ReadWriter {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.cur
+}
+
+// fault swaps in a replacement for prev. If prev is no longer current
+// (because the other goroutine already reopened) it is a no-op returning nil
+// — the caller should retry with current().
+func (p *swappablePort) fault(prev io.ReadWriter) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.cur != prev {
 		return nil
 	}
-	if s.HostReopener == nil {
-		return ErrHostFault
+	if p.reopen == nil {
+		return p.noReopener
 	}
-	next, err := s.HostReopener(prev)
+	next, err := p.reopen(prev)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrHostFault, err)
+		return fmt.Errorf("%w: %v", p.noReopener, err)
 	}
-	s.host = next
+	p.cur = next
 	return nil
 }
 
+// currentModem returns the modem port currently in use, falling back to the
+// configured Modem so callers that run before Run (ModemFd, and tests that
+// never start the splice) still see a port.
+func (s *Splice) currentModem() io.ReadWriter {
+	if rw := s.modemPort.current(); rw != nil {
+		return rw
+	}
+	return s.Modem
+}
+
+// ModemFd reports the file descriptor of the modem port currently in use.
+// The pairing runner writes via the raw fd, so it must re-read this after a
+// reopen rather than caching the number: a stale fd may have been closed, or
+// worse, reused by an unrelated open. ok is false when the port does not
+// expose an fd (a test double).
+func (s *Splice) ModemFd() (int, bool) {
+	f, ok := s.currentModem().(interface{ Fd() uintptr })
+	if !ok {
+		return 0, false
+	}
+	return int(f.Fd()), true
+}
+
+// faultModem swaps in a fresh modem port after a hangup.
+func (s *Splice) faultModem(prev io.ReadWriter) error { return s.modemPort.fault(prev) }
+
+// faultHost swaps in a fresh Host master after an EIO.
+func (s *Splice) faultHost(prev io.ReadWriter) error { return s.hostPort.fault(prev) }
+
 func (s *Splice) copyOne(ctx context.Context, name string, dir FrameDirection) error {
 	buf := make([]byte, s.BufSize)
+	// reopens counts modem hangups recovered without a byte read in between,
+	// so a port that hangs up again on every fresh fd faults instead of
+	// looping. Any successful read clears it.
+	reopens := 0
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 
 		var (
-			r       io.Reader
-			curHost io.ReadWriter
+			r        io.Reader
+			curHost  io.ReadWriter
+			curModem io.ReadWriter
 		)
 		switch dir {
 		case DirToModem:
@@ -297,12 +413,17 @@ func (s *Splice) copyOne(ctx context.Context, name string, dir FrameDirection) e
 		case DirToHost:
 			// The modem reader is NEVER paused — it is the single owner of the
 			// modem fd. During pairing it redirects to the sink (below).
-			r = s.Modem
+			curModem = s.currentModem()
+			r = curModem
 		default:
 			return fmt.Errorf("%s: unknown direction %d", name, dir)
 		}
 
 		n, rerr := r.Read(buf)
+		if n > 0 {
+			// The port is yielding data, so any earlier hangup is behind us.
+			reopens = 0
+		}
 
 		// During pairing the single modem reader hands bytes to the pairing
 		// runner via sink instead of forwarding to the host; host→modem bytes
@@ -345,8 +466,39 @@ func (s *Splice) copyOne(ctx context.Context, name string, dir FrameDirection) e
 		}
 		if rerr != nil {
 			if errors.Is(rerr, io.EOF) {
-				slog.Debug("splice copy EOF", "dir", name)
-				return nil
+				// Shutdown closes both fds, so an EOF racing cancellation
+				// is clean whichever direction sees it first.
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				// host→modem: the host process let go of the pty slave.
+				// The modem link is untouched, so this is a clean end.
+				if dir == DirToModem {
+					slog.Info("splice copy EOF, host detached", "dir", name)
+					return nil
+				}
+				// modem→host: this goroutine is the SINGLE owner of the
+				// modem fd, and a hung-up tty returns EOF forever. Ending
+				// here would leave the proxy running write-only — injected
+				// polls still reach the radio but nothing is ever read
+				// back, the watchdog reads that silence as a wedged module
+				// and reset-storms it, and Run stays parked in wg.Wait()
+				// on the surviving goroutine so the process never exits.
+				// Replace the fd and carry on.
+				reopens++
+				if reopens > maxModemReopens {
+					return fmt.Errorf("%s read: %w: hung up %d times without a read", name, ErrModemFault, reopens-1)
+				}
+				if err := s.faultModem(curModem); err != nil {
+					return fmt.Errorf("%s read: %w", name, err)
+				}
+				slog.Warn("modem fd hung up, reopened", "dir", name, "attempt", reopens)
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(modemReopenSettle):
+				}
+				continue
 			}
 			// O_NONBLOCK pty master returns EAGAIN when there is no
 			// data to read. Sleep briefly to avoid busy-spinning and
@@ -388,8 +540,16 @@ func (s *Splice) copyOne(ctx context.Context, name string, dir FrameDirection) e
 func (s *Splice) write(dir FrameDirection, p []byte) error {
 	switch dir {
 	case DirToModem:
+		// Resolve the port BEFORE taking modemMu, never while holding it.
+		// A reopen runs with the port lock held and then closes the old
+		// descriptor under modemMu, so acquiring the two in the other order
+		// here would deadlock. Holding modemMu across the write is what
+		// stops that close from freeing the fd number mid-write; a port
+		// that goes stale between the two lines is merely a hung-up tty,
+		// which fails the write harmlessly.
+		port := s.currentModem()
 		s.modemMu.Lock()
-		_, err := s.Modem.Write(p)
+		_, err := port.Write(p)
 		s.modemMu.Unlock()
 		return err
 	case DirToHost:
