@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -552,14 +554,15 @@ func TestSplice_HostEIO_NoReopener_ReturnsErrHostFault(t *testing.T) {
 	bad := newFaultyHost()
 	defer bad.close()
 
-	// Close the modem-side input so the modem→host goroutine
-	// exits via io.EOF; the host→modem goroutine then surfaces
-	// ErrHostFault as the first non-nil error.
-	fromModemR, fromModemW := io.Pipe()
-	_ = fromModemW.Close()
-	_, toModemW := io.Pipe()
+	// The modem side stays quiet until cancellation so the ONLY error in
+	// play is the host fault. A modem reader that ended on its own would
+	// race ErrHostFault for the firstErr slot now that a modem hangup is
+	// itself a fault.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	modem := &rwPair{Reader: fromModemR, Writer: toModemW}
+	_, toModemW := io.Pipe()
+	modem := &rwPair{Reader: idleReader{}, Writer: toModemW}
 
 	br := tap.NewBroadcaster(tap.SectionInfo{Hardware: "test", OS: "test", UserAppl: "test"})
 	sink := &recordingSink{}
@@ -574,8 +577,6 @@ func TestSplice_HostEIO_NoReopener_ReturnsErrHostFault(t *testing.T) {
 		BufSize: 64,
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	done := make(chan error, 1)
 	go func() { done <- s.Run(ctx) }()
 	sink.consumeHeader(t)
@@ -843,5 +844,493 @@ func TestBeginPairing_PausesHostToModem(t *testing.T) {
 	go func() { _, _ = f.fromHostW.Write([]byte{0x30}) }()
 	if _, ok := mr.next(time.Second); !ok {
 		t.Fatalf("no host→modem byte forwarded after EndPairing")
+	}
+}
+
+// readFullWithin fills buf or fails the test. A plain io.ReadFull parks
+// forever when a regression stops the bytes flowing, turning a failure into a
+// hung run; this reports it as the failure it is.
+func readFullWithin(t *testing.T, r io.Reader, buf []byte, d time.Duration) {
+	t.Helper()
+	errc := make(chan error, 1)
+	go func() {
+		_, err := io.ReadFull(r, buf)
+		errc <- err
+	}()
+	select {
+	case err := <-errc:
+		if err != nil {
+			t.Fatalf("read: %v", err)
+		}
+	case <-time.After(d):
+		t.Fatalf("no data within %s", d)
+	}
+}
+
+// idleReader models a port that simply has no data: reads report EAGAIN, the
+// way an O_NONBLOCK pty master or tty does when its buffer is empty. Tests use
+// it for the side that must NOT produce an error, so the side under test owns
+// the firstErr slot. It must not block, because the copy loop only re-checks
+// ctx between reads — a reader parked forever would keep Run from returning.
+type idleReader struct{}
+
+func (idleReader) Read([]byte) (int, error) { return 0, &syscallErr{err: syscall.EAGAIN} }
+
+// hungUpPort models a tty that has been hung up: every read reports EOF
+// forever, which is exactly why the descriptor has to be replaced rather
+// than retried. Writes are recorded so a test can prove which port a write
+// landed on.
+type hungUpPort struct {
+	mu      sync.Mutex
+	written []byte
+}
+
+func (p *hungUpPort) Read([]byte) (int, error) { return 0, io.EOF }
+
+func (p *hungUpPort) Write(b []byte) (int, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.written = append(p.written, b...)
+	return len(b), nil
+}
+
+func (p *hungUpPort) snapshot() []byte {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]byte(nil), p.written...)
+}
+
+// fdPort is a hungUpPort that also reports a file descriptor, so tests can
+// assert ModemFd follows a reopen.
+type fdPort struct {
+	hungUpPort
+	fd uintptr
+}
+
+func (p *fdPort) Fd() uintptr { return p.fd }
+
+func TestSplice_ModemHangup_ReopensAndResumesForwarding(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dead := &hungUpPort{}
+	freshR, freshW := io.Pipe()
+	defer freshW.Close()
+	fresh := &rwPair{Reader: freshR, Writer: io.Discard}
+
+	toHostR, toHostW := io.Pipe()
+	host := &rwPair{Reader: idleReader{}, Writer: toHostW}
+
+	br := tap.NewBroadcaster(tap.SectionInfo{Hardware: "test", OS: "test", UserAppl: "test"})
+	sink := &recordingSink{}
+	sink.detach, sink.done = br.Attach(sink)
+	defer sink.detach()
+
+	var reopens atomic.Int32
+	s := &Splice{
+		Modem:   dead,
+		Host:    host,
+		Hook:    NoOpHook{},
+		Tap:     br,
+		BufSize: 64,
+		ModemReopener: func(prev io.ReadWriter) (io.ReadWriter, error) {
+			if prev != dead {
+				t.Errorf("reopener got prev %T, want the hung-up port", prev)
+			}
+			reopens.Add(1)
+			return fresh, nil
+		},
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- s.Run(ctx) }()
+	sink.consumeHeader(t)
+
+	// Bytes arriving on the replacement port must reach the host, which only
+	// happens if the reader recovered instead of ending.
+	want := []byte{0xFC, 0xFC, 0x55, 0x01, 0xFE, 0xFE}
+	go func() { _, _ = freshW.Write(want) }()
+
+	got := make([]byte, len(want))
+	readFullWithin(t, toHostR, got, 2*time.Second)
+	if !bytes.Equal(got, want) {
+		t.Fatalf("forwarded bytes mismatch: got %x want %x", got, want)
+	}
+	if n := reopens.Load(); n != 1 {
+		t.Fatalf("reopener called %d times, want 1", n)
+	}
+
+	// The splice is still running: the hangup was recovered, not fatal.
+	select {
+	case err := <-done:
+		t.Fatalf("splice exited after a recovered hangup: %v", err)
+	default:
+	}
+
+	cancel()
+	_ = freshW.Close()
+	go io.Copy(io.Discard, toHostR)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("splice did not exit after cancel")
+	}
+}
+
+func TestSplice_ModemHangup_WritesGoToTheReopenedPort(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dead := &hungUpPort{}
+	fresh := &hungUpPort{}
+	// The replacement must not hang up instantly too, or the reader faults
+	// before the test can inject: give it a reader that just stays quiet.
+	freshPort := &rwPair{Reader: idleReader{}, Writer: fresh}
+
+	_, toHostW := io.Pipe()
+	host := &rwPair{Reader: idleReader{}, Writer: toHostW}
+
+	br := tap.NewBroadcaster(tap.SectionInfo{Hardware: "test", OS: "test", UserAppl: "test"})
+	sink := &recordingSink{}
+	sink.detach, sink.done = br.Attach(sink)
+	defer sink.detach()
+
+	reopened := make(chan struct{})
+	s := &Splice{
+		Modem:   dead,
+		Host:    host,
+		Hook:    NoOpHook{},
+		Tap:     br,
+		BufSize: 64,
+		ModemReopener: func(io.ReadWriter) (io.ReadWriter, error) {
+			close(reopened)
+			return freshPort, nil
+		},
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- s.Run(ctx) }()
+	sink.consumeHeader(t)
+
+	select {
+	case <-reopened:
+	case <-time.After(2 * time.Second):
+		t.Fatal("modem was never reopened")
+	}
+
+	want := []byte{0xAA, 0xAA, 0xAA, 0xAA, 0x0D}
+	if err := s.InjectToModem(want); err != nil {
+		t.Fatalf("InjectToModem after reopen: %v", err)
+	}
+	if got := fresh.snapshot(); !bytes.Equal(got, want) {
+		t.Fatalf("write landed on the wrong port: fresh got %x want %x", got, want)
+	}
+	if got := dead.snapshot(); len(got) != 0 {
+		t.Fatalf("write landed on the hung-up port: %x", got)
+	}
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("splice did not exit after cancel")
+	}
+}
+
+func TestSplice_ModemHangup_NoReopener_ReturnsErrModemFault(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_, toHostW := io.Pipe()
+	host := &rwPair{Reader: idleReader{}, Writer: toHostW}
+
+	br := tap.NewBroadcaster(tap.SectionInfo{Hardware: "test", OS: "test", UserAppl: "test"})
+	sink := &recordingSink{}
+	sink.detach, sink.done = br.Attach(sink)
+	defer sink.detach()
+
+	s := &Splice{
+		Modem:   &hungUpPort{},
+		Host:    host,
+		Hook:    NoOpHook{},
+		Tap:     br,
+		BufSize: 64,
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- s.Run(ctx) }()
+	sink.consumeHeader(t)
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, ErrModemFault) {
+			t.Fatalf("want ErrModemFault, got: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("splice did not fault on a modem hangup without a reopener")
+	}
+}
+
+func TestSplice_ModemHangup_GivesUpAfterMaxReopens(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_, toHostW := io.Pipe()
+	host := &rwPair{Reader: idleReader{}, Writer: toHostW}
+
+	br := tap.NewBroadcaster(tap.SectionInfo{Hardware: "test", OS: "test", UserAppl: "test"})
+	sink := &recordingSink{}
+	sink.detach, sink.done = br.Attach(sink)
+	defer sink.detach()
+
+	// Every replacement is hung up too and never yields a byte, so the
+	// splice must stop reopening rather than loop on it forever.
+	var reopens atomic.Int32
+	s := &Splice{
+		Modem:   &hungUpPort{},
+		Host:    host,
+		Hook:    NoOpHook{},
+		Tap:     br,
+		BufSize: 64,
+		ModemReopener: func(io.ReadWriter) (io.ReadWriter, error) {
+			reopens.Add(1)
+			return &hungUpPort{}, nil
+		},
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- s.Run(ctx) }()
+	sink.consumeHeader(t)
+
+	timeout := time.Duration(maxModemReopens+3) * (modemReopenSettle + time.Second)
+	select {
+	case err := <-done:
+		if !errors.Is(err, ErrModemFault) {
+			t.Fatalf("want ErrModemFault after exhausting reopens, got: %v", err)
+		}
+	case <-time.After(timeout):
+		t.Fatal("splice kept reopening a permanently hung-up modem")
+	}
+	if n := reopens.Load(); n != maxModemReopens {
+		t.Fatalf("reopener called %d times, want maxModemReopens=%d", n, maxModemReopens)
+	}
+}
+
+func TestSplice_ModemFd_FollowsReopen(t *testing.T) {
+	dead := &fdPort{fd: 7}
+	fresh := &fdPort{fd: 11}
+
+	s := &Splice{Modem: dead}
+	s.modemPort.configure(dead, nil, ErrModemFault)
+
+	if fd, ok := s.ModemFd(); !ok || fd != 7 {
+		t.Fatalf("ModemFd before reopen = (%d, %v), want (7, true)", fd, ok)
+	}
+
+	s.modemPort.configure(dead, func(io.ReadWriter) (io.ReadWriter, error) { return fresh, nil }, ErrModemFault)
+	if err := s.faultModem(dead); err != nil {
+		t.Fatalf("faultModem: %v", err)
+	}
+	if fd, ok := s.ModemFd(); !ok || fd != 11 {
+		t.Fatalf("ModemFd after reopen = (%d, %v), want (11, true)", fd, ok)
+	}
+
+	// A second fault for the port we already replaced is a no-op, so a
+	// concurrent reader cannot reopen twice for one hangup.
+	calls := 0
+	s.modemPort.mu.Lock()
+	s.modemPort.reopen = func(io.ReadWriter) (io.ReadWriter, error) {
+		calls++
+		return &fdPort{fd: 99}, nil
+	}
+	s.modemPort.mu.Unlock()
+	if err := s.faultModem(dead); err != nil {
+		t.Fatalf("stale faultModem: %v", err)
+	}
+	if calls != 0 {
+		t.Fatalf("reopener ran %d times for a stale port, want 0", calls)
+	}
+	if fd, _ := s.ModemFd(); fd != 11 {
+		t.Fatalf("stale fault changed the port: fd=%d want 11", fd)
+	}
+}
+
+// A port with no Fd() (any test double) must report ok=false rather than a
+// bogus descriptor the pairing runner would then write to.
+func TestSplice_ModemFd_UnsupportedPort(t *testing.T) {
+	s := &Splice{Modem: &hungUpPort{}}
+	if fd, ok := s.ModemFd(); ok {
+		t.Fatalf("ModemFd on a port without Fd() = (%d, true), want ok=false", fd)
+	}
+}
+
+// A reopen closes the old descriptor under the modem write lock while it
+// holds the port lock, and writers take those two in the opposite order.
+// That is only safe because writers resolve the port BEFORE locking; this
+// test drives both concurrently so a regression to lock-then-resolve
+// deadlocks here (and trips the race detector) instead of on the ECU.
+func TestSplice_ConcurrentWritesDuringReopen_NoDeadlock(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_, toHostW := io.Pipe()
+	host := &rwPair{Reader: idleReader{}, Writer: toHostW}
+
+	br := tap.NewBroadcaster(tap.SectionInfo{Hardware: "test", OS: "test", UserAppl: "test"})
+	sink := &recordingSink{}
+	sink.detach, sink.done = br.Attach(sink)
+	defer sink.detach()
+
+	s := &Splice{
+		Modem:   &hungUpPort{},
+		Host:    host,
+		Hook:    NoOpHook{},
+		Tap:     br,
+		BufSize: 64,
+	}
+	// Mirror what cmd/ecu-zb does: take the modem write lock around the
+	// close of the port being replaced.
+	s.ModemReopener = func(prev io.ReadWriter) (io.ReadWriter, error) {
+		mu := s.ModemWriteMu()
+		mu.Lock()
+		mu.Unlock() // stands in for closing prev
+		return &hungUpPort{}, nil
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- s.Run(ctx) }()
+	sink.consumeHeader(t)
+
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				_ = s.InjectToModem([]byte{0xAA, 0x0D})
+			}
+		}()
+	}
+
+	timeout := time.Duration(maxModemReopens+3) * (modemReopenSettle + time.Second)
+	select {
+	case err := <-done:
+		if !errors.Is(err, ErrModemFault) {
+			t.Fatalf("want ErrModemFault, got: %v", err)
+		}
+	case <-time.After(timeout):
+		// Deliberately not waiting on the writers: if the ordering
+		// regressed they are wedged inside InjectToModem, and waiting
+		// would hang the run instead of reporting the failure.
+		close(stop)
+		t.Fatal("splice deadlocked between a reopen and concurrent modem writes")
+	}
+	close(stop)
+	wg.Wait()
+}
+
+// syncBuf is a mutex-guarded buffer: slog writes from the copy goroutine
+// while the test reads.
+type syncBuf struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuf) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuf) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+// captureSlog redirects the default logger at the given level for the test.
+func captureSlog(t *testing.T, level slog.Level) *syncBuf {
+	t.Helper()
+	out := &syncBuf{}
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(out, &slog.HandlerOptions{Level: level})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	return out
+}
+
+// The outage this guards against was invisible: the modem reader ended on a
+// Debug-level line, so nothing reached /var/log/ecu-zb.log and the proxy sat
+// there write-only for three days. A hangup MUST be visible at Warn, above
+// the level the ECU actually runs at.
+func TestSplice_ModemHangup_IsLoggedAtWarn(t *testing.T) {
+	logged := captureSlog(t, slog.LevelInfo)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dead := &hungUpPort{}
+	_, toHostW := io.Pipe()
+	host := &rwPair{Reader: idleReader{}, Writer: toHostW}
+
+	br := tap.NewBroadcaster(tap.SectionInfo{Hardware: "test", OS: "test", UserAppl: "test"})
+	sink := &recordingSink{}
+	sink.detach, sink.done = br.Attach(sink)
+	defer sink.detach()
+
+	reopened := make(chan struct{})
+	s := &Splice{
+		Modem:   dead,
+		Host:    host,
+		Hook:    NoOpHook{},
+		Tap:     br,
+		BufSize: 64,
+		ModemReopener: func(io.ReadWriter) (io.ReadWriter, error) {
+			return &rwPair{Reader: idleReader{}, Writer: io.Discard}, nil
+		},
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- s.Run(ctx) }()
+	sink.consumeHeader(t)
+
+	go func() {
+		for {
+			if strings.Contains(logged.String(), "modem fd hung up") {
+				close(reopened)
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(10 * time.Millisecond):
+			}
+		}
+	}()
+
+	select {
+	case <-reopened:
+	case <-time.After(3 * time.Second):
+		t.Fatalf("modem hangup was not logged; log was:\n%s", logged.String())
+	}
+
+	line := logged.String()
+	if !strings.Contains(line, "level=WARN") {
+		t.Fatalf("hangup must be logged at WARN (Debug is what hid the original outage); got:\n%s", line)
+	}
+	if !strings.Contains(line, "attempt=1") {
+		t.Fatalf("hangup log should carry the attempt count; got:\n%s", line)
+	}
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("splice did not exit after cancel")
 	}
 }
