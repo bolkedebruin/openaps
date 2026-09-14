@@ -222,7 +222,7 @@ func (r *PairingRunner) GetShortAddr(serial string) (uint16, error) {
 	if err != nil {
 		return 0, fmt.Errorf("get-short-addr %s: %w", serial, err)
 	}
-	sa, ok := parseShortAddrReply(reply, ieee)
+	sa, ok := findShortAddrReply(reply, ieee)
 	if !ok {
 		return 0, fmt.Errorf("get-short-addr %s: no matching short-addr in reply % X", serial, reply)
 	}
