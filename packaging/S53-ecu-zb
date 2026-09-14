@@ -40,17 +40,29 @@ start() {
     [ -x "$BIN" ] || { echo "$BIN missing or not executable"; return 1; }
     mkdir -p "$RUN" /var/log
 
-    # Wrapped in `nohup sh -c "exec ..."` so the proxy survives both
-    # boot-time invocation (init(1) ancestor) and PHP-FPM-context
-    # invocation from the firmware-update endpoint. The plain `nohup
-    # BIN &` form gets reaped when the FPM request returns; the inner
-    # `exec` lets the wrapper sh be replaced by ecu-zb so we still
-    # capture the right PID for the pidfile.
-    nohup sh -c "echo \$\$ > '$PIDFILE'; exec '$BIN' $ARGS" \
-        </dev/null >> "$BOOTLOG" 2>&1 &
+    # Supervised respawn loop under nohup: the loop shell's PID is the pidfile
+    # PID and it re-launches ecu-zb whenever ecu-zb exits. ecu-zb repairs the
+    # faults it can in-process (it reopens the modem port on a tty hangup and
+    # the pty master on EIO), so reaching this loop means it gave up —
+    # proxy.ErrModemFault, ErrHostFault, or a panic. Without the loop those
+    # leave the radio unattended until the next reboot. Restart is safe:
+    # ecu-zb resumes from an already-staged <tty>.real rather than re-renaming
+    # (see captureRealUART).
+    #
+    # nohup + </dev/null detach the loop so it survives both boot-time
+    # invocation (init(1) ancestor) and the PHP-FPM firmware-update endpoint
+    # context, where a plain `nohup BIN &` gets reaped when the request
+    # returns. The 10s pause keeps a binary that dies instantly (bad flags,
+    # busy tty) from becoming a hot loop.
+    nohup sh -c "echo \$\$ > '$PIDFILE'
+        while :; do
+            '$BIN' $ARGS
+            echo \"ecu-zb exited (rc=\$?), respawning in 10s\"
+            sleep 10
+        done" </dev/null >> "$BOOTLOG" 2>&1 &
     sleep 1
-    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-        echo "ecu-zb started (pid $(cat "$PIDFILE"))"
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null && pidof ecu-zb >/dev/null 2>&1; then
+        echo "ecu-zb started (supervisor pid $(cat "$PIDFILE"))"
     else
         echo "ecu-zb failed to stay up; check $LOG and $BOOTLOG"
         return 1
@@ -72,15 +84,17 @@ start() {
 }
 
 stop() {
-    # Step 1: signal via pidfile.
+    # Step 1: kill the supervisor loop via the pidfile FIRST, so it stops
+    # respawning before we kill the binary it launched.
     if [ -f "$PIDFILE" ]; then
         PID=$(cat "$PIDFILE")
         kill "$PID" 2>/dev/null
         rm -f "$PIDFILE"
     fi
 
-    # Step 2: kill any remaining ecu-zb --proxy processes (covers stale pidfile
-    # or a double-start scenario).  `pidof` is available on BusyBox; `pgrep` is not.
+    # Step 2: kill the ecu-zb --proxy process the loop launched (a child, or an
+    # orphan once the loop is gone), and any left by a stale pidfile or a
+    # double start.  `pidof` is available on BusyBox; `pgrep` is not.
     for P in $(pidof ecu-zb 2>/dev/null); do
         kill "$P" 2>/dev/null
     done
@@ -106,8 +120,15 @@ stop() {
 }
 
 status() {
+    # The pidfile holds the supervisor loop; report the binary separately so a
+    # crash-looping ecu-zb is not mistaken for a healthy one.
     if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-        echo "running (pid $(cat "$PIDFILE"))"
+        if pidof ecu-zb >/dev/null 2>&1; then
+            echo "running (supervisor pid $(cat "$PIDFILE"), ecu-zb pid $(pidof ecu-zb))"
+        else
+            echo "supervised but ecu-zb is down (respawning); check $LOG and $BOOTLOG"
+            exit 1
+        fi
     else
         echo "stopped"
         exit 1
