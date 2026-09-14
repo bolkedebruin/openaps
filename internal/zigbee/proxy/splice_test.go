@@ -554,10 +554,10 @@ func TestSplice_HostEIO_NoReopener_ReturnsErrHostFault(t *testing.T) {
 	bad := newFaultyHost()
 	defer bad.close()
 
-	// The modem side stays quiet until cancellation so the ONLY error in
-	// play is the host fault. A modem reader that ended on its own would
-	// race ErrHostFault for the firstErr slot now that a modem hangup is
-	// itself a fault.
+	// The modem side stays quiet until cancellation, so the ONLY error in
+	// play is the host fault. A modem hangup is itself a fault now. A modem
+	// reader that ended on its own would therefore race ErrHostFault for
+	// the firstErr slot.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -848,8 +848,8 @@ func TestBeginPairing_PausesHostToModem(t *testing.T) {
 }
 
 // readFullWithin fills buf or fails the test. A plain io.ReadFull parks
-// forever when a regression stops the bytes flowing, turning a failure into a
-// hung run; this reports it as the failure it is.
+// forever when a regression stops the bytes, and that turns a failure into a
+// hung run. This helper reports the failure instead.
 func readFullWithin(t *testing.T, r io.Reader, buf []byte, d time.Duration) {
 	t.Helper()
 	errc := make(chan error, 1)
@@ -867,19 +867,19 @@ func readFullWithin(t *testing.T, r io.Reader, buf []byte, d time.Duration) {
 	}
 }
 
-// idleReader models a port that simply has no data: reads report EAGAIN, the
-// way an O_NONBLOCK pty master or tty does when its buffer is empty. Tests use
-// it for the side that must NOT produce an error, so the side under test owns
-// the firstErr slot. It must not block, because the copy loop only re-checks
-// ctx between reads — a reader parked forever would keep Run from returning.
+// idleReader models a port that has no data. Reads report EAGAIN, the way an
+// O_NONBLOCK pty master or tty does when its buffer is empty. Tests use it
+// for the side that must NOT produce an error, so the side under test owns
+// the firstErr slot. It must not block, because the copy loop only checks
+// ctx between reads. A reader parked forever would keep Run from returning.
 type idleReader struct{}
 
 func (idleReader) Read([]byte) (int, error) { return 0, &syscallErr{err: syscall.EAGAIN} }
 
-// hungUpPort models a tty that has been hung up: every read reports EOF
-// forever, which is exactly why the descriptor has to be replaced rather
-// than retried. Writes are recorded so a test can prove which port a write
-// landed on.
+// hungUpPort models a hung-up tty. Every read reports EOF forever. That is
+// exactly why the splice must replace the descriptor instead of retrying it.
+// The port records writes, so a test can prove which port a write landed
+// on.
 type hungUpPort struct {
 	mu      sync.Mutex
 	written []byte
@@ -900,8 +900,8 @@ func (p *hungUpPort) snapshot() []byte {
 	return append([]byte(nil), p.written...)
 }
 
-// fdPort is a hungUpPort that also reports a file descriptor, so tests can
-// assert ModemFd follows a reopen.
+// fdPort is a hungUpPort that also reports a file descriptor. Tests use it to
+// assert that ModemFd follows a reopen.
 type fdPort struct {
 	hungUpPort
 	fd uintptr
@@ -946,8 +946,8 @@ func TestSplice_ModemHangup_ReopensAndResumesForwarding(t *testing.T) {
 	go func() { done <- s.Run(ctx) }()
 	sink.consumeHeader(t)
 
-	// Bytes arriving on the replacement port must reach the host, which only
-	// happens if the reader recovered instead of ending.
+	// Bytes that arrive on the replacement port must reach the host. That
+	// only happens if the reader recovered instead of ending.
 	want := []byte{0xFC, 0xFC, 0x55, 0x01, 0xFE, 0xFE}
 	go func() { _, _ = freshW.Write(want) }()
 
@@ -960,7 +960,7 @@ func TestSplice_ModemHangup_ReopensAndResumesForwarding(t *testing.T) {
 		t.Fatalf("reopener called %d times, want 1", n)
 	}
 
-	// The splice is still running: the hangup was recovered, not fatal.
+	// The splice is still running. It recovered from the hangup.
 	select {
 	case err := <-done:
 		t.Fatalf("splice exited after a recovered hangup: %v", err)
@@ -983,8 +983,8 @@ func TestSplice_ModemHangup_WritesGoToTheReopenedPort(t *testing.T) {
 
 	dead := &hungUpPort{}
 	fresh := &hungUpPort{}
-	// The replacement must not hang up instantly too, or the reader faults
-	// before the test can inject: give it a reader that just stays quiet.
+	// The replacement must not hang up at once too, or the reader faults
+	// before the test can inject. Give it a reader that stays quiet.
 	freshPort := &rwPair{Reader: idleReader{}, Writer: fresh}
 
 	_, toHostW := io.Pipe()
@@ -1083,8 +1083,8 @@ func TestSplice_ModemHangup_GivesUpAfterMaxReopens(t *testing.T) {
 	sink.detach, sink.done = br.Attach(sink)
 	defer sink.detach()
 
-	// Every replacement is hung up too and never yields a byte, so the
-	// splice must stop reopening rather than loop on it forever.
+	// Every replacement is hung up too and never yields a byte. The splice
+	// must stop the reopens instead of looping forever.
 	var reopens atomic.Int32
 	s := &Splice{
 		Modem:   &hungUpPort{},
@@ -1135,7 +1135,7 @@ func TestSplice_ModemFd_FollowsReopen(t *testing.T) {
 		t.Fatalf("ModemFd after reopen = (%d, %v), want (11, true)", fd, ok)
 	}
 
-	// A second fault for the port we already replaced is a no-op, so a
+	// A second fault for the port we already replaced does nothing, so a
 	// concurrent reader cannot reopen twice for one hangup.
 	calls := 0
 	s.modemPort.mu.Lock()
@@ -1155,8 +1155,8 @@ func TestSplice_ModemFd_FollowsReopen(t *testing.T) {
 	}
 }
 
-// A port with no Fd() (any test double) must report ok=false rather than a
-// bogus descriptor the pairing runner would then write to.
+// A port with no Fd() (any test double) must report ok=false. It must not
+// report a bogus descriptor that the pairing runner would then write to.
 func TestSplice_ModemFd_UnsupportedPort(t *testing.T) {
 	s := &Splice{Modem: &hungUpPort{}}
 	if fd, ok := s.ModemFd(); ok {
@@ -1165,10 +1165,10 @@ func TestSplice_ModemFd_UnsupportedPort(t *testing.T) {
 }
 
 // A reopen closes the old descriptor under the modem write lock while it
-// holds the port lock, and writers take those two in the opposite order.
-// That is only safe because writers resolve the port BEFORE locking; this
-// test drives both concurrently so a regression to lock-then-resolve
-// deadlocks here (and trips the race detector) instead of on the ECU.
+// holds the port lock. Writers take those two in the opposite order. That is
+// only safe because writers resolve the port BEFORE they lock. This test
+// drives both concurrently, so a regression to lock-then-resolve deadlocks
+// here, and trips the race detector, instead of on the ECU.
 func TestSplice_ConcurrentWritesDuringReopen_NoDeadlock(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1189,7 +1189,7 @@ func TestSplice_ConcurrentWritesDuringReopen_NoDeadlock(t *testing.T) {
 		BufSize: 64,
 	}
 	// Mirror what cmd/ecu-zb does: take the modem write lock around the
-	// close of the port being replaced.
+	// close of the replaced port.
 	s.ModemReopener = func(prev io.ReadWriter) (io.ReadWriter, error) {
 		mu := s.ModemWriteMu()
 		mu.Lock()
@@ -1225,9 +1225,9 @@ func TestSplice_ConcurrentWritesDuringReopen_NoDeadlock(t *testing.T) {
 			t.Fatalf("want ErrModemFault, got: %v", err)
 		}
 	case <-time.After(timeout):
-		// Deliberately not waiting on the writers: if the ordering
-		// regressed they are wedged inside InjectToModem, and waiting
-		// would hang the run instead of reporting the failure.
+		// This path does not wait on the writers, on purpose. If the
+		// ordering regressed, they sit wedged inside InjectToModem, and a
+		// wait would hang the run instead of reporting the failure.
 		close(stop)
 		t.Fatal("splice deadlocked between a reopen and concurrent modem writes")
 	}
@@ -1235,8 +1235,8 @@ func TestSplice_ConcurrentWritesDuringReopen_NoDeadlock(t *testing.T) {
 	wg.Wait()
 }
 
-// syncBuf is a mutex-guarded buffer: slog writes from the copy goroutine
-// while the test reads.
+// syncBuf is a mutex-guarded buffer. slog writes to it from the copy
+// goroutine while the test reads it.
 type syncBuf struct {
 	mu  sync.Mutex
 	buf bytes.Buffer
@@ -1264,10 +1264,10 @@ func captureSlog(t *testing.T, level slog.Level) *syncBuf {
 	return out
 }
 
-// The outage this guards against was invisible: the modem reader ended on a
-// Debug-level line, so nothing reached /var/log/ecu-zb.log and the proxy sat
-// there write-only for three days. A hangup MUST be visible at Warn, above
-// the level the ECU actually runs at.
+// The failure this guards against is invisible. A modem reader that ends on
+// a Debug-level line writes nothing to /var/log/ecu-zb.log. The proxy then
+// runs write-only with no trace. A hangup MUST be visible at Warn, above the
+// level the ECU runs at.
 func TestSplice_ModemHangup_IsLoggedAtWarn(t *testing.T) {
 	logged := captureSlog(t, slog.LevelInfo)
 

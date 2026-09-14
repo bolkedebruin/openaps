@@ -20,10 +20,10 @@ const (
 )
 
 // maxRecoverBackoff caps the cooldown that escalates while recoveries keep
-// failing. A reset that has not helped the last n times is unlikely to help on
-// the next 4-minute tick either, and each attempt tears down the network the
-// fleet is joined to, so the watchdog backs off instead of reset-storming a
-// module it cannot re-arm.
+// failing. A reset that did not help the last n times is unlikely to help on
+// the next 4-minute tick either. Each attempt also removes the network that
+// the fleet joined. The watchdog therefore backs off instead of
+// reset-storming a module it cannot re-arm.
 const maxRecoverBackoff = 1 * time.Hour
 
 // WatchdogClock returns the current time; injectable so tests drive logic
@@ -67,8 +67,8 @@ type Watchdog struct {
 	lastInbound time.Time
 	lastRecover time.Time
 	// recoverFails counts recoveries that failed back-to-back. It drives the
-	// escalating cooldown and resets as soon as the module answers a probe or
-	// a recovery succeeds.
+	// escalating cooldown. It resets as soon as the module answers a probe
+	// or a recovery succeeds.
 	recoverFails int
 	started      bool
 }
@@ -119,11 +119,11 @@ const (
 	actionProbe
 )
 
-// cooldownLocked returns the quiet window to apply after the last recovery:
-// the configured Cooldown, doubled once per consecutive recovery failure and
-// capped at maxRecoverBackoff. The loop is bounded by the cap, so a long-dead
-// module settles at one probe per maxRecoverBackoff instead of one per tick.
-// Callers must hold w.mu.
+// cooldownLocked returns the quiet window to apply after the last recovery.
+// That is the configured Cooldown, doubled once per consecutive recovery
+// failure and capped at maxRecoverBackoff. The cap bounds the loop, so a
+// long-dead module settles at one probe per maxRecoverBackoff instead of one
+// per tick. Callers must hold w.mu.
 func (w *Watchdog) cooldownLocked() time.Duration {
 	d := w.Cooldown
 	for i := 1; i < w.recoverFails && d < maxRecoverBackoff; i++ {
@@ -165,8 +165,8 @@ func (w *Watchdog) tickDecision(now time.Time) action {
 // An alive probe does nothing — the silence is just sleeping inverters. A
 // transport error is inconclusive and is retried next tick. A dead probe runs
 // Recover; on success both windows reset, and on failure only the recover
-// window resets and the quiet window doubles per consecutive failure (capped
-// at maxRecoverBackoff) so we back off instead of reset-storming. Probes never
+// window resets, and the quiet window doubles per consecutive failure, capped
+// at maxRecoverBackoff, so we back off instead of reset-storming. Probes never
 // overlap, and ctx cancellation returns promptly even while waiting on the
 // ticker.
 func (w *Watchdog) Run(ctx context.Context) {
@@ -212,7 +212,7 @@ func (w *Watchdog) runProbe(ctx context.Context) {
 	}
 	if alive {
 		// Module acks 0x0D: it is fine, the inverters are simply asleep or
-		// genuinely offline. No reset, and the failure streak is over.
+		// genuinely offline. No reset. The failure streak is over.
 		w.mu.Lock()
 		w.recoverFails = 0
 		w.mu.Unlock()
