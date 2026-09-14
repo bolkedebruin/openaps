@@ -602,10 +602,18 @@ message PairingCmdResult {
 
 // FoundInverter is one inverter that announced itself (0x1D reply) during
 // a report-id scan.
+//
+// It carries no encryption state. The parser matches an announcement as
+// plaintext bytes, and one read can hold several announcements behind an
+// unrelated frame. The AES marker at the head of that read therefore
+// describes a different frame, and it says nothing about the units found in
+// the read. The per-inverter plaintext/AES badge comes from telemetry
+// ingest, which attributes each L1 frame to its own peer UID.
 message FoundInverter {
+  reserved 3;  // was: encrypted. A discovery scan cannot know it — see below.
+
   string serial     = 1;  // 12-digit decimal
   uint32 short_addr = 2;  // 0 if not yet assigned
-  bool   encrypted  = 3;  // announcement arrived AES-wrapped (CC EE/FC FC)
 }
 
 // EffectiveSettings reports the values inv-driver is actually using right

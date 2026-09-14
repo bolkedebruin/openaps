@@ -451,7 +451,8 @@ func TestConcurrentStatusAndAbort(t *testing.T) {
 func TestStatus_JSONShape(t *testing.T) {
 	m := &Manager{}
 	m.status.begin(OpScan, StageScan, 3, "ecu-web")
-	m.status.upsertInverter(PerInverter{Serial: "999900000003", State: "found", Encrypted: true})
+	enc := true
+	m.status.upsertInverter(PerInverter{Serial: "999900000003", State: "found", Encrypted: &enc})
 	resp := m.getStatus()
 	if !resp.GetOk() {
 		t.Fatalf("get_status: %s", resp.GetError())
@@ -463,7 +464,7 @@ func TestStatus_JSONShape(t *testing.T) {
 	if s.Op != OpScan || s.Stage != StageScan || s.Total != 3 {
 		t.Fatalf("status fields wrong: %+v", s)
 	}
-	if len(s.PerInverter) != 1 || !s.PerInverter[0].Encrypted {
+	if len(s.PerInverter) != 1 || s.PerInverter[0].Encrypted == nil || !*s.PerInverter[0].Encrypted {
 		t.Fatalf("per_inverter wrong: %+v", s.PerInverter)
 	}
 }

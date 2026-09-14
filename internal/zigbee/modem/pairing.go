@@ -46,6 +46,7 @@ const (
 // reportIdOnReply / discovery reply markers.
 const (
 	announceTag    byte = 0x1D // 0x1D 0x1D ... = an inverter announcing itself
+	announceLen    int  = 10   // 1D 1D + 6-byte IEEE + 2-byte CRC
 	bindAckByte    byte = 0xA5 // bytes [2][3] == A5 A5 in the 0x08 success reply
 	broadcastIeeeB byte = 0xFF // broadcast IEEE filler in 0xD1/0xD3
 )
@@ -324,16 +325,93 @@ func parseShortAddrReply(reply []byte, wantIEEE [6]byte) (uint16, bool) {
 // 8 bytes IEEE+crc must be zero. Returns ok=false if the marker, length, or
 // CRC check fails.
 func parseAnnounce(reply []byte) (ieee [6]byte, ok bool) {
-	if len(reply) < 10 {
+	if len(reply) < announceLen {
 		return ieee, false
 	}
 	if reply[0] != announceTag || reply[1] != announceTag {
 		return ieee, false
 	}
 	// crc16 over IEEE(6)+crc(2) must be the CCITT residue (0).
-	if crc16(reply[2:10]) != 0 {
+	if crc16(reply[2:announceLen]) != 0 {
 		return ieee, false
 	}
 	copy(ieee[:], reply[2:8])
 	return ieee, true
+}
+
+// parseAnnounces returns every announcement in buf, in arrival order.
+// Inverters answer the same 0xD1 solicitation independently, so several
+// announcements routinely land inside one read. A parse of only the head of
+// the buffer silently drops every unit but the first. On a large array, that
+// looks as if the missing inverters were never there.
+//
+// A scan of the whole buffer is safe because a record validates itself. It
+// has the 1D 1D marker, and the CRC-16 over IEEE+CRC has a residue of zero.
+// If a marker appears by chance inside surrounding traffic, the CRC rejects
+// it. A non-record byte advances the scan by one. A valid record advances it
+// past the whole record.
+func parseAnnounces(buf []byte) [][6]byte {
+	var out [][6]byte
+	for i := 0; i+announceLen <= len(buf); {
+		if ieee, ok := parseAnnounce(buf[i:]); ok {
+			out = append(out, ieee)
+			i += announceLen
+			continue
+		}
+		i++
+	}
+	return out
+}
+
+// FoundUnit is one inverter that announced itself during a report-id scan.
+// It carries no encryption state. The parser matches an announcement as
+// plaintext bytes, so the AES marker at the head of the read describes a
+// different frame. The per-inverter badge comes from telemetry ingest.
+type FoundUnit struct {
+	Serial string
+}
+
+// maxScanUnits caps how many distinct units one discovery scan harvests. It
+// mirrors the 0x3C count that the scan itself sends in report-id-on. The cap
+// is therefore the protocol's own window size, not an invented number.
+//
+// The cap matters because only a CRC-16 authenticates an announcement, and
+// anyone in RF range can compute one. Without the cap, a transmitter that
+// emits back-to-back records fills the harvest at line rate. The
+// report-id-off frame built from the result uses 6 bytes per unit. It then
+// grows into a multi-kilobyte write to a radio that expects a few hundred
+// bytes.
+const maxScanUnits = 60
+
+// scanHarvest accumulates the distinct units seen across the reads of one
+// discovery window, in arrival order. It keeps their IEEEs in step for the
+// report-id-off frame that quiets them afterwards.
+type scanHarvest struct {
+	seen  map[string]bool
+	units []FoundUnit
+	ieees [][6]byte
+}
+
+// add folds one read into the harvest and reports whether the harvest is now
+// full. A read can carry several announcements: the units answer the
+// solicitation independently, and any that reply within the frame idle gap
+// arrive concatenated. The same unit can also answer more than once, within
+// a read or across reads. add deduplicates both cases by serial.
+func (h *scanHarvest) add(frame []byte) (full bool) {
+	for _, ieee := range parseAnnounces(frame) {
+		if len(h.units) >= maxScanUnits {
+			return true
+		}
+		serial := bcd6ToSerial(ieee)
+		if h.seen[serial] {
+			continue
+		}
+		if h.seen == nil {
+			h.seen = make(map[string]bool)
+		}
+		h.seen[serial] = true
+		h.units = append(h.units, FoundUnit{Serial: serial})
+		h.ieees = append(h.ieees, ieee)
+	}
+	return len(h.units) >= maxScanUnits
 }
