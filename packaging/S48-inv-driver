@@ -38,7 +38,7 @@ start() {
     [ -x "$BIN" ] || { echo "$BIN missing or not executable"; return 1; }
     mkdir -p "$DATA" "$RUN" /var/log
 
-    # nohup-sh-exec wrapper: same pattern as S53-ecu-zb, so the daemon
+    # nohup-sh-exec wrapper: same pattern as S54-ecu-web, so the daemon
     # survives both init(1) boot context and PHP-FPM upgrade-endpoint
     # context. The inner exec lets the wrapper sh be replaced by
     # inv-driver so the captured PID is the right one.
