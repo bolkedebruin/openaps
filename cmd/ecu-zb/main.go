@@ -92,8 +92,8 @@ func run(cfg config) error {
 		return fmt.Errorf("open real uart: %w", err)
 	}
 	// curModem is the port in use. The splice replaces it when the tty hangs
-	// up (a hung-up tty returns EOF on every later read, so the descriptor
-	// itself has to go), and shutdown closes whichever one is current.
+	// up. A hung-up tty returns EOF on every later read, so the descriptor
+	// itself has to go. Shutdown closes whichever port is current.
 	var (
 		modemMu  sync.Mutex
 		curModem = modemPort
@@ -228,9 +228,9 @@ func run(cfg config) error {
 		defer busClient.Stop()
 	}
 
-	// Declared before the literal so the reopener closures below can refer
-	// to the splice itself (for its modem write lock); they only run once it
-	// is assigned.
+	// The declaration of sp comes before the literal, so the reopener
+	// closures below can refer to the splice itself for its modem write
+	// lock. They only run after the assignment.
 	var sp *proxy.Splice
 	sp = &proxy.Splice{
 		Modem:   modemPort,
@@ -238,13 +238,14 @@ func run(cfg config) error {
 		Hook:    hook,
 		Tap:     br,
 		BufSize: cfg.bufSize,
-		// Replace the modem port after a hangup. The radio keeps its PAN and
-		// channel across this — only the host-side descriptor is renewed — so
-		// no re-bring-up is needed; OpenSerial reapplies the raw 57600 termios.
+		// Replace the modem port after a hangup. Only the host-side
+		// descriptor changes. The radio keeps its PAN and channel, so it
+		// needs no re-bring-up. OpenSerial applies the raw 57600 termios
+		// again.
 		ModemReopener: func(prev io.ReadWriter) (io.ReadWriter, error) {
 			modemMu.Lock()
 			defer modemMu.Unlock()
-			// Somebody already swapped it: hand back what we have now.
+			// Another caller already swapped it. Return the current port.
 			if curModem != prev {
 				return curModem, nil
 			}
@@ -254,12 +255,13 @@ func run(cfg config) error {
 			}
 			old := curModem
 			curModem = next
-			// Close the old descriptor under the modem write lock: the
-			// pairing runner writes via the raw fd number, and freeing it
-			// mid-write would let an unrelated open inherit the number and
-			// receive ZigBee frames. Taking it here is deadlock-free
-			// because writers resolve the port before locking, never the
-			// other way round (see Splice.modemMu's LOCK ORDER note).
+			// Close the old descriptor under the modem write lock. The
+			// pairing runner writes via the raw fd number. If the close
+			// freed that number mid-write, an unrelated open could inherit
+			// it and receive ZigBee frames. Taking the lock here cannot
+			// deadlock. Writers resolve the port before they lock, never
+			// the other way round (see the LOCK ORDER note on
+			// Splice.modemMu).
 			mu := sp.ModemWriteMu()
 			mu.Lock()
 			_ = old.Close()

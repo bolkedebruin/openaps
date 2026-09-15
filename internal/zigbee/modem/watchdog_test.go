@@ -359,8 +359,9 @@ func TestRunEndToEndDeadModule(t *testing.T) {
 }
 
 // TestCooldownEscalatesWithConsecutiveFailures: each failed recovery doubles
-// the quiet window, so a module that never comes back is probed less and less
-// often instead of being hardware-reset once per interval forever.
+// the quiet window. The watchdog therefore probes a module that never comes
+// back less and less often, instead of a hardware reset once per interval
+// forever.
 func TestCooldownEscalatesWithConsecutiveFailures(t *testing.T) {
 	clk := newManualClock()
 	w := newWatchdog(clk,
@@ -408,7 +409,7 @@ func TestCooldownEscalatesWithConsecutiveFailures(t *testing.T) {
 }
 
 // TestCooldownResetsAfterSuccessfulRecovery: a recovery that works clears the
-// streak, so the next unrelated wedge gets the normal fast response.
+// streak. The next unrelated wedge then gets the normal fast response.
 func TestCooldownResetsAfterSuccessfulRecovery(t *testing.T) {
 	clk := newManualClock()
 	recoverErr := errors.New("reset failed")
@@ -444,8 +445,8 @@ func TestCooldownResetsAfterSuccessfulRecovery(t *testing.T) {
 	}
 }
 
-// TestCooldownResetsWhenModuleAcks: an alive probe means the module is
-// answering again, so a past failure streak must not keep throttling us.
+// TestCooldownResetsWhenModuleAcks: an alive probe means the module answers
+// again. A past failure streak must not keep throttling us.
 func TestCooldownResetsWhenModuleAcks(t *testing.T) {
 	clk := newManualClock()
 	alive := false
