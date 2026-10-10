@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -829,5 +831,74 @@ func makeTelemetry(uid, model string) *wire.Telemetry {
 		TsMs:    1000,
 		Model:   model,
 		Cmd:     0x20,
+	}
+}
+
+// pairL1 wraps an inbound pair-reply body in an L1 envelope from uid.
+func pairL1(t *testing.T, uid string, sa uint16, body string) []byte {
+	t.Helper()
+	raw, err := hex.DecodeString(fmt.Sprintf("FCFC%04X0000%s%s", sa, uid, body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+func handlePairL1(t *testing.T, in *Ingestor, raw []byte) {
+	t.Helper()
+	env := &wire.Envelope{Body: &wire.Envelope_RawFrame{RawFrame: &wire.RawFrame{TsMs: 1000, L1Frame: raw}}}
+	if err := in.Handle(context.Background(), "be", env); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+}
+
+func inverterShortAddr(t *testing.T, in *Ingestor, uid string) (uint32, bool) {
+	t.Helper()
+	row, err := in.S.GetInverterPairing(context.Background(), uid)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return row.ShortAddr, true
+}
+
+// A damaged frame from an unknown sender that happens to parse as a
+// short-address reply must not create an inverter row.
+func TestHandle_PairFrame_UnknownInverter_NoRow(t *testing.T) {
+	t.Parallel()
+	in := newIngestor(t)
+	handlePairL1(t, in, pairL1(t, "704000006805", 0xFCFB, "FCFB0000704000006805"))
+	if _, ok := inverterShortAddr(t, in, "704000006805"); ok {
+		t.Fatal("pair frame from an unknown inverter created a row")
+	}
+}
+
+func TestHandle_PairFrame_KnownInverter_UpdatesShortAddr(t *testing.T) {
+	t.Parallel()
+	in := newIngestor(t)
+	ctx := context.Background()
+	if err := in.S.SetInverterShortAddr(ctx, "704000006835", 0x61F0); err != nil {
+		t.Fatal(err)
+	}
+	handlePairL1(t, in, pairL1(t, "704000006835", 0x61F0, "F2340000704000006835"))
+	if sa, _ := inverterShortAddr(t, in, "704000006835"); sa != 0xF234 {
+		t.Fatalf("short_addr = %#x, want 0xf234", sa)
+	}
+}
+
+// A reply whose body names a different inverter than the sender is a
+// damaged frame; the known inverter's short address must not change.
+func TestHandle_PairFrame_BodyUIDMismatch_Ignored(t *testing.T) {
+	t.Parallel()
+	in := newIngestor(t)
+	ctx := context.Background()
+	if err := in.S.SetInverterShortAddr(ctx, "704000006835", 0x61F0); err != nil {
+		t.Fatal(err)
+	}
+	handlePairL1(t, in, pairL1(t, "704000006835", 0x61F0, "FCFB0000704000006805"))
+	if sa, _ := inverterShortAddr(t, in, "704000006835"); sa != 0x61F0 {
+		t.Fatalf("short_addr = %#x, want unchanged 0x61f0", sa)
 	}
 }
