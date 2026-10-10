@@ -21,11 +21,10 @@ type PTY struct {
 // the real UART runs in), and returns the master fd plus the resolved
 // /dev/pts/N path.
 //
-// The master is opened O_NONBLOCK so writes to a slave-less or
-// slow-draining pty return EAGAIN immediately instead of blocking
-// the modem→host copy goroutine. The proxy layer drops on EAGAIN;
-// reads return EAGAIN when no data is available and the read loop
-// handles that as a brief sleep.
+// The master is opened O_NONBLOCK so a raw write to a slave-less or
+// slow-draining pty returns EAGAIN instead of blocking. Go's *os.File
+// Write still parks on a full non-blocking fd, so the proxy writes
+// through the raw conn (writeNoWait) and drops on EAGAIN.
 func OpenPTY() (*PTY, error) {
 	master, err := os.OpenFile("/dev/ptmx", os.O_RDWR|unix.O_NOCTTY|unix.O_NONBLOCK, 0)
 	if err != nil {

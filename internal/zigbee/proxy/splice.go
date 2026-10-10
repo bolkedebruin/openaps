@@ -42,6 +42,37 @@ func isEAGAIN(err error) bool {
 	return errors.Is(err, syscall.EAGAIN) || errors.Is(err, syscall.EWOULDBLOCK)
 }
 
+// writeNoWait writes p to w without parking in the Go netpoller. An
+// *os.File on an O_NONBLOCK descriptor never returns EAGAIN from Write: the
+// runtime turns it into a wait for writability, which never comes on a pty
+// whose slave is not drained. Writing through the raw conn surfaces EAGAIN
+// so the caller can drop the chunk instead. Writers that are not backed by
+// a descriptor fall back to a plain Write.
+func writeNoWait(w io.Writer, p []byte) (int, error) {
+	sc, ok := w.(syscall.Conn)
+	if !ok {
+		return w.Write(p)
+	}
+	rc, err := sc.SyscallConn()
+	if err != nil {
+		return w.Write(p)
+	}
+	var (
+		n    int
+		werr error
+	)
+	if err := rc.Write(func(fd uintptr) bool {
+		n, werr = syscall.Write(int(fd), p)
+		return true
+	}); err != nil {
+		return 0, err
+	}
+	if n < 0 {
+		n = 0
+	}
+	return n, werr
+}
+
 // ErrHostFault is returned (typically wrapped) when the pty master
 // returns EIO and either no HostReopener was configured or the
 // reopener itself failed. EIO on the master happens when the last
@@ -561,7 +592,7 @@ func (s *Splice) write(dir FrameDirection, p []byte) error {
 		// caller fires BEFORE this drop, so the pcap stream still shows
 		// the chunk for analyser visibility.
 		host := s.currentHost()
-		_, err := host.Write(p)
+		_, err := writeNoWait(host, p)
 		if err != nil && isEAGAIN(err) {
 			n := atomic.AddUint64(&s.hostDropCount, 1)
 			if n == 1 || n%logEveryDrops == 0 {
@@ -575,7 +606,7 @@ func (s *Splice) write(dir FrameDirection, p []byte) error {
 			}
 			slog.Warn("modem→host host pty reopened after EIO write")
 			host = s.currentHost()
-			_, err = host.Write(p)
+			_, err = writeNoWait(host, p)
 			if err != nil && isEAGAIN(err) {
 				n := atomic.AddUint64(&s.hostDropCount, 1)
 				if n == 1 || n%logEveryDrops == 0 {
