@@ -1,3 +1,31 @@
+# OpenAPS v1.1.30
+
+Stops damaged radio frames from adding phantom inverters, and makes removing an inverter take effect everywhere at once.
+
+## Fixed
+
+- **A damaged radio frame can no longer add a phantom inverter.** A
+  corrupted frame could be mistaken for a pairing reply and added as a new
+  inverter. It had a garbage address and a serial number one digit off a
+  real unit. inv-driver then queried it several times a second, and ecu-zb
+  logged an error for each query. Pairing replies now only update an
+  inverter that is already known, and only when the serial inside the
+  reply matches the sender. New inverters are still added by pairing as
+  before.
+- **Removing an inverter now takes effect in the web console and over
+  SunSpec straight away.** The removal deleted the inverter from the
+  inventory, but the web console and the SunSpec server kept showing it
+  until they restarted, so it looked as if the removal did nothing.
+  inv-driver now announces each removal, and both services drop the
+  inverter immediately. This also covers replacing a dead unit.
+
+## Upgrading
+
+`opkg update && opkg install openaps-inv-driver openaps-ecu-web openaps-ecu-sunspec`.
+Upgrade all three together: inv-driver announces removals with a new
+message that the older web console and SunSpec server ignore. No
+configuration changes.
+
 # OpenAPS v1.1.29
 
 Fixes a second fault in ecu-zb that stopped all telemetry, this time after several weeks of uptime.
