@@ -725,6 +725,42 @@ func (in *Ingestor) storeAndPublishInfo(ctx context.Context, wireInfo *wire.Inve
 	return nil
 }
 
+// InverterRemoved forgets uid after its inventory rows were deleted and
+// tells subscribers to drop it. The per-uid caches go too: latestProt is
+// replayed to every attaching subscriber, so a stale entry would bring the
+// inverter back into their fleet, and the online/fault trackers would
+// otherwise keep emitting events for it.
+func (in *Ingestor) InverterRemoved(ctx context.Context, uid string) {
+	in.protMu.Lock()
+	delete(in.latestProt, uid)
+	delete(in.protPages, uid)
+	delete(in.protSig, uid)
+	delete(in.protValues, uid)
+	delete(in.protSeen, uid)
+	delete(in.protLastSeen, uid)
+	delete(in.protValueSeq, uid)
+	delete(in.protFamily, uid)
+	delete(in.modelByUID, uid)
+	in.protMu.Unlock()
+
+	in.ensureOnline()
+	in.online.mu.Lock()
+	delete(in.online.lastSeen, uid)
+	delete(in.online.state, uid)
+	in.online.mu.Unlock()
+
+	in.initFaults()
+	in.faults.mu.Lock()
+	delete(in.faults.state, uid)
+	in.faults.mu.Unlock()
+
+	in.publish(&wire.Envelope{Body: &wire.Envelope_InverterRemoved{InverterRemoved: &wire.InverterRemoved{
+		TsMs:    time.Now().UnixMilli(),
+		PeerUid: uid,
+	}}})
+	in.publishFleetSummary(ctx)
+}
+
 // publishFleetSummary computes and broadcasts the current fleet
 // aggregate. Non-fatal on error — the next call will retry.
 func (in *Ingestor) publishFleetSummary(ctx context.Context) {

@@ -76,7 +76,7 @@ func (m *Manager) startRemove(by string, req *wire.RemoveById) *wire.PairingResp
 
 		// ALWAYS delete the DB rows, regardless of the evict outcome.
 		m.status.setStage(StageDelete, "delete inventory rows")
-		if err := m.Store.DeleteInverter(ctx, uid); err != nil {
+		if err := m.deleteInverter(ctx, uid); err != nil {
 			m.fail(fmt.Errorf("remove %s: delete inventory: %w", serial, err))
 			return
 		}

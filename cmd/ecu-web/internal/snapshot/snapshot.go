@@ -175,6 +175,21 @@ func (s *Snapshot) ApplyInfo(in *wire.InverterInfo) {
 	s.notify()
 }
 
+// RemoveInverter drops an inverter that inv-driver deleted from its
+// inventory.
+func (s *Snapshot) RemoveInverter(r *wire.InverterRemoved) {
+	if r == nil || r.GetPeerUid() == "" {
+		return
+	}
+	s.mu.Lock()
+	_, ok := s.inverters[r.GetPeerUid()]
+	delete(s.inverters, r.GetPeerUid())
+	s.mu.Unlock()
+	if ok {
+		s.notify()
+	}
+}
+
 // ApplyFleet stores the inv-driver fleet aggregates.
 func (s *Snapshot) ApplyFleet(f *wire.FleetSummary) {
 	if f == nil {

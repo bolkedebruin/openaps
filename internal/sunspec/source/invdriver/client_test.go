@@ -381,3 +381,28 @@ func TestFromTelemetry_HostileScaleClamped(t *testing.T) {
 		})
 	}
 }
+
+func TestClient_InverterRemovedDropsSnapshot(t *testing.T) {
+	fs, sock := newFakeServer(t)
+	defer fs.stop()
+
+	c := New(sock, "test")
+	if err := c.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer c.Stop()
+	fs.waitHello(t, 2*time.Second)
+
+	fs.send(t, telemetryEnv("UIDGONE1", "DS3", 500))
+	waitFor(t, 2*time.Second, func() bool {
+		_, ok := c.Get("UIDGONE1")
+		return ok
+	})
+
+	fs.send(t, &wire.Envelope{Body: &wire.Envelope_InverterRemoved{
+		InverterRemoved: &wire.InverterRemoved{PeerUid: "UIDGONE1"}}})
+	waitFor(t, 2*time.Second, func() bool {
+		_, ok := c.Get("UIDGONE1")
+		return !ok
+	})
+}

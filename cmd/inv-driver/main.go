@@ -396,6 +396,7 @@ func runServe(args []string) error {
 		Transport: pairingTransport,
 		Lock:      busLock,
 		Events:    st,
+		Removed:   ingestor.InverterRemoved,
 		Profiles:  gpManager,
 		Names:     pairingSettings{store: settingsStore},
 		Settings:  pairingSettings{store: settingsStore},

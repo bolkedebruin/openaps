@@ -154,3 +154,17 @@ func TestInvertersStableOrderByUID(t *testing.T) {
 }
 
 func u32(v uint32) *uint32 { return &v }
+
+func TestRemoveInverter_DropsFromFleet(t *testing.T) {
+	now := time.UnixMilli(5_000_000)
+	s := New(nil)
+	s.ApplyInfo(&wire.InverterInfo{PeerUid: "keep", TsMs: now.UnixMilli()})
+	s.ApplyInfo(&wire.InverterInfo{PeerUid: "gone", TsMs: now.UnixMilli()})
+
+	s.RemoveInverter(&wire.InverterRemoved{PeerUid: "gone"})
+
+	f := s.Fleet(now)
+	if len(f.Inverters) != 1 || f.Inverters[0].UID != "keep" {
+		t.Fatalf("fleet after removal = %+v, want only \"keep\"", f.Inverters)
+	}
+}

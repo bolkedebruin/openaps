@@ -98,5 +98,7 @@ func (s *Subscriber) dispatch(env *wire.Envelope) {
 		s.Snap.ApplyFleet(env.GetFleet())
 	case env.GetProtection() != nil:
 		s.Snap.ApplyProtection(env.GetProtection())
+	case env.GetInverterRemoved() != nil:
+		s.Snap.RemoveInverter(env.GetInverterRemoved())
 	}
 }
