@@ -301,6 +301,8 @@ func (c *Client) session(ctx context.Context, conn net.Conn) error {
 			c.applyFleet(body.Fleet)
 		case *wire.Envelope_Protection:
 			c.applyProtection(body.Protection)
+		case *wire.Envelope_InverterRemoved:
+			c.removeInverter(body.InverterRemoved.GetPeerUid())
 		case *wire.Envelope_SettingsResp:
 			// inv-driver broadcasts a settings snapshot when the operator
 			// changes it; pick up a new ecu-id live (no restart).
@@ -373,6 +375,18 @@ func (c *Client) Protection() map[string]*wire.Protection {
 // the existing snapshot for the UID. Telemetry fields are untouched.
 // Optional fields that are unset on the wire leave the prior value in
 // place.
+// removeInverter forgets an inverter that inv-driver deleted from its
+// inventory, so it no longer counts toward the SunSpec fleet.
+func (c *Client) removeInverter(uid string) {
+	if uid == "" {
+		return
+	}
+	c.mu.Lock()
+	delete(c.latest, uid)
+	delete(c.prot, uid)
+	c.mu.Unlock()
+}
+
 func (c *Client) applyInfo(info *wire.InverterInfo) {
 	if info == nil {
 		return

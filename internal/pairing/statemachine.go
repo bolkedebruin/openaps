@@ -243,7 +243,7 @@ func (m *Manager) startReplace(by string, req *wire.ReplaceInverter) *wire.Pairi
 		}
 		// Retire the dead unit from the inventory.
 		if m.Store != nil {
-			if err := m.Store.DeleteInverter(ctx, oldUID); err != nil {
+			if err := m.deleteInverter(ctx, oldUID); err != nil {
 				m.fail(fmt.Errorf("replace: retire old unit %s: %w", oldUID, err))
 				return
 			}

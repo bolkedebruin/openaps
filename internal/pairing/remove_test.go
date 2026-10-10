@@ -161,3 +161,26 @@ func TestRemove_RejectsBadSerial(t *testing.T) {
 		t.Fatalf("expected rejection of bad serial")
 	}
 }
+
+// TestRemove_ReportsRemoval: the Removed hook fires with the deleted uid so
+// in-memory state and subscribers can forget it.
+func TestRemove_ReportsRemoval(t *testing.T) {
+	tr, _ := newMockTransport()
+	m := newRemoveManager(t, tr)
+	var got []string
+	m.Removed = func(_ context.Context, uid string) { got = append(got, uid) }
+	const uid = "999900000009"
+	seedInverter(t, m, uid, 0x0001)
+
+	resp := m.Handle(context.Background(), "ecu-web", &wire.PairingRequest{
+		Op: &wire.PairingRequest_RemoveById{RemoveById: &wire.RemoveById{Serial: uid, Force: true}}})
+	if !resp.GetOk() {
+		t.Fatalf("start remove: %s", resp.GetError())
+	}
+	if final := waitDone(t, m); final.Stage != StageDone {
+		t.Fatalf("stage=%q err=%q", final.Stage, final.Error)
+	}
+	if len(got) != 1 || got[0] != uid {
+		t.Fatalf("Removed calls = %v, want [%s]", got, uid)
+	}
+}

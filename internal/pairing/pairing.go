@@ -135,6 +135,9 @@ type Manager struct {
 	Events EventSink
 	// Profiles performs Replace config inheritance; may be nil.
 	Profiles ProfileInheritor
+	// Removed, when non-nil, is called after an inverter's inventory rows
+	// are deleted so in-memory state and subscribers forget it too.
+	Removed func(ctx context.Context, uid string)
 	// Names moves the operator label from the dead unit to its replacement
 	// during Replace ("inherit slot"); may be nil.
 	Names NameInheritor
@@ -276,6 +279,17 @@ func (m *Manager) milestone(ctx context.Context, uid, kind, severity, detail str
 		return
 	}
 	_ = m.Events.AppendEvent(ctx, time.Now().UnixMilli(), uid, kind, severity, m.status.attribution(), detail)
+}
+
+// deleteInverter removes uid's inventory rows and reports the removal.
+func (m *Manager) deleteInverter(ctx context.Context, uid string) error {
+	if err := m.Store.DeleteInverter(ctx, uid); err != nil {
+		return err
+	}
+	if m.Removed != nil {
+		m.Removed(ctx, uid)
+	}
+	return nil
 }
 
 // settleDur is the post-commit quiet window, overridable for tests.

@@ -52,7 +52,16 @@ message Envelope {
     // per-leg telemetry and are rejected.
     SetInverterPhaseRequest  set_inverter_phase_req  = 26;
     SetInverterPhaseResponse set_inverter_phase_resp = 27;
+
+    // Driver -> subscribers: an inverter was deleted from the inventory.
+    // Subscribers drop it from their in-memory fleet.
+    InverterRemoved      inverter_removed   = 28;
   }
+}
+
+message InverterRemoved {
+  int64  ts_ms    = 1;
+  string peer_uid = 2;
 }
 
 // Role enumerates how a peer participates on the UDS. PUBLISHER (the

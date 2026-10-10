@@ -902,3 +902,35 @@ func TestHandle_PairFrame_BodyUIDMismatch_Ignored(t *testing.T) {
 		t.Fatalf("short_addr = %#x, want unchanged 0x61f0", sa)
 	}
 }
+
+// Removing an inverter broadcasts InverterRemoved and drops its cached
+// protection, which is otherwise replayed to every attaching subscriber
+// and would bring the inverter back into their fleet.
+func TestInverterRemoved_PublishesAndForgetsReplay(t *testing.T) {
+	t.Parallel()
+	in := newIngestor(t)
+	in.Pub = events.New()
+	ch, unsub := in.Pub.Subscribe()
+	defer unsub()
+	in.cacheProtection(&wire.Protection{PeerUid: "704000006805"})
+
+	in.InverterRemoved(context.Background(), "704000006805")
+
+	if got := in.SnapshotProtection(); len(got) != 0 {
+		t.Fatalf("protection replay still holds %d entries after removal", len(got))
+	}
+	deadline := time.After(time.Second)
+	for {
+		select {
+		case env := <-ch:
+			if r := env.GetInverterRemoved(); r != nil {
+				if r.GetPeerUid() != "704000006805" {
+					t.Fatalf("removed uid = %q", r.GetPeerUid())
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("no InverterRemoved envelope published")
+		}
+	}
+}
