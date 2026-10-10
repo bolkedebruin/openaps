@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -778,6 +779,87 @@ func TestSplice_HostEAGAIN_DropsChunkAndContinues(t *testing.T) {
 	cancel()
 	_ = fromModemW.Close()
 	bad.close()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("splice did not exit after cancel")
+	}
+}
+
+// fullFileHost is a host whose writes land on a real O_NONBLOCK descriptor
+// (the write end of an os.Pipe) that nobody drains, the way a pty master
+// fills when no process reads the slave. Write and SyscallConn come from the
+// embedded *os.File; Read blocks until close so the host→modem goroutine
+// stays parked.
+type fullFileHost struct {
+	*os.File
+	closedCh chan struct{}
+	once     sync.Once
+}
+
+func (h *fullFileHost) Read([]byte) (int, error) {
+	<-h.closedCh
+	return 0, io.EOF
+}
+
+func (h *fullFileHost) close() { h.once.Do(func() { close(h.closedCh) }) }
+
+// TestSplice_UndrainedHostFile_DoesNotBlockModemReader verifies that a full
+// host descriptor drops chunks instead of blocking the modem reader. The
+// runtime parks *os.File writes on a full non-blocking fd rather than
+// returning EAGAIN, so without a raw write the modem→host goroutine stalls
+// forever and every later modem byte, tap publish and pairing reply is lost.
+func TestSplice_UndrainedHostFile_DoesNotBlockModemReader(t *testing.T) {
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pr.Close()
+	defer pw.Close()
+	host := &fullFileHost{File: pw, closedCh: make(chan struct{})}
+	defer host.close()
+
+	fromModemR, fromModemW := io.Pipe()
+	_, toModemW := io.Pipe()
+	modem := &rwPair{Reader: fromModemR, Writer: toModemW}
+
+	s := &Splice{
+		Modem:   modem,
+		Host:    host,
+		Hook:    NoOpHook{},
+		Tap:     tap.NewBroadcaster(tap.SectionInfo{Hardware: "test", OS: "test", UserAppl: "test"}),
+		BufSize: 4096,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- s.Run(ctx) }()
+
+	// Several times any pipe buffer: the reader must accept all of it even
+	// though nothing ever reads pr.
+	chunk := make([]byte, 4096)
+	wrote := make(chan struct{})
+	go func() {
+		defer close(wrote)
+		for i := 0; i < 64; i++ {
+			if _, err := fromModemW.Write(chunk); err != nil {
+				return
+			}
+		}
+	}()
+	select {
+	case <-wrote:
+	case <-time.After(5 * time.Second):
+		t.Fatal("modem reader blocked on a full host descriptor")
+	}
+	if atomic.LoadUint64(&s.hostDropCount) == 0 {
+		t.Fatal("expected dropped chunks once the host descriptor filled")
+	}
+
+	cancel()
+	_ = fromModemW.Close()
+	host.close()
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
