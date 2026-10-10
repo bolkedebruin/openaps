@@ -1,3 +1,25 @@
+# OpenAPS v1.1.29
+
+Fixes a second fault in ecu-zb that stopped all telemetry, this time after several weeks of uptime.
+
+## Fixed
+
+- **ecu-zb no longer stalls when nothing reads its virtual serial port.**
+  ecu-zb copies every modem byte to a pseudo-terminal for local readers. On
+  an ECU where nothing reads that terminal, its buffer slowly fills. ecu-zb
+  was meant to drop bytes once the buffer was full, but the write waited for
+  free space instead, and the space never came. The modem reader stopped,
+  so no telemetry reached the ECU and power read as 0 W, while the
+  inverters kept producing. The radio watchdog then saw no replies and
+  reset a healthy radio. ecu-zb now drops the bytes for the terminal and
+  keeps reading the modem. A warning appears in `ecu-zb.log` when bytes
+  are dropped.
+
+## Upgrading
+
+`opkg update && opkg install openaps-ecu-zb`. The package restarts ecu-zb.
+No configuration changes.
+
 # OpenAPS v1.1.28
 
 Fixes a fault in ecu-zb that stopped all telemetry after a modem tty hangup, and stops the radio watchdog from resetting a healthy radio.
