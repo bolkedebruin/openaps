@@ -6,7 +6,9 @@ package ingest
 
 import (
 	"context"
+	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -668,10 +670,24 @@ func (in *Ingestor) applyInfoReply(ctx context.Context, tsMs int64, env codec.L1
 // columns set by a matched inbound pair frame. A PairShortAddrReply
 // with short_addr == 0 is ignored (sentinel for "no assignment"); a
 // PairBindAck always emits because the ack itself is the state change.
+//
+// Pair frames only update inverters already in the store. Neither the L1
+// envelope nor a pair body carries a checksum, so a damaged frame of any
+// other kind can parse as a pair reply; letting it insert would create a
+// phantom inverter that the probe then queries forever. The pairing
+// runner registers new serials itself via SetInverterShortAddr.
 func (in *Ingestor) applyPairFrame(ctx context.Context, tsMs int64, env codec.L1Envelope, pf codec.PairFrame) error {
+	uid := env.PeerUIDString()
+	if _, err := in.S.GetInverterPairing(ctx, uid); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			slog.Warn("pair frame for unknown inverter ignored", "uid", uid, "short_addr", env.ShortAddr)
+			return nil
+		}
+		return err
+	}
 	wireInfo := &wire.InverterInfo{
 		TsMs:      tsMs,
-		PeerUid:   env.PeerUIDString(),
+		PeerUid:   uid,
 		ShortAddr: uint32(env.ShortAddr),
 	}
 	switch pf.Kind {
@@ -683,7 +699,10 @@ func (in *Ingestor) applyPairFrame(ctx context.Context, tsMs int64, env codec.L1
 			wireInfo.TurnedOffRpt = &r
 		}
 	case codec.PairShortAddrReply:
-		if pf.ShortAddr == 0 {
+		// The reply body names the inverter it answers for; a body UID
+		// that disagrees with the sender is a damaged frame, and taking
+		// its short address would misroute every later send.
+		if pf.ShortAddr == 0 || pf.PeerUID != uid {
 			return nil
 		}
 		wireInfo.ShortAddr = uint32(pf.ShortAddr)
