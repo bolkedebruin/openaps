@@ -117,6 +117,10 @@ type Ingestor struct {
 	// the model code; until an info reply arrives the model is unknown
 	// and the reply decodes as DS3. Guarded by protMu.
 	modelByUID map[string]uint8
+	// capReassertAt is the wall-clock of the last output-cap re-assert per
+	// UID, rate-limiting re-sends to an inverter that won't hold its cap.
+	// Guarded by protMu.
+	capReassertAt map[string]time.Time
 	// protReadQueue serialises on-demand reads through a single worker so
 	// queries are spaced on the wire (concurrent unspaced reads make
 	// ecu-zb's single-frame reassembly cross-talk between inverters).
@@ -296,6 +300,7 @@ func (in *Ingestor) routeDownstream(peerUID int, sender string, env *wire.Envelo
 	}
 	in.maybeReadAfterWrite(env)
 	in.auditWrite(env, sender)
+	in.recordCapIntent(env, sender)
 	return nil
 }
 
@@ -741,6 +746,7 @@ func (in *Ingestor) InverterRemoved(ctx context.Context, uid string) {
 	delete(in.protValueSeq, uid)
 	delete(in.protFamily, uid)
 	delete(in.modelByUID, uid)
+	delete(in.capReassertAt, uid)
 	in.protMu.Unlock()
 
 	in.ensureOnline()

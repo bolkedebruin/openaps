@@ -250,6 +250,11 @@ func (in *Ingestor) handleProtectionPage(ctx context.Context, tsMs int64, env co
 	if err != nil {
 		return
 	}
+	// The cap check uses only this reply's page: the buffered set can carry
+	// a DA from an earlier read.
+	if page, err := codec.DecodeProtectionReply(model, [][]byte{frame}); err == nil {
+		in.checkCapDrift(ctx, uid, model, page.Values)
+	}
 	// Merge into the cumulative per-UID set and publish that, so a dropped or
 	// truncated page in this read doesn't erase previously-known codes.
 	reading.Values = in.cacheProtectionValues(uid, reading.Values)
