@@ -3,6 +3,8 @@ package modem
 import (
 	"bytes"
 	"testing"
+
+	"github.com/bolkedebruin/openaps/codec"
 )
 
 // Golden frames verified byte-for-byte against main.exe's decompiled
@@ -315,5 +317,126 @@ func TestIsEncryptedFrame(t *testing.T) {
 	// Bare 1D 1D announcement → not encrypted.
 	if isEncryptedFrame([]byte{0x1D, 0x1D, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}) {
 		t.Errorf("isEncryptedFrame: bare announce misdetected as AES")
+	}
+}
+
+// l1ShortAddrReply builds a 0x0E reply in the L1 layout for one unit.
+func l1ShortAddrReply(sa uint16, ieee [6]byte) []byte {
+	f := []byte{codec.L1ReplySOF, codec.L1ReplySOF, byte(sa >> 8), byte(sa), 0x00, 0x00}
+	return append(f, ieee[:]...)
+}
+
+// A reply that arrives behind an unrelated frame in the same read is still
+// an answer from the inverter. A head-only parse reports the inverter as
+// silent, and the caller then migrates a unit that had just answered.
+func TestFindShortAddrReplyBehindAnotherFrame(t *testing.T) {
+	ieee := [6]byte{0x99, 0x99, 0x00, 0x00, 0x00, 0x03}
+	noise := []byte{0xFB, 0xFB, 0x06, 0xDC, 0x00, 0x00, 0x11, 0x22, 0x33, 0x44}
+
+	buf := append(append([]byte{}, noise...), l1ShortAddrReply(0x1234, ieee)...)
+	if sa, ok := findShortAddrReply(buf, ieee); !ok || sa != 0x1234 {
+		t.Fatalf("findShortAddrReply(% X) = 0x%04X,%v want 0x1234,true", buf, sa, ok)
+	}
+
+	// At offset 0 both layouts still work.
+	bare := append([]byte{0x00, 0x09, 0xAA, 0xBB}, ieee[:]...)
+	if sa, ok := findShortAddrReply(bare, ieee); !ok || sa != 0x0009 {
+		t.Errorf("bare reply at offset 0 = 0x%04X,%v want 0x0009,true", sa, ok)
+	}
+}
+
+// The scan must not invent a short address out of whatever bytes precede a
+// matching IEEE. Past offset 0 it accepts only the L1 layout, anchored on
+// its own FC FC marker.
+func TestFindShortAddrReplyIgnoresUnanchoredMatches(t *testing.T) {
+	ieee := [6]byte{0x99, 0x99, 0x00, 0x00, 0x00, 0x03}
+	// The IEEE appears mid-buffer with nothing to anchor it. There is no FC
+	// FC anywhere, so the bytes in front of it are payload, not a short
+	// address. The trailing bytes are there so that the scan reaches the
+	// offset where an unanchored bare-layout match would occur. Without
+	// them, the loop bound stops short of that offset, and the test could
+	// pass without the anchor.
+	buf := append([]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77}, ieee[:]...)
+	buf = append(buf, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD)
+	if sa, ok := findShortAddrReply(buf, ieee); ok {
+		t.Fatalf("accepted an unanchored match, sa = 0x%04X", sa)
+	}
+}
+
+func TestFindShortAddrReplyRejectsOtherUnitsAndReservedAddrs(t *testing.T) {
+	ieee := [6]byte{0x99, 0x99, 0x00, 0x00, 0x00, 0x03}
+	other := [6]byte{0x80, 0x60, 0x00, 0x04, 0x25, 0x82}
+
+	// The scan never accepts a reply for a different unit, however deep it
+	// sits.
+	buf := append([]byte{0x00, 0x00}, l1ShortAddrReply(0x1234, other)...)
+	if sa, ok := findShortAddrReply(buf, ieee); ok {
+		t.Errorf("accepted another unit's reply, sa = 0x%04X", sa)
+	}
+
+	// The scan rejects a reserved short address and keeps looking. It still
+	// finds a later valid reply for the same unit.
+	buf = append(l1ShortAddrReply(0xFFFE, ieee), l1ShortAddrReply(0x0055, ieee)...)
+	if sa, ok := findShortAddrReply(buf, ieee); !ok || sa != 0x0055 {
+		t.Errorf("findShortAddrReply(% X) = 0x%04X,%v want 0x0055,true", buf, sa, ok)
+	}
+}
+
+// A reply carries no authentication. Two frames that claim different short
+// addresses for the same unit therefore cannot both be true, and neither
+// wins by position. A refusal costs a retry. A choice of one aims later
+// directed sends at whatever address the scan chose.
+func TestFindShortAddrReplyRefusesContradictingMatches(t *testing.T) {
+	ieee := [6]byte{0x99, 0x99, 0x00, 0x00, 0x00, 0x03}
+	buf := append(l1ShortAddrReply(0x1111, ieee), l1ShortAddrReply(0x2222, ieee)...)
+	if sa, ok := findShortAddrReply(buf, ieee); ok {
+		t.Fatalf("accepted 0x%04X from contradicting replies", sa)
+	}
+	// Repeats that agree are not a contradiction: the same unit answers
+	// twice, or a reply and a telemetry frame state the same address.
+	buf = append(l1ShortAddrReply(0x1111, ieee), l1ShortAddrReply(0x1111, ieee)...)
+	if sa, ok := findShortAddrReply(buf, ieee); !ok || sa != 0x1111 {
+		t.Fatalf("findShortAddrReply(agreeing repeats) = 0x%04X,%v want 0x1111,true", sa, ok)
+	}
+}
+
+// Any inbound L1 frame from the wanted unit states its short address in the
+// same place, so ordinary telemetry answers the query. This test pins that
+// contract. A future restriction to a 0x0E opcode check should fail here, so
+// that it is a deliberate decision.
+func TestFindShortAddrReplyAcceptsTelemetryFromTheWantedUnit(t *testing.T) {
+	ieee := [6]byte{0x99, 0x99, 0x00, 0x00, 0x00, 0x03}
+	// FC FC | SA | RSSI | LQI | UID | L2 payload
+	frame := []byte{codec.L1ReplySOF, codec.L1ReplySOF, 0x00, 0x42, 0x5A, 0x30}
+	frame = append(frame, ieee[:]...)
+	frame = append(frame, 0xFB, 0xFB, 0x06, 0xBB, 0x00, 0x00)
+	buf := append([]byte{0x11, 0x22}, frame...)
+
+	if sa, ok := findShortAddrReply(buf, ieee); !ok || sa != 0x0042 {
+		t.Fatalf("findShortAddrReply(telemetry) = 0x%04X,%v want 0x0042,true", sa, ok)
+	}
+}
+
+// A short address that is really a frame marker is a resync artefact. It is
+// not an assignment.
+func TestParseShortAddrReplyRejectsFrameMarkersAsAddresses(t *testing.T) {
+	ieee := [6]byte{0x99, 0x99, 0x00, 0x00, 0x00, 0x03}
+	for _, sa := range []uint16{0xFBFB, 0xFCFC} {
+		if got, ok := parseShortAddrReply(l1ShortAddrReply(sa, ieee), ieee); ok {
+			t.Errorf("accepted 0x%04X as a short address (got 0x%04X)", sa, got)
+		}
+	}
+	// A neighbouring value is a legal address. The scan must still accept it.
+	if got, ok := parseShortAddrReply(l1ShortAddrReply(0xFBFC, ieee), ieee); !ok || got != 0xFBFC {
+		t.Errorf("rejected the legal address 0xFBFC (got 0x%04X,%v)", got, ok)
+	}
+}
+
+func TestFindShortAddrReplyHandlesShortBuffers(t *testing.T) {
+	ieee := [6]byte{0x99, 0x99, 0x00, 0x00, 0x00, 0x03}
+	for _, buf := range [][]byte{nil, {}, {0xFC}, {0xFC, 0xFC, 0x12, 0x34}} {
+		if sa, ok := findShortAddrReply(buf, ieee); ok {
+			t.Errorf("findShortAddrReply(% X) = 0x%04X,true want no match", buf, sa)
+		}
 	}
 }

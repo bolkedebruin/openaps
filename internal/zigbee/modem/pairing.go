@@ -307,6 +307,13 @@ func parseShortAddrReply(reply []byte, wantIEEE [6]byte) (uint16, bool) {
 	if sa >= 0xFFF8 {
 		return 0, false
 	}
+	// FB FB and FC FC are the L2 and L1 start-of-frame markers. They are
+	// what lands in the short-address slot when a scan resyncs onto a frame
+	// boundary. They are not a real assignment. The QS1A pair misparse is
+	// the same artefact. Neither value is a plausible address.
+	if sa == 0xFBFB || sa == 0xFCFC {
+		return 0, false
+	}
 	if len(reply) < ieeeOff+6 {
 		return 0, false
 	}
@@ -316,6 +323,58 @@ func parseShortAddrReply(reply []byte, wantIEEE [6]byte) (uint16, bool) {
 		}
 	}
 	return sa, true
+}
+
+// minL1ShortAddrReply is the shortest inbound L1 frame that can carry a
+// short address for a given unit. It holds the FC FC marker, the short
+// address, two header bytes and the 6-byte UID.
+const minL1ShortAddrReply = 12
+
+// findShortAddrReply reads wantIEEE's short address out of buf. One read can
+// carry several frames. The pairing sink is the whole modem byte stream, so
+// a reply routinely arrives behind unrelated traffic. A head-only parse then
+// reports the inverter as silent, and the caller goes on to migrate a unit
+// that had in fact just answered.
+//
+// The scan accepts any inbound L1 frame that carries wantIEEE, not only a
+// 0x0E reply. The L1 header puts the short address at [2..3] and the UID at
+// [6..11] for every inbound frame. Ordinary telemetry from the wanted unit
+// therefore states the same short address that the query asked for. That is
+// a correct answer that arrives by another route.
+//
+// At offset 0 the scan accepts either documented reply layout, as before.
+// Beyond offset 0 it accepts only the L1 layout, anchored on its FC FC
+// marker. The bare layout has nothing to anchor on. A match of the bare
+// layout at an arbitrary offset would read a short address out of whatever
+// bytes happened to precede the UID.
+//
+// Matches must agree. A reply carries no authentication. No checksum reaches
+// this far, and the UID is public. With first-match-wins, a forged frame
+// could decide the result if it sat earlier in the buffer. A wrong short
+// address does not heal itself: the runner persists it, and a non-zero
+// short address overrides UID resolution for every later directed send. A
+// refusal of a contradiction costs a retry. Acceptance of one would silently
+// aim this ECU's writes at whatever unit holds the forged address.
+func findShortAddrReply(buf []byte, wantIEEE [6]byte) (uint16, bool) {
+	var found uint16
+	var seen bool
+	if sa, ok := parseShortAddrReply(buf, wantIEEE); ok {
+		found, seen = sa, true
+	}
+	for i := 1; i+minL1ShortAddrReply <= len(buf); i++ {
+		if buf[i] != codec.L1ReplySOF || buf[i+1] != codec.L1ReplySOF {
+			continue
+		}
+		sa, ok := parseShortAddrReply(buf[i:], wantIEEE)
+		if !ok {
+			continue
+		}
+		if seen && sa != found {
+			return 0, false
+		}
+		found, seen = sa, true
+	}
+	return found, seen
 }
 
 // parseAnnounce parses one 0x1D 0x1D announcement reply, returning the
