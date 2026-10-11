@@ -1,3 +1,24 @@
+# OpenAPS v1.1.31
+
+Restores an inverter's output cap automatically if the inverter loses it.
+
+## Fixed
+
+- **An inverter that drops its output cap now gets it back.** An inverter
+  normally keeps the cap you set, even overnight. One QS1A was seen
+  resetting its stored settings at sunrise, which left its cap at about
+  0 W, so it produced almost nothing until the cap was set again by hand.
+  inv-driver now remembers the cap each inverter should hold, whether set
+  per inverter or for the whole array. When the inverter reports a cap that
+  differs by more than 2 W, inv-driver sends the cap again (at most once
+  every 10 minutes per inverter) and logs a `power_cap_reasserted` event.
+  On first start after the upgrade, each inverter's current cap is kept as
+  the one to hold.
+
+## Upgrading
+
+`opkg update && opkg install openaps-inv-driver`. No configuration changes.
+
 # OpenAPS v1.1.30
 
 Stops damaged radio frames from adding phantom inverters, and makes removing an inverter take effect everywhere at once.
