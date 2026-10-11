@@ -4,9 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"testing"
-	"time"
 
-	"github.com/bolkedebruin/openaps/internal/buslock"
 	"github.com/bolkedebruin/openaps/wire"
 )
 
@@ -30,14 +28,7 @@ func assertDeleted(t *testing.T, m *Manager, uid string) {
 
 func newRemoveManager(t *testing.T, tr *Transport) *Manager {
 	t.Helper()
-	return &Manager{
-		Store: newTestStore(t), Transport: tr, Lock: buslock.New(),
-		Events:           &recordingEvents{},
-		Settings:         &stubSettings{pan: "0DCE"},
-		CurrentChannel:   func() uint32 { return 16 },
-		CommitSettle:     10 * time.Millisecond,
-		VerifyRetrySleep: 5 * time.Millisecond,
-	}
+	return newTestManager(t, tr, newTestStore(t), &stubSettings{pan: "0DCE"}, 16)
 }
 
 // TestRemove_EvictSuccess: force=false, the directed set_inv_pan succeeds, so

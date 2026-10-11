@@ -70,10 +70,14 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	//   encrypted        — last-observed AES (1) vs plaintext (0) frame, NULL=unknown
 	//   pairing_state    — free-text state from the pairing state machine
 	//   last_announce_ms — wall-clock of the last 0x1D report-id announcement
+	//   found_channel    — RF channel on which the unit last announced
+	//                      itself, so a later add can migrate it from
+	//                      where it is
 	for _, mig := range []string{
 		"ALTER TABLE inverters ADD COLUMN encrypted INTEGER",
 		"ALTER TABLE inverters ADD COLUMN pairing_state TEXT",
 		"ALTER TABLE inverters ADD COLUMN last_announce_ms INTEGER",
+		"ALTER TABLE inverters ADD COLUMN found_channel INTEGER",
 	} {
 		if _, err := db.ExecContext(ctx, mig); err != nil &&
 			!strings.Contains(err.Error(), "duplicate column") {
@@ -316,32 +320,58 @@ ON CONFLICT(uid) DO UPDATE SET
 	return nil
 }
 
+// SetInverterFoundChannel records the RF channel on which an inverter last
+// announced itself during a discovery scan. A later add reads it to migrate
+// the unit from the channel it is on, not from the ECU's own channel. The
+// write is an upsert, so a scan that discovers a new serial can record it
+// before any telemetry arrives. The store ignores a zero channel. A zero
+// would erase a known channel without a real channel in its place.
+func (s *Store) SetInverterFoundChannel(ctx context.Context, uid string, channel uint32) error {
+	if channel == 0 {
+		return nil
+	}
+	const q = `
+INSERT INTO inverters (uid, paired_at_ms, last_seen_ms, found_channel)
+VALUES (?, ?, ?, ?)
+ON CONFLICT(uid) DO UPDATE SET found_channel = excluded.found_channel
+`
+	now := time.Now().UnixMilli()
+	if _, err := s.db.ExecContext(ctx, q, uid, now, now, channel); err != nil {
+		return fmt.Errorf("SetInverterFoundChannel: %w", err)
+	}
+	return nil
+}
+
 // InverterPairingRow is the pairing-relevant view of one inverters row.
-// Encrypted is nil when the column is NULL (never observed).
+// Encrypted is nil when the column is NULL (never observed). FoundChannel is
+// 0 when no scan ever heard the unit.
 type InverterPairingRow struct {
 	UID            string
 	ShortAddr      uint32
 	Encrypted      *bool
 	PairingState   string
 	LastAnnounceMs int64
+	FoundChannel   uint32
 }
 
 // GetInverterPairing returns the pairing columns for one inverter, or
 // sql.ErrNoRows if the uid is unknown.
 func (s *Store) GetInverterPairing(ctx context.Context, uid string) (InverterPairingRow, error) {
 	var (
-		row   InverterPairingRow
-		sa    sql.NullInt64
-		enc   sql.NullInt64
-		state sql.NullString
-		annMs sql.NullInt64
+		row     InverterPairingRow
+		sa      sql.NullInt64
+		enc     sql.NullInt64
+		state   sql.NullString
+		annMs   sql.NullInt64
+		foundCh sql.NullInt64
 	)
 	err := s.db.QueryRowContext(ctx, `
-SELECT uid, short_addr, encrypted, pairing_state, last_announce_ms
-FROM   inverters WHERE uid=?`, uid).Scan(&row.UID, &sa, &enc, &state, &annMs)
+SELECT uid, short_addr, encrypted, pairing_state, last_announce_ms, found_channel
+FROM   inverters WHERE uid=?`, uid).Scan(&row.UID, &sa, &enc, &state, &annMs, &foundCh)
 	if err != nil {
 		return InverterPairingRow{}, err
 	}
+	row.FoundChannel = uint32(foundCh.Int64)
 	row.ShortAddr = uint32(sa.Int64)
 	if enc.Valid {
 		b := enc.Int64 != 0

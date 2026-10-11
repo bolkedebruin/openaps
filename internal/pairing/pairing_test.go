@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -237,48 +238,322 @@ func TestAdd_BindOnPAN(t *testing.T) {
 	}
 }
 
-func TestAdd_MigrateWhenOffPAN(t *testing.T) {
-	tr, mock := newMockTransport()
-	var firstQuery sync.Once
-	mock.responder = func(c *wire.PairingCmd) *wire.PairingCmdResult {
-		if c.GetGetShortAddr() != nil {
-			fail := false
-			firstQuery.Do(func() { fail = true })
-			if fail {
-				// Off-PAN: first query fails → triggers migrate.
-				return &wire.PairingCmdResult{Ok: false, Error: "no reply"}
-			}
-			return &wire.PairingCmdResult{Ok: true, ShortAddr: 0x55AA}
+// offPANResponder fails the first get_short_addr, so the add takes the
+// migrate path. It answers a report_scan with serial only while the module
+// sits parked on answersOn. It succeeds on every later query. It tracks the
+// park channel the way the real backend does: from the set_module_pan it was
+// told to run.
+type offPANResponder struct {
+	mu         sync.Mutex
+	serial     string
+	answersOn  uint32 // 0 → never answers a scan
+	parkedOn   uint32
+	queries    int
+	scanChans  []uint32
+	primeChan  uint32
+	primePan   uint32
+	commitChan uint32
+	// primeAfterScans is the number of listens before the prime went out.
+	// A test uses it to tell which channel the prime targeted.
+	primeAfterScans int
+	// scanDelay slows each listen, so a test can interleave an abort with
+	// a sweep. Against the mock, the sweep would otherwise finish at once.
+	scanDelay time.Duration
+}
+
+// scanCount returns the number of listens so far.
+func (r *offPANResponder) scanCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.scanChans)
+}
+
+// sawScanOn reports whether the module ever listened on ch.
+func (r *offPANResponder) sawScanOn(ch uint32) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, c := range r.scanChans {
+		if c == ch {
+			return true
 		}
-		return &wire.PairingCmdResult{Ok: true}
 	}
-	m := &Manager{
-		Store: newTestStore(t), Transport: tr, Lock: buslock.New(),
-		Events:   &recordingEvents{},
-		Settings: &stubSettings{pan: "0DCE"}, CurrentChannel: func() uint32 { return 16 },
+	return false
+}
+
+func (r *offPANResponder) respond(c *wire.PairingCmd) *wire.PairingCmdResult {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	switch {
+	case c.GetSetModulePan() != nil:
+		r.parkedOn = c.GetSetModulePan().GetChannel()
+	case c.GetReportScan() != nil:
+		if r.scanDelay > 0 {
+			time.Sleep(r.scanDelay)
+		}
+		r.scanChans = append(r.scanChans, r.parkedOn)
+		if r.answersOn != 0 && r.parkedOn == r.answersOn {
+			return &wire.PairingCmdResult{Ok: true, Found: []*wire.FoundInverter{{Serial: r.serial}}}
+		}
+	case c.GetPrimeInv() != nil:
+		r.primeChan = c.GetPrimeInv().GetChannel()
+		r.primePan = c.GetPrimeInv().GetPan()
+		r.primeAfterScans = len(r.scanChans)
+	case c.GetCommitPan() != nil:
+		r.commitChan = c.GetCommitPan().GetChannel()
+	case c.GetGetShortAddr() != nil:
+		r.queries++
+		if r.queries == 1 {
+			// Off-PAN: the unit is not on our channel, so it does not answer.
+			return &wire.PairingCmdResult{Ok: false, Error: "no reply from inverter"}
+		}
+		return &wire.PairingCmdResult{Ok: true, ShortAddr: 0x55AA}
+	}
+	return &wire.PairingCmdResult{Ok: true}
+}
+
+// parkChannels returns the channels on which the module parked for a
+// rendezvous (pan 0xFFFF), in order.
+func (m *mockTransport) parkChannels() []uint32 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []uint32
+	for _, c := range m.cmds {
+		if p := c.GetSetModulePan(); p != nil && p.GetPan() == 0xFFFF {
+			out = append(out, p.GetChannel())
+		}
+	}
+	return out
+}
+
+// newTestManager is the common Manager wiring: a real bus lock, an in-memory
+// PAN/channel, and short settles. A test then does not wait on radio latency
+// that it does not test.
+func newTestManager(t *testing.T, tr *Transport, st *store.Store, settings Settings, channel uint32) *Manager {
+	t.Helper()
+	return &Manager{
+		Store: st, Transport: tr, Lock: buslock.New(), Events: &recordingEvents{},
+		Settings: settings, CurrentChannel: func() uint32 { return channel },
 		CommitSettle: 10 * time.Millisecond, VerifyRetrySleep: 5 * time.Millisecond,
 	}
-	// Shorten the post-commit settle for the test.
+}
+
+func newAddManager(t *testing.T, tr *Transport, st *store.Store, ev *recordingEvents) *Manager {
+	t.Helper()
+	m := newTestManager(t, tr, st, &stubSettings{pan: "0DCE"}, 16)
+	m.Events = ev
+	return m
+}
+
+func runAdd(t *testing.T, m *Manager, serial string) PairingStatus {
+	t.Helper()
 	resp := m.Handle(context.Background(), "ecu-web", &wire.PairingRequest{
-		Op: &wire.PairingRequest_AddById{AddById: &wire.AddById{Serial: "999900000001"}}})
+		Op: &wire.PairingRequest_AddById{AddById: &wire.AddById{Serial: serial}}})
 	if !resp.GetOk() {
-		t.Fatalf("start: %s", resp.GetError())
+		t.Fatalf("start add: %s", resp.GetError())
 	}
-	final := waitDone(t, m)
-	if final.Stage != StageDone {
+	return waitDone(t, m)
+}
+
+// An earlier scan heard the unit on another channel. The add migrates it
+// from THAT channel. The rendezvous runs where the unit listens, while the
+// prime and the commit carry the ECU's own PAN and channel as the target.
+func TestAdd_MigratesFromTheRecordedChannel(t *testing.T) {
+	const serial = "999900000001"
+	tr, mock := newMockTransport()
+	r := &offPANResponder{serial: serial, answersOn: 21}
+	mock.responder = r.respond
+
+	st := newTestStore(t)
+	if err := st.SetInverterFoundChannel(context.Background(), serial, 21); err != nil {
+		t.Fatalf("SetInverterFoundChannel: %v", err)
+	}
+	m := newAddManager(t, tr, st, &recordingEvents{})
+
+	if final := runAdd(t, m, serial); final.Stage != StageDone {
 		t.Fatalf("stage=%q err=%q", final.Stage, final.Error)
 	}
-	ops := mock.opNames()
-	want := map[string]bool{"set_module_pan": false, "prime_inv": false, "commit_pan": false}
-	for _, op := range ops {
-		if _, ok := want[op]; ok {
-			want[op] = true
+
+	// The add confirms the recorded channel and uses it directly: one
+	// listen, on 21, with no sweep from the bottom of the range.
+	if len(r.scanChans) != 1 || r.scanChans[0] != 21 {
+		t.Errorf("listened on %v, want exactly channel 21 — a recorded channel must not trigger a sweep", r.scanChans)
+	}
+	if parks := mock.parkChannels(); len(parks) != 1 || parks[0] != 21 {
+		t.Errorf("rendezvous parked on %v, want channel 21 (where the unit was heard)", parks)
+	}
+	if r.primeChan != 16 || r.commitChan != 16 {
+		t.Errorf("prime ch=%d commit ch=%d, want the target channel 16 in both", r.primeChan, r.commitChan)
+	}
+	if r.primePan != 0x0DCE {
+		t.Errorf("prime pan=0x%04X, want the operating PAN 0x0DCE", r.primePan)
+	}
+}
+
+// With no recorded channel, the add sweeps to find the unit. It does not
+// prime blindly on the ECU's own channel. That is the one channel on which a
+// unit bound to another ECU is least likely to listen.
+func TestAdd_LocatesTheChannelWhenNoneRecorded(t *testing.T) {
+	const serial = "999900000002"
+	tr, mock := newMockTransport()
+	r := &offPANResponder{serial: serial, answersOn: 21}
+	mock.responder = r.respond
+
+	st := newTestStore(t)
+	ev := &recordingEvents{}
+	m := newAddManager(t, tr, st, ev)
+
+	if final := runAdd(t, m, serial); final.Stage != StageDone {
+		t.Fatalf("stage=%q err=%q", final.Stage, final.Error)
+	}
+
+	if len(r.scanChans) == 0 || r.scanChans[0] != defaultChanLo {
+		t.Errorf("sweep started at %v, want channel %d", r.scanChans, defaultChanLo)
+	}
+	if last := r.scanChans[len(r.scanChans)-1]; last != 21 {
+		t.Errorf("sweep ended on channel %d, want it to stop at 21 where the unit answered", last)
+	}
+	for _, ch := range r.scanChans {
+		if ch > 21 {
+			t.Errorf("swept channel %d past the one the unit answered on: %v", ch, r.scanChans)
 		}
 	}
-	for op, seen := range want {
-		if !seen {
-			t.Fatalf("expected migrate op %q in %v", op, ops)
+	if r.primeChan != 16 || r.commitChan != 16 {
+		t.Errorf("prime ch=%d commit ch=%d, want the target channel 16", r.primeChan, r.commitChan)
+	}
+	// The add records the located channel, so a later add skips the sweep.
+	row, err := st.GetInverterPairing(context.Background(), serial)
+	if err != nil {
+		t.Fatalf("GetInverterPairing: %v", err)
+	}
+	if row.FoundChannel != 21 {
+		t.Errorf("found_channel = %d, want 21 persisted for next time", row.FoundChannel)
+	}
+	if !ev.has("channel_located") {
+		t.Errorf("expected channel_located milestone; got %v", ev.kinds)
+	}
+}
+
+// The add reports a unit that answers on no channel as unreachable. A prime
+// and a commit anyway would broadcast a PAN change on a channel where nothing
+// listens. They would then report a migration that never happened.
+func TestAdd_FailsWhenTheUnitAnswersNowhere(t *testing.T) {
+	const serial = "999900000003"
+	tr, mock := newMockTransport()
+	r := &offPANResponder{serial: serial} // answersOn 0 → never answers
+	mock.responder = r.respond
+	m := newAddManager(t, tr, newTestStore(t), &recordingEvents{})
+
+	final := runAdd(t, m, serial)
+	if final.Stage != StageError {
+		t.Fatalf("stage=%q, want error", final.Stage)
+	}
+	if !strings.Contains(final.Error, "did not answer on any channel") {
+		t.Errorf("error = %q, want it to name the exhausted sweep", final.Error)
+	}
+	for _, op := range mock.opNames() {
+		if op == "prime_inv" || op == "commit_pan" {
+			t.Fatalf("sent %q for a unit that answered nowhere: %v", op, mock.opNames())
 		}
+	}
+	if got := len(r.scanChans); got != int(defaultChanHi-defaultChanLo+1) {
+		t.Errorf("swept %d channels, want the full %d-%d range", got, defaultChanLo, defaultChanHi)
+	}
+	assertRadioRestored(t, mock)
+}
+
+// assertRadioRestored confirms that the last radio command was the pan=0
+// sentinel that returns the radio to the operating PAN. A sweep that ends
+// without it leaves the whole fleet dark on PAN 0xFFFF.
+func assertRadioRestored(t *testing.T, mock *mockTransport) {
+	t.Helper()
+	mock.mu.Lock()
+	defer mock.mu.Unlock()
+	for i := len(mock.cmds) - 1; i >= 0; i-- {
+		if p := mock.cmds[i].GetSetModulePan(); p != nil {
+			if p.GetPan() != 0 {
+				t.Fatalf("radio left parked on PAN 0x%04X ch=%d; want the pan=0 restore", p.GetPan(), p.GetChannel())
+			}
+			return
+		}
+	}
+	t.Fatal("no set_module_pan issued at all; radio state unknown")
+}
+
+// A recorded channel that is our own is no hint at all. The direct query on
+// it already failed. A rendezvous on it would use the very channel that this
+// whole path exists to move away from.
+func TestAdd_SweepsWhenTheRecordedChannelIsOurOwn(t *testing.T) {
+	const serial = "999900000004"
+	tr, mock := newMockTransport()
+	r := &offPANResponder{serial: serial, answersOn: 19}
+	mock.responder = r.respond
+
+	st := newTestStore(t)
+	if err := st.SetInverterFoundChannel(context.Background(), serial, 16); err != nil {
+		t.Fatalf("SetInverterFoundChannel: %v", err)
+	}
+	m := newAddManager(t, tr, st, &recordingEvents{})
+
+	if final := runAdd(t, m, serial); final.Stage != StageDone {
+		t.Fatalf("stage=%q err=%q", final.Stage, final.Error)
+	}
+	if len(r.scanChans) == 0 || r.scanChans[0] != defaultChanLo {
+		t.Fatalf("listened on %v, want a sweep from channel %d", r.scanChans, defaultChanLo)
+	}
+	// The sweep passes over 16 like any other channel. What matters is that
+	// the prime went out only after the sweep reached the channel on which
+	// the unit answers.
+	if last := r.scanChans[len(r.scanChans)-1]; last != 19 {
+		t.Errorf("last listen was channel %d, want 19: %v", last, r.scanChans)
+	}
+	if r.primeAfterScans != len(r.scanChans) {
+		t.Errorf("prime sent after %d listens, want it only after the last (%d)", r.primeAfterScans, len(r.scanChans))
+	}
+	row, err := st.GetInverterPairing(context.Background(), serial)
+	if err != nil {
+		t.Fatalf("GetInverterPairing: %v", err)
+	}
+	if row.FoundChannel != 19 {
+		t.Errorf("found_channel = %d, want the located channel 19 to replace the stale 16", row.FoundChannel)
+	}
+}
+
+// A stale record costs one listen and then falls back to the sweep. The
+// record is stale because the unit moved to another channel after the scan
+// that wrote it. The add primes and commits nothing at the wrong channel.
+func TestAdd_FallsBackToSweepWhenTheRecordIsStale(t *testing.T) {
+	const serial = "999900000005"
+	tr, mock := newMockTransport()
+	r := &offPANResponder{serial: serial, answersOn: 24}
+	mock.responder = r.respond
+
+	st := newTestStore(t)
+	if err := st.SetInverterFoundChannel(context.Background(), serial, 13); err != nil {
+		t.Fatalf("SetInverterFoundChannel: %v", err)
+	}
+	ev := &recordingEvents{}
+	m := newAddManager(t, tr, st, ev)
+
+	if final := runAdd(t, m, serial); final.Stage != StageDone {
+		t.Fatalf("stage=%q err=%q", final.Stage, final.Error)
+	}
+	if len(r.scanChans) == 0 || r.scanChans[0] != 13 {
+		t.Fatalf("listened on %v, want the recorded channel 13 tried first", r.scanChans)
+	}
+	// The add sent nothing at channel 13. The prime came after the sweep
+	// reached the channel on which the unit is.
+	if r.primeAfterScans != len(r.scanChans) {
+		t.Errorf("prime sent after %d listens, want it only after the last (%d)", r.primeAfterScans, len(r.scanChans))
+	}
+	if !r.sawScanOn(24) {
+		t.Errorf("never listened on 24 where the unit answers: %v", r.scanChans)
+	}
+	row, err := st.GetInverterPairing(context.Background(), serial)
+	if err != nil {
+		t.Fatalf("GetInverterPairing: %v", err)
+	}
+	if row.FoundChannel != 24 {
+		t.Errorf("found_channel = %d, want the stale 13 replaced by 24", row.FoundChannel)
 	}
 }
 
@@ -541,3 +816,150 @@ func TestTransport_DeliverNoWaiter(t *testing.T) {
 }
 
 var _ = fmt.Sprintf
+
+// A scan is what teaches the ECU where a unit lives. The scan must persist
+// the channel on which the unit answered, so a later add reaches the unit
+// without another sweep.
+func TestScan_RecordsTheChannelEachUnitAnsweredOn(t *testing.T) {
+	const serial = "999900000006"
+	tr, mock := newMockTransport()
+	r := &offPANResponder{serial: serial, answersOn: 23}
+	mock.responder = r.respond
+
+	st := newTestStore(t)
+	m := newAddManager(t, tr, st, &recordingEvents{})
+
+	resp := m.Handle(context.Background(), "ecu-web", &wire.PairingRequest{
+		Op: &wire.PairingRequest_Scan{Scan: &wire.ScanStart{Slow: true}}})
+	if !resp.GetOk() {
+		t.Fatalf("start scan: %s", resp.GetError())
+	}
+	if final := waitDone(t, m); final.Stage != StageDone {
+		t.Fatalf("stage=%q err=%q", final.Stage, final.Error)
+	}
+
+	row, err := st.GetInverterPairing(context.Background(), serial)
+	if err != nil {
+		t.Fatalf("GetInverterPairing: %v", err)
+	}
+	if row.FoundChannel != 23 {
+		t.Fatalf("found_channel = %d, want 23 recorded by the scan", row.FoundChannel)
+	}
+	// A junk serial in the scan results must not create a row.
+	if _, err := st.GetInverterPairing(context.Background(), "not-a-serial"); err == nil {
+		t.Error("a malformed serial from the radio created an inverter row")
+	}
+	assertRadioRestored(t, mock)
+}
+
+// A sweep is the longest window an operator can interrupt: up to 16 channels
+// of dwell. An abort must therefore end the op as aborted, send nothing at
+// the fleet, and hand the radio back to the operating PAN.
+func TestAdd_AbortDuringSweepRestoresTheRadio(t *testing.T) {
+	const serial = "999900000007"
+	tr, mock := newMockTransport()
+	// The unit answers nowhere, so the sweep runs the full range. The
+	// per-listen delay gives the abort a window, the way a real dwell would.
+	r := &offPANResponder{serial: serial, scanDelay: 20 * time.Millisecond}
+	mock.responder = r.respond
+	ev := &recordingEvents{}
+	m := newAddManager(t, tr, newTestStore(t), ev)
+
+	resp := m.Handle(context.Background(), "ecu-web", &wire.PairingRequest{
+		Op: &wire.PairingRequest_AddById{AddById: &wire.AddById{Serial: serial}}})
+	if !resp.GetOk() {
+		t.Fatalf("start add: %s", resp.GetError())
+	}
+	// Abort once the sweep is under way.
+	deadline := time.Now().Add(2 * time.Second)
+	for r.scanCount() == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	m.Handle(context.Background(), "ecu-web", &wire.PairingRequest{
+		Op: &wire.PairingRequest_Abort{Abort: &wire.Empty{}}})
+
+	final := waitDone(t, m)
+	if final.Stage != StageAborted {
+		t.Fatalf("stage=%q err=%q, want aborted", final.Stage, final.Error)
+	}
+	if !ev.has("pairing_aborted") || ev.has("pairing_error") {
+		t.Errorf("milestones = %v, want pairing_aborted and no pairing_error", ev.kinds)
+	}
+	for _, op := range mock.opNames() {
+		if op == "prime_inv" || op == "commit_pan" {
+			t.Fatalf("transmitted %q during an aborted locate: %v", op, mock.opNames())
+		}
+	}
+	assertRadioRestored(t, mock)
+}
+
+// Replace shares bindAndMigrate, so the channel resolution has to work there
+// too. It then hands over to the inheritance tail.
+func TestReplace_MigratesTheNewUnitFromItsOwnChannel(t *testing.T) {
+	const oldUID, newSerial = "999900000008", "999900000009"
+	tr, mock := newMockTransport()
+	r := &offPANResponder{serial: newSerial, answersOn: 18}
+	mock.responder = r.respond
+
+	st := newTestStore(t)
+	ctx := context.Background()
+	if err := st.SetInverterShortAddr(ctx, oldUID, 0x0101); err != nil {
+		t.Fatalf("seed old unit: %v", err)
+	}
+	if err := st.SetInverterFoundChannel(ctx, newSerial, 18); err != nil {
+		t.Fatalf("SetInverterFoundChannel: %v", err)
+	}
+	m := newAddManager(t, tr, st, &recordingEvents{})
+
+	resp := m.Handle(ctx, "ecu-web", &wire.PairingRequest{
+		Op: &wire.PairingRequest_Replace{Replace: &wire.ReplaceInverter{
+			OldUid: oldUID, NewSerial: newSerial}}})
+	if !resp.GetOk() {
+		t.Fatalf("start replace: %s", resp.GetError())
+	}
+	if final := waitDone(t, m); final.Stage != StageDone {
+		t.Fatalf("stage=%q err=%q", final.Stage, final.Error)
+	}
+
+	if len(r.scanChans) != 1 || r.scanChans[0] != 18 {
+		t.Errorf("listened on %v, want exactly the recorded channel 18", r.scanChans)
+	}
+	if r.primeChan != 16 || r.commitChan != 16 {
+		t.Errorf("prime ch=%d commit ch=%d, want the target channel 16", r.primeChan, r.commitChan)
+	}
+	// The same op retires the dead unit.
+	if _, err := st.GetInverterPairing(ctx, oldUID); err == nil {
+		t.Error("old unit still present after replace")
+	}
+	assertRadioRestored(t, mock)
+}
+
+// A store that the add cannot read is not the same as a unit that no scan
+// ever heard. Both fall back to the sweep. The broken store costs a
+// fleet-wide telemetry pause, and it must say why.
+func TestAdd_UnreadableStoreWarnsBeforeSweeping(t *testing.T) {
+	const serial = "999900000010"
+	tr, mock := newMockTransport()
+	r := &offPANResponder{serial: serial, answersOn: 17}
+	mock.responder = r.respond
+
+	st := newTestStore(t)
+	if err := st.SetInverterFoundChannel(context.Background(), serial, 21); err != nil {
+		t.Fatalf("SetInverterFoundChannel: %v", err)
+	}
+	m := newAddManager(t, tr, st, &recordingEvents{})
+	if err := st.Close(); err != nil { // the record exists but is unreachable
+		t.Fatalf("Close: %v", err)
+	}
+
+	// The add cannot complete against a closed store, because the persist
+	// of the short address is not best effort. The fallback and its warning
+	// happen first, and that is what this test pins.
+	final := runAdd(t, m, serial)
+	if !strings.Contains(final.Message, "could not read the recorded channel") {
+		t.Errorf("message = %q, want it to name the unreadable record", final.Message)
+	}
+	if len(r.scanChans) == 0 || r.scanChans[0] != defaultChanLo {
+		t.Errorf("listened on %v, want a sweep from channel %d", r.scanChans, defaultChanLo)
+	}
+}
