@@ -64,15 +64,15 @@ func (a *pairingAdapter) GetOperatingChannel() byte {
 // pairing mode: the splice's single modem reader redirects modem replies to a
 // sink the runner reads, and host→modem is paused. This avoids a second
 // reader on the modem fd (the dual-reader race that consumed config-op acks).
-// It also refreshes the runner's write fd from the splice, which owns the
-// port and may have reopened it.
+// It also refreshes the runner's write fd from the splice. The splice owns
+// the port and may have reopened it.
 func (a *pairingAdapter) withModem(fn func() error) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	// Re-read the modem fd rather than trusting the one captured at
-	// construction: the splice replaces the port on a hangup, and the old
-	// descriptor is closed (and its number possibly reused by an unrelated
-	// open, which a raw unix.Write would happily corrupt).
+	// Read the modem fd again. Do not trust the one captured at
+	// construction: the splice replaces the port on a hangup and closes
+	// the old descriptor. An unrelated open may then reuse the number, and
+	// a raw unix.Write would corrupt that file.
 	if fd, ok := a.splice.ModemFd(); ok {
 		a.runner.Fd = fd
 	}
