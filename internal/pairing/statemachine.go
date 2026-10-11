@@ -134,8 +134,10 @@ func (m *Manager) restoreModule(_ uint32) {
 }
 
 // recordFound persists each discovered inverter (pairing_state=found,
-// encrypted, last_announce_ms) and surfaces it in the status, emitting one
-// inverter_found milestone per new serial.
+// last_announce_ms) and surfaces it in the status. It emits one
+// inverter_found milestone per new serial. A scan carries no encryption
+// state. Telemetry ingest owns that column, because it attributes each L1
+// frame to its own peer UID.
 func (m *Manager) recordFound(ctx context.Context, found []*wire.FoundInverter) {
 	now := time.Now().UnixMilli()
 	for _, fi := range found {
@@ -147,13 +149,11 @@ func (m *Manager) recordFound(ctx context.Context, found []*wire.FoundInverter) 
 			Serial:    serial,
 			ShortAddr: fi.GetShortAddr(),
 			State:     "found",
-			Encrypted: fi.GetEncrypted(),
 		})
 		if m.Store != nil {
 			_ = m.Store.SetInverterPairingState(ctx, serial, "found", now)
-			_ = m.Store.SetInverterEncrypted(ctx, serial, fi.GetEncrypted())
 		}
-		m.milestone(ctx, serial, "inverter_found", "info", fmt.Sprintf("encrypted=%v", fi.GetEncrypted()))
+		m.milestone(ctx, serial, "inverter_found", "info", fmt.Sprintf("short_addr=0x%04X", fi.GetShortAddr()))
 	}
 }
 

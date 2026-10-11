@@ -96,10 +96,7 @@ func (c *Client) handlePairingCmd(cmd *wire.PairingCmd) {
 		found, err := c.Pairing.ReportScan(window)
 		if err == nil {
 			for _, u := range found {
-				res.Found = append(res.Found, &wire.FoundInverter{
-					Serial:    u.Serial,
-					Encrypted: u.Encrypted,
-				})
+				res.Found = append(res.Found, &wire.FoundInverter{Serial: u.Serial})
 			}
 		}
 		c.finishPairing(res, err)

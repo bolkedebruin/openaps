@@ -16,12 +16,6 @@ type PairingRunner struct {
 	Mu *sync.Mutex
 }
 
-// FoundUnit mirrors the linux definition so callers compile on all platforms.
-type FoundUnit struct {
-	Serial    string
-	Encrypted bool
-}
-
 func (r *PairingRunner) Ping() (bool, error)                  { return false, errUnsupported }
 func (r *PairingRunner) SetModulePan(uint16, byte) error      { return errUnsupported }
 func (r *PairingRunner) GetShortAddr(string) (uint16, error)  { return 0, errUnsupported }

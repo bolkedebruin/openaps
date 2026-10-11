@@ -288,12 +288,6 @@ func (r *PairingRunner) BindQuiet(shortAddr uint16) error {
 	return nil
 }
 
-// FoundUnit is one inverter that announced itself during a report-id scan.
-type FoundUnit struct {
-	Serial    string
-	Encrypted bool
-}
-
 // ReportScan turns report-id ON (0xD1), collects 0x1D announcements for the
 // window, then turns report-id OFF (0xD2) for the units found. Returns the
 // de-duplicated set of announcing inverters. encrypted reflects whether the
@@ -305,9 +299,7 @@ func (r *PairingRunner) ReportScan(window time.Duration, seq byte) ([]FoundUnit,
 		return nil, err
 	}
 
-	seen := make(map[string]bool)
-	var found []FoundUnit
-	var ieees [][6]byte
+	var h scanHarvest
 
 	deadline := time.Now().Add(window)
 	for {
@@ -315,32 +307,26 @@ func (r *PairingRunner) ReportScan(window time.Duration, seq byte) ([]FoundUnit,
 		if remaining <= 0 {
 			break
 		}
-		frame, encrypted, err := readFrameChan(r.In, remaining)
+		frame, _, err := readFrameChan(r.In, remaining)
 		if err != nil {
 			// Timeout/no-more-announcements ends the window cleanly.
 			break
 		}
-		ieee, ok := parseAnnounce(frame)
-		if !ok {
-			continue
+		if h.add(frame) {
+			slog.Warn("pairing report-scan harvested the maximum units, ignoring further announcements",
+				"cap", maxScanUnits)
+			break
 		}
-		serial := bcd6ToSerial(ieee)
-		if seen[serial] {
-			continue
-		}
-		seen[serial] = true
-		found = append(found, FoundUnit{Serial: serial, Encrypted: encrypted})
-		ieees = append(ieees, ieee)
 	}
 
 	// Quiet the announcers. Send the 0xD2 list-off then a 0xD3 broadcast
 	// quiet to end the discovery sweep.
-	if err := r.writeFrame(buildReportIdOff(ieees, seq+1), "report-id-off"); err != nil {
+	if err := r.writeFrame(buildReportIdOff(h.ieees, seq+1), "report-id-off"); err != nil {
 		slog.Error("pairing report-id-off write failed", "err", err)
 	}
 	time.Sleep(100 * time.Millisecond)
 	if err := r.writeFrame(buildReportIdQuiet(), "report-id-quiet"); err != nil {
 		slog.Error("pairing report-id-quiet write failed", "err", err)
 	}
-	return found, nil
+	return h.units, nil
 }

@@ -103,8 +103,8 @@ func TestHandlePairingCmd_SetModulePan(t *testing.T) {
 
 func TestHandlePairingCmd_ReportScan(t *testing.T) {
 	fe := &fakeExecutor{found: []modem.FoundUnit{
-		{Serial: "999900000003", Encrypted: true},
-		{Serial: "123456789012", Encrypted: false},
+		{Serial: "999900000003"},
+		{Serial: "123456789012"},
 	}}
 	c := newTestClient()
 	c.Pairing = fe
@@ -122,11 +122,11 @@ func TestHandlePairingCmd_ReportScan(t *testing.T) {
 	if len(res.Found) != 2 {
 		t.Fatalf("found %d, want 2", len(res.Found))
 	}
-	if res.Found[0].GetSerial() != "999900000003" || !res.Found[0].GetEncrypted() {
+	if res.Found[0].GetSerial() != "999900000003" {
 		t.Errorf("found[0] = %+v", res.Found[0])
 	}
-	if res.Found[1].GetEncrypted() {
-		t.Errorf("found[1] should be plaintext")
+	if res.Found[1].GetSerial() != "123456789012" {
+		t.Errorf("found[1] = %+v", res.Found[1])
 	}
 }
 
