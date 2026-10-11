@@ -368,6 +368,7 @@ func (s *Store) DeleteInverter(ctx context.Context, uid string) error {
 		`DELETE FROM inverter_panels  WHERE inverter_uid=?`,
 		`DELETE FROM energy_lifetime  WHERE inverter_uid=?`,
 		`DELETE FROM inverter_metrics WHERE inverter_uid=?`,
+		`DELETE FROM power_cap_intent WHERE inverter_uid=?`,
 		`DELETE FROM inverters        WHERE uid=?`,
 	} {
 		if _, err := tx.ExecContext(ctx, q, uid); err != nil {

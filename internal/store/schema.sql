@@ -114,3 +114,14 @@ CREATE TABLE IF NOT EXISTS events (
 
 CREATE INDEX IF NOT EXISTS events_ts_idx ON events(ts_ms);
 CREATE INDEX IF NOT EXISTS events_uid_kind_idx ON events(inverter_uid, kind);
+
+-- power_cap_intent is the per-panel output cap (W) the inverter is meant to
+-- hold: the last setpoint routed to it, or the first read-back seen when no
+-- setpoint has been routed yet. A protection read whose DA read-back drifts
+-- from it re-sends the cap (the inverter can drop its stored cap on its own).
+CREATE TABLE IF NOT EXISTS power_cap_intent (
+    inverter_uid TEXT PRIMARY KEY,
+    panel_w      INTEGER NOT NULL,
+    set_ms       INTEGER NOT NULL,
+    by           TEXT
+);
