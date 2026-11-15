@@ -136,17 +136,52 @@ func isAnomalousDelta(deltaWh float64, maxChannelW uint32, elapsedMs int64) bool
 // UpsertInverterFromTelemetry promotes a never-before-seen inverter
 // to the inventory and bumps last_seen on every subsequent telemetry
 // frame.
-func (s *Store) UpsertInverterFromTelemetry(ctx context.Context, uid string, shortAddr uint16, family, model string, tsMs int64) error {
-	const q = `
+// canonicalTelemetryModelSQL builds the known model-code mapping once.
+// The codec remains the single source of truth for model labels.
+// Unknown codes leave the existing model-name handling unchanged.
+func canonicalTelemetryModelSQL() string {
+	var cases []string
+
+	for code := 1; code <= 0xff; code++ {
+		label := codec.ModelLabelForCode(uint8(code))
+		if strings.HasPrefix(label, "unknown(") {
+			continue
+		}
+
+		// Labels come from the codec, but escape them for SQL safety.
+		label = strings.ReplaceAll(label, "'", "''")
+		cases = append(cases,
+			fmt.Sprintf("WHEN %d THEN '%s'", code, label))
+	}
+
+	return "CASE inverters.model_code " +
+		strings.Join(cases, " ") +
+		` ELSE CASE
+            WHEN inverters.model_code IS NOT NULL
+                 AND inverters.model IS NOT NULL
+            THEN inverters.model
+            ELSE COALESCE(excluded.model, inverters.model)
+          END END`
+}
+
+// Build the complete UPSERT once, rather than allocating SQL or querying
+// the existing model_code for every telemetry frame.
+var upsertInverterTelemetrySQL = `
 INSERT INTO inverters (uid, short_addr, family, model, paired_at_ms, last_seen_ms)
 VALUES (?, ?, ?, ?, ?, ?)
 ON CONFLICT(uid) DO UPDATE SET
     short_addr   = excluded.short_addr,
     family       = COALESCE(excluded.family, inverters.family),
-    model        = COALESCE(excluded.model,  inverters.model),
+    model        = ` + canonicalTelemetryModelSQL() + `,
     last_seen_ms = excluded.last_seen_ms
 `
-	_, err := s.db.ExecContext(ctx, q, uid, int(shortAddr), nullable(family), nullable(model), tsMs, tsMs)
+
+// UpsertInverterFromTelemetry records telemetry and repairs stale model
+// labels from the persisted model_code in the same atomic SQL statement.
+func (s *Store) UpsertInverterFromTelemetry(ctx context.Context, uid string, shortAddr uint16, family, model string, tsMs int64) error {
+	_, err := s.db.ExecContext(ctx, upsertInverterTelemetrySQL,
+		uid, int(shortAddr), nullable(family), nullable(model), tsMs, tsMs,
+	)
 	if err != nil {
 		return fmt.Errorf("UpsertInverter: %w", err)
 	}
@@ -208,6 +243,14 @@ func (s *Store) InverterModelCode(ctx context.Context, uid string) (code uint32,
 // update never clobbers a known value with NULL. Reports whether a new row
 // was created.
 func (s *Store) UpsertInverterInfo(ctx context.Context, in InverterInfoUpdate) (inserted bool, err error) {
+	// A known model code is more authoritative than a model label
+	// inferred from the generic telemetry command.
+	if in.ModelCode != nil && *in.ModelCode > 0 && *in.ModelCode <= 0xff {
+		label := codec.ModelLabelForCode(uint8(*in.ModelCode))
+		if !strings.HasPrefix(label, "unknown(") {
+			in.Model = &label
+		}
+	}
 	// Wrap the existence probe and the upsert in one transaction so the
 	// insert-vs-update decision the caller reports stays consistent with the
 	// row actually written, even if another writer races between the probe

@@ -3,6 +3,7 @@ package sunspec
 import (
 	"strconv"
 
+	"github.com/bolkedebruin/openaps/codec"
 	"github.com/bolkedebruin/openaps/internal/sunspec/source"
 )
 
@@ -240,6 +241,11 @@ func emitPerInverterMPPT(bank *Bank, inv source.Inverter) {
 // The vendor name lives in `Mn`, so don't repeat it here — Venus and HA
 // combine Mn + Md when displaying.
 func inverterModelLabel(inv source.Inverter) string {
+	// QS2 shares the four-channel layout with QS1, but must retain
+	// its own model identity in the SunSpec Common Model.
+	if inv.Model == int(codec.ModelQS2) {
+		return "QS2"
+	}
 	switch inv.TypeCode {
 	case "01":
 		return "DS3"

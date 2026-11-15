@@ -265,7 +265,7 @@ func typeCodeFromModelCode(model uint32) string {
 	switch uint8(model) {
 	case codec.ModelYC600, codec.ModelDS3, codec.ModelDS3H, codec.ModelDS3L:
 		return "01"
-	case codec.ModelQS1, codec.ModelQS1A:
+	case codec.ModelQS1, codec.ModelQS1A, codec.ModelQS2:
 		return "03"
 	case codec.ModelQT2:
 		return "05"
