@@ -24,11 +24,11 @@ func TestEncode_Model160_Layout(t *testing.T) {
 		t.Errorf("L=%d want %d", got, wantL)
 	}
 
-	if got := int16(bank.At(mpptBodyBase + 0)); got != -1 {
-		t.Errorf("DCA_SF=%d want -1", got)
+	if got := int16(bank.At(mpptBodyBase + 0)); got != -2 {
+		t.Errorf("DCA_SF=%d want -2", got)
 	}
-	if got := int16(bank.At(mpptBodyBase + 1)); got != 0 {
-		t.Errorf("DCV_SF=%d want 0", got)
+	if got := int16(bank.At(mpptBodyBase + 1)); got != -1 {
+		t.Errorf("DCV_SF=%d want -1", got)
 	}
 	if got := bank.At(mpptBodyBase + 6); got != wantN {
 		t.Errorf("N=%d want %d", got, wantN)

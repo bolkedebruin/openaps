@@ -548,8 +548,8 @@ func emitMultiMPPT(bank *Bank, s source.Snapshot) {
 	bank.put16(MultiMPPTModelID, bodyLen)
 
 	// Fixed block (8 regs body)
-	bank.put16(scaleFactor(-1))       // DCA_SF
-	bank.put16(scaleFactor(0))        // DCV_SF
+	bank.put16(scaleFactor(-2))       // DCA_SF: 0.01 A
+	bank.put16(scaleFactor(-1))       // DCV_SF: 0.1 V
 	bank.put16(scaleFactor(0))        // DCW_SF
 	bank.put16(scaleFactor(0))        // DCWH_SF
 	bank.putAcc32(uint64(notImplU32)) // Evt — global module events bitfield32, not-impl
@@ -567,21 +567,9 @@ func emitMultiMPPT(bank *Bank, s source.Snapshot) {
 		bank.put16(uint16(i + 1))
 		bank.putString(panelLabel(e.inv, e.channel), 8)
 
-		// DCA derived
-		dca := notImplU16
-		if e.inv.ACVoltageV > 0 && e.powerW >= 0 {
-			amps10 := float64(e.powerW) / float64(e.inv.ACVoltageV) * 10
-			if amps10 < 65535 {
-				dca = uint16(amps10 + 0.5)
-			}
-		}
+		// Use the actual per-panel DC measurements.
+		dca, dcv := panelDCRegisters(e.inv, e.channel)
 		bank.put16(dca)
-
-		// DCV — share inverter's AC voltage stand-in
-		dcv := uint16(notImplU16)
-		if e.inv.ACVoltageV > 0 && e.inv.ACVoltageV < 65535 {
-			dcv = uint16(e.inv.ACVoltageV)
-		}
 		bank.put16(dcv)
 
 		// DCW = panel power
@@ -595,7 +583,7 @@ func emitMultiMPPT(bank *Bank, s source.Snapshot) {
 		bank.putAcc32(tmsNotImpl) // Tms — same for all panels; expose as not-implemented
 
 		// Tmp — share inverter cabinet temperature
-		bank.put16(uint16(int16(clampInt32(int32(e.inv.TemperatureC), -100, 200))))
+		bank.put16(notImplS16) // No measured panel temperature
 
 		// DCSt — per-panel state
 		st := StOff

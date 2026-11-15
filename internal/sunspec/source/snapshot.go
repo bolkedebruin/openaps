@@ -163,7 +163,9 @@ type Inverter struct {
 
 	// PanelWatts carries decoded per-panel watts from inv-driver; length
 	// should equal PanelCount(). It is the source PanelPowers() uses.
-	PanelWatts []int
+	PanelWatts   []int
+	PanelDCVolts []float64
+	PanelDCAmps  []float64
 
 	// EventBits holds the 86-bit event bitstring from database.db.Event,
 	// packed LSB-first into uint32 slots: [Evt1, Evt2, EvtVnd1, EvtVnd2].

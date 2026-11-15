@@ -1,6 +1,7 @@
 package sunspec
 
 import (
+	"math"
 	"strconv"
 
 	"github.com/bolkedebruin/openaps/codec"
@@ -168,6 +169,28 @@ func EncodePerInverterWithProtection(inv source.Inverter, ecuid string, unitID u
 	return bank
 }
 
+// panelDCRegisters converts measured panel values into SunSpec registers.
+// DCA_SF=-2 (0.01 A), DCV_SF=-1 (0.1 V).
+// Missing or invalid measurements are not substituted with AC values.
+func panelDCRegisters(inv source.Inverter, i int) (uint16, uint16) {
+	amps := notImplU16
+	volts := notImplU16
+
+	if i < len(inv.PanelDCAmps) {
+		a := inv.PanelDCAmps[i]
+		if a >= 0 && a < 655.345 {
+			amps = uint16(math.Round(a * 100))
+		}
+	}
+	if i < len(inv.PanelDCVolts) {
+		v := inv.PanelDCVolts[i]
+		if v > 0 && v < 6553.45 {
+			volts = uint16(math.Round(v * 10))
+		}
+	}
+	return amps, volts
+}
+
 func emitPerInverterMPPT(bank *Bank, inv source.Inverter) {
 	powers := inv.PanelPowers()
 	if len(powers) == 0 {
@@ -179,10 +202,10 @@ func emitPerInverterMPPT(bank *Bank, inv source.Inverter) {
 	bank.put16(MultiMPPTModelID, bodyLen)
 
 	// Fixed block (8 regs body)
-	bank.put16(scaleFactor(-1))
-	bank.put16(scaleFactor(0))
-	bank.put16(scaleFactor(0))
-	bank.put16(scaleFactor(0))
+	bank.put16(scaleFactor(-2))       // DCA_SF
+	bank.put16(scaleFactor(-1))       // DCV_SF
+	bank.put16(scaleFactor(0))        // DCW_SF
+	bank.put16(scaleFactor(0))        // DCWH_SF
 	bank.putAcc32(uint64(notImplU32)) // Evt — global module events
 	bank.put16(n)
 	bank.put16(notImplU16)
@@ -192,19 +215,8 @@ func emitPerInverterMPPT(bank *Bank, inv source.Inverter) {
 		bank.put16(uint16(i + 1))
 		bank.putString(panelLabel(inv, i), 8)
 
-		dca := notImplU16
-		if inv.ACVoltageV > 0 && p >= 0 {
-			amps10 := float64(p) / float64(inv.ACVoltageV) * 10
-			if amps10 < 65535 {
-				dca = uint16(amps10 + 0.5)
-			}
-		}
+		dca, dcv := panelDCRegisters(inv, i)
 		bank.put16(dca)
-
-		dcv := uint16(notImplU16)
-		if inv.ACVoltageV > 0 && inv.ACVoltageV < 65535 {
-			dcv = uint16(inv.ACVoltageV)
-		}
 		bank.put16(dcv)
 
 		dcw := uint16(notImplU16)
@@ -216,7 +228,7 @@ func emitPerInverterMPPT(bank *Bank, inv source.Inverter) {
 		bank.putAcc32(0)                  // DCWH — per-panel lifetime not tracked
 		bank.putAcc32(uint64(notImplU32)) // Tms — emit "not implemented" sentinel
 
-		bank.put16(uint16(int16(clampInt32(int32(inv.TemperatureC), -100, 200))))
+		bank.put16(notImplS16) // No measured panel temperature
 
 		st := StOff
 		if p > 0 {
