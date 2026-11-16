@@ -163,7 +163,9 @@ type Inverter struct {
 
 	// PanelWatts carries decoded per-panel watts from inv-driver; length
 	// should equal PanelCount(). It is the source PanelPowers() uses.
-	PanelWatts []int
+	PanelWatts   []int
+	PanelDCVolts []float64
+	PanelDCAmps  []float64
 
 	// EventBits holds the 86-bit event bitstring from database.db.Event,
 	// packed LSB-first into uint32 slots: [Evt1, Evt2, EvtVnd1, EvtVnd2].
@@ -199,7 +201,7 @@ func (inv Inverter) PanelCount() int {
 	switch inv.TypeCode {
 	case "01", "04":
 		return 2
-	case "03":
+	case "02", "03", "05":
 		return 4
 	}
 	return 0
@@ -218,6 +220,10 @@ func (inv Inverter) PanelPowers() []int {
 		return nil
 	}
 	out := make([]int, n)
+	for i := range out {
+		// Missing channels are unknown, not measured zero watts.
+		out[i] = -1
+	}
 	for i := 0; i < n && i < len(inv.PanelWatts); i++ {
 		out[i] = inv.PanelWatts[i]
 	}

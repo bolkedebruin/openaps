@@ -605,12 +605,49 @@ func (in *Ingestor) noteModel(uid string, modelCode uint8) {
 	in.protMu.Unlock()
 }
 
-// modelFor returns the cached model code for a UID, or 0 if no info
-// reply has been seen yet (the decoder then falls back to DS3).
+// modelFor returns the cached model code for a UID. After a restart,
+// recover known model codes from SQLite before falling back to DS3.
 func (in *Ingestor) modelFor(uid string) uint8 {
+	if uid == "" {
+		return 0
+	}
+
 	in.protMu.RLock()
-	defer in.protMu.RUnlock()
-	return in.modelByUID[uid]
+	code := in.modelByUID[uid]
+	in.protMu.RUnlock()
+
+	if code != 0 {
+		return code
+	}
+
+	if in.S == nil {
+		return 0
+	}
+
+	stored, found, err := in.S.InverterModelCode(
+		context.Background(), uid,
+	)
+	if err != nil {
+		slog.Warn("load inverter model code", "uid", uid, "err", err)
+		return 0
+	}
+	if !found || stored == 0 || stored > 0xff {
+		return 0
+	}
+
+	// Another info reply may have updated the cache while SQLite
+	// was queried. Never replace a newer in-memory model code.
+	in.protMu.Lock()
+	defer in.protMu.Unlock()
+
+	if code := in.modelByUID[uid]; code != 0 {
+		return code
+	}
+	if in.modelByUID == nil {
+		in.modelByUID = make(map[string]uint8)
+	}
+	in.modelByUID[uid] = uint8(stored)
+	return uint8(stored)
 }
 
 func (in *Ingestor) tryTelemetry(ctx context.Context, tsMs int64, env codec.L1Envelope) (bool, error) {

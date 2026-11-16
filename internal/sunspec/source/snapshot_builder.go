@@ -236,10 +236,16 @@ func (b *Builder) invertersFromInvDriver() []Inverter {
 		}
 		if len(snap.Panels) > 0 {
 			pw := make([]int, len(snap.Panels))
+			pv := make([]float64, len(snap.Panels))
+			pa := make([]float64, len(snap.Panels))
 			for i, p := range snap.Panels {
 				pw[i] = intRound(p.W)
+				pv[i] = p.DCV
+				pa[i] = p.DCI
 			}
 			inv.PanelWatts = pw
+			inv.PanelDCVolts = pv
+			inv.PanelDCAmps = pa
 		}
 		inv.Faults = snap.Faults
 		// SignalStrength applies the clamp: a raw L1 byte < 0x10 is taken
@@ -265,7 +271,7 @@ func typeCodeFromModelCode(model uint32) string {
 	switch uint8(model) {
 	case codec.ModelYC600, codec.ModelDS3, codec.ModelDS3H, codec.ModelDS3L:
 		return "01"
-	case codec.ModelQS1, codec.ModelQS1A:
+	case codec.ModelQS1, codec.ModelQS1A, codec.ModelQS2:
 		return "03"
 	case codec.ModelQT2:
 		return "05"

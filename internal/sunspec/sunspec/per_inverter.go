@@ -1,8 +1,10 @@
 package sunspec
 
 import (
+	"math"
 	"strconv"
 
+	"github.com/bolkedebruin/openaps/codec"
 	"github.com/bolkedebruin/openaps/internal/sunspec/source"
 )
 
@@ -167,47 +169,67 @@ func EncodePerInverterWithProtection(inv source.Inverter, ecuid string, unitID u
 	return bank
 }
 
+// panelDCRegisters converts measured panel values into SunSpec registers.
+// DCA_SF=-2 (0.01 A), DCV_SF=-1 (0.1 V).
+// Missing or invalid measurements are not substituted with AC values.
+func panelDCRegisters(inv source.Inverter, i int) (uint16, uint16) {
+	amps := notImplU16
+	volts := notImplU16
+
+	if i < len(inv.PanelDCAmps) {
+		a := inv.PanelDCAmps[i]
+		if a >= 0 && a < 655.345 {
+			amps = uint16(math.Round(a * 100))
+		}
+	}
+	if i < len(inv.PanelDCVolts) {
+		v := inv.PanelDCVolts[i]
+		if v > 0 && v < 6553.45 {
+			volts = uint16(math.Round(v * 10))
+		}
+	}
+	return amps, volts
+}
+
 func emitPerInverterMPPT(bank *Bank, inv source.Inverter) {
-	powers := inv.PanelPowers()
-	if len(powers) == 0 {
+	n := uint16(inv.PanelCount())
+	if n == 0 {
 		return
 	}
-	n := uint16(len(powers))
+	powers := inv.PanelPowers()
 	bodyLen := MultiMPPTFixedBlockLen + MultiMPPTPerModuleLen*n
 
 	bank.put16(MultiMPPTModelID, bodyLen)
 
 	// Fixed block (8 regs body)
-	bank.put16(scaleFactor(-1))
-	bank.put16(scaleFactor(0))
-	bank.put16(scaleFactor(0))
-	bank.put16(scaleFactor(0))
+	bank.put16(scaleFactor(-2))       // DCA_SF
+	bank.put16(scaleFactor(-1))       // DCV_SF
+	bank.put16(scaleFactor(0))        // DCW_SF
+	bank.put16(scaleFactor(0))        // DCWH_SF
 	bank.putAcc32(uint64(notImplU32)) // Evt — global module events
 	bank.put16(n)
 	bank.put16(notImplU16)
 
 	// One module per panel
-	for i, p := range powers {
+	for i := 0; i < int(n); i++ {
+		// PanelPowers is nil when the inverter is offline.
+		// Keep the module, but mark its measurement unavailable.
+		p := -1
+		if i < len(powers) {
+			p = powers[i]
+		}
 		bank.put16(uint16(i + 1))
 		bank.putString(panelLabel(inv, i), 8)
 
-		dca := notImplU16
-		if inv.ACVoltageV > 0 && p >= 0 {
-			amps10 := float64(p) / float64(inv.ACVoltageV) * 10
-			if amps10 < 65535 {
-				dca = uint16(amps10 + 0.5)
-			}
+		dca, dcv := uint16(notImplU16), uint16(notImplU16)
+		if inv.Online {
+			dca, dcv = panelDCRegisters(inv, i)
 		}
 		bank.put16(dca)
-
-		dcv := uint16(notImplU16)
-		if inv.ACVoltageV > 0 && inv.ACVoltageV < 65535 {
-			dcv = uint16(inv.ACVoltageV)
-		}
 		bank.put16(dcv)
 
-		dcw := uint16(notImplU16)
-		if p >= 0 && p < 65535 {
+		dcw := uint16(notImplS16)
+		if p >= 0 && p <= 32767 {
 			dcw = uint16(p)
 		}
 		bank.put16(dcw)
@@ -215,7 +237,7 @@ func emitPerInverterMPPT(bank *Bank, inv source.Inverter) {
 		bank.putAcc32(0)                  // DCWH — per-panel lifetime not tracked
 		bank.putAcc32(uint64(notImplU32)) // Tms — emit "not implemented" sentinel
 
-		bank.put16(uint16(int16(clampInt32(int32(inv.TemperatureC), -100, 200))))
+		bank.put16(notImplS16) // No measured panel temperature
 
 		st := StOff
 		if p > 0 {
@@ -240,6 +262,11 @@ func emitPerInverterMPPT(bank *Bank, inv source.Inverter) {
 // The vendor name lives in `Mn`, so don't repeat it here — Venus and HA
 // combine Mn + Md when displaying.
 func inverterModelLabel(inv source.Inverter) string {
+	// QS2 shares the four-channel layout with QS1, but must retain
+	// its own model identity in the SunSpec Common Model.
+	if inv.Model == int(codec.ModelQS2) {
+		return "QS2"
+	}
 	switch inv.TypeCode {
 	case "01":
 		return "DS3"
