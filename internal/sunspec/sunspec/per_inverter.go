@@ -192,11 +192,11 @@ func panelDCRegisters(inv source.Inverter, i int) (uint16, uint16) {
 }
 
 func emitPerInverterMPPT(bank *Bank, inv source.Inverter) {
-	powers := inv.PanelPowers()
-	if len(powers) == 0 {
+	n := uint16(inv.PanelCount())
+	if n == 0 {
 		return
 	}
-	n := uint16(len(powers))
+	powers := inv.PanelPowers()
 	bodyLen := MultiMPPTFixedBlockLen + MultiMPPTPerModuleLen*n
 
 	bank.put16(MultiMPPTModelID, bodyLen)
@@ -211,16 +211,25 @@ func emitPerInverterMPPT(bank *Bank, inv source.Inverter) {
 	bank.put16(notImplU16)
 
 	// One module per panel
-	for i, p := range powers {
+	for i := 0; i < int(n); i++ {
+		// PanelPowers is nil when the inverter is offline.
+		// Keep the module, but mark its measurement unavailable.
+		p := -1
+		if i < len(powers) {
+			p = powers[i]
+		}
 		bank.put16(uint16(i + 1))
 		bank.putString(panelLabel(inv, i), 8)
 
-		dca, dcv := panelDCRegisters(inv, i)
+		dca, dcv := uint16(notImplU16), uint16(notImplU16)
+		if inv.Online {
+			dca, dcv = panelDCRegisters(inv, i)
+		}
 		bank.put16(dca)
 		bank.put16(dcv)
 
-		dcw := uint16(notImplU16)
-		if p >= 0 && p < 65535 {
+		dcw := uint16(notImplS16)
+		if p >= 0 && p <= 32767 {
 			dcw = uint16(p)
 		}
 		bank.put16(dcw)

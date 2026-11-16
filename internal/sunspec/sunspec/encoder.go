@@ -528,15 +528,20 @@ func emitMultiMPPT(bank *Bank, s source.Snapshot) {
 	}
 	var panels []panelEntry
 	for _, inv := range s.Inverters {
-		if !inv.Online {
+		n := inv.PanelCount()
+		if n == 0 {
 			continue
 		}
 		ch := inv.PanelPowers()
-		if len(ch) == 0 {
-			continue
-		}
-		for i, p := range ch {
-			panels = append(panels, panelEntry{inv: inv, channel: i, powerW: p})
+		for i := 0; i < n; i++ {
+			// Keep the registered module layout stable at night.
+			p := -1
+			if i < len(ch) {
+				p = ch[i]
+			}
+			panels = append(panels, panelEntry{
+				inv: inv, channel: i, powerW: p,
+			})
 		}
 	}
 	if len(panels) == 0 {
@@ -568,13 +573,16 @@ func emitMultiMPPT(bank *Bank, s source.Snapshot) {
 		bank.putString(panelLabel(e.inv, e.channel), 8)
 
 		// Use the actual per-panel DC measurements.
-		dca, dcv := panelDCRegisters(e.inv, e.channel)
+		dca, dcv := uint16(notImplU16), uint16(notImplU16)
+		if e.inv.Online {
+			dca, dcv = panelDCRegisters(e.inv, e.channel)
+		}
 		bank.put16(dca)
 		bank.put16(dcv)
 
 		// DCW = panel power
-		dcw := uint16(notImplU16)
-		if e.powerW >= 0 && e.powerW < 65535 {
+		dcw := uint16(notImplS16)
+		if e.powerW >= 0 && e.powerW <= 32767 {
 			dcw = uint16(e.powerW)
 		}
 		bank.put16(dcw)
